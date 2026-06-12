@@ -280,7 +280,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   }, []);
 
   return (
-    <div className={`overflow-y-auto bg-[#FBF9F1] dark:bg-gray-900 custom-scrollbar ${document.documentElement.dataset.mobileLayout ? 'flex-1' : 'flex-1 h-screen'}`}
+    <div className={`overflow-y-auto bg-[#faf9f5] dark:bg-gray-900 custom-scrollbar ${document.documentElement.dataset.mobileLayout ? 'flex-1' : 'flex-1 h-screen'}`}
       style={document.documentElement.dataset.mobileLayout ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 44px)', paddingBottom: '52px' } : undefined}
     >
       {/* 移动端菜单按钮 (hidden when MobileLayout is active) */}
@@ -307,7 +307,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
           {memoView === 'active' && allPendingTasks.length > 0 && (
             <div className="mb-6">
               <h2 className="text-sm font-semibold text-gray-400 dark:text-gray-500 mb-3 uppercase tracking-wider">未完成事项</h2>
-              <div className="bg-white dark:bg-gray-800/50 rounded-2xl p-4 border border-[#ebebeb] dark:border-gray-700 ">
+              <div className="bg-white dark:bg-gray-800/50 rounded-2xl p-4 shadow-sm ">
                 <div>
                   {allPendingTasks.map(task => {
                     const isCompleting = completingTaskIds.has(task.id);
@@ -450,7 +450,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
             <MemoHeatmapCalendar />
             <HabitTracker />
             {/* 已归档 / 已公开 */}
-            <div className="bg-white dark:bg-gray-800/50 rounded-2xl border border-[#ebebeb] dark:border-gray-700 overflow-hidden ">
+            <div className="bg-white dark:bg-gray-800/50 rounded-2xl shadow-sm overflow-hidden ">
               <button
                 onClick={() => { setMemoView(memoView === 'archived' ? 'active' : 'archived'); setTagFilter(null); setSearchFilter(null); }}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-base font-medium transition-colors ${
@@ -541,7 +541,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
             <MemoHeatmapCalendar />
             <HabitTracker />
             {/* 已归档 / 已公开 */}
-            <div className="bg-white dark:bg-gray-800/50 rounded-2xl border border-[#ebebeb] dark:border-gray-700 overflow-hidden ">
+            <div className="bg-white dark:bg-gray-800/50 rounded-2xl shadow-sm overflow-hidden ">
               <button
                 onClick={() => { setMemoView(memoView === 'archived' ? 'active' : 'archived'); setTagFilter(null); setSearchFilter(null); setShowRightPanel(false); }}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-base font-medium transition-colors ${

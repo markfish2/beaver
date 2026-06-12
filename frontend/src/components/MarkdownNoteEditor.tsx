@@ -538,10 +538,10 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
       )}
 
       {/* 编辑/预览区域 */}
-      <div className="flex-1 overflow-y-auto relative flex flex-col items-center">
+      <div className="flex-1 overflow-y-auto scrollbar-none relative flex flex-col items-center">
         {isEditing ? (
           <>
-            <div className="w-full max-w-[768px] h-full">
+            <div className="w-full max-w-[768px] h-full scrollbar-none">
             <textarea
               ref={textareaRef}
               defaultValue={content}
@@ -618,7 +618,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
               onSelect={(e) => detectTagSearch((e.target as HTMLTextAreaElement).value, (e.target as HTMLTextAreaElement).selectionStart)}
               onBlur={() => setTimeout(() => setTagSearch(null), 200)}
               placeholder="开始书写... (支持 Markdown，输入 # 添加标签，@ 链接笔记)"
-              className="w-full h-full min-h-full bg-transparent text-gray-800 dark:text-gray-200 text-base p-6 resize-none focus:outline-none"
+              className="w-full h-full min-h-full bg-transparent text-gray-800 dark:text-gray-200 text-base p-6 resize-none focus:outline-none scrollbar-none"
               style={{ fontFamily: 'inherit', lineHeight: '1.75' }}
             />
             </div>

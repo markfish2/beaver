@@ -1224,10 +1224,10 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   }
 
   return (
-    <div className={`group rounded-2xl p-4 border transition-colors min-w-0 overflow-hidden  ${
+    <div className={`group rounded-2xl p-4 min-w-0 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 ${
       memo.is_pinned
-        ? 'border-amber-200 dark:border-amber-800/60 hover:border-amber-300 dark:hover:border-amber-700'
-        : 'border-[#ebebeb] dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+        ? 'border border-amber-200 dark:border-amber-800/60'
+        : ''
     } ${isHighlighted ? 'outline outline-2 outline-blue-400 dark:outline-blue-500 outline-offset-2' : ''}`}
     style={{ backgroundColor: bgColor, contain: 'layout' }}
     >
