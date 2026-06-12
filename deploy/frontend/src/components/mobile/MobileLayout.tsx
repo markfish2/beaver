@@ -1,0 +1,236 @@
+import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import MobileTopBar from './MobileTopBar';
+import MobileBottomTabBar, { type MobileTab } from './MobileBottomTabBar';
+import MobileToolbar from '../MobileToolbar';
+import { MobileToolbarProvider, useMobileToolbar } from '../../context/MobileToolbarContext';
+import { getMonthlyDiary, getOrCreateDayNode } from '../../api/data';
+import NewMenuPopup from './NewMenuPopup';
+import type { ReactNode } from 'react';
+
+const FileTreeView = lazy(() => import('./FileTreeView'));
+const StarredView = lazy(() => import('./StarredView'));
+const MobileTodos = lazy(() => import('./MobileTodos'));
+
+interface MobileLayoutProps {
+  children: ReactNode;
+}
+
+// ToolbarSlot reads from MobileToolbarContext and renders MobileToolbar
+// Toolbar is position: fixed at bottom, above keyboard
+function ToolbarSlot({ showZoom, hasTabBar }: { showZoom?: boolean; hasTabBar?: boolean }) {
+  const { isVisible, handlers } = useMobileToolbar();
+  return (
+    <>
+      <MobileToolbar
+        isVisible={isVisible}
+        onIndent={handlers?.onIndent ?? (() => {})}
+        onOutdent={handlers?.onOutdent ?? (() => {})}
+        onToggleTodo={handlers?.onToggleTodo ?? (() => {})}
+        onAddNote={handlers?.onAddNote ?? (() => {})}
+        onMoveUp={handlers?.onMoveUp ?? (() => {})}
+        onMoveDown={handlers?.onMoveDown ?? (() => {})}
+        onZoom={handlers?.onZoom ?? (() => {})}
+        onUndo={handlers?.onUndo ?? (() => {})}
+        onDelete={handlers?.onDelete ?? (() => {})}
+        showZoom={showZoom}
+        hasTabBar={hasTabBar}
+      />
+      {isVisible && <div className="h-10 shrink-0" />}
+    </>
+  );
+}
+
+export default function MobileLayout({ children }: MobileLayoutProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState<MobileTab>('memos');
+  const [showNewMenu, setShowNewMenu] = useState(false);
+  const prevTabRef = useRef<MobileTab>('memos');
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  // 监听键盘状态（由 MobileToolbar 通过 CustomEvent 通知）
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setKeyboardOpen(detail?.open ?? false);
+    };
+    window.addEventListener('keyboard-change', handler);
+    return () => window.removeEventListener('keyboard-change', handler);
+  }, []);
+
+  // Diary state
+  const [diaryDocId, setDiaryDocId] = useState<string | null>(null);
+
+  // Is user viewing a specific document (not diary tab)?
+  const isEditing = location.pathname.startsWith('/d/');
+
+  // Load diary when switching to diary tab
+  useEffect(() => {
+    if (activeTab !== 'diary') return;
+    let cancelled = false;
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = today.getMonth() + 1;
+    const d = today.getDate();
+
+    (async () => {
+      try {
+        const data = await getMonthlyDiary(y, m);
+        if (cancelled) return;
+        setDiaryDocId(data.document.id);
+
+        // Auto-create today's node if needed
+        await getOrCreateDayNode(y, m, d);
+      } catch (err) {
+        console.error('Failed to load diary:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeTab]);
+
+  // Signal to MemoHome/MainArea that MobileLayout is active
+  useEffect(() => {
+    document.documentElement.dataset.mobileLayout = 'true';
+    return () => { delete document.documentElement.dataset.mobileLayout; };
+  }, []);
+
+  const prevEditingRef = useRef(false);
+  useEffect(() => {
+    if (prevEditingRef.current && !isEditing) {
+      setActiveTab(prevTabRef.current);
+    }
+    if (isEditing) {
+      prevTabRef.current = activeTab;
+    }
+    prevEditingRef.current = isEditing;
+  }, [isEditing, activeTab]);
+
+  const handleTabChange = useCallback((tab: MobileTab) => {
+    if (tab === 'new') {
+      setShowNewMenu(true);
+      return;
+    }
+    setActiveTab(tab);
+    // Navigate to root when switching away from editor (but not diary)
+    // Use replace to avoid polluting browser history stack
+    if (isEditing && tab !== 'diary') {
+      navigate('/', { replace: true });
+    }
+  }, [isEditing, navigate]);
+
+  // location.key === "default" 表示用户直接通过 URL 打开（历史栈无上一页）
+  // 否则用 navigate(-1) 返回应用内上一页
+  const handleBack = useCallback(() => {
+    if (location.key === 'default') {
+      navigate('/', { replace: true });
+    } else {
+      navigate(-1);
+    }
+  }, [navigate, location.key]);
+
+  const handleSearch = useCallback((query: string) => {
+    navigate(`/search?q=${encodeURIComponent(query)}`);
+  }, [navigate]);
+
+  const handleNewMenuClose = useCallback(() => {
+    setShowNewMenu(false);
+  }, []);
+
+  const handleDocumentCreated = useCallback((id: string) => {
+    setShowNewMenu(false);
+    navigate(`/d/${id}`);
+  }, [navigate]);
+
+  // Determine top bar title
+  const getTopBarTitle = () => {
+    if (isEditing) return '编辑';
+    switch (activeTab) {
+      case 'memos': return '随想';
+      case 'diary': return '日记';
+      case 'files': return '文件';
+      case 'starred': return '收藏';
+      default: return '随想';
+    }
+  };
+
+  const showTabBar = (!isEditing || activeTab === 'diary') && !keyboardOpen;
+
+
+  return (
+    <MobileToolbarProvider>
+    <div className="flex flex-col bg-white dark:bg-gray-900" style={{ height: '100dvh' }}>
+      <MobileTopBar
+        title={getTopBarTitle()}
+        showBack={isEditing}
+        onBack={handleBack}
+        onSearch={handleSearch}
+      />
+
+      <div className="flex-1 overflow-hidden flex flex-col">
+        {isEditing && activeTab !== 'diary' ? (
+          // Document editor mode: toolbar below topbar, then content
+          <>
+            <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 44px)', flexShrink: 0 }} />
+            <ToolbarSlot showZoom={true} hasTabBar={false} />
+            {children}
+          </>
+        ) : activeTab === 'diary' ? (
+          // Diary tab: todos + toolbar + inline MainArea
+          <div className="flex-1 overflow-hidden flex flex-col">
+            <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 44px)', flexShrink: 0 }} />
+            <div className="max-h-[40vh] overflow-y-auto scrollbar-none shrink-0">
+              <Suspense fallback={null}>
+                <MobileTodos />
+              </Suspense>
+            </div>
+            <ToolbarSlot showZoom={false} hasTabBar={true} />
+            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-none">
+              {diaryDocId ? (
+                <DiaryMainArea diaryDocId={diaryDocId} onDiaryDocChange={setDiaryDocId} />
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">加载中...</div>
+              )}
+            </div>
+          </div>
+        ) : activeTab === 'files' ? (
+          <Suspense fallback={<div className="flex-1 flex items-center justify-center text-gray-400 text-sm">加载中...</div>}>
+            <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 44px)', flexShrink: 0 }} />
+            <FileTreeView />
+          </Suspense>
+        ) : activeTab === 'starred' ? (
+          <Suspense fallback={<div className="flex-1 flex items-center justify-center text-gray-400 text-sm">加载中...</div>}>
+            <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 44px)', flexShrink: 0 }} />
+            <StarredView />
+          </Suspense>
+        ) : (
+          // Memos tab: MainArea renders MemoHome
+          children
+        )}
+      </div>
+
+      {/* Fixed bottom tab bar */}
+      {showTabBar && (
+        <MobileBottomTabBar
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+        />
+      )}
+
+      {showNewMenu && (
+        <NewMenuPopup
+          onClose={handleNewMenuClose}
+          onDocumentCreated={handleDocumentCreated}
+        />
+      )}
+    </div>
+    </MobileToolbarProvider>
+  );
+}
+
+// Inline diary rendering - uses MainArea with diaryDocId prop
+import MainArea from '../MainArea';
+
+function DiaryMainArea({ diaryDocId, onDiaryDocChange }: { diaryDocId: string; onDiaryDocChange: (id: string) => void }) {
+  return <MainArea diaryDocId={diaryDocId} onDiaryDocChange={onDiaryDocChange} />;
+}

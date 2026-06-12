@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+__pycache__/
+venv/
+.venv/
+
+# Build output
+dist/
+build/
+*.pyc
+
+# Data (databases, uploads, canvas files)
+backend/data/
+appback.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.trae/
+.vscode/
+.idea/
+
+# Deploy packages
+deploy-package.tar.gz
+*.tar.gz
+
+# Temp
+*.tmp
+*.log

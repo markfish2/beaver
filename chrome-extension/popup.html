@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beaver</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Tab bar -->
+    <div class="tabs">
+      <button class="tab active" data-tab="save">保存</button>
+      <button class="tab" data-tab="settings">设置</button>
+    </div>
+
+    <!-- Save view -->
+    <div id="save-view" class="view">
+      <!-- Inject FAB button -->
+      <button id="btn-inject-fab" class="btn-fab" title="在当前页面注入浮动按钮">📌 注入浮动按钮</button>
+
+      <!-- Mode toggle: memo or document -->
+      <div class="mode-toggle">
+        <button class="mode-btn active" data-mode="memo">Memo 笔记</button>
+        <button class="mode-btn" data-mode="doc">普通笔记</button>
+      </div>
+
+      <!-- Memo mode (existing) -->
+      <div id="memo-mode">
+        <div id="selection-area">
+          <label class="label">选中内容</label>
+          <div id="selection-preview" class="preview">未检测到选中内容</div>
+          <div id="image-preview" class="image-grid hidden"></div>
+        </div>
+        <button id="btn-save" class="btn-primary" disabled>保存到 Memo</button>
+      </div>
+
+      <!-- Document mode (new) -->
+      <div id="doc-mode" class="hidden">
+        <div id="article-area">
+          <label class="label">页面正文</label>
+          <div id="article-preview" class="preview">点击下方按钮提取当前页面正文</div>
+        </div>
+        <button id="btn-extract" class="btn-primary">提取正文并保存</button>
+      </div>
+
+      <div id="save-toast" class="toast hidden"></div>
+    </div>
+
+    <!-- Settings view -->
+    <div id="settings-view" class="view hidden">
+      <div class="field">
+        <label class="label" for="input-url">API 地址</label>
+        <input id="input-url" type="url" placeholder="https://notes.example.com（不要带 /api）" spellcheck="false">
+      </div>
+      <div class="field">
+        <label class="label" for="input-token">Token</label>
+        <input id="input-token" type="password" placeholder="粘贴 API Token" spellcheck="false">
+      </div>
+      <div class="btn-row">
+        <button id="btn-save-settings" class="btn-primary">保存</button>
+        <button id="btn-test" class="btn-secondary">测试连接</button>
+      </div>
+      <div id="settings-toast" class="toast hidden"></div>
+    </div>
+  </div>
+  <script src="readability.js"></script>
+  <script src="turndown.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
