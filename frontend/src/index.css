@@ -207,8 +207,8 @@
 
 /* Memo Markdown 渲染样式 */
 .memo-content { overflow-wrap: break-word; word-break: break-word; min-width: 0; }
-.memo-content h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.75rem; }
-.memo-content h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.625rem; }
+.memo-content h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.75rem; letter-spacing: -0.01em; }
+.memo-content h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.625rem; letter-spacing: -0.005em; }
 .memo-content h3 { font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem; }
 .memo-content p { margin-bottom: 1rem; }
 .memo-content p:last-child { margin-bottom: 0; }

@@ -23,7 +23,7 @@ export default function MemoTagsPanel({ onTagClick, activeTag }: MemoTagsPanelPr
 
   if (tags.length === 0) {
     return (
-      <div className="bg-white dark:bg-gray-800/50 rounded-2xl p-4 border border-[#ebebeb] dark:border-gray-700 ">
+      <div className="bg-white dark:bg-gray-800/50 rounded-2xl p-4 shadow-sm ">
         <h3 className="text-sm font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">标签</h3>
         <p className="text-sm text-gray-400 dark:text-gray-500">使用 #标签 来创建</p>
       </div>
@@ -31,7 +31,7 @@ export default function MemoTagsPanel({ onTagClick, activeTag }: MemoTagsPanelPr
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800/50 rounded-2xl p-4 border border-[#ebebeb] dark:border-gray-700 ">
+    <div className="bg-white dark:bg-gray-800/50 rounded-2xl p-4 shadow-sm ">
       <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">标签</h3>
       <div className="flex flex-wrap gap-1.5">
         {tags.map(tag => (

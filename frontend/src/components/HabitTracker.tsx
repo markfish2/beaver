@@ -439,7 +439,7 @@ export default function HabitTracker() {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800/50 rounded-2xl p-4 border border-[#ebebeb] dark:border-gray-700 ">
+    <div className="bg-white dark:bg-gray-800/50 rounded-2xl p-4 shadow-sm ">
       {/* 标题栏 */}
       <div className="flex items-center justify-between mb-3">
         <span className="flex items-center gap-1.5 text-base font-medium text-gray-400 dark:text-gray-500">

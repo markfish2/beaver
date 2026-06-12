@@ -375,7 +375,7 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
 
   return (
     <div className="mb-6 relative">
-      <div className="bg-white dark:bg-gray-800/50 rounded-2xl border border-[#ebebeb] dark:border-gray-700 overflow-visible " data-resizable-container>
+      <div className="bg-white dark:bg-gray-800/50 rounded-2xl shadow-sm overflow-visible " data-resizable-container>
         <textarea
           ref={textareaRef}
           data-resizable-textarea

@@ -638,7 +638,7 @@ const NodeItem = memo(({
                 aria-checked={node.is_completed || false}
                 className={`absolute left-0 top-[5px] inline-flex items-center justify-center w-4 h-4 rounded-full border cursor-pointer shrink-0 transition-colors ${
                   (node.is_completed || false)
-                    ? 'bg-blue-500 border-blue-500'
+                    ? 'bg-emerald-500 border-emerald-500'
                     : (node.is_in_progress || false)
                       ? 'bg-white dark:bg-gray-700 border-blue-400'
                       : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-500'
