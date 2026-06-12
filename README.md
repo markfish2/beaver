@@ -55,7 +55,7 @@
 |------|------|
 | **大纲笔记** | 无限层级嵌套，支持折叠/展开、拖拽排序、缩进/取消缩进 |
 | **普通笔记 (Markdown)** | 支持 GFM 语法、代码高亮、实时预览、HTML 粘贴自动转 Markdown |
-| **画布笔记 (Excalidraw)** | 矢量绘图、流程图、思维导图式绘图（桌面端） |
+| **画布笔记 (Excalidraw)** | 矢量绘图、流程图、思维导图式绘图（桌面端），多窗口版本冲突检测，图片二进制独立存储 |
 | **思维导图** | 基于大纲结构一键生成思维导图，支持层级折叠 |
 | **富文本格式** | 加粗、斜体、标题级别、颜色、高亮、待办复选框 |
 | **@提及** | `@` 链接其他文档，可点击跳转 |
@@ -201,6 +201,7 @@ miniflowy/
 │       ├── crud.py                     # CRUD 操作（~38KB）
 │       ├── auth.py                     # JWT 认证（bcrypt + python-jose）
 │       ├── dependencies.py             # FastAPI 依赖注入（带缓存的用户查询）
+│       ├── excalidraw_storage.py       # 画布文件存储层（原子写入、版本控制、图片二进制存储）
 │       ├── limiter.py                  # 速率限制配置
 │       └── routers/                    # API 路由
 │           ├── auth.py                 # 登录 / 注册 / 初始化
@@ -286,7 +287,8 @@ miniflowy/
 │       │   ├── useHistory.ts           # 撤销/重做
 │       │   ├── useKeyboardScroll.ts    # 键盘滚动
 │       │   ├── useRetryFailedPreviews.ts # 链接预览重试
-│       │   └── useSaveManager.ts       # 保存管理
+│       │   ├── useSaveManager.ts       # 保存管理
+│       │   └── useResizableTextarea.ts # textarea 拖拽调整高度
 │       ├── context/
 │       │   ├── AuthContext.tsx          # 认证上下文
 │       │   ├── DocumentContext.tsx      # 文档列表上下文
@@ -693,10 +695,14 @@ Authorization: Bearer <token>
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/excalidraw/{document_id}` | 获取画布数据 |
+| GET | `/api/excalidraw/{document_id}` | 获取画布数据（含版本号） |
 | POST | `/api/excalidraw/` | 创建画布数据 |
-| PUT | `/api/excalidraw/{document_id}` | 更新画布（自动保存） |
+| PUT | `/api/excalidraw/{document_id}` | 更新画布（自动保存，支持版本控制） |
 | DELETE | `/api/excalidraw/{document_id}` | 删除画布 |
+| GET | `/api/excalidraw/{document_id}/files` | 获取画布图片元数据 |
+| GET | `/api/excalidraw/{document_id}/files/{file_id}` | 获取单个图片文件（二进制） |
+
+**版本控制**：PUT 请求支持 `version` 参数（乐观锁），版本不匹配返回 409 Conflict。
 
 ### API Token
 
@@ -837,10 +843,12 @@ SQLite 数据库，使用 WAL 模式优化并发性能。
 |------|------|------|
 | id | VARCHAR | 主键 |
 | document_id | UUID (FK, unique) | 关联文档 |
-| scene_data | TEXT | JSON 场景数据 |
+| scene_data | TEXT | 已迁移至文件系统，此字段为 NULL |
 | thumbnail | TEXT | 缩略图（Base64） |
 | created_at | DATETIME | 创建时间 |
 | updated_at | DATETIME | 更新时间 |
+
+**画布数据存储**：场景数据存储在 `data/excalidraw/{document_id}.json`，图片存储为二进制文件在 `data/excalidraw/{document_id}/` 目录。SQLite 只存元数据索引。支持乐观锁版本控制（`_version` 字段）。
 
 ### SQLite 优化配置
 
@@ -848,7 +856,7 @@ SQLite 数据库，使用 WAL 模式优化并发性能。
 PRAGMA journal_mode = WAL;       -- 写前日志模式，提升并发读写
 PRAGMA cache_size = -20480;      -- 20MB 缓存
 PRAGMA busy_timeout = 30000;     -- 30 秒忙等待
-PRAGMA synchronous = NORMAL;     -- 平衡性能和安全
+PRAGMA synchronous = FULL;       -- 每次 commit 等待数据写入磁盘，防止数据丢失
 ```
 
 ---
@@ -896,6 +904,8 @@ Beaver 支持全平台 PWA 安装：
 
 ### 功能
 
+- **弹窗设置**：点击插件图标打开设置弹窗，配置服务器地址和 API Token
+- **注入浮动按钮**：在当前页面注入浮动操作按钮，支持保存选中文字和提取整页正文
 - **右键菜单保存**：选中文字或图片 → 右键 → 保存到 Beaver
 - **一键保存网页**：保存当前页面标题和 URL
 - **图片保存**：右键保存图片到随想笔记
@@ -909,8 +919,8 @@ Beaver 支持全平台 PWA 安装：
 
 ### 配置
 
-在插件弹窗中填写：
-- **服务器地址**：`https://your-domain.com`
+点击插件图标，在弹窗中填写：
+- **服务器地址**：`https://your-domain.com`（不要带 /api）
 - **API Token**：在 Beaver 设置中生成
 
 ---
