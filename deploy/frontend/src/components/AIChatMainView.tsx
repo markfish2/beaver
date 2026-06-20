@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader2, FileText, ListTree, StickyNote, PenTool } from 'lucide-react';
+import { Send, Loader2, FileText, ListTree, StickyNote, PenTool, BookmarkPlus } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { askAI, getAIConversation } from '../api/data';
+import { askAI, getAIConversation, createMemo, createDocument, createNode } from '../api/data';
+import { useDocuments } from '../context/DocumentContext';
 
 interface Source {
   id: string;
@@ -39,12 +40,60 @@ interface AIChatMainViewProps {
 }
 
 export default function AIChatMainView({ conversationId, onConversationCreated, onNavigate }: AIChatMainViewProps) {
+  const { addDocument } = useDocuments();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingConv, setLoadingConv] = useState(false);
+  const [saveMenuIndex, setSaveMenuIndex] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [mode, setMode] = useState<'data' | 'web'>('data');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const saveMenuRef = useRef<HTMLDivElement>(null);
+
+  // 点击外部关闭保存菜单
+  useEffect(() => {
+    if (saveMenuIndex === null) return;
+    const handleClick = (e: MouseEvent) => {
+      if (saveMenuRef.current && !saveMenuRef.current.contains(e.target as Node)) {
+        setSaveMenuIndex(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [saveMenuIndex]);
+
+  // 保存到随想
+  const handleSaveToMemo = useCallback(async (content: string) => {
+    setSaving(true);
+    try {
+      await createMemo(content, true);
+      setSaveMenuIndex(null);
+      alert('已保存到随想');
+    } catch (e) {
+      alert('保存失败：' + (e instanceof Error ? e.message : '未知错误'));
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  // 保存到普通笔记
+  const handleSaveToNote = useCallback(async (content: string) => {
+    setSaving(true);
+    try {
+      const title = content.split('\n')[0].slice(0, 50) || 'AI 回复';
+      const doc = await createDocument(title, 'note', null, Date.now(), true);
+      await createNode(doc.id, content);
+      addDocument(doc);
+      setSaveMenuIndex(null);
+      if (onNavigate) onNavigate('note', doc.id);
+    } catch (e) {
+      alert('保存失败：' + (e instanceof Error ? e.message : '未知错误'));
+    } finally {
+      setSaving(false);
+    }
+  }, [onNavigate, addDocument]);
 
   // 加载已有对话消息
   useEffect(() => {
@@ -82,7 +131,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
       let sources: Source[] = [];
       let convId = conversationId || undefined;
 
-      for await (const chunk of askAI(newMessages, convId)) {
+      for await (const chunk of askAI(newMessages, convId, mode)) {
         try {
           const data = JSON.parse(chunk);
           if (data.type === 'conversation_id') {
@@ -149,7 +198,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
     } finally {
       setLoading(false);
     }
-  }, [input, messages, loading, conversationId, onConversationCreated]);
+  }, [input, messages, loading, conversationId, onConversationCreated, mode]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -164,23 +213,20 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
     }
   };
 
+  const isEmpty = messages.length === 0 && !loadingConv;
+
   return (
-    <div className="flex-1 flex flex-col h-full bg-white dark:bg-gray-900">
+    <div className={`flex-1 flex flex-col h-full bg-white dark:bg-gray-900 ${isEmpty ? 'items-center justify-center' : ''}`}>
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className={`${isEmpty ? 'hidden' : 'flex-1 overflow-y-auto p-4 space-y-4'}`}>
         {loadingConv ? (
           <div className="text-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
           </div>
-        ) : messages.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-lg text-gray-400">输入问题开始对话</p>
-            <p className="text-sm text-gray-300 mt-2">AI 会基于你的笔记内容回答</p>
-          </div>
         ) : null}
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[70%] rounded-lg px-4 py-3 ${
+            <div className={`max-w-[70%] rounded-lg px-4 py-3 relative group ${
               msg.role === 'user'
                 ? 'bg-blue-500 text-white'
                 : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200'
@@ -190,6 +236,37 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
               ) : (
                 <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
                   <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{msg.content}</ReactMarkdown>
+                </div>
+              )}
+              {msg.role === 'assistant' && msg.content && !msg.content.startsWith('请求失败') && (
+                <div className="flex justify-end mt-1.5 relative" ref={saveMenuIndex === i ? saveMenuRef : undefined}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setSaveMenuIndex(saveMenuIndex === i ? null : i); }}
+                    className="p-1 text-gray-400 hover:text-blue-500 rounded transition-colors"
+                    title="保存"
+                  >
+                    <BookmarkPlus className="w-3.5 h-3.5" />
+                  </button>
+                  {saveMenuIndex === i && (
+                    <div className="absolute right-0 bottom-full mb-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[120px] z-10">
+                      <button
+                        onClick={() => handleSaveToMemo(msg.content)}
+                        disabled={saving}
+                        className="w-full px-3 py-1.5 text-left text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                      >
+                        <StickyNote className="w-3.5 h-3.5" />
+                        保存到随想
+                      </button>
+                      <button
+                        onClick={() => handleSaveToNote(msg.content)}
+                        disabled={saving}
+                        className="w-full px-3 py-1.5 text-left text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        保存到笔记
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
               {msg.sources && msg.sources.length > 0 && (
@@ -227,25 +304,44 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-        <div className="flex items-end gap-2 max-w-3xl mx-auto">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="输入问题..."
-            rows={1}
-            className="flex-1 resize-none px-4 py-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg placeholder-gray-400 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            style={{ maxHeight: 120 }}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || loading}
-            className="p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <Send className="w-4 h-4" />
-          </button>
+      <div className={`px-4 ${isEmpty ? 'w-full max-w-2xl' : 'pb-4'}`}>
+        {isEmpty && (
+          <p className="text-lg text-gray-300 dark:text-gray-600 text-center mb-4">有什么可以帮你的？</p>
+        )}
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-full focus-within:border-gray-400 dark:focus-within:border-gray-500 transition-colors shadow-sm">
+            {/* 模式切换按钮 */}
+            <button
+              onClick={() => setMode(mode === 'data' ? 'web' : 'data')}
+              className="flex-shrink-0 ml-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              title={mode === 'data' ? '当前：数据模式，点击切换' : '当前：网络模式，点击切换'}
+            >
+              <span className="text-base">{mode === 'data' ? '📚' : '🌐'}</span>
+            </button>
+            {/* 输入框 */}
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={mode === 'data' ? '基于笔记内容回答...' : '输入任何问题...'}
+              rows={1}
+              className="flex-1 resize-none py-3.5 px-2 text-sm bg-transparent placeholder-gray-400 text-gray-800 dark:text-gray-200 focus:outline-none"
+              style={{ maxHeight: 120 }}
+            />
+            {/* 发送按钮 */}
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || loading}
+              className={`flex-shrink-0 mr-1.5 w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
+                input.trim()
+                  ? 'bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
+              } disabled:opacity-30 disabled:cursor-not-allowed`}
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

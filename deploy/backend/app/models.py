@@ -182,6 +182,7 @@ class AIConfig(Base):
     api_url: Mapped[str] = mapped_column(String(500))                  # API 地址
     api_key: Mapped[str] = mapped_column(String(500))                  # API Key
     model: Mapped[str] = mapped_column(String(100))                    # 模型名称
+    purpose: Mapped[str] = mapped_column(String(20), default="chat")   # chat/embedding
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)   # 是否默认配置
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

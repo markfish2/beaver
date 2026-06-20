@@ -403,6 +403,7 @@ class AIConfigBase(BaseModel):
     api_url: str
     api_key: str
     model: str
+    purpose: str = "chat"          # chat/embedding
     is_default: bool = False
 
 class AIConfigCreate(AIConfigBase):
@@ -452,3 +453,4 @@ class AIChatRequest(BaseModel):
     context: str = ""
     ai_config_id: Optional[UUID] = None
     conversation_id: Optional[UUID] = None
+    mode: str = "data"  # "data" = 搜索本地笔记, "web" = 网络问答

@@ -104,11 +104,19 @@ def update_document(db: Session, document_id: uuid.UUID, document: schemas.Docum
     if expected is not None and expected != db_doc.version:
         return db_doc, "conflict"
     update_data = document.model_dump(exclude_unset=True, exclude={'expected_version'})
+    # ai_excluded 变化时处理向量索引
+    ai_excluded_changed = 'ai_excluded' in update_data and update_data['ai_excluded'] != db_doc.ai_excluded
     for key, value in update_data.items():
         setattr(db_doc, key, value)
     db_doc.version += 1
     db.commit()
     db.refresh(db_doc)
+    # ai_excluded 变化时更新向量索引
+    if ai_excluded_changed:
+        if db_doc.ai_excluded:
+            _delete_embeddings("document", str(document_id))
+        else:
+            _trigger_doc_embedding_index(db, document_id)
     return db_doc, "ok"
 
 def copy_document(db: Session, document_id: uuid.UUID):
@@ -204,6 +212,10 @@ def copy_document(db: Session, document_id: uuid.UUID):
         db.add(excal_data)
         db.commit()
 
+    # 复制后索引向量
+    if new_doc.type not in ('folder', 'excalidraw'):
+        _trigger_doc_embedding_index(db, new_doc.id)
+
     return new_doc
 
 def delete_document(db: Session, document_id: uuid.UUID, delete_children: bool = False):
@@ -233,6 +245,7 @@ def delete_document(db: Session, document_id: uuid.UUID, delete_children: bool =
             db_doc.parent_id = None
             db_doc.deleted_at = now
             db.commit()
+        _delete_embeddings("document", str(document_id))
         return True
     return False
 
@@ -281,6 +294,9 @@ def restore_document(db: Session, document_id: uuid.UUID):
     # 如果是文件夹，递归恢复子项
     if db_doc.type == "folder":
         _restore_folder_children(db, db_doc.id)
+    else:
+        # 恢复时重新索引向量
+        _trigger_doc_embedding_index(db, document_id)
     return True
 
 
@@ -308,6 +324,7 @@ def restore_memo(db: Session, memo_id: uuid.UUID):
     db_memo.deleted_at = None
     db.commit()
     invalidate_memo_tags_cache()
+    _trigger_embedding_index("memo", db_memo.id, db_memo.content, db_memo.ai_excluded)
     return True
 
 
@@ -327,6 +344,7 @@ def permanent_delete_document(db: Session, document_id: uuid.UUID):
             permanent_delete_document(db, child.id)
     db.delete(db_doc)
     db.commit()
+    _delete_embeddings("document", str(document_id))
     return True
 
 
@@ -338,6 +356,7 @@ def permanent_delete_memo(db: Session, memo_id: uuid.UUID):
     db.delete(db_memo)
     db.commit()
     invalidate_memo_tags_cache()
+    _delete_embeddings("memo", str(memo_id))
     return True
 
 
@@ -441,6 +460,10 @@ def batch_move_nodes(db: Session, updates: list[schemas.NodeBatchUpdateItem]):
     return updated_nodes
 
 def delete_node(db: Session, node_id: uuid.UUID):
+    # 获取所属文档 ID（用于清理向量）
+    node = db.query(models.Node).filter(models.Node.id == node_id).first()
+    doc_id = str(node.document_id) if node else None
+
     # 使用循环收集所有子孙节点，然后批量删除
     all_ids = {node_id}
     to_process = {node_id}
@@ -458,11 +481,22 @@ def delete_node(db: Session, node_id: uuid.UUID):
         synchronize_session=False
     )
     db.commit()
+
+    # 清理该文档的向量数据
+    if doc_id:
+        _delete_embeddings("document", doc_id)
     return True
 
 def batch_delete_nodes(db: Session, node_ids: list[uuid.UUID]):
     if not node_ids:
         return True
+
+    # 收集涉及的文档 ID（用于清理向量）
+    doc_ids = set()
+    for nid in node_ids:
+        node = db.query(models.Node.document_id).filter(models.Node.id == nid).first()
+        if node:
+            doc_ids.add(str(node.document_id))
 
     # 收集所有需要删除的节点 ID（包括子孙节点）
     all_ids = set(node_ids)
@@ -481,6 +515,10 @@ def batch_delete_nodes(db: Session, node_ids: list[uuid.UUID]):
         synchronize_session=False
     )
     db.commit()
+
+    # 清理相关文档的向量数据
+    for doc_id in doc_ids:
+        _delete_embeddings("document", doc_id)
     return True
 
 def batch_create_nodes(db: Session, nodes_data: list[schemas.NodeBatchCreateItem]):
@@ -516,6 +554,10 @@ def batch_create_nodes(db: Session, nodes_data: list[schemas.NodeBatchCreateItem
     db.commit()
     for node in created_nodes:
         db.refresh(node)
+    # 批量创建后索引向量
+    doc_ids = {str(node.document_id) for node in created_nodes}
+    for doc_id in doc_ids:
+        _trigger_doc_embedding_index(db, uuid.UUID(doc_id))
     return created_nodes
 
 def batch_update_nodes(db: Session, updates: list[schemas.NodeBatchUpdateItem]):
@@ -534,10 +576,14 @@ def batch_update_nodes(db: Session, updates: list[schemas.NodeBatchUpdateItem]):
     }
 
     updated_nodes = []
+    content_changed_docs = set()
     for node_id_str, update in id_map.items():
         db_node = existing_nodes.get(uuid.UUID(node_id_str))
         if db_node:
             update_data = update.model_dump(exclude_unset=True, exclude={'id'})
+            # 检测内容是否变化
+            if 'content' in update_data or 'note' in update_data:
+                content_changed_docs.add(db_node.document_id)
             for key, value in update_data.items():
                 setattr(db_node, key, value)
             updated_nodes.append(db_node)
@@ -545,6 +591,9 @@ def batch_update_nodes(db: Session, updates: list[schemas.NodeBatchUpdateItem]):
     db.commit()
     for node in updated_nodes:
         db.refresh(node)
+    # 内容变化时重新索引
+    for doc_id in content_changed_docs:
+        _trigger_doc_embedding_index(db, doc_id)
     return updated_nodes
 
 def batch_update_node_properties(db: Session, updates: list[schemas.NodeBatchPropertyUpdateItem]):
@@ -588,6 +637,7 @@ def batch_save_operations(db: Session, operations: list[schemas.BatchSaveOperati
 
     results = []
     touched_doc_ids = set()  # 跟踪受影响的文档 ID
+    content_changed_doc_ids = set()  # 跟踪内容变化的文档 ID（用于向量索引）
     for operation in operations:
         try:
             op_type = operation.type
@@ -602,6 +652,7 @@ def batch_save_operations(db: Session, operations: list[schemas.BatchSaveOperati
                         if new_content is not None:
                             db_node.content = new_content
                             touched_doc_ids.add(db_node.document_id)
+                            content_changed_doc_ids.add(db_node.document_id)
                             results.append({'id': operation.id, 'status': 'success'})
                         else:
                             results.append({'id': operation.id, 'status': 'skipped', 'reason': 'no newContent'})
@@ -619,6 +670,7 @@ def batch_save_operations(db: Session, operations: list[schemas.BatchSaveOperati
                         if new_note is not None:
                             db_node.note = new_note
                             touched_doc_ids.add(db_node.document_id)
+                            content_changed_doc_ids.add(db_node.document_id)
                             results.append({'id': operation.id, 'status': 'success'})
                         else:
                             results.append({'id': operation.id, 'status': 'skipped', 'reason': 'no newNote'})
@@ -706,6 +758,10 @@ def batch_save_operations(db: Session, operations: list[schemas.BatchSaveOperati
     # 更新受影响文档的 updated_at
     for doc_id in touched_doc_ids:
         _touch_document(db, doc_id)
+
+    # 内容变化时重新索引向量
+    for doc_id in content_changed_doc_ids:
+        _trigger_doc_embedding_index(db, doc_id)
 
     try:
         db.commit()
@@ -1024,6 +1080,7 @@ def delete_memo(db: Session, memo_id: uuid.UUID):
         db_memo.deleted_at = datetime.utcnow()
         db.commit()
         invalidate_memo_tags_cache()
+        _delete_embeddings("memo", str(memo_id))
         return True
     return False
 

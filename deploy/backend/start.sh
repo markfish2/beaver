@@ -137,10 +137,14 @@ sqlite3 /app/data/app.db "CREATE TABLE IF NOT EXISTS ai_configs (
     api_url VARCHAR(500) NOT NULL,
     api_key VARCHAR(500) NOT NULL,
     model VARCHAR(100) NOT NULL,
+    purpose VARCHAR(20) NOT NULL DEFAULT 'chat',
     is_default BOOLEAN DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );" && echo "Created ai_configs table" || echo "ai_configs table already exists"
+
+# AI 配置表迁移：添加 purpose 字段（已有表的兼容）
+sqlite3 /app/data/app.db "ALTER TABLE ai_configs ADD COLUMN purpose VARCHAR(20) NOT NULL DEFAULT 'chat';" 2>/dev/null && echo "Added ai_configs.purpose column" || echo "ai_configs.purpose column already exists"
 
 # 语音记录表
 sqlite3 /app/data/app.db "CREATE TABLE IF NOT EXISTS voice_records (

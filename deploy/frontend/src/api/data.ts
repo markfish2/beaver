@@ -81,8 +81,8 @@ export const getDocument = async (id: string): Promise<Document> => {
   return response.data;
 };
 
-export const createDocument = async (title: string, type: string = 'document', parent_id: string | null = null, sort_order: number = Date.now()) => {
-  const response = await api.post<Document>('/documents/', { title, type, parent_id, sort_order });
+export const createDocument = async (title: string, type: string = 'document', parent_id: string | null = null, sort_order: number = Date.now(), aiExcluded: boolean = false) => {
+  const response = await api.post<Document>('/documents/', { title, type, parent_id, sort_order, ai_excluded: aiExcluded });
   dataCache.invalidate('documents:');
   return response.data;
 };
@@ -375,8 +375,8 @@ export interface MemoHeatmapResponse {
   days: Record<string, number>;
 }
 
-export const createMemo = async (content: string): Promise<Memo> => {
-  const response = await api.post<Memo>('/memos/', { content });
+export const createMemo = async (content: string, aiExcluded: boolean = false): Promise<Memo> => {
+  const response = await api.post<Memo>('/memos/', { content, ai_excluded: aiExcluded });
   dataCache.invalidate('memos:');
   return response.data;
 };
@@ -876,10 +876,11 @@ export const aiChat = async function* (
   }
 };
 
-// AI 问答（流式返回，包含来源信息）
+// AI 问答（流式返回，按行分割 JSON）
 export const askAI = async function* (
   messages: { role: string; content: string }[],
-  conversationId?: string
+  conversationId?: string,
+  mode: 'data' | 'web' = 'data'
 ): AsyncGenerator<string> {
   const token = localStorage.getItem('token');
   const resp = await fetch('/api/ai/ask', {
@@ -888,7 +889,7 @@ export const askAI = async function* (
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`
     },
-    body: JSON.stringify({ messages, conversation_id: conversationId })
+    body: JSON.stringify({ messages, conversation_id: conversationId, mode })
   });
 
   if (!resp.ok) {
@@ -899,12 +900,19 @@ export const askAI = async function* (
   const reader = resp.body?.getReader();
   if (!reader) return;
   const decoder = new TextDecoder();
+  let buffer = '';
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    yield decoder.decode(value);
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      if (line.trim()) yield line;
+    }
   }
+  if (buffer.trim()) yield buffer;
 };
 
 // AI 对话历史
