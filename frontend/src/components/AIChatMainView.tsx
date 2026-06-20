@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader2, FileText, ListTree, StickyNote, PenTool } from 'lucide-react';
+import { Send, Loader2, FileText, ListTree, StickyNote, PenTool, BookmarkPlus } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { askAI, getAIConversation } from '../api/data';
+import { askAI, getAIConversation, createMemo, createDocument, createNode } from '../api/data';
 
 interface Source {
   id: string;
@@ -43,8 +43,53 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingConv, setLoadingConv] = useState(false);
+  const [saveMenuIndex, setSaveMenuIndex] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const saveMenuRef = useRef<HTMLDivElement>(null);
+
+  // 点击外部关闭保存菜单
+  useEffect(() => {
+    if (saveMenuIndex === null) return;
+    const handleClick = (e: MouseEvent) => {
+      if (saveMenuRef.current && !saveMenuRef.current.contains(e.target as Node)) {
+        setSaveMenuIndex(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [saveMenuIndex]);
+
+  // 保存到随想
+  const handleSaveToMemo = useCallback(async (content: string) => {
+    setSaving(true);
+    try {
+      await createMemo(content);
+      setSaveMenuIndex(null);
+      alert('已保存到随想');
+    } catch (e) {
+      alert('保存失败：' + (e instanceof Error ? e.message : '未知错误'));
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  // 保存到普通笔记
+  const handleSaveToNote = useCallback(async (content: string) => {
+    setSaving(true);
+    try {
+      const title = content.split('\n')[0].slice(0, 50) || 'AI 回复';
+      const doc = await createDocument(title, 'note');
+      await createNode(doc.id, content);
+      setSaveMenuIndex(null);
+      if (onNavigate) onNavigate('note', doc.id);
+    } catch (e) {
+      alert('保存失败：' + (e instanceof Error ? e.message : '未知错误'));
+    } finally {
+      setSaving(false);
+    }
+  }, [onNavigate]);
 
   // 加载已有对话消息
   useEffect(() => {
@@ -180,7 +225,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
         ) : null}
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[70%] rounded-lg px-4 py-3 ${
+            <div className={`max-w-[70%] rounded-lg px-4 py-3 relative group ${
               msg.role === 'user'
                 ? 'bg-blue-500 text-white'
                 : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200'
@@ -190,6 +235,37 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
               ) : (
                 <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
                   <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{msg.content}</ReactMarkdown>
+                </div>
+              )}
+              {msg.role === 'assistant' && msg.content && !msg.content.startsWith('请求失败') && (
+                <div className="absolute -bottom-3 right-1 opacity-0 group-hover:opacity-100 transition-opacity" ref={saveMenuIndex === i ? saveMenuRef : undefined}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setSaveMenuIndex(saveMenuIndex === i ? null : i); }}
+                    className="p-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md shadow-sm text-gray-400 hover:text-blue-500 transition-colors"
+                    title="保存"
+                  >
+                    <BookmarkPlus className="w-3.5 h-3.5" />
+                  </button>
+                  {saveMenuIndex === i && (
+                    <div className="absolute right-0 bottom-full mb-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[120px] z-10">
+                      <button
+                        onClick={() => handleSaveToMemo(msg.content)}
+                        disabled={saving}
+                        className="w-full px-3 py-1.5 text-left text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                      >
+                        <StickyNote className="w-3.5 h-3.5" />
+                        保存到随想
+                      </button>
+                      <button
+                        onClick={() => handleSaveToNote(msg.content)}
+                        disabled={saving}
+                        className="w-full px-3 py-1.5 text-left text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        保存到笔记
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
               {msg.sources && msg.sources.length > 0 && (
