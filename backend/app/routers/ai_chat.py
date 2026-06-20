@@ -41,27 +41,48 @@ def _search_notes(db: Session, query: str, limit: int = 10) -> list[dict]:
     stopwords = {'笔记', '里面', '哪些', '什么', '怎么', '如何', '可以', '这个', '那个', '有没有', '是什么'}
     keywords = [kw for kw in keywords if len(kw) >= 2 and kw not in stopwords]
 
-    # 搜索 memos（排除 ai_excluded 和已删除）
+    # 搜索策略：完整短语 → AND 关键词 → 核心词 OR
     memo_conditions = [
         models.Memo.deleted_at.is_(None),
         models.Memo.ai_excluded == False,
         models.Memo.is_archived == False,
     ]
-    # 优先 AND 匹配（所有关键词都要出现），无结果时回退到 OR
-    and_conditions = [models.Memo.content.like(f"%{kw}%") for kw in keywords]
+    node_kw_conds = [
+        or_(models.Node.content.like(f"%{kw}%"), models.Node.note.like(f"%{kw}%"))
+        for kw in keywords
+    ]
+
+    # 1) 完整短语搜索
     memos = db.query(models.Memo).filter(
-        *memo_conditions,
-        and_(*and_conditions)
+        *memo_conditions, models.Memo.content.like(f"%{query}%")
     ).limit(limit).all()
-    if not memos and len(keywords) > 1:
-        keyword_conditions = [models.Memo.content.like(f"%{kw}%") for kw in keywords]
+    nodes = db.query(models.Node).filter(
+        or_(models.Node.content.like(f"%{query}%"), models.Node.note.like(f"%{query}%"))
+    ).limit(limit).all()
+
+    # 2) AND 关键词（短语无结果时）
+    if not memos and not nodes and len(keywords) > 1:
         memos = db.query(models.Memo).filter(
-            *memo_conditions,
-            or_(*keyword_conditions)
+            *memo_conditions, and_(*[models.Memo.content.like(f"%{kw}%") for kw in keywords])
         ).limit(limit).all()
+        nodes = db.query(models.Node).filter(and_(*node_kw_conds)).limit(limit).all()
+
+    # 3) 核心词 OR（AND 也无结果时，只用非 bigram 的关键词）
+    if not memos and not nodes:
+        # 优先用原始查询中的有意义词（去掉单字 bigram）
+        core_keywords = [kw for kw in keywords if len(kw) >= 2]
+        if core_keywords:
+            core_memo_conds = [models.Memo.content.like(f"%{kw}%") for kw in core_keywords]
+            memos = db.query(models.Memo).filter(
+                *memo_conditions, or_(*core_memo_conds)
+            ).limit(limit).all()
+            core_node_conds = [
+                or_(models.Node.content.like(f"%{kw}%"), models.Node.note.like(f"%{kw}%"))
+                for kw in core_keywords
+            ]
+            nodes = db.query(models.Node).filter(or_(*core_node_conds)).limit(limit).all()
 
     for memo in memos:
-        # 提取匹配片段
         snippet = _extract_snippet(memo.content, query)
         results.append({
             "id": str(memo.id),
@@ -69,22 +90,6 @@ def _search_notes(db: Session, query: str, limit: int = 10) -> list[dict]:
             "type": "memo",
             "snippet": snippet,
         })
-
-    # 搜索 nodes（大纲笔记内容）
-    node_keyword_conditions = [
-        or_(
-            models.Node.content.like(f"%{kw}%"),
-            models.Node.note.like(f"%{kw}%")
-        ) for kw in keywords
-    ]
-    # 优先 AND 匹配
-    nodes = db.query(models.Node).filter(
-        and_(*node_keyword_conditions)
-    ).limit(limit).all()
-    if not nodes and len(keywords) > 1:
-        nodes = db.query(models.Node).filter(
-            or_(*node_keyword_conditions)
-        ).limit(limit).all()
 
     # 按 document 分组，每个 document 只取最相关的片段
     doc_snippets = {}
