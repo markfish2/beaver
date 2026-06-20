@@ -20,39 +20,32 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _search_notes(db: Session, query: str, limit: int = 10) -> list[dict]:
-    """搜索笔记内容，返回相关片段（支持分词搜索）"""
+def _search_notes(db: Session, query: str, keywords: list[str] = None, limit: int = 10) -> list[dict]:
+    """搜索笔记内容，按关键词匹配数量评分排序"""
     import re
     results = []
 
-    # 提取搜索关键词（中文按 bigram 分词，英文按单词）
-    keywords = []
-    # 英文单词（至少3个字符）
-    keywords.extend([w for w in re.findall(r'[a-zA-Z]+', query) if len(w) >= 3])
-    # 中文 bigram（连续2个汉字）
-    chinese = re.findall(r'[一-鿿]+', query)
-    for seg in chinese:
-        if len(seg) >= 2:
-            for i in range(len(seg) - 1):
-                keywords.append(seg[i:i+2])
-    if not keywords:
-        keywords = [query.strip()]
-    # 过滤太短和太常见的关键词
-    stopwords = {'笔记', '里面', '哪些', '什么', '怎么', '如何', '可以', '这个', '那个', '有没有', '是什么'}
-    keywords = [kw for kw in keywords if len(kw) >= 2 and kw not in stopwords]
+    # 如果没传 keywords，用原始查询提取
+    if keywords is None:
+        keywords = []
+        keywords.extend([w for w in re.findall(r'[a-zA-Z]+', query) if len(w) >= 3])
+        chinese = re.findall(r'[一-鿿]+', query)
+        for seg in chinese:
+            if len(seg) >= 2:
+                for i in range(len(seg) - 1):
+                    keywords.append(seg[i:i+2])
+        if not keywords:
+            keywords = [query.strip()]
+        stopwords = {'笔记', '里面', '哪些', '什么', '怎么', '如何', '可以', '这个', '那个', '有没有', '是什么'}
+        keywords = [kw for kw in keywords if len(kw) >= 2 and kw not in stopwords]
 
-    # 搜索策略：完整短语 → AND 关键词 → 核心词 OR
     memo_conditions = [
         models.Memo.deleted_at.is_(None),
         models.Memo.ai_excluded == False,
         models.Memo.is_archived == False,
     ]
-    node_kw_conds = [
-        or_(models.Node.content.like(f"%{kw}%"), models.Node.note.like(f"%{kw}%"))
-        for kw in keywords
-    ]
 
-    # 1) 完整短语搜索
+    # 1) 完整短语搜索（最高优先级）
     memos = db.query(models.Memo).filter(
         *memo_conditions, models.Memo.content.like(f"%{query}%")
     ).limit(limit).all()
@@ -60,27 +53,52 @@ def _search_notes(db: Session, query: str, limit: int = 10) -> list[dict]:
         or_(models.Node.content.like(f"%{query}%"), models.Node.note.like(f"%{query}%"))
     ).limit(limit).all()
 
-    # 2) AND 关键词（短语无结果时）
-    if not memos and not nodes and len(keywords) > 1:
-        memos = db.query(models.Memo).filter(
-            *memo_conditions, and_(*[models.Memo.content.like(f"%{kw}%") for kw in keywords])
-        ).limit(limit).all()
-        nodes = db.query(models.Node).filter(and_(*node_kw_conds)).limit(limit).all()
+    # 2) 关键词 OR 搜索（短语无结果时），按匹配数量评分
+    if not memos and not nodes and keywords:
+        # 搜索所有可能匹配的 memo
+        kw_conds = [models.Memo.content.like(f"%{kw}%") for kw in keywords]
+        all_memos = db.query(models.Memo).filter(
+            *memo_conditions, or_(*kw_conds)
+        ).limit(limit * 3).all()
 
-    # 3) 核心词 OR（AND 也无结果时，只用非 bigram 的关键词）
-    if not memos and not nodes:
-        # 优先用原始查询中的有意义词（去掉单字 bigram）
-        core_keywords = [kw for kw in keywords if len(kw) >= 2]
-        if core_keywords:
-            core_memo_conds = [models.Memo.content.like(f"%{kw}%") for kw in core_keywords]
-            memos = db.query(models.Memo).filter(
-                *memo_conditions, or_(*core_memo_conds)
-            ).limit(limit).all()
-            core_node_conds = [
-                or_(models.Node.content.like(f"%{kw}%"), models.Node.note.like(f"%{kw}%"))
-                for kw in core_keywords
-            ]
-            nodes = db.query(models.Node).filter(or_(*core_node_conds)).limit(limit).all()
+        # 评分：计算每个 memo 匹配了多少个关键词
+        scored_memos = []
+        for memo in all_memos:
+            content = memo.content or ""
+            score = sum(1 for kw in keywords if kw in content)
+            if score > 0:
+                scored_memos.append((score, memo))
+        scored_memos.sort(key=lambda x: -x[0])
+        # 只取匹配关键词数 >= 2 的，或者全部结果中最好的几个
+        if scored_memos:
+            max_score = scored_memos[0][0]
+            if max_score >= 2:
+                memos = [m for s, m in scored_memos if s >= 2][:limit]
+            else:
+                memos = [m for _, m in scored_memos[:limit]]
+
+        # 搜索节点
+        node_kw_conds = [
+            or_(models.Node.content.like(f"%{kw}%"), models.Node.note.like(f"%{kw}%"))
+            for kw in keywords
+        ]
+        all_nodes = db.query(models.Node).filter(
+            or_(*node_kw_conds)
+        ).limit(limit * 3).all()
+
+        scored_nodes = []
+        for node in all_nodes:
+            text = (node.content or "") + (node.note or "")
+            score = sum(1 for kw in keywords if kw in text)
+            if score > 0:
+                scored_nodes.append((score, node))
+        scored_nodes.sort(key=lambda x: -x[0])
+        if scored_nodes:
+            max_score = scored_nodes[0][0]
+            if max_score >= 2:
+                nodes = [n for s, n in scored_nodes if s >= 2][:limit]
+            else:
+                nodes = [n for _, n in scored_nodes[:limit]]
 
     for memo in memos:
         snippet = _extract_snippet(memo.content, query)
@@ -91,7 +109,7 @@ def _search_notes(db: Session, query: str, limit: int = 10) -> list[dict]:
             "snippet": snippet,
         })
 
-    # 按 document 分组，每个 document 只取最相关的片段
+    # 按 document 分组
     doc_snippets = {}
     for node in nodes:
         doc = db.query(models.Document).filter(
@@ -101,7 +119,6 @@ def _search_notes(db: Session, query: str, limit: int = 10) -> list[dict]:
         ).first()
         if not doc:
             continue
-
         doc_id = str(doc.id)
         if doc_id not in doc_snippets:
             doc_snippets[doc_id] = {
@@ -110,13 +127,10 @@ def _search_notes(db: Session, query: str, limit: int = 10) -> list[dict]:
                 "type": doc.type,
                 "snippet": "",
             }
-
-        # 取最相关的片段
         text = node.content or node.note or ""
-        if query.lower() in text.lower():
-            snippet = _extract_snippet(text, query)
-            if snippet and len(snippet) > len(doc_snippets[doc_id]["snippet"]):
-                doc_snippets[doc_id]["snippet"] = snippet
+        snippet = _extract_snippet(text, query)
+        if snippet and len(snippet) > len(doc_snippets[doc_id]["snippet"]):
+            doc_snippets[doc_id]["snippet"] = snippet
 
     results.extend(list(doc_snippets.values())[:limit])
 
@@ -358,27 +372,20 @@ async def ask_ai(
         if embedding_supported:
             sources = await search_similar(db, query, config)
         else:
-            # 优先用扩展查询搜索（更精准）
+            # 用 AI 扩展搜索关键词
             search_queries = await _expand_query(query, config)
-            seen_ids = set()
-            for sq in search_queries:
-                results = _search_notes(db, sq)
-                for r in results:
-                    key = f"{r['type']}:{r['id']}"
-                    if key not in seen_ids:
-                        seen_ids.add(key)
-                        sources.append(r)
-                        if len(sources) >= 8:
-                            break
-                if len(sources) >= 8:
-                    break
-            # 用原始查询补充
-            if len(sources) < 3:
-                for r in _search_notes(db, query):
-                    key = f"{r['type']}:{r['id']}"
-                    if key not in seen_ids:
-                        seen_ids.add(key)
-                        sources.append(r)
+            # 收集所有关键词（原始查询 + 扩展查询的每个词）
+            import re
+            all_keywords = set()
+            for sq in [query] + search_queries:
+                # 提取有意义的词（2字以上的中文词组、英文单词）
+                for w in re.findall(r'[一-鿿]{2,}', sq):
+                    all_keywords.add(w)
+                for w in re.findall(r'[a-zA-Z]{3,}', sq):
+                    all_keywords.add(w)
+            keywords = list(all_keywords)
+            # 搜索
+            sources = _search_notes(db, query, keywords=keywords if keywords else None)
 
         context_parts = []
         for i, source in enumerate(sources, 1):
