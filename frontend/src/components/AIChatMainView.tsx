@@ -216,15 +216,14 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
   return (
     <div className="flex-1 flex flex-col h-full bg-white dark:bg-gray-900">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${messages.length === 0 && !loadingConv ? 'flex flex-col justify-center' : ''}`}>
         {loadingConv ? (
           <div className="text-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
           </div>
         ) : messages.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-lg text-gray-400">输入问题开始对话</p>
-            <p className="text-sm text-gray-300 mt-2">AI 会基于你的笔记内容回答</p>
+          <div className="text-center">
+            <p className="text-lg text-gray-300 dark:text-gray-600 mb-6">有什么可以帮你的？</p>
           </div>
         ) : null}
         {messages.map((msg, i) => (
@@ -307,16 +306,16 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
       </div>
 
       {/* Input */}
-      <div className="p-4">
-        <div className="max-w-3xl mx-auto">
-          <div className="flex items-center gap-0 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl focus-within:border-gray-300 dark:focus-within:border-gray-600 transition-colors">
+      <div className={`px-4 pb-4 ${messages.length === 0 ? 'pb-8' : ''}`}>
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-full focus-within:border-gray-400 dark:focus-within:border-gray-500 transition-colors shadow-sm">
             {/* 模式切换按钮 */}
             <button
               onClick={() => setMode(mode === 'data' ? 'web' : 'data')}
-              className="flex-shrink-0 ml-2 px-2 py-1.5 text-xs rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              className="flex-shrink-0 ml-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
               title={mode === 'data' ? '当前：数据模式，点击切换' : '当前：网络模式，点击切换'}
             >
-              {mode === 'data' ? '📚 数据' : '🌐 网络'}
+              <span className="text-base">{mode === 'data' ? '📚' : '🌐'}</span>
             </button>
             {/* 输入框 */}
             <textarea
@@ -326,14 +325,14 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
               onKeyDown={handleKeyDown}
               placeholder={mode === 'data' ? '基于笔记内容回答...' : '输入任何问题...'}
               rows={1}
-              className="flex-1 resize-none py-3 px-2 text-sm bg-transparent placeholder-gray-400 text-gray-800 dark:text-gray-200 focus:outline-none"
+              className="flex-1 resize-none py-3.5 px-2 text-sm bg-transparent placeholder-gray-400 text-gray-800 dark:text-gray-200 focus:outline-none"
               style={{ maxHeight: 120 }}
             />
             {/* 发送按钮 */}
             <button
               onClick={handleSend}
               disabled={!input.trim() || loading}
-              className="flex-shrink-0 mr-2 p-2 bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="flex-shrink-0 mr-1.5 w-8 h-8 flex items-center justify-center bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               <Send className="w-4 h-4" />
             </button>
