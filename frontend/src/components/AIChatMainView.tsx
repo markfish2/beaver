@@ -238,7 +238,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
                 </div>
               )}
               {msg.role === 'assistant' && msg.content && !msg.content.startsWith('请求失败') && (
-                <div className="absolute -bottom-3 right-1 opacity-0 group-hover:opacity-100 transition-opacity" ref={saveMenuIndex === i ? saveMenuRef : undefined}>
+                <div className="absolute -bottom-3 right-1" ref={saveMenuIndex === i ? saveMenuRef : undefined}>
                   <button
                     onClick={(e) => { e.stopPropagation(); setSaveMenuIndex(saveMenuIndex === i ? null : i); }}
                     className="p-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md shadow-sm text-gray-400 hover:text-blue-500 transition-colors"
