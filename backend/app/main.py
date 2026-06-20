@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from .routers import auth, users, documents, nodes, attachments, shares, diary, memos, search, public_memos, link_preview, excalidraw, todos, api_tokens, trash, share, habits
+from .routers import auth, users, documents, nodes, attachments, shares, diary, memos, search, public_memos, link_preview, excalidraw, todos, api_tokens, trash, share, habits, ai, ai_chat, ai_conversations
 from .database import engine, Base
 from .limiter import limiter
 from slowapi import _rate_limit_exceeded_handler
@@ -154,6 +154,50 @@ def migrate_database():
             cursor.execute("UPDATE documents SET updated_at = datetime('now')")
             conn.commit()
             logger.info("已添加 documents.updated_at 列")
+        # Add user profile fields if not exists
+        cursor.execute("PRAGMA table_info(users)")
+        user_columns = [row[1] for row in cursor.fetchall()]
+        for col_name, col_def in [
+            ('nickname', "VARCHAR(50)"),
+            ('email', "VARCHAR(100)"),
+            ('phone', "VARCHAR(20)"),
+            ('bio', "VARCHAR(200)"),
+            ('avatar_path', "VARCHAR(500)"),
+        ]:
+            if col_name not in user_columns:
+                cursor.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_def}")
+                conn.commit()
+                logger.info(f"已添加 users.{col_name} 列")
+        # Add ai_excluded to documents and memos
+        for table in ['documents', 'memos']:
+            cursor.execute(f"PRAGMA table_info({table})")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'ai_excluded' not in columns:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN ai_excluded BOOLEAN DEFAULT 0")
+                conn.commit()
+                logger.info(f"已添加 {table}.ai_excluded 列")
+        # Create AI conversation tables
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ai_conversations (
+                id TEXT PRIMARY KEY,
+                title VARCHAR(200),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ai_messages (
+                id TEXT PRIMARY KEY,
+                conversation_id TEXT NOT NULL REFERENCES ai_conversations(id) ON DELETE CASCADE,
+                role VARCHAR(20) NOT NULL,
+                content TEXT NOT NULL,
+                sources TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_ai_messages_conversation ON ai_messages(conversation_id)")
+        conn.commit()
+        logger.info("已确认 ai_conversations / ai_messages 表存在")
         conn.close()
     except Exception as e:
         logger.warning(f"数据库迁移失败: {e}")
@@ -215,6 +259,9 @@ app.include_router(api_tokens.router, prefix="/api/tokens", tags=["tokens"])
 app.include_router(trash.router, prefix="/api/trash", tags=["trash"])
 app.include_router(share.router, prefix="/api/share", tags=["share"])
 app.include_router(habits.router, prefix="/api/habits", tags=["habits"])
+app.include_router(ai.router, prefix="/api/ai", tags=["ai"])
+app.include_router(ai_chat.router, prefix="/api/ai", tags=["ai-chat"])
+app.include_router(ai_conversations.router, prefix="/api/ai/conversations", tags=["ai-conversations"])
 
 # Mount static files for uploads (must be after API routes)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")

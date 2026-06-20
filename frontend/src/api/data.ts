@@ -9,6 +9,7 @@ export interface Document {
   parent_id: string | null;
   sort_order: number;
   is_starred: boolean;
+  ai_excluded?: boolean;
   icon?: string;
   diary_date?: string | null;
   version?: number;
@@ -37,6 +38,7 @@ export interface Node {
   file_path?: string;
   file_name?: string;
   version?: number;
+  parent_content?: string | null;
 }
 
 export interface UploadResponse {
@@ -355,6 +357,7 @@ export interface Memo {
   is_archived: boolean;
   is_public: boolean;
   color: string | null;
+  ai_excluded: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -424,6 +427,12 @@ export const updateMemoColor = async (id: string, color: string | null): Promise
 
 export const toggleMemoPublic = async (id: string, is_public: boolean): Promise<Memo> => {
   const response = await api.put<Memo>(`/memos/${id}`, { is_public });
+  dataCache.invalidate('memos:');
+  return response.data;
+};
+
+export const toggleMemoAI = async (id: string, ai_excluded: boolean): Promise<Memo> => {
+  const response = await api.put<Memo>(`/memos/${id}`, { ai_excluded });
   dataCache.invalidate('memos:');
   return response.data;
 };
@@ -777,4 +786,157 @@ export const toggleHabitRecord = async (id: string, date: string): Promise<{ che
 
 export const updatePassword = async (oldPassword: string, newPassword: string): Promise<void> => {
   await api.put('/users/password', { old_password: oldPassword, new_password: newPassword });
+};
+
+// ── AI ──
+
+export interface AIConfig {
+  id: string;
+  name: string;
+  provider: string;
+  api_url: string;
+  api_key: string;
+  model: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AIConfigCreate {
+  name: string;
+  provider: string;
+  api_url: string;
+  api_key: string;
+  model: string;
+  is_default?: boolean;
+}
+
+export interface AIConfigUpdate {
+  name?: string;
+  provider?: string;
+  api_url?: string;
+  api_key?: string;
+  model?: string;
+  is_default?: boolean;
+}
+
+export const getAIConfigs = async (): Promise<AIConfig[]> => {
+  const response = await api.get<AIConfig[]>('/ai/configs');
+  return response.data;
+};
+
+export const createAIConfig = async (config: AIConfigCreate): Promise<AIConfig> => {
+  const response = await api.post<AIConfig>('/ai/configs', config);
+  return response.data;
+};
+
+export const updateAIConfig = async (id: string, data: AIConfigUpdate): Promise<AIConfig> => {
+  const response = await api.put<AIConfig>(`/ai/configs/${id}`, data);
+  return response.data;
+};
+
+export const deleteAIConfig = async (id: string): Promise<void> => {
+  await api.delete(`/ai/configs/${id}`);
+};
+
+export const testAIConfig = async (id: string): Promise<{ ok: boolean; message: string }> => {
+  const response = await api.post<{ ok: boolean; message: string }>(`/ai/configs/${id}/test`);
+  return response.data;
+};
+
+// AI 流式对话（不走 axios，直接 fetch 处理流）
+export const aiChat = async function* (
+  messages: { role: string; content: string }[],
+  context: string,
+  aiConfigId?: string
+): AsyncGenerator<string> {
+  const token = localStorage.getItem('token');
+  const resp = await fetch('/api/ai/chat', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ messages, context, ai_config_id: aiConfigId })
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(errText || `HTTP ${resp.status}`);
+  }
+
+  const reader = resp.body?.getReader();
+  if (!reader) return;
+  const decoder = new TextDecoder();
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    yield decoder.decode(value);
+  }
+};
+
+// AI 问答（流式返回，包含来源信息）
+export const askAI = async function* (
+  messages: { role: string; content: string }[],
+  conversationId?: string
+): AsyncGenerator<string> {
+  const token = localStorage.getItem('token');
+  const resp = await fetch('/api/ai/ask', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ messages, conversation_id: conversationId })
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(errText || `HTTP ${resp.status}`);
+  }
+
+  const reader = resp.body?.getReader();
+  if (!reader) return;
+  const decoder = new TextDecoder();
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    yield decoder.decode(value);
+  }
+};
+
+// AI 对话历史
+export interface AIConversation {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AIMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  sources?: Array<{ id: string; title: string; type: string; snippet: string }>;
+  created_at: string;
+}
+
+export interface AIConversationDetail extends AIConversation {
+  messages: AIMessage[];
+}
+
+export const getAIConversations = async (): Promise<AIConversation[]> => {
+  const response = await api.get<AIConversation[]>('/ai/conversations/');
+  return response.data;
+};
+
+export const getAIConversation = async (id: string): Promise<AIConversationDetail> => {
+  const response = await api.get<AIConversationDetail>(`/ai/conversations/${id}`);
+  return response.data;
+};
+
+export const deleteAIConversation = async (id: string): Promise<void> => {
+  await api.delete(`/ai/conversations/${id}`);
 };

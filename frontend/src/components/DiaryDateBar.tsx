@@ -169,7 +169,7 @@ export default function DiaryDateBar({ docYear, docMonth, diaryDays, onDayClick,
               onClick={() => handleDayClick(day)}
               className={`relative flex-shrink-0 flex flex-col items-center justify-center w-10 h-14 rounded-lg text-xs transition-colors ${
                 isToday
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold'
+                  ? 'bg-[#3f587f] dark:bg-[#3f587f] text-white dark:text-white font-bold'
                   : hasContent
                     ? 'text-gray-800 dark:text-gray-200 font-medium hover:bg-gray-100 dark:hover:bg-gray-800'
                     : 'text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800/50'
@@ -178,7 +178,7 @@ export default function DiaryDateBar({ docYear, docMonth, diaryDays, onDayClick,
               <span className="text-[11px] leading-tight">{day}</span>
               <span className="text-[9px] leading-tight opacity-60">{weekday}</span>
               {hasContent && (
-                <span className={`absolute bottom-1 w-1 h-1 rounded-full ${isToday ? 'bg-blue-500' : 'bg-gray-400'}`} />
+                <span className={`absolute bottom-1 w-1 h-1 rounded-full ${isToday ? 'bg-white' : 'bg-gray-400'}`} />
               )}
             </button>
           );

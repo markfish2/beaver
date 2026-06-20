@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { DocumentProvider } from './context/DocumentContext';
 import { SearchProvider } from './context/SearchContext';
 import { DiaryProvider } from './context/DiaryContext';
+import { UserViewProvider, useUserView } from './context/UserViewContext';
 import { useRetryFailedPreviews } from './hooks/useRetryFailedPreviews';
 import type { ReactNode } from 'react';
 
@@ -79,7 +80,7 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
     return <MobileLayout>{children}</MobileLayout>;
   }
 
-  // Desktop: sidebar layout (unchanged)
+  // Desktop: sidebar layout
   return (
     <div className="flex h-screen bg-white dark:bg-gray-900" style={{ paddingBottom: 'var(--safe-area-inset-bottom)' }}>
       <Sidebar isMobile={false} onDocumentSelect={() => {}} />
@@ -89,6 +90,12 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
 };
 
 const PageLoading = () => <div className="h-screen flex items-center justify-center bg-white dark:bg-gray-900 text-gray-500">Loading...</div>;
+
+// Wrapper to pass userSubView from context to MainArea
+function MainAreaWithUserView() {
+  const { userSubView } = useUserView();
+  return <MainArea userSubView={userSubView} />;
+}
 
 function AppRoutes() {
   useRetryFailedPreviews();
@@ -124,7 +131,7 @@ function AppRoutes() {
         <Route path="/" element={
           <ProtectedRoute>
             <AppLayout>
-              <MainArea />
+              <MainAreaWithUserView />
             </AppLayout>
           </ProtectedRoute>
         } />
@@ -132,7 +139,7 @@ function AppRoutes() {
         <Route path="/d/:documentId" element={
           <ProtectedRoute>
             <AppLayout>
-              <MainArea />
+              <MainAreaWithUserView />
             </AppLayout>
           </ProtectedRoute>
         } />
@@ -154,11 +161,13 @@ function App() {
         <SearchProvider>
           <DocumentProvider>
             <DiaryProvider>
-              <AppRoutes />
-              <Suspense fallback={null}>
-                <ReloadPrompt />
-                <ConflictResolver />
-              </Suspense>
+              <UserViewProvider>
+                <AppRoutes />
+                <Suspense fallback={null}>
+                  <ReloadPrompt />
+                  <ConflictResolver />
+                </Suspense>
+              </UserViewProvider>
             </DiaryProvider>
           </DocumentProvider>
         </SearchProvider>

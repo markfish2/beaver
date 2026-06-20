@@ -323,16 +323,16 @@ const HabitRow = memo(function HabitRow({
               <button
                 key={date}
                 onClick={() => onToggle(habit.id, date)}
-                className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                className={`w-[18px] h-[18px] rounded-full flex items-center justify-center transition-all ${
                   checked
-                    ? 'bg-blue-500 dark:bg-blue-600 scale-110'
+                    ? 'bg-[#3f587f] dark:bg-[#6b8ab5] scale-110'
                     : today
-                      ? 'border-2 border-blue-400 dark:border-blue-500 bg-transparent'
-                      : 'border border-gray-300 dark:border-gray-600 bg-transparent hover:border-blue-400 dark:hover:border-blue-500'
+                      ? 'border-2 border-[#3f587f] dark:border-[#6b8ab5] bg-transparent'
+                      : 'border border-gray-300 dark:border-gray-600 bg-transparent hover:border-[#3f587f] dark:hover:border-[#6b8ab5]'
                 }`}
                 title={`${date}${checked ? ' ✓' : ''}`}
               >
-                {checked && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+                {checked && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
               </button>
             );
           })}
@@ -352,7 +352,7 @@ const HabitRow = memo(function HabitRow({
 });
 
 // ── 主组件 ──
-export default function HabitTracker() {
+export default function HabitTracker({ embedded = false }: { embedded?: boolean } = {}) {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
@@ -439,7 +439,7 @@ export default function HabitTracker() {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800/50 rounded-2xl p-4 shadow-sm ">
+    <div className={embedded ? 'px-1' : 'bg-white dark:bg-gray-800/50 rounded-xl p-4 border border-[#e7e7e5] dark:border-gray-700/40'}>
       {/* 标题栏 */}
       <div className="flex items-center justify-between mb-3">
         <span className="flex items-center gap-1.5 text-base font-medium text-gray-400 dark:text-gray-500">

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Menu, Archive, X, Globe, Shuffle, Image as ImageIcon } from 'lucide-react';
+import { Menu, Archive, X, Globe, Shuffle, Image as ImageIcon, CalendarDays, ListTodo, AlertCircle } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import MemoInput from './MemoInput';
 import MemoList from './MemoList';
@@ -8,8 +8,9 @@ import HabitTracker from './HabitTracker';
 import MemoTagsPanel from './MemoTagsPanel';
 import MemoWanderer from './MemoWanderer';
 import MemoMediaGallery from './MemoMediaGallery';
-import { getMemos, getDiarySummary, updateMemo, deleteMemo, toggleMemoPinned, toggleMemoArchived, toggleMemoPublic, updateNode } from '../api/data';
-import type { Memo, Node } from '../api/data';
+import { getMemos, getDiarySummary, updateMemo, deleteMemo, toggleMemoPinned, toggleMemoArchived, toggleMemoPublic, toggleMemoAI, updateNode, getTodos, updateTodo } from '../api/data';
+import type { Memo, Node, Todo } from '../api/data';
+import { parseTodoDueDate } from '../utils/todoDueDate';
 import { useDocuments } from '../context/DocumentContext';
 import { useAuth } from '../context/AuthContext';
 import { updateSettings } from '../api/auth';
@@ -46,7 +47,8 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   const [searchFilter, setSearchFilter] = useState<string | null>(searchFromUrl);
   const [highlightMemoId, setHighlightMemoId] = useState<string | null>(highlightFromUrl);
   const [showRightPanel, setShowRightPanel] = useState(false);
-  const [allPendingTasks, setAllPendingTasks] = useState<Node[]>([]);
+  type PendingTask = (Node & { origin: 'diary'; diary_date?: string }) | (Todo & { origin: 'todo' });
+  const [allPendingTasks, setAllPendingTasks] = useState<PendingTask[]>([]);
   const [completingTaskIds, setCompletingTaskIds] = useState<Set<string>>(new Set());
 
   // Refs
@@ -58,6 +60,26 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   tagFilterRef.current = tagFilter;
   const searchFilterRef = useRef(searchFilter);
   searchFilterRef.current = searchFilter;
+
+  // 监听侧边栏的 memo 视图切换事件
+  useEffect(() => {
+    const handleViewChange = (e: Event) => {
+      const { view, tag, source } = (e as CustomEvent).detail;
+      if (source === 'memoHome') return; // 忽略自己派发的事件
+      if (view !== undefined) setMemoView(view);
+      if (tag !== undefined) {
+        setTagFilter(tag);
+        setSearchFilter(null);
+      }
+    };
+    window.addEventListener('memo-view-change', handleViewChange);
+    return () => window.removeEventListener('memo-view-change', handleViewChange);
+  }, []);
+
+  // MemoHome 自身状态变化时通知侧边栏同步
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('memo-view-change', { detail: { view: memoView, tag: tagFilter, source: 'memoHome' } }));
+  }, [memoView, tagFilter]);
 
   // 从用户设置初始化 memoColumns
   useEffect(() => {
@@ -77,12 +99,29 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
     }
   }, [memoColumns]);
 
-  // 首页数据搜集：日记摘要（待办任务）
+  // 首页数据搜集：日记待办 + 独立待办（近三天/过期）
   useEffect(() => {
     const fetchTasks = async () => {
       try {
-        const summary = await getDiarySummary();
-        setAllPendingTasks(summary.tasks);
+        const [summary, todos] = await Promise.all([
+          getDiarySummary(),
+          getTodos(false).catch(() => []),
+        ]);
+        // 日记待办标记 origin
+        const diaryTasks: PendingTask[] = summary.tasks.map(t => ({ ...t, origin: 'diary' }));
+        // 独立待办：过滤近三天或过期的
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const threeDaysLater = new Date(todayStart.getTime() + 4 * 24 * 60 * 60 * 1000); // 含第3天
+        const urgentTodos: PendingTask[] = todos
+          .filter(todo => {
+            const parsed = parseTodoDueDate(todo.content);
+            if (!parsed.dueDate) return false; // 无日期不显示
+            const dueDateStart = new Date(parsed.dueDate.getFullYear(), parsed.dueDate.getMonth(), parsed.dueDate.getDate());
+            return dueDateStart < threeDaysLater; // 过期 + 3天内
+          })
+          .map(todo => ({ ...todo, origin: 'todo' }));
+        setAllPendingTasks([...diaryTasks, ...urgentTodos]);
       } catch (e) {
         console.error('获取日记摘要失败', e);
       }
@@ -171,13 +210,29 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 全局任务完成处理器（带平滑退场动画延迟）
-  const handleGlobalTaskComplete = (task: Node) => {
+  const handleGlobalTaskComplete = (task: PendingTask) => {
+    // 独立待办：直接标记完成/取消完成
+    if (task.origin === 'todo') {
+      setCompletingTaskIds(prev => new Set(prev).add(task.id));
+      setTimeout(async () => {
+        try {
+          await updateTodo(task.id, { is_completed: true });
+          setAllPendingTasks(prev => prev.filter(t => t.id !== task.id));
+        } catch (error) {
+          console.error('待办更新失败', error);
+        } finally {
+          setCompletingTaskIds(prev => { const next = new Set(prev); next.delete(task.id); return next; });
+        }
+      }, 600);
+      return;
+    }
+    // 日记待办：三态循环
     if (task.is_completed) {
       const updatedContent = task.content.replace(/\[x\]/, '[ ]');
       updateNode(task.id, { content: updatedContent, is_completed: false, is_in_progress: false }).catch(error => {
         console.error('任务更新失败', error);
       });
-      setAllPendingTasks(prev => prev.map(t => t.id === task.id ? { ...t, content: updatedContent, is_completed: false, is_in_progress: false } : t));
+      setAllPendingTasks(prev => prev.map(t => t.id === task.id ? { ...t, content: updatedContent, is_completed: false, is_in_progress: false } as PendingTask : t));
     } else if (task.is_in_progress) {
       setCompletingTaskIds(prev => new Set(prev).add(task.id));
       setTimeout(async () => {
@@ -196,7 +251,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
       updateNode(task.id, { content: updatedContent, is_in_progress: true }).catch(error => {
         console.error('任务更新失败', error);
       });
-      setAllPendingTasks(prev => prev.map(t => t.id === task.id ? { ...t, content: updatedContent, is_in_progress: true } : t));
+      setAllPendingTasks(prev => prev.map(t => t.id === task.id ? { ...t, content: updatedContent, is_in_progress: true } as PendingTask : t));
     }
   };
 
@@ -268,6 +323,16 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
     }
   }, []);
 
+  const handleMemoToggleAI = useCallback(async (id: string, ai_excluded: boolean) => {
+    setMemos(prev => prev.map(m => m.id === id ? { ...m, ai_excluded } : m));
+    try {
+      await toggleMemoAI(id, ai_excluded);
+    } catch (e) {
+      console.error('[ToggleAI] API error:', e);
+      setMemos(prev => prev.map(m => m.id === id ? { ...m, ai_excluded: !ai_excluded } : m));
+    }
+  }, []);
+
   const handleLoadMoreMemos = useCallback(async () => {
     const nextPage = memoPageRef.current + 1;
     const isArchived = memoViewRef.current === 'archived';
@@ -298,20 +363,62 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
         </button>
       )}
 
-      <div className="flex flex-row max-w-6xl mx-auto px-4 pb-20 gap-6" style={{ paddingTop: document.documentElement.dataset.mobileLayout ? '24px' : 'calc(env(safe-area-inset-top, 0px) + 24px)' }}>
+      <div className="flex flex-row max-w-[670px] mx-auto px-4 pb-20 gap-6" style={{ paddingTop: document.documentElement.dataset.mobileLayout ? '24px' : 'calc(env(safe-area-inset-top, 0px) + 24px)' }}>
         {/* 左栏：输入框 + 待办 + 随想 */}
         <div className="flex-1 min-w-0">
           {memoView === 'active' && <MemoInput onMemoCreated={handleMemoCreated} documents={documents} />}
 
-          {/* 待办事项（仅日记待办，归档/公开视图不显示） */}
+          {/* 待办事项（日记待办 + 独立待办，归档/公开视图不显示） */}
           {memoView === 'active' && allPendingTasks.length > 0 && (
             <div className="mb-6">
               <h2 className="text-sm font-semibold text-gray-400 dark:text-gray-500 mb-3 uppercase tracking-wider">未完成事项</h2>
-              <div className="bg-white dark:bg-gray-800/50 rounded-2xl p-4 shadow-sm ">
+              <div className="bg-white dark:bg-gray-800/50 rounded-xl p-4 border border-[#dad9d4] dark:border-gray-700/40 ">
                 <div>
+                  {/* 构建 document_id → diary_date 映射 */}
+                  {(() => {
+                    const docDateMap = new Map<string, string>();
+                    documents.forEach(d => { if (d.diary_date) docDateMap.set(d.id, d.diary_date); });
+                    return null;
+                  })()}
                   {allPendingTasks.map(task => {
                     const isCompleting = completingTaskIds.has(task.id);
-                    const inProgress = task.is_in_progress && !isCompleting;
+                    const isTodo = task.origin === 'todo';
+                    const inProgress = !isTodo && (task as Node & { origin: 'diary' }).is_in_progress && !isCompleting;
+                    // 截止日期：日记任务用日记日期，独立待办解析 !M.D
+                    let dueLabel = '';
+                    let urgency: 'today' | 'soon' | 'normal' | null = null;
+                    let isOverdue = false;
+                    if (isTodo) {
+                      const parsed = parseTodoDueDate(task.content);
+                      dueLabel = parsed.dueDateLabel;
+                      urgency = parsed.urgency;
+                      // 过期 = 截止日期早于今天
+                      if (parsed.dueDate) {
+                        const dueDateStart = new Date(parsed.dueDate.getFullYear(), parsed.dueDate.getMonth(), parsed.dueDate.getDate());
+                        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+                        isOverdue = dueDateStart < todayStart;
+                      }
+                    } else {
+                      // 日记任务：用父节点内容提取日期
+                      const diaryTask = task as Node & { origin: 'diary'; diary_date?: string };
+                      const parentContent = diaryTask.parent_content;
+                      const diaryDateStr = diaryTask.diary_date;
+                      if (parentContent && diaryDateStr) {
+                        // 父节点内容如 "15日" 或 "15号"，提取日期数字
+                        const dayMatch = parentContent.match(/(\d{1,2})[日号]/);
+                        if (dayMatch) {
+                          const day = parseInt(dayMatch[1]);
+                          const [y, m] = diaryDateStr.split('-').map(Number);
+                          dueLabel = `${m}/${day}`;
+                          // 判断是否过期
+                          const diaryDate = new Date(y, m - 1, day);
+                          const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+                          if (diaryDate < todayStart) { isOverdue = true; urgency = 'today'; }
+                          else if (diaryDate.getTime() === todayStart.getTime()) { urgency = 'today'; }
+                        }
+                      }
+                    }
+                    const displayText = task.content.replace(/\[[ xX-]\]/, '').trim();
                     return (
                       <div
                         key={task.id}
@@ -319,10 +426,17 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
                           isCompleting ? 'opacity-0 translate-x-4 scale-95' : 'opacity-100'
                         }`}
                       >
+                        {/* 来源图标 */}
+                        {isTodo ? (
+                          <ListTodo className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 shrink-0" />
+                        ) : (
+                          <CalendarDays className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 shrink-0" />
+                        )}
+                        {/* 复选框 */}
                         <span
                           role="checkbox"
                           aria-checked={isCompleting}
-                          className={`inline-flex items-center justify-center w-4 h-4 rounded-full border cursor-pointer shrink-0 transition-colors ${
+                          className={`ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full border cursor-pointer shrink-0 transition-colors ${
                             isCompleting
                               ? 'bg-blue-500 border-blue-500'
                               : inProgress
@@ -339,18 +453,32 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
                             <span className="w-2 h-0.5 bg-blue-400 rounded-full"></span>
                           ) : null}
                         </span>
+                        {/* 文字 + 日期右对齐 */}
                         <span
-                          className={`ml-3 cursor-pointer transition-all duration-300 truncate text-base ${
+                          className={`ml-2 flex-1 min-w-0 flex items-center gap-1 cursor-pointer transition-all duration-300 text-base ${
                             isCompleting
                               ? 'text-gray-700 dark:text-gray-300'
                               : inProgress
                                 ? 'text-blue-500 dark:text-blue-400'
                                 : 'text-gray-700 dark:text-gray-300 hover:text-blue-600'
                           }`}
-                          onClick={() => !isCompleting && navigate(`/d/${task.document_id}?nodeId=${task.id}`)}
-                          title={task.content.replace(/\[[ xX-]\]/, '').trim()}
+                          onClick={() => {
+                            if (isCompleting) return;
+                            if (task.origin === 'diary') navigate(`/d/${(task as Node & { origin: 'diary' }).document_id}?nodeId=${task.id}`);
+                          }}
                         >
-                          {task.content.replace(/\[[ xX-]\]/, '').trim() || '无标题任务'}
+                          <span className="truncate">{displayText || '无标题任务'}</span>
+                          {/* 日期 + 过期图标，右对齐 */}
+                          {dueLabel && (
+                            <span className={`ml-auto shrink-0 flex items-center gap-0.5 text-xs whitespace-nowrap ${
+                              isOverdue ? 'text-orange-500 font-medium'
+                              : urgency === 'soon' ? 'text-orange-400'
+                              : 'text-gray-400'
+                            }`}>
+                              {isOverdue && <AlertCircle className="w-3 h-3" />}
+                              {dueLabel}
+                            </span>
+                          )}
                         </span>
                       </div>
                     );
@@ -433,6 +561,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
                 onTogglePin={handleMemoTogglePin}
                 onToggleArchive={handleMemoToggleArchive}
                 onTogglePublic={handleMemoTogglePublic}
+                onToggleAI={handleMemoToggleAI}
                 onTagClick={handleMemoTagClick}
                 onColorChange={handleMemoColorChange}
                 onLoadMore={handleLoadMoreMemos}
@@ -444,64 +573,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
           </div>
         </div>
 
-        {/* 右栏：桌面端内联显示 */}
-        <div className="hidden lg:block w-72 shrink-0">
-          <div className="space-y-4">
-            <MemoHeatmapCalendar />
-            <HabitTracker />
-            {/* 已归档 / 已公开 */}
-            <div className="bg-white dark:bg-gray-800/50 rounded-2xl shadow-sm overflow-hidden ">
-              <button
-                onClick={() => { setMemoView(memoView === 'archived' ? 'active' : 'archived'); setTagFilter(null); setSearchFilter(null); }}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-base font-medium transition-colors ${
-                  memoView === 'archived'
-                    ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-              >
-                <Archive className="w-4 h-4" />
-                <span>已归档</span>
-              </button>
-              <div className="border-t border-gray-100 dark:border-gray-700" />
-              <button
-                onClick={() => { setMemoView(memoView === 'public' ? 'active' : 'public'); setTagFilter(null); setSearchFilter(null); }}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-base font-medium transition-colors ${
-                  memoView === 'public'
-                    ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-              >
-                <Globe className="w-4 h-4" />
-                <span>已公开</span>
-              </button>
-              <div className="border-t border-gray-100 dark:border-gray-700" />
-              <button
-                onClick={() => { setMemoView(memoView === 'wanderer' ? 'active' : 'wanderer'); setTagFilter(null); setSearchFilter(null); }}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-base font-medium transition-colors ${
-                  memoView === 'wanderer'
-                    ? 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-              >
-                <Shuffle className="w-4 h-4" />
-                <span>随机漫游</span>
-              </button>
-              <div className="border-t border-gray-100 dark:border-gray-700" />
-              <button
-                onClick={() => { setMemoView(memoView === 'media' ? 'active' : 'media'); setTagFilter(null); setSearchFilter(null); }}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-base font-medium transition-colors ${
-                  memoView === 'media'
-                    ? 'text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-900/20'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-              >
-                <ImageIcon className="w-4 h-4" />
-                <span>图片文件</span>
-              </button>
-            </div>
-            <MemoTagsPanel onTagClick={handleMemoTagClick} activeTag={tagFilter} />
-          </div>
-        </div>
+        {/* 右侧栏已移至左侧栏 memo 视图中 */}
       </div>
 
       {/* 移动端：右栏展开/收起按钮 */}
@@ -541,7 +613,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
             <MemoHeatmapCalendar />
             <HabitTracker />
             {/* 已归档 / 已公开 */}
-            <div className="bg-white dark:bg-gray-800/50 rounded-2xl shadow-sm overflow-hidden ">
+            <div className="bg-white dark:bg-gray-800/50 rounded-xl overflow-hidden border border-[#dad9d4] dark:border-gray-700/40 ">
               <button
                 onClick={() => { setMemoView(memoView === 'archived' ? 'active' : 'archived'); setTagFilter(null); setSearchFilter(null); setShowRightPanel(false); }}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-base font-medium transition-colors ${

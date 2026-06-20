@@ -16,6 +16,11 @@ class User(Base):
     font_family: Mapped[str] = mapped_column(String, default="system")
     font_size: Mapped[str] = mapped_column(String, default="medium")
     memo_columns: Mapped[int] = mapped_column(Integer, default=1)
+    nickname: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    bio: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    avatar_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
 class Document(Base):
     __tablename__ = "documents"
@@ -25,6 +30,8 @@ class Document(Base):
     parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("documents.id"), nullable=True, index=True)
     sort_order: Mapped[float] = mapped_column(Float, default=0.0)
     is_starred: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_public: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    ai_excluded: Mapped[bool] = mapped_column(Boolean, default=False)
     icon: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     diary_date: Mapped[Optional[str]] = mapped_column(String(10), nullable=True, index=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
@@ -90,6 +97,7 @@ class Memo(Base):
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     is_public: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     color: Mapped[str | None] = mapped_column(String(20), nullable=True, default=None)
+    ai_excluded: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None, index=True)
@@ -162,3 +170,75 @@ class ExcalidrawData(Base):
 
     # 关系
     document: Mapped["Document"] = relationship("Document")
+
+
+class AIConfig(Base):
+    """AI 模型 API 配置"""
+    __tablename__ = "ai_configs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(100))                    # 配置名称，如 "DeepSeek"
+    provider: Mapped[str] = mapped_column(String(50))                  # deepseek/openai/gemini/qwen/mimo/custom
+    api_url: Mapped[str] = mapped_column(String(500))                  # API 地址
+    api_key: Mapped[str] = mapped_column(String(500))                  # API Key
+    model: Mapped[str] = mapped_column(String(100))                    # 模型名称
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)   # 是否默认配置
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class VoiceRecord(Base):
+    """语音录音记录"""
+    __tablename__ = "voice_records"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    memo_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("memos.id", ondelete="SET NULL"), nullable=True, index=True)
+    document_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("documents.id", ondelete="SET NULL"), nullable=True, index=True)
+    audio_path: Mapped[str] = mapped_column(String(500))               # 音频文件路径
+    duration_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 录音时长（秒）
+    transcribed_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)     # 转写原文
+    ai_messages: Mapped[Optional[str]] = mapped_column(Text, nullable=True)          # AI 对话历史（JSON）
+    ai_config_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("ai_configs.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # 关系
+    memo: Mapped[Optional["Memo"]] = relationship("Memo")
+    document: Mapped[Optional["Document"]] = relationship("Document")
+
+
+class NoteEmbedding(Base):
+    """笔记向量嵌入表，用于语义搜索"""
+    __tablename__ = "note_embeddings"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    source_type: Mapped[str] = mapped_column(String(20))  # 'memo' | 'document' | 'node'
+    source_id: Mapped[str] = mapped_column(String)        # 对应笔记 ID
+    chunk_text: Mapped[str] = mapped_column(Text)         # 分块文本
+    embedding: Mapped[Optional[bytes]] = mapped_column(nullable=True)  # sqlite-vec 向量
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AIConversation(Base):
+    """AI 对话历史"""
+    __tablename__ = "ai_conversations"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    messages: Mapped[List["AIMessage"]] = relationship("AIMessage", back_populates="conversation", cascade="all, delete-orphan")
+
+
+class AIMessage(Base):
+    """AI 对话消息"""
+    __tablename__ = "ai_messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    conversation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("ai_conversations.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(20))  # 'user' | 'assistant'
+    content: Mapped[str] = mapped_column(Text)
+    sources: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: [{"id":"...","title":"...","type":"memo"}]
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    conversation: Mapped["AIConversation"] = relationship("AIConversation", back_populates="messages")

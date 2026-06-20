@@ -9,6 +9,7 @@ interface MentionDropdownProps {
   position: { top: number; left: number };
   searchText: string;
   onSearchChange?: (text: string) => void;
+  zIndex?: number;
 }
 
 const MentionDropdown: React.FC<MentionDropdownProps> = ({
@@ -17,7 +18,8 @@ const MentionDropdown: React.FC<MentionDropdownProps> = ({
   onClose,
   position,
   searchText,
-  onSearchChange
+  onSearchChange,
+  zIndex = 50
 }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [localSearchText, setLocalSearchText] = useState('');
@@ -138,8 +140,8 @@ const MentionDropdown: React.FC<MentionDropdownProps> = ({
   return (
     <div
       ref={dropdownRef}
-      className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 max-h-80 overflow-hidden min-w-[280px]"
-      style={{ top: position.top, left: position.left }}
+      className={`fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 max-h-80 overflow-hidden min-w-[280px]`}
+      style={{ top: position.top, left: position.left, zIndex }}
     >
       {/* 搜索框 */}
       <div className="px-2 py-2 border-b border-gray-100 dark:border-gray-700">

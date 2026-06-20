@@ -16,6 +16,11 @@ import DiaryDateBar from './DiaryDateBar';
 import MarkdownNoteEditor from './MarkdownNoteEditor';
 import { ExcalidrawEditor } from './ExcalidrawEditor';
 import MemoHome from './MemoHome';
+import UserProfileEditor from './UserProfileEditor';
+import TokenPanel from './TokenPanel';
+import TrashPanel from './TrashPanel';
+import PasswordPanel from './PasswordPanel';
+import AISettingsPanel from './AISettingsPanel';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { getNodes, getDocument, updateNode, updateDocument, deleteNode, createNode, createNodesBatch, uploadFile, batchUpdateNodes, batchMoveNodes, batchDeleteNodes, moveNode, getDiaryDayDates, getOrCreateDayNode, getMonthlyDiary } from '../api/data';
 import type { Node, Document } from '../api/data';
@@ -255,12 +260,15 @@ const flattenParsedNodes = (
   return result;
 };
 
+type UserSubView = 'profile' | 'token' | 'ai' | 'trash' | 'password';
+
 interface MainAreaProps {
   diaryDocId?: string | null;
   onDiaryDocChange?: (docId: string) => void;
+  userSubView?: UserSubView | null;
 }
 
-const MainArea = ({ diaryDocId = null, onDiaryDocChange }: MainAreaProps = {}) => {
+const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null }: MainAreaProps = {}) => {
   const { documentId: urlDocumentId } = useParams();
   const navigate = useNavigate();
   const documentId = diaryDocId || urlDocumentId;
@@ -758,6 +766,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange }: MainAreaProps = {}) =
 
   useEffect(() => {
     setTagFilter(null);
+    setViewMode('outline');
     if (documentId) {
       const id = ++fetchIdRef.current;
       fetchData(documentId, id);
@@ -778,6 +787,15 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange }: MainAreaProps = {}) =
       }
     }
   }, [documents, documentId, currentDoc]);
+
+  // 侧边栏重命名 → 同步标题到 currentDoc（只更新 title，不覆盖其他本地状态）
+  useEffect(() => {
+    if (!currentDoc || !documentId) return;
+    const ctxDoc = documents.find(d => d.id === documentId);
+    if (ctxDoc && ctxDoc.title !== currentDoc.title) {
+      setCurrentDoc(prev => prev ? { ...prev, title: ctxDoc.title } : prev);
+    }
+  }, [documents, documentId]);
 
   // 注意：不再在 sidebarClose 时重新 fetchData，
   // documentId 变化时 useEffect 已自动加载数据
@@ -2432,6 +2450,19 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange }: MainAreaProps = {}) =
     return () => window.removeEventListener('keydown', handleGlobalKey, { capture: true });
   }, [undo, redo, commands, execute]);
 
+  // User sub-view rendering
+  if (userSubView) {
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+        {userSubView === 'profile' && <UserProfileEditor />}
+        {userSubView === 'token' && <TokenPanel />}
+        {userSubView === 'ai' && <AISettingsPanel />}
+        {userSubView === 'trash' && <TrashPanel />}
+        {userSubView === 'password' && <PasswordPanel />}
+      </div>
+    );
+  }
+
   if (!documentId) {
     return <MemoHome sidebarOpen={sidebarOpen} isMobile={isMobile} />;
   }
@@ -2540,7 +2571,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange }: MainAreaProps = {}) =
           )}
             </div>
             <div className="flex items-center gap-2">
-          {currentDoc?.type !== 'note' && (
+          {currentDoc?.type === 'document' && (
             <button
               onClick={() => setViewMode('mindmap')}
               className="p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -3176,7 +3207,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange }: MainAreaProps = {}) =
       />
 
       {/* Mind Map View */}
-      {viewMode === 'mindmap' && (
+      {viewMode === 'mindmap' && currentDoc?.type === 'document' && (
         <MindMapView
           nodes={nodes}
           documentTitle={currentDoc?.title || ''}

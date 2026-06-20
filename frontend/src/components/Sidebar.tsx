@@ -1,4 +1,4 @@
-import { Search, FileText, ChevronDown, Plus, Trash, Star, LogOut, ChevronLeft, ChevronRight, Folder, Edit2, CalendarDays, MoreHorizontal, Copy, ArrowUpRight, ListTree, FolderPlus, FilePlus, Move, Frame, StickyNote, Square, Key, Clock, Lock } from 'lucide-react';
+import { Search, FileText, ChevronDown, Plus, Trash, Star, LogOut, ChevronLeft, ChevronRight, Folder, Edit2, CalendarDays, MoreHorizontal, Copy, ArrowUpRight, ListTree, FolderPlus, FilePlus, Move, Frame, StickyNote, Square, Key, Clock, Lock, Sparkles, User } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createDocument, deleteDocument, updateDocument, copyDocument, getNodes, createMemo, uploadFile, search as apiSearch, getTodos, createTodo, updateTodo, getMonthlyDiary, getOrCreateDayNode } from '../api/data';
 import type { Document as DocType, SearchResultItem, Todo } from '../api/data';
@@ -10,6 +10,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useDocuments } from '../context/DocumentContext';
 import { useSearch } from '../context/SearchContext';
+import { useUserView } from '../context/UserViewContext';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
 import NewFolderDialog from './NewFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
@@ -19,10 +20,14 @@ import DiaryCalendar from './DiaryCalendar';
 import TokenDialog from './TokenDialog';
 import TrashDialog from './TrashDialog';
 import PasswordDialog from './PasswordDialog';
+import MemoSidebarContent from './MemoSidebarContent';
+import AISettings from './AISettings';
+import AIChatSidebar from './AIChatSidebar';
 
 interface SidebarProps {
   onDocumentSelect?: () => void;
   isMobile?: boolean;
+  onUserSubViewChange?: (subView: UserSubView | null) => void;
 }
 
 const highlightText = (text: string, query: string) => {
@@ -59,7 +64,8 @@ const DEFAULT_PANEL_WIDTH = 212;  // 260 - 48 = 212 (total visual width stays 26
 const MIN_PANEL_WIDTH = 160;
 const MAX_PANEL_WIDTH = 460;
 
-type ViewMode = 'diary' | 'all' | 'starred' | 'recent';
+type ViewMode = 'diary' | 'all' | 'starred' | 'recent' | 'memo' | 'user' | 'ai';
+type UserSubView = 'profile' | 'token' | 'ai' | 'trash' | 'password';
 
 const TabNav = ({ activeTab, onTabChange }: {
   activeTab: ViewMode;
@@ -123,7 +129,7 @@ const TabNav = ({ activeTab, onTabChange }: {
   );
 };
 
-const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
+const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: SidebarProps) => {
   const { documents, isLoading, refreshDocuments, updateDocumentLocal, moveDocument, addDocument, removeDocument } = useDocuments();
   const { searchQuery, setSearchQuery } = useSearch();
   const [isExpanded, setIsExpanded] = useState<Record<string, boolean>>({});
@@ -155,7 +161,23 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
     return () => clearTimeout(timer);
   }, [searchQuery, isSearchMode]);
   const [viewMode, setViewMode] = useState<ViewMode>('diary');
+  const { userSubView, setUserSubView: setUserSubViewContext } = useUserView();
   const [showNewMenu, setShowNewMenu] = useState(false);
+
+  // Wrapper to update both context and notify parent
+  const setUserSubView = useCallback((view: UserSubView) => {
+    setUserSubViewContext(view);
+    onUserSubViewChange?.(view);
+  }, [setUserSubViewContext, onUserSubViewChange]);
+
+  // Notify parent when userSubView changes
+  useEffect(() => {
+    if (viewMode === 'user') {
+      onUserSubViewChange?.(userSubView || 'profile');
+    } else {
+      onUserSubViewChange?.(null);
+    }
+  }, [viewMode, userSubView, onUserSubViewChange]);
 
   // 获取最近编辑的文档
   useEffect(() => {
@@ -185,10 +207,11 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
   const [showTokenDialog, setShowTokenDialog] = useState(false);
   const [showTrashDialog, setShowTrashDialog] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [showAISettings, setShowAISettings] = useState(false);
   const [todoText, setTodoText] = useState('');
   const todoInputRef = useRef<HTMLInputElement>(null);
   const [contextMenu, setContextMenu] = useState<{
-    docId: string; docTitle: string; docType: 'document' | 'folder'; isStarred: boolean; x: number; y: number; buttonBottom: number;
+    docId: string; docTitle: string; docType: 'document' | 'folder'; isStarred: boolean; aiExcluded: boolean; x: number; y: number; buttonBottom: number;
   } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [moveDialog, setMoveDialog] = useState<{ show: boolean; docId: string; docTitle: string; docType: 'document' | 'folder' }>({ show: false, docId: '', docTitle: '', docType: 'document' });
@@ -531,6 +554,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
       setSearchQuery('');
     } else {
       setIsSearchMode(true);
+      setUserSubViewContext(null);
       setContentExpanded(true);
       setTimeout(() => searchInputRef.current?.focus(), 100);
     }
@@ -641,6 +665,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
         docTitle: doc.title || '无标题',
         docType: doc.type,
         isStarred: doc.is_starred,
+        aiExcluded: doc.ai_excluded || false,
         x: touch.clientX,
         y: touch.clientY,
         buttonBottom: touch.clientY,
@@ -779,6 +804,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
                     docTitle: doc.title || '无标题',
                     docType: doc.type,
                     isStarred: doc.is_starred,
+                    aiExcluded: doc.ai_excluded || false,
                     x: e.clientX,
                     y: e.clientY,
                     buttonBottom: e.clientY,
@@ -795,6 +821,12 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
                   {isFolder ? <FolderIcon className="w-5 h-5" /> : doc.type === 'note' ? <FileText className="w-5 h-5 text-gray-500 dark:text-gray-400" /> : doc.type === 'excalidraw' ? <Frame className="w-5 h-5 text-gray-500 dark:text-gray-400" /> : <ListTree className="w-5 h-5 text-gray-500 dark:text-gray-400" />}
                   {!isFolder && doc.is_starred && (
                     <Star className="w-2 h-2 fill-current text-yellow-500 absolute -top-0.5 -right-0.5" />
+                  )}
+                  {!isFolder && doc.ai_excluded && (
+                    <svg className="w-3.5 h-3.5 absolute -bottom-1 -right-1" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" fill="#ef4444" stroke="white" strokeWidth="1.5"/>
+                      <line x1="6" y1="6" x2="18" y2="18" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
                   )}
                 </span>
 
@@ -816,6 +848,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
                       docTitle: doc.title || '无标题',
                       docType: doc.type,
                       isStarred: doc.is_starred,
+                      aiExcluded: doc.ai_excluded || false,
                       x: rect.left,
                       y: rect.bottom,
                       buttonBottom: rect.bottom,
@@ -831,7 +864,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
               {!searchQuery.trim() && viewMode !== 'starred' && isFolder && isExpanded[doc.id] && (
                 <div
                   className="relative pl-2 border-l border-gray-200 dark:border-gray-600"
-                  style={{ marginLeft: `${level * 12 + 12}px` }}
+                  style={{ marginLeft: `${level * 12 + 11}px` }}
                 >
                   {renderFileTree(doc.id, level + 1)}
                 </div>
@@ -846,46 +879,32 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
   // 图标栏内容（桌面端直接渲染，移动端放入 fixed wrapper）
   const iconRailContent = (
     <>
-      {/* 项目图标 */}
-      <div ref={userMenuRef} className="relative mb-4">
+      {/* 用户头像 */}
+      <div className="relative mb-4">
         <div
-          onClick={() => setShowUserMenu(!showUserMenu)}
-          className="w-8 h-8 rounded-lg cursor-pointer hover:opacity-80 transition-opacity overflow-hidden"
+          onClick={() => {
+            setIsSearchMode(false);
+            if (viewMode === 'user' && contentExpanded) {
+              setContentExpanded(false);
+            } else {
+              setViewMode('user');
+              setContentExpanded(true);
+            }
+          }}
+          className={`w-8 h-8 rounded-full cursor-pointer hover:opacity-80 transition-opacity overflow-hidden border-2 ${
+            viewMode === 'user' && contentExpanded
+              ? 'border-blue-500'
+              : 'border-transparent'
+          }`}
         >
-          <img src="/beaver.png" alt="beaver" className="w-full h-full object-cover" />
+          {user?.avatar_path ? (
+            <img src={user.avatar_path} alt="avatar" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
+              <User className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+            </div>
+          )}
         </div>
-        {showUserMenu && (
-          <div className="absolute left-full top-0 ml-2 w-36 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
-            <button
-              onClick={() => { setShowTrashDialog(true); setShowUserMenu(false); }}
-              className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
-            >
-              <Trash className="w-4 h-4" />
-              <span>回收站</span>
-            </button>
-            <button
-              onClick={() => { setShowTokenDialog(true); setShowUserMenu(false); }}
-              className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
-            >
-              <Key className="w-4 h-4" />
-              <span>API Token</span>
-            </button>
-            <button
-              onClick={() => { setShowPasswordDialog(true); setShowUserMenu(false); }}
-              className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
-            >
-              <Lock className="w-4 h-4" />
-              <span>修改密码</span>
-            </button>
-            <button
-              onClick={() => { logout(); setShowUserMenu(false); }}
-              className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>退出登录</span>
-            </button>
-          </div>
-        )}
       </div>
 
       {/* 搜索 */}
@@ -903,7 +922,17 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
 
       {/* 随想笔记 */}
       <button
-        onClick={() => { setIsSearchMode(false); setContentExpanded(false); navigate('/'); }}
+        onClick={() => {
+          setIsSearchMode(false);
+          setUserSubViewContext(null);
+          if (viewMode === 'memo' && contentExpanded) {
+            setContentExpanded(false);
+          } else {
+            setViewMode('memo');
+            setContentExpanded(true);
+          }
+          navigate('/');
+        }}
         className="w-10 h-10 flex items-center justify-center rounded-lg transition-colors text-[#8B8B80] dark:text-gray-400 hover:text-[#5A5A52] dark:hover:text-gray-200 hover:bg-[#EDEDE8] dark:hover:bg-gray-800"
         title="随想笔记"
       >
@@ -915,6 +944,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
         <button
           onClick={async () => {
             setIsSearchMode(false);
+            setUserSubViewContext(null);
             if (viewMode === 'diary' && contentExpanded) {
               setContentExpanded(false);
             } else {
@@ -947,7 +977,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
           <CalendarDays className="w-5 h-5" />
         </button>
         <button
-          onClick={() => { setIsSearchMode(false); viewMode === 'all' && contentExpanded ? setContentExpanded(false) : (setViewMode('all'), setContentExpanded(true)); }}
+          onClick={() => { setIsSearchMode(false); setUserSubViewContext(null); viewMode === 'all' && contentExpanded ? setContentExpanded(false) : (setViewMode('all'), setContentExpanded(true)); }}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
             viewMode === 'all' && contentExpanded && !isSearchMode
               ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
@@ -958,7 +988,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
           <FileText className="w-5 h-5" />
         </button>
         <button
-          onClick={() => { setIsSearchMode(false); viewMode === 'recent' && contentExpanded ? setContentExpanded(false) : (setViewMode('recent'), setContentExpanded(true)); }}
+          onClick={() => { setIsSearchMode(false); setUserSubViewContext(null); viewMode === 'recent' && contentExpanded ? setContentExpanded(false) : (setViewMode('recent'), setContentExpanded(true)); }}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
             viewMode === 'recent' && contentExpanded && !isSearchMode
               ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
@@ -969,7 +999,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
           <Clock className={`w-5 h-5 ${viewMode === 'recent' && contentExpanded ? 'text-blue-500' : ''}`} />
         </button>
         <button
-          onClick={() => { setIsSearchMode(false); viewMode === 'starred' && contentExpanded ? setContentExpanded(false) : (setViewMode('starred'), setContentExpanded(true)); }}
+          onClick={() => { setIsSearchMode(false); setUserSubViewContext(null); viewMode === 'starred' && contentExpanded ? setContentExpanded(false) : (setViewMode('starred'), setContentExpanded(true)); }}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
             viewMode === 'starred' && contentExpanded && !isSearchMode
               ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
@@ -978,6 +1008,18 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
           title="收藏"
         >
           <Star className={`w-5 h-5 ${viewMode === 'starred' && contentExpanded ? 'fill-current text-yellow-500' : ''}`} />
+        </button>
+        <div className="border-t border-gray-200 dark:border-gray-700 my-1 w-6 mx-auto" />
+        <button
+          onClick={() => { setIsSearchMode(false); setUserSubViewContext(null); viewMode === 'ai' && contentExpanded ? setContentExpanded(false) : (setViewMode('ai'), setContentExpanded(true)); }}
+          className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
+            viewMode === 'ai' && contentExpanded && !isSearchMode
+              ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
+              : 'text-[#8B8B80] dark:text-gray-400 hover:text-[#5A5A52] dark:hover:text-gray-200 hover:bg-[#EDEDE8] dark:hover:bg-gray-800'
+          }`}
+          title="AI 问答"
+        >
+          <Sparkles className="w-5 h-5" />
         </button>
       </div>
 
@@ -1127,7 +1169,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
                   <>
                     <div className="flex items-center justify-between px-3 pt-3 pb-2">
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {viewMode === 'diary' ? '日记' : viewMode === 'starred' ? '收藏' : '文件'}
+                        {viewMode === 'diary' ? '日记' : viewMode === 'starred' ? '收藏' : viewMode === 'user' ? '用户' : viewMode === 'ai' ? 'AI 问答' : '文件'}
                       </span>
                       <button
                         onClick={toggleSidebar}
@@ -1138,7 +1180,31 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
                       </button>
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar">
-                      {viewMode === 'diary' ? (
+                      {viewMode === 'user' ? (
+                        <div className="py-2">
+                          <button onClick={() => { setUserSubView('profile'); onDocumentSelect?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
+                            <User className="w-4 h-4 text-gray-400" /><span>个人资料</span>
+                          </button>
+                          <button onClick={() => { setUserSubView('token'); onDocumentSelect?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
+                            <Key className="w-4 h-4 text-gray-400" /><span>API Token</span>
+                          </button>
+                          <button onClick={() => { setUserSubView('ai'); onDocumentSelect?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
+                            <Sparkles className="w-4 h-4 text-gray-400" /><span>AI 设置</span>
+                          </button>
+                          <button onClick={() => { setUserSubView('trash'); onDocumentSelect?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
+                            <Trash className="w-4 h-4 text-gray-400" /><span>回收站</span>
+                          </button>
+                          <button onClick={() => { setUserSubView('password'); onDocumentSelect?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
+                            <Lock className="w-4 h-4 text-gray-400" /><span>修改密码</span>
+                          </button>
+                          <div className="my-2 border-t border-gray-200 dark:border-gray-700" />
+                          <button onClick={() => logout()} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                            <LogOut className="w-4 h-4" /><span>退出登录</span>
+                          </button>
+                        </div>
+                      ) : viewMode === 'memo' ? (
+                        <MemoSidebarContent />
+                      ) : viewMode === 'diary' ? (
                         <DiaryCalendar
                           onNavigate={() => setContentExpanded(false)}
                           pendingTasks={pendingTasks}
@@ -1149,6 +1215,15 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
                         <div className="px-1 py-1">
                           {renderFileTree(null, 0, true)}
                         </div>
+                      ) : viewMode === 'ai' ? (
+                        <AIChatSidebar onNavigate={(type, id) => {
+                          if (type === 'memo') {
+                            navigate(`/?highlight=${id}`);
+                          } else {
+                            navigate(`/d/${id}`);
+                          }
+                          onDocumentSelect?.();
+                        }} />
                       ) : (
                         <div className="px-1 py-1">
                           {renderFileTree(null, 0, false)}
@@ -1276,20 +1351,84 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
                   <>
                     <div className="px-3 py-2 flex items-center justify-between">
                       <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        {viewMode === 'diary' ? '日记' : viewMode === 'starred' ? '收藏' : '文件'}
+                        {viewMode === 'diary' ? '日记' : viewMode === 'starred' ? '收藏' : viewMode === 'memo' ? '随想笔记' : viewMode === 'user' ? '用户' : '文件'}
                       </span>
                       <button onClick={toggleSidebar} className="w-5 h-5 flex items-center justify-center rounded text-[#8B8B80] hover:text-[#5A5A52] hover:bg-[#EDEDE8] dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-colors shrink-0" title="收起面板">
                         <ChevronLeft className="w-4 h-4" />
                       </button>
                     </div>
                     <div className="flex-1 relative overflow-hidden bg-[#FAFAF5] dark:bg-gray-800">
-                      <div ref={listRef} className="absolute inset-0 overflow-y-auto px-2 pb-2 custom-scrollbar" onDragOver={(e) => e.preventDefault()} onDrop={handleRootDrop} onClick={() => setSelectedFolderId(null)}>
-                        {viewMode === 'diary' ? (
+                      <div ref={listRef} className="absolute inset-0 overflow-y-auto custom-scrollbar" onDragOver={(e) => e.preventDefault()} onDrop={handleRootDrop} onClick={() => setSelectedFolderId(null)}>
+                        {viewMode === 'user' ? (
+                          <div className="py-2">
+                            {/* 个人资料 */}
+                            <button
+                              onClick={() => { setUserSubView('profile'); onDocumentSelect?.(); }}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors"
+                            >
+                              <User className="w-4 h-4 text-gray-400" />
+                              <span>个人资料</span>
+                            </button>
+                            {/* API Token */}
+                            <button
+                              onClick={() => { setUserSubView('token'); onDocumentSelect?.(); }}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors"
+                            >
+                              <Key className="w-4 h-4 text-gray-400" />
+                              <span>API Token</span>
+                            </button>
+                            {/* AI 设置 */}
+                            <button
+                              onClick={() => { setUserSubView('ai'); onDocumentSelect?.(); }}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors"
+                            >
+                              <Sparkles className="w-4 h-4 text-gray-400" />
+                              <span>AI 设置</span>
+                            </button>
+                            {/* 回收站 */}
+                            <button
+                              onClick={() => { setUserSubView('trash'); onDocumentSelect?.(); }}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors"
+                            >
+                              <Trash className="w-4 h-4 text-gray-400" />
+                              <span>回收站</span>
+                            </button>
+                            {/* 修改密码 */}
+                            <button
+                              onClick={() => { setUserSubView('password'); onDocumentSelect?.(); }}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors"
+                            >
+                              <Lock className="w-4 h-4 text-gray-400" />
+                              <span>修改密码</span>
+                            </button>
+                            {/* 分割线 */}
+                            <div className="my-2 border-t border-gray-200 dark:border-gray-700" />
+                            {/* 退出登录 */}
+                            <button
+                              onClick={() => logout()}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                            >
+                              <LogOut className="w-4 h-4" />
+                              <span>退出登录</span>
+                            </button>
+                          </div>
+                        ) : viewMode === 'memo' ? (
+                          <MemoSidebarContent />
+                        ) : viewMode === 'diary' ? (
                           <DiaryCalendar onNavigate={() => { onDocumentSelect?.(); setTimeout(() => { window.dispatchEvent(new CustomEvent('sidebarClose')); }, 0); }} pendingTasks={pendingTasks} onTaskToggle={handleTodoToggle} onTaskMoved={fetchPendingTasks} />
                         ) : isLoading ? (
                           <div className="p-4 text-xs text-gray-400 text-center">加载中...</div>
                         ) : viewMode === 'starred' ? (
                           filteredDocuments.length === 0 ? <div className="p-4 text-xs text-gray-400 text-center">暂无收藏</div> : <div className="pt-2">{renderFileTree(null, 0)}</div>
+                        ) : viewMode === 'ai' ? (
+                          <AIChatSidebar onNavigate={(type, id) => {
+                            if (type === 'memo') {
+                              navigate(`/?highlight=${id}`);
+                            } else {
+                              navigate(`/d/${id}`);
+                            }
+                            onDocumentSelect?.();
+                          }} />
                         ) : (
                           filteredDocuments.filter(d => !d.parent_id).length === 0 ? <div className="p-4 text-xs text-gray-400 text-center">暂无文章</div> : <div className="pt-2">{renderFileTree(null, 0)}</div>
                         )}
@@ -1410,7 +1549,6 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
         isOpen={editFolderDialog.show}
         folderId={editFolderDialog.id}
         initialTitle={editFolderDialog.title}
-        initialIcon={editFolderDialog.icon}
         onConfirm={handleEditFolder}
         onCancel={() => setEditFolderDialog({ ...editFolderDialog, show: false })}
       />
@@ -1422,6 +1560,9 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
         <TrashDialog onClose={() => setShowTrashDialog(false)} onRestore={refreshDocuments} />
       )}
       <PasswordDialog open={showPasswordDialog} onClose={() => setShowPasswordDialog(false)} />
+      {showAISettings && (
+        <AISettings onClose={() => setShowAISettings(false)} />
+      )}
 
       {/* Move To Folder Dialog */}
       {moveDialog.show && (() => {
@@ -1613,6 +1754,18 @@ const Sidebar = ({ onDocumentSelect, isMobile = false }: SidebarProps) => {
               >
                 <Move className="w-4 h-4 text-gray-400" />
                 <span>移动到...</span>
+              </button>
+              <button
+                onClick={() => {
+                  updateDocument(contextMenu.docId, { ai_excluded: !contextMenu.aiExcluded }).then(() => {
+                    updateDocumentLocal(contextMenu.docId, { ai_excluded: !contextMenu.aiExcluded });
+                  });
+                  setContextMenu(null);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <Sparkles className={`w-4 h-4 ${contextMenu.aiExcluded ? 'text-gray-400' : 'text-blue-500'}`} />
+                <span>{contextMenu.aiExcluded ? '取消不参与 AI' : '不参与 AI'}</span>
               </button>
               <button
                 onClick={() => {

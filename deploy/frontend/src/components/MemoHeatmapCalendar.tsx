@@ -15,12 +15,12 @@ function getFirstDayOfWeek(year: number, month: number) {
 
 function getIntensity(count: number): string {
   if (count === 0) return '';
-  if (count === 1) return 'bg-blue-100 dark:bg-blue-900/60';
-  if (count <= 3) return 'bg-blue-200 dark:bg-blue-800';
-  return 'bg-blue-400/70 dark:bg-blue-600';
+  if (count === 1) return 'bg-[#a3bdd6] dark:bg-[#2a3a50]';
+  if (count <= 3) return 'bg-[#6b8ab5] dark:bg-[#3f587f]';
+  return 'bg-[#3f587f] dark:bg-[#6b8ab5]';
 }
 
-export default function MemoHeatmapCalendar() {
+export default function MemoHeatmapCalendar({ embedded = false }: { embedded?: boolean } = {}) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
@@ -59,7 +59,7 @@ export default function MemoHeatmapCalendar() {
   while (cells.length % 7 !== 0) cells.push(null);
 
   return (
-    <div className="bg-white dark:bg-gray-800/50 rounded-2xl p-4 shadow-sm ">
+    <div className={embedded ? 'px-1' : 'bg-white dark:bg-gray-800/50 rounded-xl p-4 border border-[#e7e7e5] dark:border-gray-700/40'}>
       <div className="flex items-center justify-between mb-3">
         <button onClick={prevMonth} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors">
           <ChevronLeft className="w-4 h-4 text-gray-500 dark:text-gray-400" />
@@ -86,12 +86,14 @@ export default function MemoHeatmapCalendar() {
           return (
             <div
               key={day}
-              className={`aspect-square rounded-full flex items-center justify-center text-[10px] ${
-                intensity || 'bg-gray-100 dark:bg-gray-800'
-              } ${count > 0 ? 'text-white dark:text-gray-900 font-medium' : 'text-gray-400 dark:text-gray-500'}`}
+              className="aspect-square flex items-center justify-center"
               title={`${day}日: ${count}条`}
             >
-              {day}
+              <span className={`w-[80%] aspect-square rounded-[5px] flex items-center justify-center text-[10px] ${
+                intensity || 'bg-[#f4f2ec] dark:bg-gray-800'
+              } ${count > 0 ? 'text-white dark:text-gray-900 font-medium' : 'text-gray-400 dark:text-gray-500'}`}>
+                {day}
+              </span>
             </div>
           );
         })}
@@ -99,10 +101,10 @@ export default function MemoHeatmapCalendar() {
 
       <div className="flex items-center justify-end gap-1 mt-2">
         <span className="text-[9px] text-gray-400">少</span>
-        <div className="w-3 h-3 rounded-full bg-gray-100 dark:bg-gray-800" />
-        <div className="w-3 h-3 rounded-full bg-blue-100 dark:bg-blue-900/60" />
-        <div className="w-3 h-3 rounded-full bg-blue-200 dark:bg-blue-800" />
-        <div className="w-3 h-3 rounded-full bg-blue-400/70 dark:bg-blue-600" />
+        <div className="w-3 h-3 rounded-[5px] bg-[#f4f2ec] dark:bg-gray-800" />
+        <div className="w-3 h-3 rounded-[5px] bg-[#a3bdd6] dark:bg-[#2a3a50]" />
+        <div className="w-3 h-3 rounded-[5px] bg-[#6b8ab5] dark:bg-[#3f587f]" />
+        <div className="w-3 h-3 rounded-[5px] bg-[#3f587f] dark:bg-[#6b8ab5]" />
         <span className="text-[9px] text-gray-400">多</span>
       </div>
     </div>

@@ -1,6 +1,20 @@
 @import "tailwindcss";
 @variant dark (&:where(.dark, .dark *));
 
+@theme {
+  --color-blue-50: #f0f3f7;
+  --color-blue-100: #dde3ec;
+  --color-blue-200: #b9c5d6;
+  --color-blue-300: #8ea4bb;
+  --color-blue-400: #6583a0;
+  --color-blue-500: #3f587f;
+  --color-blue-600: #334766;
+  --color-blue-700: #2a3b54;
+  --color-blue-800: #222f44;
+  --color-blue-900: #1a2333;
+  --color-blue-950: #111722;
+}
+
 :root {
   --outline-font-size: 16px;
   --outline-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -233,7 +247,7 @@
 .memo-content mark { background: #fef08a; padding: 0.05em 0.15em; border-radius: 2px; }
 .dark .memo-content mark { background: #854d0e; color: #fef3c7; }
 .memo-content pre { border-radius: 0.5rem; overflow-x: auto; margin-bottom: 1rem; max-width: 100%; }
-.memo-content blockquote { border-left: 3px solid #d1d5db; padding-left: 0.75rem; color: #6b7280; margin-bottom: 1rem; }
+.memo-content blockquote { border-left: 3px solid #d1d5db; padding-left: 1.25rem; color: #6b7280; margin-bottom: 1rem; margin-left: 0; }
 .dark .memo-content blockquote { border-left-color: #4b5563; color: #9ca3af; }
 .memo-content a { color: #2563eb; text-decoration: underline; word-break: break-all; }
 .dark .memo-content a { color: #60a5fa; }

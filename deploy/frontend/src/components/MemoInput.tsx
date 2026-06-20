@@ -1,10 +1,12 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Send, Image, Paperclip, ChevronDown, Mic, MicOff } from 'lucide-react';
-import { createMemo, uploadFile, uploadAudio, uploadFromUrl, getMemoTags, createTodo } from '../api/data';
+import { Send, Image, Paperclip, ChevronDown, Mic, MicOff, Maximize2, Minimize2, X, Sparkles } from 'lucide-react';
+import { createMemo, uploadFile, uploadAudio, uploadFromUrl, getMemoTags, createTodo, getAIConfigs } from '../api/data';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { useResizableTextarea } from '../hooks/useResizableTextarea';
 import WaveformCanvas from './WaveformCanvas';
+import VoiceRecordCard from './VoiceRecordCard';
+import AIChatPanel from './AIChatPanel';
 import { handleListContinuation } from '../utils/listContinuation';
 import { getPasteMarkdown, extractExternalImageUrls } from '../utils/htmlToMarkdown';
 import { showToast } from '../utils/toast';
@@ -20,6 +22,11 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showExpandEditor, setShowExpandEditor] = useState(false);
+  const [showVoiceCard, setShowVoiceCard] = useState(false);
+  const [showAIPanel, setShowAIPanel] = useState(false);
+  const [hasAIConfig, setHasAIConfig] = useState(false);
+  const activeTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -31,15 +38,22 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
   const [tagSearch, setTagSearch] = useState<{ keyword: string; start: number } | null>(null);
   const [tagDropdownIndex, setTagDropdownIndex] = useState(0);
   const [tagDropdownPos, setTagDropdownPos] = useState({ top: 0, left: 0 });
+  const [mentionDropdownIndex, setMentionDropdownIndex] = useState(0);
 
   // @提及文档搜索状态
   const [showMention, setShowMention] = useState(false);
   const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
+  const [mentionDropdownPos, setMentionDropdownPos] = useState({ top: 0, left: 0 });
   const [mentionSearchText, setMentionSearchText] = useState('');
   const [isTodoMode, setIsTodoMode] = useState(false);
   const [mentionStartOffset, setMentionStartOffset] = useState<number | null>(null);
   useEffect(() => {
     getMemoTags().then(setAllTags).catch(() => {});
+  }, []);
+
+  // 检查是否配置了 AI 模型
+  useEffect(() => {
+    getAIConfigs().then(configs => setHasAIConfig(configs.length > 0)).catch(() => setHasAIConfig(false));
   }, []);
 
   const filteredTags = useMemo(() => {
@@ -55,6 +69,20 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
     }
     return [...prefixMatches, ...containsMatches].slice(0, 8);
   }, [tagSearch, allTags]);
+
+  const filteredMentionDocs = useMemo(() => {
+    if (!showMention || !documents) return [];
+    const kw = mentionSearchText.toLowerCase();
+    if (!kw) return documents.slice(0, 8);
+    const prefixMatches: Document[] = [];
+    const containsMatches: Document[] = [];
+    for (const doc of documents) {
+      const title = (doc.title || '无标题').toLowerCase();
+      if (title.startsWith(kw)) prefixMatches.push(doc);
+      else if (title.includes(kw)) containsMatches.push(doc);
+    }
+    return [...prefixMatches, ...containsMatches].slice(0, 8);
+  }, [showMention, mentionSearchText, documents]);
 
   // 计算 textarea 中光标的像素位置（逐字符测量）
   const mirrorRef = useRef<HTMLDivElement | null>(null);
@@ -123,7 +151,7 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
   }, []);
 
   // 检测光标前的 @提及片段（仅用于更新搜索关键字，不主动打开下拉框）
-  const detectMentionSearch = useCallback((text: string, cursorPos: number) => {
+  const detectMentionSearch = useCallback((text: string, cursorPos: number, externalEl?: HTMLTextAreaElement) => {
     const before = text.slice(0, cursorPos);
     const match = before.match(/(?:^|\s)@([a-zA-Z0-9_一-龥]*)$/);
     if (match) {
@@ -131,17 +159,19 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
       const searchText = text.substring(start + 1, cursorPos);
       setMentionSearchText(searchText);
       setMentionStartOffset(start);
+      setMentionDropdownIndex(0);
 
-      // 用当前光标位置定位下拉框（而非 @ 字符位置）
-      const el = textareaRef.current;
+      const el = externalEl || textareaRef.current;
       if (el) {
-        setMentionPosition(getCursorPos(el, cursorPos));
+        const pos = getCursorPos(el, cursorPos);
+        setMentionPosition(pos);
+        setMentionDropdownPos(pos);
       }
     } else {
       setShowMention(false);
       setMentionStartOffset(null);
     }
-  }, []);
+  }, [getCursorPos]);
 
   const adjustHeight = useCallback(() => {
     if (isUserResized()) return;
@@ -153,8 +183,8 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
   }, [isUserResized]);
 
   // 插入文档链接
-  const insertMention = useCallback((doc: Document) => {
-    const el = textareaRef.current;
+  const insertMention = useCallback((doc: Document, externalEl?: HTMLTextAreaElement) => {
+    const el = externalEl || activeTextareaRef.current || textareaRef.current;
     if (!el || mentionStartOffset === null) return;
     const searchTextLength = mentionSearchText.length;
     const mentionEndOffset = mentionStartOffset + 1 + searchTextLength;
@@ -163,6 +193,7 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
     const linkText = `[@${doc.title || '无标题'}](/d/${doc.id})`;
     const newContent = before + linkText + ' ' + after;
     setContent(newContent);
+    if (textareaRef.current && textareaRef.current !== el) textareaRef.current.value = newContent;
     setShowMention(false);
     setMentionSearchText('');
     setMentionStartOffset(null);
@@ -170,9 +201,8 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
       el.focus();
       const newPos = before.length + linkText.length + 1;
       el.selectionStart = el.selectionEnd = newPos;
-      adjustHeight();
     });
-  }, [mentionStartOffset, mentionSearchText, adjustHeight]);
+  }, [mentionStartOffset, mentionSearchText]);
 
   // 内容变化时自动调整高度（包括 handleListContinuation 触发的变化）
   useEffect(() => {
@@ -201,14 +231,14 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
   }, [adjustHeight]);
 
   // 检测光标前的标签片段
-  const detectTagSearch = useCallback((text: string, cursorPos: number) => {
+  const detectTagSearch = useCallback((text: string, cursorPos: number, externalEl?: HTMLTextAreaElement) => {
     const before = text.slice(0, cursorPos);
     const match = before.match(/(?:^|\s)#([a-zA-Z0-9_一-龥]*)$/);
     if (match) {
       const start = cursorPos - match[0].length + (match[0][0] === '#' ? 0 : 1);
       setTagSearch({ keyword: match[1], start });
       setTagDropdownIndex(0);
-      const el = textareaRef.current;
+      const el = externalEl || textareaRef.current;
       if (el) {
         setTagDropdownPos(getCursorPos(el, cursorPos));
       }
@@ -217,22 +247,22 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
     }
   }, [getCursorPos]);
 
-  const insertTag = useCallback((tagName: string) => {
-    const el = textareaRef.current;
+  const insertTag = useCallback((tagName: string, externalEl?: HTMLTextAreaElement) => {
+    const el = externalEl || activeTextareaRef.current || textareaRef.current;
     if (!el || !tagSearch) return;
     const cursorPos = el.selectionStart;
     const before = el.value.slice(0, tagSearch.start);
     const after = el.value.slice(cursorPos);
     const newContent = before + tagName + ' ' + after;
     setContent(newContent);
+    if (textareaRef.current && textareaRef.current !== el) textareaRef.current.value = newContent;
     setTagSearch(null);
     requestAnimationFrame(() => {
       el.focus();
-      const newPos = tagSearch.start.length + tagName.length + 1;
+      const newPos = tagSearch.start + tagName.length + 1;
       el.selectionStart = el.selectionEnd = newPos;
-      adjustHeight();
     });
-  }, [tagSearch, adjustHeight]);
+  }, [tagSearch]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (showMention) {
@@ -375,7 +405,7 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
 
   return (
     <div className="mb-6 relative">
-      <div className="bg-white dark:bg-gray-800/50 rounded-2xl shadow-sm overflow-visible " data-resizable-container>
+      <div className="bg-white dark:bg-gray-800/50 rounded-xl overflow-visible border border-[#dad9d4] dark:border-gray-700/40 " data-resizable-container>
         <textarea
           ref={textareaRef}
           data-resizable-textarea
@@ -461,6 +491,7 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
           onClick={(e) => {
             detectTagSearch(content, (e.target as HTMLTextAreaElement).selectionStart);
           }}
+          onFocus={(e) => { activeTextareaRef.current = e.target as HTMLTextAreaElement; }}
           onSelect={(e) => {
             detectTagSearch(content, (e.target as HTMLTextAreaElement).selectionStart);
           }}
@@ -485,7 +516,7 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
             {filteredTags.map((tag, i) => (
               <button
                 key={tag}
-                onMouseDown={(e) => { e.preventDefault(); insertTag(tag); }}
+                onMouseDown={(e) => { e.preventDefault(); insertTag(tag, activeTextareaRef.current || undefined); }}
                 className={`w-full text-left px-4 py-2 text-base transition-colors ${
                   i === tagDropdownIndex
                     ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
@@ -503,15 +534,16 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
         {showMention && createPortal(
           <MentionDropdown
             documents={documents || []}
-            onSelect={insertMention}
+            onSelect={(doc) => insertMention(doc, activeTextareaRef.current || undefined)}
             onClose={() => {
               setShowMention(false);
               setMentionSearchText('');
               setMentionStartOffset(null);
-              textareaRef.current?.focus();
+              (activeTextareaRef.current || textareaRef.current)?.focus();
             }}
             position={mentionPosition}
             searchText={mentionSearchText}
+            zIndex={showExpandEditor ? 10000 : 50}
           />,
           document.body
         )}
@@ -521,18 +553,16 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
           <div className="px-4 pb-2 text-sm text-blue-500">上传中...</div>
         )}
 
-        {/* 录音状态 */}
-        {recorder.isRecording && (
-          <div className="px-4 pb-2 flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            <WaveformCanvas data={recorder.analyserData} width={160} height={32} />
-            <span className="text-sm text-red-500 font-mono tabular-nums">{recorder.durationFormatted}</span>
-            <span className="text-xs text-gray-400">最长 5:00</span>
-          </div>
-        )}
-
         <div className="flex items-center justify-between px-4 pb-3">
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowExpandEditor(true)}
+              disabled={uploading || isSubmitting}
+              className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40"
+              title="展开编辑"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
             <button
               onClick={() => imageInputRef.current?.click()}
               disabled={uploading || isSubmitting}
@@ -550,17 +580,23 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
               <Paperclip className="w-4 h-4" />
             </button>
             <button
-              onClick={handleAudioRecord}
+              onClick={(e) => { e.stopPropagation(); setShowVoiceCard(true); }}
               disabled={uploading || isSubmitting}
-              className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${
-                recorder.isRecording
-                  ? 'text-red-500 animate-pulse bg-red-50 dark:bg-red-900/20'
-                  : 'text-gray-400 hover:text-blue-500 hover:bg-gray-200 dark:hover:bg-gray-700'
-              }`}
-              title={recorder.isRecording ? '停止录音' : '录音'}
+              className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40"
+              title="语音记录"
             >
-              {recorder.isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              <Mic className="w-4 h-4" />
             </button>
+            {hasAIConfig && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowAIPanel(true); }}
+                disabled={uploading || isSubmitting}
+                className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40"
+                title="AI 整理"
+              >
+                <Sparkles className="w-4 h-4" />
+              </button>
+            )}
             <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">
               Ctrl+Enter 发布
             </span>
@@ -620,6 +656,197 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
           e.target.value = '';
         }}
       />
+
+      {/* 展开编辑器弹窗 */}
+      {showExpandEditor && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => {
+          const expandEl = document.querySelector('[data-expand-textarea]') as HTMLTextAreaElement;
+          if (expandEl) {
+            setContent(expandEl.value);
+            if (textareaRef.current) textareaRef.current.value = expandEl.value;
+          }
+          activeTextareaRef.current = textareaRef.current;
+          setShowExpandEditor(false);
+        }}>
+          <div className="flex flex-col w-[90vw] max-w-[680px] h-[75vh] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 shrink-0">
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={uploading || isSubmitting}
+                  className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40"
+                  title="添加图片"
+                >
+                  <Image className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading || isSubmitting}
+                  className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40"
+                  title="添加附件"
+                >
+                  <Paperclip className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={handleAudioRecord}
+                  disabled={uploading || isSubmitting}
+                  className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${
+                    recorder.isRecording
+                      ? 'text-red-500 animate-pulse bg-red-50 dark:bg-red-900/20'
+                      : 'text-gray-400 hover:text-blue-500 hover:bg-gray-200 dark:hover:bg-gray-700'
+                  }`}
+                  title={recorder.isRecording ? '停止录音' : '录音'}
+                >
+                  {recorder.isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                </button>
+                {uploading && <span className="text-xs text-blue-500">上传中...</span>}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const expandEl = document.querySelector('[data-expand-textarea]') as HTMLTextAreaElement;
+                    if (expandEl) {
+                      setContent(expandEl.value);
+                      if (textareaRef.current) textareaRef.current.value = expandEl.value;
+                    }
+                    activeTextareaRef.current = textareaRef.current;
+                    setShowExpandEditor(false);
+                    setTimeout(() => handleSubmit(), 0);
+                  }}
+                  disabled={isSubmitting || !content.trim()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white dark:text-gray-900 bg-gray-900 dark:bg-gray-100 hover:bg-gray-700 dark:hover:bg-gray-300 rounded-lg transition-colors disabled:opacity-40"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>发布</span>
+                </button>
+                <button
+                  onClick={() => {
+                    const expandEl = document.querySelector('[data-expand-textarea]') as HTMLTextAreaElement;
+                    if (expandEl) {
+                      setContent(expandEl.value);
+                      if (textareaRef.current) textareaRef.current.value = expandEl.value;
+                    }
+                    activeTextareaRef.current = textareaRef.current;
+                    setShowExpandEditor(false);
+                  }}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <textarea
+              data-expand-textarea
+              defaultValue={textareaRef.current?.value ?? content}
+              onFocus={(e) => { activeTextareaRef.current = e.target as HTMLTextAreaElement; }}
+              onChange={(e) => {
+                const expandEl = e.target as HTMLTextAreaElement;
+                const newVal = expandEl.value;
+                const cursorPos = expandEl.selectionStart;
+                setContent(newVal);
+                if (textareaRef.current) textareaRef.current.value = newVal;
+                detectTagSearch(newVal, cursorPos, expandEl);
+                // 检测 @ 输入或持续搜索
+                if (newVal.length > content.length && newVal.charAt(cursorPos - 1) === '@') {
+                  setShowMention(true);
+                  detectMentionSearch(newVal, cursorPos, expandEl);
+                } else if (showMention) {
+                  detectMentionSearch(newVal, cursorPos, expandEl);
+                }
+              }}
+              onKeyDown={(e) => {
+                const expandEl = e.currentTarget as HTMLTextAreaElement;
+                // 标签下拉导航
+                if (tagSearch && filteredTags.length > 0) {
+                  if (e.key === 'ArrowDown') { e.preventDefault(); setTagDropdownIndex(prev => (prev + 1) % filteredTags.length); return; }
+                  if (e.key === 'ArrowUp') { e.preventDefault(); setTagDropdownIndex(prev => (prev - 1 + filteredTags.length) % filteredTags.length); return; }
+                  if ((e.key === 'Enter' && !e.nativeEvent.isComposing) || e.key === 'Tab') { e.preventDefault(); insertTag(filteredTags[tagDropdownIndex], expandEl); return; }
+                  if (e.key === 'Escape') { e.preventDefault(); setTagSearch(null); return; }
+                }
+                // 提及下拉导航
+                if (showMention && filteredMentionDocs.length > 0) {
+                  if (e.key === 'ArrowDown') { e.preventDefault(); setMentionDropdownIndex(prev => (prev + 1) % filteredMentionDocs.length); return; }
+                  if (e.key === 'ArrowUp') { e.preventDefault(); setMentionDropdownIndex(prev => (prev - 1 + filteredMentionDocs.length) % filteredMentionDocs.length); return; }
+                  if ((e.key === 'Enter' && !e.nativeEvent.isComposing) || e.key === 'Tab') { e.preventDefault(); insertMention(filteredMentionDocs[mentionDropdownIndex], expandEl); return; }
+                  if (e.key === 'Escape') { e.preventDefault(); setShowMention(false); setMentionSearchText(''); setMentionStartOffset(null); return; }
+                }
+                // 列表续行
+                if (handleListContinuation(e, expandEl.value, setContent, { current: expandEl })) return;
+                // Esc 关闭
+                if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  setContent(expandEl.value);
+                  if (textareaRef.current) textareaRef.current.value = expandEl.value;
+                  activeTextareaRef.current = textareaRef.current;
+                  setShowExpandEditor(false);
+                }
+              }}
+              className="flex-1 w-full bg-transparent text-gray-800 dark:text-gray-200 text-base p-4 resize-none focus:outline-none scrollbar-none"
+              style={{ fontFamily: 'inherit', lineHeight: '1.75' }}
+              autoFocus
+            />
+            {/* 标签下拉 */}
+            {tagSearch && filteredTags.length > 0 && (
+              <div className="fixed w-40 z-[10000] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg max-h-48 overflow-y-auto" style={{ top: tagDropdownPos.top, left: tagDropdownPos.left }}>
+                {filteredTags.map((tag, i) => (
+                  <button
+                    key={tag}
+                    onMouseDown={(e) => { e.preventDefault(); insertTag(tag, activeTextareaRef.current || undefined); }}
+                    className={`w-full text-left px-4 py-2 text-base transition-colors ${
+                      i === tagDropdownIndex
+                        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            )}
+            {/* 提及下拉 */}
+            {showMention && filteredMentionDocs.length > 0 && (
+              <div className="fixed w-52 z-[10000] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg max-h-48 overflow-y-auto" style={{ top: mentionDropdownPos.top, left: mentionDropdownPos.left }}>
+                {filteredMentionDocs.map((doc, i) => (
+                  <button
+                    key={doc.id}
+                    onMouseDown={(e) => { e.preventDefault(); insertMention(doc, activeTextareaRef.current || undefined); }}
+                    className={`w-full text-left px-4 py-2 text-base transition-colors ${
+                      i === mentionDropdownIndex
+                        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {doc.title || '无标题'}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+      {/* 语音录音卡片 */}
+      {showVoiceCard && (
+        <VoiceRecordCard
+          onClose={() => setShowVoiceCard(false)}
+          onSaved={(audioUrl, durationFormatted) => {
+            insertAtCursor(`🎙 录音 ${durationFormatted} ![](${audioUrl})`);
+            showToast('录音已保存');
+          }}
+        />
+      )}
+
+      {/* AI 对话面板 */}
+      {showAIPanel && (
+        <AIChatPanel
+          context={content}
+          onWriteBack={(newContent) => {
+            setContent(newContent);
+            if (textareaRef.current) textareaRef.current.value = newContent;
+          }}
+          onClose={() => setShowAIPanel(false)}
+        />
+      )}
     </div>
   );
 }

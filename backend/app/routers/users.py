@@ -16,6 +16,14 @@ def update_settings(settings: schemas.UserSettingsUpdate, current_user: schemas.
     invalidate_user_cache(current_user.username)
     return result
 
+@router.put("/profile", response_model=schemas.User)
+def update_profile(profile: schemas.UserProfileUpdate, current_user: schemas.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    result = crud.update_user_profile(db, current_user.id, profile)
+    if not result:
+        raise HTTPException(status_code=404, detail="User not found")
+    invalidate_user_cache(current_user.username)
+    return result
+
 @router.put("/password", response_model=schemas.User)
 def update_password(password_update: schemas.PasswordUpdate, current_user: schemas.User = Depends(get_current_user), db: Session = Depends(get_db)):
     # 从数据库获取真实用户模型（Pydantic schema 没有 password_hash）

@@ -26,6 +26,12 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
     cursor.execute("PRAGMA synchronous=FULL")  # 每次 commit 等待数据写入磁盘，防止数据丢失
     cursor.execute("PRAGMA cache_size=-20000")  # 增加缓存到 20MB
     cursor.execute("PRAGMA busy_timeout=30000")  # 忙碌等待超时 30 秒
+    # 加载 sqlite-vec 向量搜索扩展
+    try:
+        import sqlite_vec
+        sqlite_vec.load(dbapi_connection)
+    except Exception:
+        pass  # 扩展不可用时静默跳过
     cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

@@ -39,6 +39,11 @@ sqlite3 /app/data/app.db "ALTER TABLE users ADD COLUMN theme VARCHAR(50) DEFAULT
 sqlite3 /app/data/app.db "ALTER TABLE users ADD COLUMN font_family VARCHAR(50) DEFAULT 'system';" 2>/dev/null && echo "Added font_family column" || echo "font_family column already exists"
 sqlite3 /app/data/app.db "ALTER TABLE users ADD COLUMN font_size VARCHAR(20) DEFAULT 'medium';" 2>/dev/null && echo "Added font_size column" || echo "font_size column already exists"
 sqlite3 /app/data/app.db "ALTER TABLE users ADD COLUMN memo_columns INTEGER DEFAULT 1;" 2>/dev/null && echo "Added memo_columns column" || echo "memo_columns column already exists"
+sqlite3 /app/data/app.db "ALTER TABLE users ADD COLUMN nickname VARCHAR(50);" 2>/dev/null && echo "Added nickname column" || echo "nickname column already exists"
+sqlite3 /app/data/app.db "ALTER TABLE users ADD COLUMN email VARCHAR(100);" 2>/dev/null && echo "Added email column" || echo "email column already exists"
+sqlite3 /app/data/app.db "ALTER TABLE users ADD COLUMN phone VARCHAR(20);" 2>/dev/null && echo "Added phone column" || echo "phone column already exists"
+sqlite3 /app/data/app.db "ALTER TABLE users ADD COLUMN bio VARCHAR(200);" 2>/dev/null && echo "Added bio column" || echo "bio column already exists"
+sqlite3 /app/data/app.db "ALTER TABLE users ADD COLUMN avatar_path VARCHAR(500);" 2>/dev/null && echo "Added avatar_path column" || echo "avatar_path column already exists"
 
 # 创建 attachments 表
 sqlite3 /app/data/app.db "CREATE TABLE IF NOT EXISTS attachments (
@@ -85,7 +90,72 @@ sqlite3 /app/data/app.db "ALTER TABLE documents ADD COLUMN original_parent_id VA
 sqlite3 /app/data/app.db "ALTER TABLE memos ADD COLUMN deleted_at TIMESTAMP;" 2>/dev/null && echo "Added memos.deleted_at column" || echo "memos.deleted_at column already exists"
 sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_memos_deleted_at ON memos(deleted_at);" 2>/dev/null
 
+# 文档公开字段
+sqlite3 /app/data/app.db "ALTER TABLE documents ADD COLUMN is_public BOOLEAN DEFAULT 0;" 2>/dev/null && echo "Added documents.is_public column" || echo "documents.is_public column already exists"
+sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_documents_is_public ON documents(is_public);" 2>/dev/null
+
+# AI 排除字段
+sqlite3 /app/data/app.db "ALTER TABLE documents ADD COLUMN ai_excluded BOOLEAN DEFAULT 0;" 2>/dev/null && echo "Added documents.ai_excluded column" || echo "documents.ai_excluded column already exists"
+sqlite3 /app/data/app.db "ALTER TABLE memos ADD COLUMN ai_excluded BOOLEAN DEFAULT 0;" 2>/dev/null && echo "Added memos.ai_excluded column" || echo "memos.ai_excluded column already exists"
+
+# 笔记向量嵌入表
+sqlite3 /app/data/app.db "CREATE TABLE IF NOT EXISTS note_embeddings (
+    id TEXT PRIMARY KEY,
+    source_type TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    chunk_text TEXT NOT NULL,
+    embedding BLOB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);" && echo "Created note_embeddings table" || echo "note_embeddings table already exists"
+sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_embeddings_source ON note_embeddings(source_type, source_id);" 2>/dev/null
+
+# AI 对话历史表
+sqlite3 /app/data/app.db "CREATE TABLE IF NOT EXISTS ai_conversations (
+    id TEXT PRIMARY KEY,
+    title VARCHAR(200),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);" && echo "Created ai_conversations table" || echo "ai_conversations table already exists"
+
+sqlite3 /app/data/app.db "CREATE TABLE IF NOT EXISTS ai_messages (
+    id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL REFERENCES ai_conversations(id) ON DELETE CASCADE,
+    role VARCHAR(20) NOT NULL,
+    content TEXT NOT NULL,
+    sources TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);" && echo "Created ai_messages table" || echo "ai_messages table already exists"
+sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_ai_messages_conversation ON ai_messages(conversation_id);" 2>/dev/null
+
 echo "Database migrations complete."
+
+# AI 配置表
+sqlite3 /app/data/app.db "CREATE TABLE IF NOT EXISTS ai_configs (
+    id TEXT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    provider VARCHAR(50) NOT NULL DEFAULT 'custom',
+    api_url VARCHAR(500) NOT NULL,
+    api_key VARCHAR(500) NOT NULL,
+    model VARCHAR(100) NOT NULL,
+    is_default BOOLEAN DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);" && echo "Created ai_configs table" || echo "ai_configs table already exists"
+
+# 语音记录表
+sqlite3 /app/data/app.db "CREATE TABLE IF NOT EXISTS voice_records (
+    id TEXT PRIMARY KEY,
+    memo_id TEXT REFERENCES memos(id) ON DELETE SET NULL,
+    document_id TEXT REFERENCES documents(id) ON DELETE SET NULL,
+    audio_path VARCHAR(500) NOT NULL,
+    duration_seconds INTEGER,
+    transcribed_text TEXT,
+    ai_messages TEXT,
+    ai_config_id TEXT REFERENCES ai_configs(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);" && echo "Created voice_records table" || echo "voice_records table already exists"
+sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_voice_records_memo_id ON voice_records(memo_id);" 2>/dev/null
+sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_voice_records_document_id ON voice_records(document_id);" 2>/dev/null
 
 # 画布数据迁移：将 SQLite scene_data 列中的数据迁移到文件系统
 echo "Running excalidraw data migration..."

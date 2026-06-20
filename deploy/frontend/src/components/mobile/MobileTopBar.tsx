@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, X, ArrowLeft, LogOut, Key, Trash } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Search, X, ArrowLeft, LogOut, Key, Trash, User, Sparkles, Lock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useDocuments } from '../../context/DocumentContext';
-import TokenDialog from '../TokenDialog';
-import TrashDialog from '../TrashDialog';
+import UserProfileEditor from '../UserProfileEditor';
+import TokenPanel from '../TokenPanel';
+import AISettingsPanel from '../AISettingsPanel';
+import TrashPanel from '../TrashPanel';
+import PasswordPanel from '../PasswordPanel';
 
 interface MobileTopBarProps {
   title: string;
@@ -13,11 +16,9 @@ interface MobileTopBarProps {
 }
 
 export default function MobileTopBar({ title, showBack, onBack, onSearch }: MobileTopBarProps) {
-  const { logout } = useAuth();
-  const { refreshDocuments } = useDocuments();
+  const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showTokenDialog, setShowTokenDialog] = useState(false);
-  const [showTrashDialog, setShowTrashDialog] = useState(false);
+  const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
@@ -48,6 +49,11 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
     }
   };
 
+  const openDialog = (name: string) => {
+    setActiveDialog(name);
+    setShowUserMenu(false);
+  };
+
   return (
     <div
       className="fixed top-0 left-0 right-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-700/50 z-30"
@@ -67,29 +73,57 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
             <div className="relative">
               <div
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="w-7 h-7 rounded-md cursor-pointer hover:opacity-80 transition-opacity overflow-hidden"
+                className="w-7 h-7 rounded-full cursor-pointer hover:opacity-80 transition-opacity overflow-hidden border border-gray-200 dark:border-gray-600"
               >
-                <img src="/beaver.png" alt="beaver" className="w-full h-full object-cover" />
+                {user?.avatar_path ? (
+                  <img src={user.avatar_path} alt="avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                    <User className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
+                  </div>
+                )}
               </div>
               {showUserMenu && (
-                <div className="absolute left-0 top-full mt-1 w-36 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+                <div className="absolute left-0 top-full mt-1 w-40 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
                   <button
-                    onClick={() => { setShowTrashDialog(true); setShowUserMenu(false); }}
+                    onClick={() => openDialog('profile')}
                     className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
                   >
-                    <Trash className="w-4 h-4" />
-                    <span>回收站</span>
+                    <User className="w-4 h-4" />
+                    <span>个人资料</span>
                   </button>
                   <button
-                    onClick={() => { setShowTokenDialog(true); setShowUserMenu(false); }}
+                    onClick={() => openDialog('token')}
                     className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
                   >
                     <Key className="w-4 h-4" />
                     <span>API Token</span>
                   </button>
                   <button
-                    onClick={() => { logout(); setShowUserMenu(false); }}
+                    onClick={() => openDialog('ai')}
                     className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>AI 设置</span>
+                  </button>
+                  <button
+                    onClick={() => openDialog('trash')}
+                    className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
+                  >
+                    <Trash className="w-4 h-4" />
+                    <span>回收站</span>
+                  </button>
+                  <button
+                    onClick={() => openDialog('password')}
+                    className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
+                  >
+                    <Lock className="w-4 h-4" />
+                    <span>修改密码</span>
+                  </button>
+                  <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
+                  <button
+                    onClick={() => { logout(); setShowUserMenu(false); }}
+                    className="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-2"
                   >
                     <LogOut className="w-4 h-4" />
                     <span>退出登录</span>
@@ -142,8 +176,30 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
           </div>
         </div>
       )}
-      {showTokenDialog && <TokenDialog onClose={() => setShowTokenDialog(false)} />}
-      {showTrashDialog && <TrashDialog onClose={() => setShowTrashDialog(false)} onRestore={refreshDocuments} />}
+
+      {/* Full-screen panels - rendered via portal to escape fixed parent */}
+      {activeDialog && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-white dark:bg-gray-900 flex flex-col">
+          {/* Top bar with close button */}
+          <div className="shrink-0 flex items-center justify-end px-3" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)', height: 'calc(env(safe-area-inset-top, 0px) + 44px)' }}>
+            <button
+              onClick={() => setActiveDialog(null)}
+              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          {/* Panel content */}
+          <div className="flex-1 min-h-0 overflow-hidden">
+            {activeDialog === 'profile' && <UserProfileEditor />}
+            {activeDialog === 'token' && <TokenPanel />}
+            {activeDialog === 'ai' && <AISettingsPanel />}
+            {activeDialog === 'trash' && <TrashPanel />}
+            {activeDialog === 'password' && <PasswordPanel />}
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

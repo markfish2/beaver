@@ -388,7 +388,8 @@ function MindMapView({
         // 彩色主题下，子节点继承父级的 branchIndex
         const childBranchIndex = isColorful ? (depth === 0 ? i : branchIndex) : 0;
 
-        const shouldCollapse = collapseLvl > 0 && depth >= collapseLvl - 1;
+        // depth 0 = 二级节点(root的子节点), 所以 collapseLvl=N 对应 depth >= N-2
+        const shouldCollapse = collapseLvl > 0 && depth >= collapseLvl - 2;
 
         return {
           data: {

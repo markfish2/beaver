@@ -229,10 +229,12 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onClick={(e) => e.stopPropagation()}
           >
-            <button onClick={() => handleStar(contextMenu.docId)} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
-              <Star className={`w-4 h-4 ${doc.is_starred ? 'fill-yellow-500 text-yellow-500' : ''}`} />
-              {doc.is_starred ? '取消收藏' : '收藏'}
-            </button>
+            {doc.type !== 'folder' && (
+              <button onClick={() => handleStar(contextMenu.docId)} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                <Star className={`w-4 h-4 ${doc.is_starred ? 'fill-yellow-500 text-yellow-500' : ''}`} />
+                {doc.is_starred ? '取消收藏' : '收藏'}
+              </button>
+            )}
             <button onClick={() => handleRename(contextMenu.docId)} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
               <Pencil className="w-4 h-4" />
               重命名

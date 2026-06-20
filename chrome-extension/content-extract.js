@@ -1,5 +1,99 @@
 // Content extraction script
 // Injected with readability.js + turndown.js in the same content script world
+
+/**
+ * Preprocess HTML before turndown conversion
+ * - Clean table cells (strip div/p/section/span wrappers)
+ * - Handle code blocks with SVG icons
+ * - Fix heading tags with font-weight:bold
+ */
+function preprocessHtml(html) {
+  // Remove style/script tags
+  html = html.replace(/<style[\s\S]*?<\/style>/gi, '');
+  html = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+
+  // Clean tables using DOMParser
+  try {
+    var parser = new DOMParser();
+    var doc = parser.parseFromString(html, 'text/html');
+    var tables = doc.querySelectorAll('table');
+    tables.forEach(function(table) {
+      var cells = table.querySelectorAll('td, th');
+      cells.forEach(function(cell) {
+        cell.innerHTML = cleanCellContent(cell.innerHTML);
+      });
+      // Remove table attributes
+      while (table.attributes.length > 0) {
+        table.removeAttribute(table.attributes[0].name);
+      }
+    });
+    // Fix heading tags: remove font-weight:bold from style to prevent boldStyle rule matching
+    var headings = doc.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    headings.forEach(function(h) {
+      var style = h.getAttribute('style') || '';
+      style = style.replace(/font-weight\s*:\s*bold\s*;?/gi, '');
+      style = style.replace(/font-weight\s*:\s*[7-9]\d{2}\s*;?/gi, '');
+      h.setAttribute('style', style);
+    });
+
+    // Clean list items: remove div/p inside li to prevent double bullet points
+    var listItems = doc.querySelectorAll('li');
+    listItems.forEach(function(li) {
+      li.innerHTML = cleanListItemContent(li.innerHTML);
+    });
+
+    return doc.body.innerHTML;
+  } catch (e) {
+    return html;
+  }
+}
+
+function cleanListItemContent(html) {
+  // Protect nested lists
+  var nestedLists = [];
+  var result = html.replace(/<ul[\s\S]*?<\/ul>/gi, function(match) {
+    nestedLists.push(match);
+    return '__NESTED_LIST_' + (nestedLists.length - 1) + '__';
+  });
+  result = result.replace(/<ol[\s\S]*?<\/ol>/gi, function(match) {
+    nestedLists.push(match);
+    return '__NESTED_LIST_' + (nestedLists.length - 1) + '__';
+  });
+
+  // Remove block elements
+  result = result
+    .replace(/<div[^>]*>/gi, '')
+    .replace(/<\/div>/gi, '')
+    .replace(/<p[^>]*>/gi, '')
+    .replace(/<\/p>/gi, '')
+    .replace(/<section[^>]*>/gi, '')
+    .replace(/<\/section>/gi, '')
+    .replace(/<br\s*\/?>/gi, ' ');
+  result = result.replace(/\s+/g, ' ').trim();
+
+  // Restore nested lists
+  nestedLists.forEach(function(list, i) {
+    result = result.replace('__NESTED_LIST_' + i + '__', list);
+  });
+
+  return result;
+}
+
+function cleanCellContent(html) {
+  var result = html
+    .replace(/<div[^>]*>/gi, '')
+    .replace(/<\/div>/gi, '')
+    .replace(/<p[^>]*>/gi, '')
+    .replace(/<\/p>/gi, '')
+    .replace(/<section[^>]*>/gi, '')
+    .replace(/<\/section>/gi, '')
+    .replace(/<span[^>]*>/gi, '')
+    .replace(/<\/span>/gi, '')
+    .replace(/<br\s*\/?>/gi, ' ');
+  result = result.replace(/\s+/g, ' ').trim();
+  return result || ' ';
+}
+
 (async function() {
   try {
     // KEY FIX: Get full rendered HTML from LIVE DOM (not cloneNode which misses JS-rendered content)
@@ -63,10 +157,55 @@
       return;
     }
 
+    // Preprocess HTML: clean tables, code blocks, headings
+    htmlContent = preprocessHtml(htmlContent);
+
     var td = new TurndownService({
       headingStyle: 'atx',
       codeBlockStyle: 'fenced',
       bulletListMarker: '-',
+    });
+
+    // Handle tables → GFM markdown
+    td.addRule('tableToGfm', {
+      filter: 'table',
+      replacement: function(_, node) {
+        var rows = [];
+        var trs = node.querySelectorAll('tr');
+        trs.forEach(function(tr) {
+          var cells = [];
+          tr.querySelectorAll('th, td').forEach(function(cell) {
+            cells.push(cell.textContent.replace(/\n/g, ' ').replace(/\|/g, '\\|').trim() || ' ');
+          });
+          rows.push(cells);
+        });
+        if (rows.length === 0) return '';
+        // First row as header
+        var header = '| ' + rows[0].join(' | ') + ' |';
+        var separator = '| ' + rows[0].map(function() { return '---'; }).join(' | ') + ' |';
+        var body = rows.slice(1).map(function(r) { return '| ' + r.join(' | ') + ' |'; }).join('\n');
+        return '\n\n' + header + '\n' + separator + (body ? '\n' + body : '') + '\n\n';
+      }
+    });
+
+    // Handle pre>code blocks with SVG icons (e.g. GitHub-style code blocks)
+    td.addRule('preCodeBlock', {
+      filter: function(node) {
+        if (node.nodeName !== 'PRE') return false;
+        return !!(node.querySelector('code') || node.querySelector('svg'));
+      },
+      replacement: function(_, node) {
+        var codeEl = node.querySelector('code');
+        var target = codeEl || node;
+        var cloned = target.cloneNode(true);
+        cloned.querySelectorAll('br').forEach(function(br) { br.replaceWith('\n'); });
+        cloned.querySelectorAll('svg').forEach(function(svg) { svg.remove(); });
+        var text = cloned.textContent || '';
+        var cls = (codeEl && codeEl.getAttribute('class') || node.getAttribute('class') || '').toLowerCase();
+        var langMatch = cls.match(/(?:language|lang|highlight-source)-(\w+)/);
+        var lang = langMatch ? langMatch[1] : '';
+        return '\n\n```' + lang + '\n' + text.replace(/\n+$/, '') + '\n```\n\n';
+      }
     });
 
     // Handle links wrapping images: output as [![alt](img)](link) on one line

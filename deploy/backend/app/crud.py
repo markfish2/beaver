@@ -5,8 +5,11 @@ import uuid
 import re
 import time
 import json
+import logging
 from datetime import datetime
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 # User
 def get_user_by_username(db: Session, username: str):
@@ -45,6 +48,17 @@ def update_user_password(db: Session, user_id: uuid.UUID, password: str):
     if db_user:
         db_user.password_hash = hashed_password
         db.commit()
+    return db_user
+
+def update_user_profile(db: Session, user_id: uuid.UUID, profile: schemas.UserProfileUpdate):
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not db_user:
+        return None
+    update_data = profile.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_user, key, value)
+    db.commit()
+    db.refresh(db_user)
     return db_user
 
 # Documents
@@ -360,6 +374,8 @@ def create_node(db: Session, node: schemas.NodeCreate):
     _touch_document(db, db_node.document_id)
     db.commit()
     db.refresh(db_node)
+    # 触发文档级 embedding 索引
+    _trigger_doc_embedding_index(db, db_node.document_id)
     return db_node
 
 def update_node(db: Session, node_id: uuid.UUID, node: schemas.NodeUpdate):
@@ -377,6 +393,9 @@ def update_node(db: Session, node_id: uuid.UUID, node: schemas.NodeUpdate):
     _touch_document(db, db_node.document_id)
     db.commit()
     db.refresh(db_node)
+    # 内容变化时重新索引文档
+    if 'content' in update_data or 'note' in update_data:
+        _trigger_doc_embedding_index(db, db_node.document_id)
     return db_node, "ok"
 
 def move_node(db: Session, node_id: uuid.UUID, move: schemas.NodeMove):
@@ -831,21 +850,41 @@ def get_diary_day_dates(db: Session, doc_id):
     return sorted(days)
 
 def get_diary_summary(db: Session):
-    """Return pending tasks and top tags from all diary documents."""
-    # Get all diary document IDs
-    diary_docs = db.query(models.Document.id).filter(
-        models.Document.diary_date.isnot(None)
-    ).all()
-    doc_ids = [d.id for d in diary_docs]
-    if not doc_ids:
-        return [], []
-
-    # Pending tasks: is_todo=True and is_completed=False
-    tasks = db.query(models.Node).filter(
-        models.Node.document_id.in_(doc_ids),
+    """Return pending tasks (with parent node content and diary_date) and top tags from all diary documents."""
+    # Pending tasks: join with Document to get diary_date, with parent node content
+    tasks_query = db.query(
+        models.Node,
+        models.Document.diary_date
+    ).join(
+        models.Document, models.Node.document_id == models.Document.id
+    ).filter(
+        models.Document.diary_date.isnot(None),
         models.Node.is_todo == True,
         models.Node.is_completed == False
     ).all()
+
+    if not tasks_query:
+        return [], []
+
+    # Get all diary document IDs for tag extraction
+    doc_ids = list(set(t.Node.document_id for t in tasks_query))
+
+    # Batch fetch parent nodes to get their content (the day label)
+    parent_ids = list(set(t.Node.parent_node_id for t in tasks_query if t.Node.parent_node_id))
+    parent_map = {}
+    if parent_ids:
+        parents = db.query(models.Node.id, models.Node.content).filter(
+            models.Node.id.in_(parent_ids)
+        ).all()
+        parent_map = {p.id: p.content for p in parents}
+
+    # Build result with parent_content and diary_date
+    tasks = []
+    for t in tasks_query:
+        task_dict = schemas.Node.model_validate(t.Node).model_dump()
+        task_dict['parent_content'] = parent_map.get(t.Node.parent_node_id)
+        task_dict['diary_date'] = t.diary_date
+        tasks.append(task_dict)
 
     # Tags: scan content and note of all nodes
     all_nodes = db.query(models.Node.content, models.Node.note).filter(
@@ -866,13 +905,84 @@ def get_diary_summary(db: Session):
     sorted_tags = sorted(tag_count.items(), key=lambda x: -x[1])[:20]
     return tasks, [tag for tag, _ in sorted_tags]
 
+
+def _trigger_embedding_index(source_type: str, source_id: str, content: str, ai_excluded: bool = False):
+    """异步触发 embedding 索引（非阻塞）"""
+    if ai_excluded:
+        # 标记为不参与 AI 时，删除已有的向量数据
+        _delete_embeddings(source_type, str(source_id))
+        return
+    if not content or len(content.strip()) < 50:
+        return
+    try:
+        import asyncio
+        from .vector_search import index_note, get_embedding_config
+        from .database import SessionLocal
+
+        async def _do_index():
+            db = SessionLocal()
+            try:
+                config = get_embedding_config(db)
+                if config:
+                    await index_note(db, source_type, str(source_id), content, config)
+            finally:
+                db.close()
+
+        # 在后台执行，不阻塞当前请求
+        loop = asyncio.get_event_loop()
+        loop.create_task(_do_index())
+    except Exception as e:
+        logger.warning(f"触发 embedding 索引失败: {e}")
+
+
+def _delete_embeddings(source_type: str, source_id: str):
+    """删除指定笔记的所有向量数据"""
+    try:
+        from sqlalchemy import text
+        from .database import SessionLocal
+        db = SessionLocal()
+        try:
+            db.execute(
+                text("DELETE FROM note_embeddings WHERE source_type = :st AND source_id = :sid"),
+                {"st": source_type, "sid": source_id}
+            )
+            db.commit()
+            logger.info(f"已删除 {source_type}/{source_id} 的向量数据")
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"删除向量数据失败: {e}")
+
+
+def _trigger_doc_embedding_index(db: Session, document_id):
+    """异步触发文档级 embedding 索引"""
+    try:
+        doc = db.query(models.Document).filter(models.Document.id == document_id).first()
+        if not doc or doc.ai_excluded:
+            return
+        # 收集文档下所有节点的内容
+        nodes = db.query(models.Node).filter(models.Node.document_id == document_id).all()
+        content_parts = []
+        for node in nodes:
+            if node.content:
+                content_parts.append(node.content)
+            if node.note:
+                content_parts.append(node.note)
+        full_content = "\n\n".join(content_parts)
+        if full_content and len(full_content.strip()) >= 50:
+            _trigger_embedding_index("document", document_id, full_content)
+    except Exception as e:
+        logger.warning(f"触发文档 embedding 索引失败: {e}")
+
+
 # Memos
 def create_memo(db: Session, memo: schemas.MemoCreate):
-    db_memo = models.Memo(content=memo.content)
+    db_memo = models.Memo(content=memo.content, ai_excluded=memo.ai_excluded)
     db.add(db_memo)
     db.commit()
     db.refresh(db_memo)
     invalidate_memo_tags_cache()
+    _trigger_embedding_index("memo", db_memo.id, db_memo.content, db_memo.ai_excluded)
     return db_memo
 
 def get_memos(db: Session, page: int = 1, page_size: int = 20, archived: bool = False, public: bool = False, tag: str = None, search: str = None):
@@ -902,6 +1012,9 @@ def update_memo(db: Session, memo_id: uuid.UUID, memo: schemas.MemoUpdate):
     db.commit()
     db.refresh(db_memo)
     invalidate_memo_tags_cache()
+    # 内容变化或 ai_excluded 变化时重新索引
+    if 'content' in update_data or 'ai_excluded' in update_data:
+        _trigger_embedding_index("memo", db_memo.id, db_memo.content, db_memo.ai_excluded)
     return db_memo
 
 def delete_memo(db: Session, memo_id: uuid.UUID):
@@ -1389,6 +1502,64 @@ def get_api_tokens(db: Session, user_id: uuid.UUID):
         models.ApiToken.user_id == user_id
     ).order_by(models.ApiToken.created_at.desc()).all()
 
+
+# ==================== AI Conversations ====================
+
+def create_conversation(db: Session, title: str | None = None) -> models.AIConversation:
+    conv = models.AIConversation(title=title)
+    db.add(conv)
+    db.commit()
+    db.refresh(conv)
+    return conv
+
+def get_conversations(db: Session) -> list[models.AIConversation]:
+    return db.query(models.AIConversation).order_by(models.AIConversation.updated_at.desc()).all()
+
+def get_conversation(db: Session, conv_id: uuid.UUID) -> models.AIConversation | None:
+    return db.query(models.AIConversation).filter(models.AIConversation.id == conv_id).first()
+
+def update_conversation(db: Session, conv_id: uuid.UUID, title: str) -> models.AIConversation | None:
+    conv = db.query(models.AIConversation).filter(models.AIConversation.id == conv_id).first()
+    if not conv:
+        return None
+    conv.title = title
+    conv.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(conv)
+    return conv
+
+def delete_conversation(db: Session, conv_id: uuid.UUID) -> bool:
+    conv = db.query(models.AIConversation).filter(models.AIConversation.id == conv_id).first()
+    if not conv:
+        return False
+    db.delete(conv)
+    db.commit()
+    return True
+
+def add_message(db: Session, conversation_id: uuid.UUID, role: str, content: str, sources: str | None = None) -> models.AIMessage:
+    msg = models.AIMessage(
+        conversation_id=conversation_id,
+        role=role,
+        content=content,
+        sources=sources,
+    )
+    db.add(msg)
+    # 更新会话的 updated_at
+    conv = db.query(models.AIConversation).filter(models.AIConversation.id == conversation_id).first()
+    if conv:
+        conv.updated_at = datetime.utcnow()
+        # 自动设置标题（取第一条用户消息的前30字）
+        if not conv.title and role == 'user':
+            conv.title = content[:30] + ('...' if len(content) > 30 else '')
+    db.commit()
+    db.refresh(msg)
+    return msg
+
+def get_messages(db: Session, conversation_id: uuid.UUID) -> list[models.AIMessage]:
+    return db.query(models.AIMessage).filter(
+        models.AIMessage.conversation_id == conversation_id
+    ).order_by(models.AIMessage.created_at.asc()).all()
+
 def delete_api_token(db: Session, token_id: uuid.UUID, user_id: uuid.UUID) -> bool:
     token = db.query(models.ApiToken).filter(
         models.ApiToken.id == token_id,
@@ -1411,3 +1582,71 @@ def verify_api_token(db: Session, token_str: str):
     db.commit()
     user = db.query(models.User).filter(models.User.id == db_token.user_id).first()
     return user
+
+
+# ==================== AI Config ====================
+
+def create_ai_config(db: Session, config: schemas.AIConfigCreate) -> models.AIConfig:
+    # 如果设为默认，先取消其他默认
+    if config.is_default:
+        db.query(models.AIConfig).filter(models.AIConfig.is_default == True).update({"is_default": False})
+    db_config = models.AIConfig(**config.model_dump())
+    db.add(db_config)
+    db.commit()
+    db.refresh(db_config)
+    return db_config
+
+def get_ai_configs(db: Session) -> list[models.AIConfig]:
+    return db.query(models.AIConfig).order_by(models.AIConfig.is_default.desc(), models.AIConfig.created_at.desc()).all()
+
+def get_ai_config(db: Session, config_id: uuid.UUID) -> models.AIConfig | None:
+    return db.query(models.AIConfig).filter(models.AIConfig.id == config_id).first()
+
+def get_default_ai_config(db: Session) -> models.AIConfig | None:
+    return db.query(models.AIConfig).filter(models.AIConfig.is_default == True).first()
+
+def update_ai_config(db: Session, config_id: uuid.UUID, update: schemas.AIConfigUpdate) -> models.AIConfig | None:
+    db_config = db.query(models.AIConfig).filter(models.AIConfig.id == config_id).first()
+    if not db_config:
+        return None
+    update_data = update.model_dump(exclude_unset=True)
+    # 如果设为默认，先取消其他默认
+    if update_data.get("is_default"):
+        db.query(models.AIConfig).filter(models.AIConfig.id != config_id, models.AIConfig.is_default == True).update({"is_default": False})
+    for key, value in update_data.items():
+        setattr(db_config, key, value)
+    db.commit()
+    db.refresh(db_config)
+    return db_config
+
+def delete_ai_config(db: Session, config_id: uuid.UUID) -> bool:
+    db_config = db.query(models.AIConfig).filter(models.AIConfig.id == config_id).first()
+    if not db_config:
+        return False
+    db.delete(db_config)
+    db.commit()
+    return True
+
+
+# ==================== Voice Record ====================
+
+def create_voice_record(db: Session, record: schemas.VoiceRecordCreate) -> models.VoiceRecord:
+    db_record = models.VoiceRecord(**record.model_dump())
+    db.add(db_record)
+    db.commit()
+    db.refresh(db_record)
+    return db_record
+
+def get_voice_record(db: Session, record_id: uuid.UUID) -> models.VoiceRecord | None:
+    return db.query(models.VoiceRecord).filter(models.VoiceRecord.id == record_id).first()
+
+def update_voice_record(db: Session, record_id: uuid.UUID, **kwargs) -> models.VoiceRecord | None:
+    db_record = db.query(models.VoiceRecord).filter(models.VoiceRecord.id == record_id).first()
+    if not db_record:
+        return None
+    for key, value in kwargs.items():
+        if hasattr(db_record, key):
+            setattr(db_record, key, value)
+    db.commit()
+    db.refresh(db_record)
+    return db_record

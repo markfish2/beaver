@@ -155,17 +155,22 @@ export default function TokenDialog({ onClose }: TokenDialogProps) {
           <p className="text-xs text-gray-400">
             在 Beaver 浏览器插件或第三方客户端中填入上方地址和 Token 即可连接。
           </p>
-          <p className="text-xs text-gray-400">
-            <a
-              href={`${window.location.origin}/shortcut.html`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-500 hover:text-blue-600 dark:text-blue-400 underline underline-offset-2"
-            >
-              下载 iOS 捷径
-            </a>
-            <span className="ml-1">— 在 iPhone 上一键保存到 Beaver</span>
-          </p>
+
+          {/* 公开 Memo 调用地址 */}
+          <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/50">
+            <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">公开 Memo 接口（无需登录）</p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 text-[11px] bg-gray-100 dark:bg-gray-700 px-1.5 py-1 rounded text-gray-600 dark:text-gray-300 break-all">{window.location.origin}/api/public/memos</code>
+              <button
+                onClick={() => navigator.clipboard.writeText(`${window.location.origin}/api/public/memos`)}
+                className="shrink-0 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                title="复制"
+              >
+                <Copy className="w-3 h-3" />
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1">返回所有标记为公开的 Memo 列表</p>
+          </div>
           <p className="text-xs text-gray-400">
             <a
               href={`${window.location.origin}/beaver-extension.zip`}

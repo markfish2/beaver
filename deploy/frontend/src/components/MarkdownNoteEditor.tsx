@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
@@ -7,6 +7,7 @@ import remarkBreaks from 'remark-breaks';
 import rehypeRaw from 'rehype-raw';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { ghcolors } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import jsx from 'react-syntax-highlighter/dist/esm/languages/prism/jsx';
 import python from 'react-syntax-highlighter/dist/esm/languages/prism/python';
 import javascript from 'react-syntax-highlighter/dist/esm/languages/prism/javascript';
@@ -41,7 +42,7 @@ SyntaxHighlighter.registerLanguage('cpp', cpp);
 SyntaxHighlighter.registerLanguage('go', go);
 SyntaxHighlighter.registerLanguage('rust', rust);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
-import { Pencil, Eye, Image, Paperclip, Copy, CheckCheck, Save, Bold, Italic, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Code, Link, Minus } from 'lucide-react';
+import { Pencil, Eye, Image, Paperclip, Copy, CheckCheck, Save, Bold, Italic, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Code, Link, Minus, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getNodes, createNode, updateNode, uploadFile, uploadFromUrl, getMemoTags, getDocuments, updateDocument } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
@@ -50,6 +51,7 @@ import { handleListContinuation } from '../utils/listContinuation';
 import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks } from '../utils/markdownPreprocess';
 import { getPasteMarkdown, extractExternalImageUrls } from '../utils/htmlToMarkdown';
 import MentionDropdown from './MentionDropdown';
+import AIChatPanel from './AIChatPanel';
 
 interface Props {
   documentId: string;
@@ -62,36 +64,89 @@ function preprocess(content: string): string {
 }
 
 // --- 代码块组件 (同 MemoCard) ---
-const codeBlockCustomStyle: React.CSSProperties = {
-  margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: '0.95em',
-  background: '#f6f8fa', border: '1px solid #d0d7de', borderTop: 'none', padding: '16px',
-};
-const codeBlockHeaderStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-  padding: '4px 12px', background: '#f6f8fa', border: '1px solid #d0d7de',
-  borderBottom: 'none', borderRadius: '0.5rem 0.5rem 0 0',
-};
+function useIsDark() {
+  const check = () => {
+    try {
+      const saved = localStorage.getItem('outline-font-settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.theme === 'dark') return true;
+        if (parsed.theme && parsed.theme !== 'dark') return false;
+      }
+    } catch { /* ignore parse error */ }
+    return document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
+  };
+  const [isDark, setIsDark] = useState(check);
+  useEffect(() => {
+    const update = () => setIsDark(check());
+    window.addEventListener('theme-change', update);
+    const obs = new MutationObserver(update);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    mq.addEventListener('change', update);
+    return () => {
+      window.removeEventListener('theme-change', update);
+      obs.disconnect();
+      mq.removeEventListener('change', update);
+    };
+  }, []);
+  return isDark;
+}
 
-function CodeBlock({ className, children, ...props }: { className?: string; children: React.ReactNode; [key: string]: any }) {
+const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => ({
+  margin: 0,
+  borderRadius: '0 0 0.5rem 0.5rem',
+  fontSize: '0.95em',
+  background: isDark ? '#282c34' : '#fbfbf8',
+  border: 'none',
+  padding: '16px',
+});
+
+const CodeBlock = memo(function CodeBlock({ className, children, ...props }: { className?: string; children: React.ReactNode; [key: string]: any }) {
   const [copied, setCopied] = useState(false);
+  const isDark = useIsDark();
   const match = /language-(\w+)/.exec(className || '');
   const language = match ? match[1] : '';
   const code = String(children).replace(/\n$/, '');
   const isBlock = code.includes('\n') || language;
-  if (!isBlock) return <code className={className} {...props}>{children}</code>;
-  return (
-    <div className="relative">
-      <div style={codeBlockHeaderStyle}>
-        <span className="text-[11px] text-gray-500 font-mono">{language || 'text'}</span>
-        <button onClick={() => { navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-          className="flex items-center p-1 rounded-md bg-white/90 hover:bg-gray-100 text-gray-600 hover:text-gray-900 border border-gray-200 transition-all" title={copied ? '已复制' : '复制代码'}>
-          {copied ? <CheckCheck className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-        </button>
+
+  const handleCopy = useCallback(async () => {
+    await navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [code]);
+
+  if (isBlock) {
+    return (
+      <div className="relative rounded-lg overflow-hidden border border-[#dad9d4] dark:border-gray-700">
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#dad9d4] dark:border-gray-700"
+          style={{ background: isDark ? '#282c34' : '#f6f5f0' }}
+        >
+          <span className={`text-[11px] font-mono ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{language || 'text'}</span>
+          <button
+            onClick={handleCopy}
+            className="flex items-center p-1 rounded-md bg-white/90 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-600 transition-all"
+            title={copied ? '已复制' : '复制代码'}
+          >
+            {copied ? <CheckCheck className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+          </button>
+        </div>
+        <SyntaxHighlighter
+          style={isDark ? oneDark : ghcolors}
+          language={language || 'text'}
+          PreTag="div"
+          customStyle={{ ...codeBlockCustomStyle(isDark) }}
+        >
+          {code}
+        </SyntaxHighlighter>
       </div>
-      <SyntaxHighlighter style={ghcolors} language={language || 'text'} PreTag="div" customStyle={codeBlockCustomStyle}>{code}</SyntaxHighlighter>
-    </div>
+    );
+  }
+
+  return (
+    <code className={className} {...props}>{children}</code>
   );
-}
+});
 
 // --- 图片组件 ---
 function NoteImage({ src, alt }: { src?: string; alt?: string }) {
@@ -115,6 +170,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   const { updateDocumentTitle } = useDocuments();
   const [isEditing, setIsEditing] = useState(isNew);
   const [content, setContent] = useState('');
+  const [showAIPanel, setShowAIPanel] = useState(false);
   const [title, setTitle] = useState('');
   const [nodeId, setNodeId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -534,14 +590,16 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
           <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
           <ToolbarBtn onClick={() => imageInputRef.current?.click()} title="上传图片"><Image className="w-4 h-4" /></ToolbarBtn>
           <ToolbarBtn onClick={() => fileInputRef.current?.click()} title="上传附件"><Paperclip className="w-4 h-4" /></ToolbarBtn>
+          <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
+          <ToolbarBtn onClick={() => setShowAIPanel(true)} title="AI 整理"><Sparkles className="w-4 h-4" /></ToolbarBtn>
         </div>
       )}
 
       {/* 编辑/预览区域 */}
-      <div className="flex-1 overflow-y-auto relative flex flex-col items-center">
+      <div className="flex-1 overflow-y-auto scrollbar-none relative flex flex-col items-center">
         {isEditing ? (
           <>
-            <div className="w-full max-w-[768px] h-full">
+            <div className="w-full max-w-[768px] h-full scrollbar-none">
             <textarea
               ref={textareaRef}
               defaultValue={content}
@@ -618,7 +676,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
               onSelect={(e) => detectTagSearch((e.target as HTMLTextAreaElement).value, (e.target as HTMLTextAreaElement).selectionStart)}
               onBlur={() => setTimeout(() => setTagSearch(null), 200)}
               placeholder="开始书写... (支持 Markdown，输入 # 添加标签，@ 链接笔记)"
-              className="w-full h-full min-h-full bg-transparent text-gray-800 dark:text-gray-200 text-base p-6 resize-none focus:outline-none"
+              className="w-full h-full min-h-full bg-transparent text-gray-800 dark:text-gray-200 text-base p-6 resize-none focus:outline-none scrollbar-none"
               style={{ fontFamily: 'inherit', lineHeight: '1.75' }}
             />
             </div>
@@ -659,6 +717,19 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
         onChange={(e) => { const file = e.target.files?.[0]; if (file) handleFileUpload(file, true); e.target.value = ''; }} />
       <input ref={fileInputRef} type="file" className="hidden"
         onChange={(e) => { const file = e.target.files?.[0]; if (file) handleFileUpload(file, false); e.target.value = ''; }} />
+
+      {/* AI 对话面板 */}
+      {showAIPanel && (
+        <AIChatPanel
+          context={content}
+          onWriteBack={(newContent) => {
+            setContent(newContent);
+            if (textareaRef.current) textareaRef.current.value = newContent;
+            scheduleSave(newContent);
+          }}
+          onClose={() => setShowAIPanel(false)}
+        />
+      )}
     </div>
   );
 }

@@ -51,6 +51,11 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         "font_family": user.font_family,
         "font_size": user.font_size,
         "memo_columns": user.memo_columns,
+        "nickname": user.nickname,
+        "email": user.email,
+        "phone": user.phone,
+        "bio": user.bio,
+        "avatar_path": user.avatar_path,
     }
     _user_cache[username] = (now, user_data)
     return schemas.User(**user_data)
@@ -81,6 +86,11 @@ def get_current_user_flexible(token: str = Depends(oauth2_scheme), db: Session =
                     "font_family": user.font_family,
                     "font_size": user.font_size,
                     "memo_columns": user.memo_columns,
+                    "nickname": user.nickname,
+                    "email": user.email,
+                    "phone": user.phone,
+                    "bio": user.bio,
+                    "avatar_path": user.avatar_path,
                 }
                 _user_cache[username] = (now, user_data)
                 return schemas.User(**user_data)
@@ -99,4 +109,9 @@ def get_current_user_flexible(token: str = Depends(oauth2_scheme), db: Session =
         font_family=user.font_family,
         font_size=user.font_size,
         memo_columns=user.memo_columns,
+        nickname=user.nickname,
+        email=user.email,
+        phone=user.phone,
+        bio=user.bio,
+        avatar_path=user.avatar_path,
     )

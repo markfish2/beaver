@@ -7,6 +7,11 @@ export interface User {
   font_family: string;
   font_size: string;
   memo_columns: number;
+  nickname?: string;
+  email?: string;
+  phone?: string;
+  bio?: string;
+  avatar_path?: string;
 }
 
 export interface AuthResponse {
@@ -42,5 +47,10 @@ export const getMe = async () => {
 
 export const updateSettings = async (settings: { theme?: string; font_family?: string; font_size?: string; memo_columns?: number }) => {
   const response = await api.put<User>('/users/settings', settings);
+  return response.data;
+};
+
+export const updateProfile = async (profile: { nickname?: string; email?: string; phone?: string; bio?: string; avatar_path?: string }) => {
+  const response = await api.put<User>('/users/profile', profile);
   return response.data;
 };

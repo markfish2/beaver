@@ -9,12 +9,12 @@ interface EditFolderDialogProps {
   onCancel: () => void;
 }
 
-const EditFolderDialog = ({ 
-  isOpen, 
+const EditFolderDialog = ({
+  isOpen,
   folderId,
-  initialTitle, 
-  onConfirm, 
-  onCancel 
+  initialTitle,
+  onConfirm,
+  onCancel
 }: EditFolderDialogProps) => {
   const [title, setTitle] = useState(initialTitle);
 
@@ -43,7 +43,7 @@ const EditFolderDialog = ({
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
       <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
-      
+
       <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-96 max-w-[90vw]">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -56,7 +56,7 @@ const EditFolderDialog = ({
             <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
           </button>
         </div>
-        
+
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -73,7 +73,7 @@ const EditFolderDialog = ({
             />
           </div>
         </div>
-        
+
         <div className="flex justify-end space-x-3 mt-6">
           <button
             onClick={onCancel}

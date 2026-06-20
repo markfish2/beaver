@@ -22,6 +22,11 @@ class User(UserBase):
     font_family: str
     font_size: str
     memo_columns: int = 1
+    nickname: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    bio: Optional[str] = None
+    avatar_path: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -30,6 +35,13 @@ class UserSettingsUpdate(BaseModel):
     font_family: Optional[str] = None
     font_size: Optional[str] = None
     memo_columns: Optional[int] = None
+
+class UserProfileUpdate(BaseModel):
+    nickname: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    bio: Optional[str] = None
+    avatar_path: Optional[str] = None
 
 class PasswordUpdate(BaseModel):
     old_password: str
@@ -41,6 +53,7 @@ class DocumentBase(BaseModel):
     parent_id: Optional[UUID] = None
     sort_order: float = 0
     is_starred: bool = False
+    ai_excluded: bool = False
     icon: Optional[str] = None
     diary_date: Optional[str] = None
     deleted_at: Optional[datetime] = None
@@ -54,6 +67,7 @@ class DocumentUpdate(BaseModel):
     parent_id: Optional[UUID] = None
     sort_order: Optional[float] = None
     is_starred: Optional[bool] = None
+    ai_excluded: Optional[bool] = None
     icon: Optional[str] = None
     diary_date: Optional[str] = None
     expected_version: Optional[int] = None
@@ -214,8 +228,12 @@ class DiaryDayNodeResponse(BaseModel):
     is_new: bool
     child_node: Optional[Node] = None
 
+class DiaryTaskWithParent(Node):
+    parent_content: Optional[str] = None
+    diary_date: Optional[str] = None
+
 class DiarySummaryResponse(BaseModel):
-    tasks: List[Node]
+    tasks: List[DiaryTaskWithParent]
     tags: List[str]
 
 # Memo schemas
@@ -225,6 +243,7 @@ class MemoBase(BaseModel):
     is_archived: bool = False
     is_public: bool = False
     color: Optional[str] = None
+    ai_excluded: bool = False
 
 class MemoCreate(MemoBase):
     pass
@@ -235,6 +254,8 @@ class MemoUpdate(BaseModel):
     is_archived: Optional[bool] = None
     is_public: Optional[bool] = None
     color: Optional[str] = None
+    ai_excluded: Optional[bool] = None
+    ai_excluded: Optional[bool] = None
 
 class Memo(MemoBase):
     id: UUID
@@ -373,3 +394,61 @@ class ApiTokenInfo(BaseModel):
 
 class ApiTokenCreated(ApiTokenInfo):
     token: str
+
+# ── AI Config ──
+
+class AIConfigBase(BaseModel):
+    name: str
+    provider: str = "custom"       # deepseek/openai/gemini/qwen/mimo/custom
+    api_url: str
+    api_key: str
+    model: str
+    is_default: bool = False
+
+class AIConfigCreate(AIConfigBase):
+    pass
+
+class AIConfigUpdate(BaseModel):
+    name: Optional[str] = None
+    provider: Optional[str] = None
+    api_url: Optional[str] = None
+    api_key: Optional[str] = None
+    model: Optional[str] = None
+    is_default: Optional[bool] = None
+
+class AIConfig(AIConfigBase):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+# ── Voice Record ──
+
+class VoiceRecordBase(BaseModel):
+    memo_id: Optional[UUID] = None
+    document_id: Optional[UUID] = None
+    audio_path: str
+    duration_seconds: Optional[int] = None
+    transcribed_text: Optional[str] = None
+    ai_messages: Optional[str] = None
+    ai_config_id: Optional[UUID] = None
+
+class VoiceRecordCreate(VoiceRecordBase):
+    pass
+
+class VoiceRecord(VoiceRecordBase):
+    id: UUID
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class TranscribeResponse(BaseModel):
+    text: str
+    voice_record_id: UUID
+
+class AIChatRequest(BaseModel):
+    messages: list  # [{"role": "user", "content": "..."}]
+    context: str = ""
+    ai_config_id: Optional[UUID] = None
+    conversation_id: Optional[UUID] = None

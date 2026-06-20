@@ -6,6 +6,7 @@ export function normalizeTaskLists(content: string): string {
   return content.replace(/^(\s*)[-*+]\s*\[([ xX*])\] /gm, '$1- [$2] ');
 }
 
+
 export function normalizeHighlight(content: string): string {
   const lines = content.split('\n');
   const result: string[] = [];
@@ -98,5 +99,5 @@ export function stripAttachments(content: string): string {
 
 /** Full preprocessing pipeline: strip tags/attachments, then normalize lists/highlights/code blocks. */
 export function preprocessMarkdown(content: string): string {
-  return normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(stripAttachments(stripTags(content))))));
+  return escapeFullWidthColon(normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(stripAttachments(stripTags(content)))))));
 }

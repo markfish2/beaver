@@ -1,0 +1,420 @@
+"""
+AI 问答路由：基于笔记内容的检索问答（使用向量搜索）
+"""
+
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+from sqlalchemy import or_, func
+from .. import crud, schemas, models
+from ..database import get_db
+from ..dependencies import get_current_user
+from ..vector_search import search_similar, get_embedding_config
+import json
+import uuid
+import logging
+import httpx
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+def _search_notes(db: Session, query: str, limit: int = 10) -> list[dict]:
+    """搜索笔记内容，返回相关片段（支持分词搜索）"""
+    import re
+    results = []
+
+    # 提取搜索关键词（中文按 bigram 分词，英文按单词）
+    keywords = []
+    # 英文单词
+    keywords.extend(re.findall(r'[a-zA-Z]+', query))
+    # 中文 bigram（连续2个汉字）
+    chinese = re.findall(r'[一-鿿]+', query)
+    for seg in chinese:
+        if len(seg) >= 2:
+            for i in range(len(seg) - 1):
+                keywords.append(seg[i:i+2])
+        elif len(seg) == 1:
+            keywords.append(seg)
+    if not keywords:
+        keywords = [query.strip()]
+
+    # 搜索 memos（排除 ai_excluded 和已删除）
+    memo_conditions = [
+        models.Memo.deleted_at.is_(None),
+        models.Memo.ai_excluded == False,
+        models.Memo.is_archived == False,
+    ]
+    # 任一关键词匹配即可
+    keyword_conditions = [models.Memo.content.like(f"%{kw}%") for kw in keywords]
+    memos = db.query(models.Memo).filter(
+        *memo_conditions,
+        or_(*keyword_conditions)
+    ).limit(limit).all()
+
+    for memo in memos:
+        # 提取匹配片段
+        snippet = _extract_snippet(memo.content, query)
+        results.append({
+            "id": str(memo.id),
+            "title": _extract_title(memo.content),
+            "type": "memo",
+            "snippet": snippet,
+        })
+
+    # 搜索 nodes（大纲笔记内容）
+    node_keyword_conditions = [
+        or_(
+            models.Node.content.like(f"%{kw}%"),
+            models.Node.note.like(f"%{kw}%")
+        ) for kw in keywords
+    ]
+    nodes = db.query(models.Node).filter(
+        or_(*node_keyword_conditions)
+    ).limit(limit).all()
+
+    # 按 document 分组，每个 document 只取最相关的片段
+    doc_snippets = {}
+    for node in nodes:
+        doc = db.query(models.Document).filter(
+            models.Document.id == node.document_id,
+            models.Document.deleted_at.is_(None),
+            models.Document.ai_excluded == False,
+        ).first()
+        if not doc:
+            continue
+
+        doc_id = str(doc.id)
+        if doc_id not in doc_snippets:
+            doc_snippets[doc_id] = {
+                "id": doc_id,
+                "title": doc.title,
+                "type": doc.type,
+                "snippet": "",
+            }
+
+        # 取最相关的片段
+        text = node.content or node.note or ""
+        if query.lower() in text.lower():
+            snippet = _extract_snippet(text, query)
+            if snippet and len(snippet) > len(doc_snippets[doc_id]["snippet"]):
+                doc_snippets[doc_id]["snippet"] = snippet
+
+    results.extend(list(doc_snippets.values())[:limit])
+
+    # 搜索普通笔记（markdown 内容）
+    note_docs = db.query(models.Document).filter(
+        models.Document.type == "note",
+        models.Document.deleted_at.is_(None),
+        models.Document.ai_excluded == False,
+    ).all()
+
+    for doc in note_docs:
+        note_conditions = [
+            or_(
+                models.Node.content.like(f"%{kw}%"),
+                models.Node.note.like(f"%{kw}%")
+            ) for kw in keywords
+        ]
+        nodes = db.query(models.Node).filter(
+            models.Node.document_id == doc.id,
+            or_(*note_conditions)
+        ).first()
+        if nodes:
+            snippet = _extract_snippet(nodes.content or nodes.note or "", query)
+            results.append({
+                "id": str(doc.id),
+                "title": doc.title,
+                "type": "note",
+                "snippet": snippet,
+            })
+
+    return results[:limit]
+
+
+def _search_todos(db: Session, query: str, limit: int = 10) -> list[dict]:
+    """搜索未完成的待办事项"""
+    import re
+    results = []
+
+    # 从未完成的 todos 表搜索
+    todos = db.query(models.Todo).filter(
+        models.Todo.is_completed == False
+    ).all()
+    for todo in todos:
+        results.append({
+            "id": str(todo.id),
+            "title": "待办事项",
+            "type": "todo",
+            "snippet": todo.content,
+        })
+
+    # 从 memos 中搜索未完成的复选框
+    memos = db.query(models.Memo).filter(
+        models.Memo.deleted_at.is_(None),
+        models.Memo.ai_excluded == False,
+        models.Memo.is_archived == False,
+    ).all()
+    for memo in memos:
+        unchecked = re.findall(r'^(\s*[-*+])\s*\[\s*\]\s*(.+)', memo.content, re.MULTILINE)
+        if unchecked:
+            items = [f"{m[0]} [ ] {m[1]}" for m in unchecked]
+            snippet = "\n".join(items[:10])
+            results.append({
+                "id": str(memo.id),
+                "title": _extract_title(memo.content),
+                "type": "memo",
+                "snippet": f"未完成待办：\n{snippet}",
+            })
+
+    # 从 nodes 中搜索未完成的复选框
+    nodes = db.query(models.Node).filter(
+        models.Node.is_todo == True,
+        models.Node.is_completed == False,
+    ).limit(50).all()
+    doc_nodes = {}
+    for node in nodes:
+        doc_id = str(node.document_id)
+        if doc_id not in doc_nodes:
+            doc = db.query(models.Document).filter(
+                models.Document.id == node.document_id,
+                models.Document.deleted_at.is_(None),
+                models.Document.ai_excluded == False,
+            ).first()
+            if doc:
+                doc_nodes[doc_id] = {"doc": doc, "items": []}
+        if doc_id in doc_nodes:
+            doc_nodes[doc_id]["items"].append(node.content or "")
+
+    for doc_id, data in doc_nodes.items():
+        doc = data["doc"]
+        items = data["items"]
+        if items:
+            snippet = "\n".join(f"- [ ] {item}" for item in items[:10])
+            results.append({
+                "id": doc_id,
+                "title": doc.title,
+                "type": doc.type,
+                "snippet": f"未完成待办：\n{snippet}",
+            })
+
+    return results[:limit]
+
+
+def _extract_snippet(text: str, query: str, context_chars: int = 100) -> str:
+    """提取匹配片段"""
+    if not text:
+        return ""
+    idx = text.lower().find(query.lower())
+    if idx == -1:
+        return text[:200]
+    start = max(0, idx - context_chars)
+    end = min(len(text), idx + len(query) + context_chars)
+    snippet = text[start:end]
+    if start > 0:
+        snippet = "..." + snippet
+    if end < len(text):
+        snippet = snippet + "..."
+    return snippet
+
+
+def _extract_title(content: str) -> str:
+    """从 memo 内容提取标题"""
+    if not content:
+        return "无标题"
+    first_line = content.split('\n')[0].strip()
+    # 去掉 markdown 标记
+    title = first_line.lstrip('#').lstrip('*').lstrip('-').strip()
+    return title[:50] if title else "无标题"
+
+
+async def _expand_query(query: str, config) -> list[str]:
+    """用 AI 扩展搜索关键词（Query Expansion）"""
+    try:
+        prompt = f"""用户问题：{query}
+
+请生成 3-5 个搜索关键词或短语，用于在笔记中搜索相关内容。
+规则：
+1. 包含原问题的核心词
+2. 添加相关的同义词、近义词
+3. 如果涉及待办/任务，添加 "待办" "todo" "未完成" 等词
+4. 如果涉及特定主题，添加相关概念词
+5. 每行一个关键词，不要编号，不要解释"""
+
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                f"{config.api_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {config.api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": config.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 200,
+                    "temperature": 0.3
+                }
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                content = data["choices"][0]["message"]["content"]
+                queries = [q.strip() for q in content.strip().split('\n') if q.strip()]
+                # 原始查询也要包含
+                if query not in queries:
+                    queries.insert(0, query)
+                return queries[:6]
+    except Exception as e:
+        logger.warning(f"Query expansion 失败: {e}")
+
+    return [query]
+
+
+@router.post("/ask")
+async def ask_ai(
+    request: schemas.AIChatRequest,
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(get_current_user)
+):
+    """AI 问答"""
+    # 获取 AI 配置
+    config = crud.get_default_ai_config(db)
+    if not config:
+        raise HTTPException(status_code=400, detail="未配置 AI 模型，请先在设置中添加")
+
+    # 提取最后一条用户消息作为查询
+    user_messages = [m for m in request.messages if m.get("role") == "user"]
+    if not user_messages:
+        raise HTTPException(status_code=400, detail="缺少用户消息")
+
+    # 获取或创建对话
+    conv_id = request.conversation_id
+    if conv_id:
+        conv = crud.get_conversation(db, conv_id)
+        if not conv:
+            conv = crud.create_conversation(db)
+    else:
+        conv = crud.create_conversation(db)
+
+    # 保存用户消息
+    user_query = user_messages[-1].get("content", "")
+    crud.add_message(db, conv.id, "user", user_query)
+
+    query = user_messages[-1].get("content", "")
+    if not query.strip():
+        raise HTTPException(status_code=400, detail="消息内容为空")
+
+    # 检测是否支持向量搜索
+    from ..vector_search import check_embedding_support, search_similar
+    embedding_supported = await check_embedding_support(config)
+
+    if embedding_supported:
+        # 使用向量搜索
+        sources = await search_similar(db, query, config)
+    else:
+        # 使用关键词搜索 + Query Expansion
+        search_queries = await _expand_query(query, config)
+
+        sources = []
+        seen_ids = set()
+        for sq in search_queries:
+            results = _search_notes(db, sq)
+            for r in results:
+                key = f"{r['type']}:{r['id']}"
+                if key not in seen_ids:
+                    seen_ids.add(key)
+                    sources.append(r)
+
+        # 如果扩展搜索没有结果，回退到原始查询
+        if not sources:
+            sources = _search_notes(db, query)
+
+    # 构建上下文
+    context_parts = []
+    for i, source in enumerate(sources, 1):
+        context_parts.append(f"[{i}] {source['type'].upper()}: {source['title']}\n{source['snippet']}")
+    context = "\n\n".join(context_parts) if context_parts else "未找到相关笔记。"
+
+    # 构建 prompt
+    system_prompt = f"""你是一个笔记助手。根据用户的笔记内容回答问题。
+
+用户的笔记内容：
+---
+{context}
+---
+
+要求：
+1. 只基于提供的笔记内容回答问题
+2. 仔细检查每条笔记来源，只引用与问题直接相关的笔记
+3. 如果笔记内容与问题无关，不要引用它
+4. 如果笔记中没有相关内容，如实告知"未找到相关笔记"
+5. 用中文回答
+6. 回答格式：
+   - 先回答问题
+   - 如果引用了笔记，在回答末尾用 "📎 来源：" 列出实际使用的笔记标题和类型
+   - 如果没有使用任何笔记，不要列出来源"""
+
+    messages = [{"role": "system", "content": system_prompt}] + request.messages
+
+    # 收集完整回复用于保存
+    full_response = ""
+
+    async def generate():
+        nonlocal full_response
+        try:
+            # 先发送 conversation_id
+            yield json.dumps({"type": "conversation_id", "id": str(conv.id)}, ensure_ascii=False) + "\n"
+
+            # 发送来源信息
+            if sources:
+                yield json.dumps({"type": "sources", "sources": sources}, ensure_ascii=False) + "\n"
+
+            async with httpx.AsyncClient(timeout=120) as client:
+                async with client.stream(
+                    "POST",
+                    f"{config.api_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {config.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": config.model,
+                        "messages": messages,
+                        "stream": True
+                    }
+                ) as resp:
+                    if resp.status_code != 200:
+                        error_text = ""
+                        async for chunk in resp.aiter_bytes():
+                            error_text += chunk.decode()
+                        error_msg = f"[错误] API 返回 {resp.status_code}: {error_text[:200]}"
+                        full_response = error_msg
+                        yield json.dumps({"type": "error", "content": error_msg}, ensure_ascii=False) + "\n"
+                        return
+
+                    async for line in resp.aiter_lines():
+                        if line.startswith("data: ") and line != "data: [DONE]":
+                            try:
+                                data = json.loads(line[6:])
+                                delta = data["choices"][0].get("delta", {})
+                                content = delta.get("content")
+                                if content:
+                                    full_response += content
+                                    yield json.dumps({"type": "content", "content": content}, ensure_ascii=False) + "\n"
+                            except (json.JSONDecodeError, KeyError, IndexError):
+                                continue
+        except httpx.TimeoutException:
+            error_msg = "\n[错误] 请求超时"
+            full_response = error_msg
+            yield json.dumps({"type": "error", "content": error_msg}, ensure_ascii=False)
+        except Exception as e:
+            error_msg = f"\n[错误] {str(e)}"
+            full_response = error_msg
+            yield json.dumps({"type": "error", "content": error_msg}, ensure_ascii=False)
+        finally:
+            # 保存 AI 回复到数据库
+            if full_response:
+                sources_json = json.dumps(sources, ensure_ascii=False) if sources else None
+                crud.add_message(db, conv.id, "assistant", full_response, sources_json)
+
+    return StreamingResponse(generate(), media_type="text/plain")

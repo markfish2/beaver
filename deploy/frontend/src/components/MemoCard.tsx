@@ -42,7 +42,7 @@ SyntaxHighlighter.registerLanguage('cpp', cpp);
 SyntaxHighlighter.registerLanguage('go', go);
 SyntaxHighlighter.registerLanguage('rust', rust);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
-import { MoreVertical, Pencil, Trash2, Pin, PinOff, X, Check, Copy, CheckCheck, Image, Paperclip, FileText, Download, Archive, ArchiveRestore, ArrowUpRight, Globe } from 'lucide-react';
+import { MoreVertical, Pencil, Trash2, Pin, PinOff, X, Check, Copy, CheckCheck, Image, Paperclip, FileText, Download, Archive, ArchiveRestore, ArrowUpRight, Globe, Maximize2, Minimize2, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Memo, Document, LinkPreview } from '../api/data';
 import { uploadFile, getMemoTags, updateMemoColor, getThumbnailUrl, fetchLinkPreview, retryLinkPreview } from '../api/data';
@@ -52,14 +52,17 @@ import { getPasteMarkdown } from '../utils/htmlToMarkdown';
 import { stripTags, stripAttachments, normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks } from '../utils/markdownPreprocess';
 import MemoToDocDialog from './MemoToDocDialog';
 import AudioPlayer from './AudioPlayer';
+import AIChatPanel from './AIChatPanel';
 import { useResizableTextarea } from '../hooks/useResizableTextarea';
+import { useAuth } from '../context/AuthContext';
 
 const MEMO_COLORS = [
-  { name: '白', value: '#ffffff', dark: '#1f2937' },
-  { name: '黄', value: '#fef9c3', dark: '#422006' },
-  { name: '绿', value: '#dcfce7', dark: '#14532d' },
-  { name: '蓝', value: '#dbeafe', dark: '#1e3a5f' },
-  { name: '紫', value: '#f3e8ff', dark: '#3b0764' },
+  { name: '白', value: '#ffffff', dark: '#1f2937', whiteText: false },
+  { name: '浅卡片', value: '#E5DFD2', dark: '#2a2720', whiteText: false },
+  { name: '强调黑', value: '#1A1A1A', dark: '#1A1A1A', whiteText: true },
+  { name: '标志橙', value: '#b37f90', dark: '#8B4A2E', whiteText: true },
+  { name: '鼠尾草', value: '#d1dfe8', dark: '#2a3a2d', whiteText: false },
+  { name: '深鼠尾草', value: '#9ec8a8', dark: '#3d5240', whiteText: true },
 ];
 
 const TAG_COLORS = [
@@ -90,6 +93,7 @@ interface MemoCardProps {
   onTogglePin: (id: string, is_pinned: boolean) => Promise<void>;
   onToggleArchive: (id: string, is_archived: boolean) => Promise<void>;
   onTogglePublic?: (id: string, is_public: boolean) => Promise<void>;
+  onToggleAI?: (id: string, ai_excluded: boolean) => Promise<void>;
   onTagClick: (tag: string) => void;
   onColorChange?: (id: string, color: string | null) => void;
   isHighlighted?: boolean;
@@ -212,21 +216,71 @@ function getMemoBg(isDark: boolean, color: string | null, isPinned: boolean): st
       const found = MEMO_COLORS.find(c => c.value === color);
       return found ? found.dark : '#1f2937';
     }
-    return isPinned ? '#3b2f0a' : '#1f2937';
+    return '#1f2937';
   }
-  return color || (isPinned ? '#fffbeb' : '#ffffff');
+  return color || '#ffffff';
+}
+
+function getMemoTextColor(isDark: boolean, color: string | null): string {
+  if (!color) return '';
+  const found = MEMO_COLORS.find(c => c.value === color);
+  if (!found) return '';
+  if (isDark) {
+    if (found.value === '#1A1A1A' || found.value === '#9ec8a8') return 'text-white';
+    return '';
+  }
+  return found.whiteText ? 'text-white' : '';
+}
+
+function getMemoSecondaryBg(isDark: boolean, color: string | null): string {
+  // 代码块、图片块、附件块的背景色，基于卡片颜色适配
+  if (!color) return '';
+  const found = MEMO_COLORS.find(c => c.value === color);
+  if (!found) return '';
+  if (isDark) {
+    if (found.value === '#1A1A1A') return 'bg-[#111111]';
+    if (found.value === '#b37f90') return 'bg-[#6b4a55]';
+    if (found.value === '#9ec8a8') return 'bg-[#4a7a55]';
+    if (found.value === '#d1dfe8') return 'bg-[#3a4a55]';
+    return '';
+  }
+  if (found.value === '#1A1A1A') return 'bg-[#252525]';
+  if (found.value === '#b37f90') return 'bg-[#c9a0ae]';
+  if (found.value === '#9ec8a8') return 'bg-[#85b892]';
+  if (found.value === '#d1dfe8') return 'bg-[#b8cdd8]';
+  if (found.value === '#E5DFD2') return 'bg-[#d9d3c6]';
+  return '';
+}
+
+function getMemoSecondaryBorder(isDark: boolean, color: string | null): string {
+  if (!color) return '';
+  const found = MEMO_COLORS.find(c => c.value === color);
+  if (!found) return '';
+  if (isDark) {
+    if (found.value === '#1A1A1A') return 'border-[#333333]';
+    if (found.value === '#b37f90') return 'border-[#8a5a68]';
+    if (found.value === '#9ec8a8') return 'border-[#5a8a65]';
+    if (found.value === '#d1dfe8') return 'border-[#4a6a7a]';
+    return '';
+  }
+  if (found.value === '#1A1A1A') return 'border-[#3a3a3a]';
+  if (found.value === '#b37f90') return 'border-[#a06a7a]';
+  if (found.value === '#9ec8a8') return 'border-[#70a87e]';
+  if (found.value === '#d1dfe8') return 'border-[#a0b8c5]';
+  if (found.value === '#E5DFD2') return 'border-[#c9c3b6]';
+  return '';
 }
 
 const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => ({
   margin: 0,
-  borderRadius: '0.5rem',
+  borderRadius: '0 0 0.5rem 0.5rem',
   fontSize: '0.95em',
-  background: isDark ? '#282c34' : '#f6f8fa',
-  border: `1px solid ${isDark ? '#374067' : '#d0d7de'}`,
+  background: isDark ? '#282c34' : '#fbfbf8',
+  border: 'none',
   padding: '16px',
 });
 
-const CodeBlock = memo(function CodeBlock({ className, children, ...props }: { className?: string; children: React.ReactNode; [key: string]: any }) {
+const CodeBlock = memo(function CodeBlock({ className, children, cardColor, ...props }: { className?: string; children: React.ReactNode; cardColor?: string | null; [key: string]: any }) {
   const [copied, setCopied] = useState(false);
   const isDark = useIsDark();
   const match = /language-(\w+)/.exec(className || '');
@@ -240,14 +294,18 @@ const CodeBlock = memo(function CodeBlock({ className, children, ...props }: { c
     setTimeout(() => setCopied(false), 2000);
   }, [code]);
 
+  const secondaryBg = getMemoSecondaryBg(isDark, cardColor);
+  const secondaryBorder = getMemoSecondaryBorder(isDark, cardColor);
+  const isCardDark = !!cardColor && !!(MEMO_COLORS.find(c => c.value === cardColor)?.whiteText);
+  const codeHeaderBg = secondaryBg ? undefined : (isDark ? '#282c34' : '#f6f5f0');
+  const codeBorderClass = secondaryBorder || 'border-[#dad9d4] dark:border-gray-700';
+
   if (isBlock) {
     return (
-      <div className="relative">
-        <div className={`flex items-center justify-between px-3 py-1.5 border border-b-0 rounded-t-lg ${
-          isDark
-            ? 'bg-[#282c34] border-[#374067]'
-            : 'bg-[#f6f8fa] border-[#d0d7de]'
-        }`}>
+      <div className={`relative rounded-lg overflow-hidden border ${codeBorderClass}`}>
+        <div className={`flex items-center justify-between px-3 py-1.5 border-b ${codeBorderClass} ${secondaryBg || ''}`}
+          style={codeHeaderBg ? { background: codeHeaderBg } : undefined}
+        >
           <span className={`text-[11px] font-mono ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{language || 'text'}</span>
           <button
             onClick={handleCopy}
@@ -261,7 +319,7 @@ const CodeBlock = memo(function CodeBlock({ className, children, ...props }: { c
           style={isDark ? oneDark : ghcolors}
           language={language || 'text'}
           PreTag="div"
-          customStyle={{ ...codeBlockCustomStyle(isDark), borderTopLeftRadius: 0, borderTopRightRadius: 0, borderTop: 'none' }}
+          customStyle={{ ...codeBlockCustomStyle(isDark) }}
         >
           {code}
         </SyntaxHighlighter>
@@ -269,8 +327,16 @@ const CodeBlock = memo(function CodeBlock({ className, children, ...props }: { c
     );
   }
 
+  // 行内代码：深色卡片适配
+  const inlineCodeStyle = isCardDark ? (() => {
+    if (cardColor === '#1A1A1A') return { background: 'rgba(255,255,255,0.15)', color: '#e5e5e5' };
+    if (cardColor === '#b37f90') return { background: 'rgba(255,255,255,0.18)', color: '#f0ebe6' };
+    if (cardColor === '#9ec8a8') return { background: 'rgba(255,255,255,0.15)', color: '#e8e0d8' };
+    return undefined;
+  })() : undefined;
+
   return (
-    <code className={className} {...props}>{children}</code>
+    <code className={className} {...props} style={inlineCodeStyle}>{children}</code>
   );
 });
 
@@ -540,9 +606,13 @@ const markdownComponents = (
   onToggleCheckboxRef: React.MutableRefObject<((taskIndex: number) => void) | undefined>,
   checkboxIndexRef: React.MutableRefObject<number>,
   navigate: (to: string) => void,
+  cardColor?: string | null,
 ): Components => {
+  const cardColorDef = cardColor ? MEMO_COLORS.find(c => c.value === cardColor) : null;
+  const isCardDark = !!cardColorDef?.whiteText;
+  const markerClass = isCardDark ? 'text-white/60' : 'text-gray-500 dark:text-gray-400';
   return {
-    code: CodeBlock as Components['code'],
+    code: (props: any) => <CodeBlock {...props} cardColor={cardColor} />,
     img: ({ src, alt }) => {
       // 检测音频文件
       if (src && /\.(mp4|webm|ogg|wav|mp3|m4a)(\?|$)/i.test(src)) {
@@ -555,7 +625,7 @@ const markdownComponents = (
         return (
           <a
             href={href}
-            className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-1 rounded cursor-pointer"
+            className="text-[#3f587f] hover:text-[#2d4159] dark:text-[#6b8ab5] dark:hover:text-[#a3bdd6] bg-[#3f587f]/10 dark:bg-[#3f587f]/20 px-1 rounded cursor-pointer"
             onMouseDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -591,8 +661,8 @@ const markdownComponents = (
       );
       // 区分有序/无序标记
       const marker = ordered
-        ? <span className="shrink-0 text-gray-500 dark:text-gray-400 select-none tabular-nums">{(index ?? 0) + 1}.</span>
-        : <span className="shrink-0 leading-none select-none text-gray-500 dark:text-gray-400" aria-hidden="true">•</span>;
+        ? <span className={`shrink-0 select-none tabular-nums ${markerClass}`}>{(index ?? 0) + 1}.</span>
+        : <span className={`shrink-0 leading-none select-none ${markerClass}`} aria-hidden="true">•</span>;
       const mergeClass = (cls: string) => ({ ...props, className: [props.className, cls].filter(Boolean).join(' ') });
       if (hasCheckbox && !hasNestedList) {
         return <li {...mergeClass('list-none relative pl-[22px] leading-[1.5]')}>{children}</li>;
@@ -611,7 +681,7 @@ const markdownComponents = (
         );
       }
       // 叶子节点：有序数字或无序圆点
-      return <li {...mergeClass('list-none flex items-baseline gap-1.5')}>{marker}{children}</li>;
+      return <li {...mergeClass('list-none flex items-baseline gap-1.5')}>{marker}<span className="flex-1">{children}</span></li>;
     },
     input: ({ checked, type, className: inputClassName, ...props }) => {
       if (type === 'checkbox') {
@@ -622,8 +692,10 @@ const markdownComponents = (
             aria-checked={checked}
             className={`absolute left-0 top-[5px] inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border cursor-pointer shrink-0 transition-colors ${
               checked
-                ? 'bg-blue-500 border-blue-500'
-                : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-500'
+                ? 'bg-[#3f587f] border-[#3f587f]'
+                : isCardDark
+                  ? 'bg-white/20 border-white/40'
+                  : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-500'
             }`}
             onClick={(e) => {
               e.stopPropagation();
@@ -640,17 +712,34 @@ const markdownComponents = (
       }
       return <input type={type} checked={checked} className={inputClassName} {...props} />;
     },
+    blockquote: ({ children, ...props }: any) => {
+      const isWarmDark = cardColor === '#b37f90' || cardColor === '#9ec8a8';
+      const bqStyle = isCardDark
+        ? isWarmDark
+          ? { color: '#f0ebe6', borderLeftColor: '#e8e0d8' }
+          : { color: 'rgba(255,255,255,0.8)', borderLeftColor: 'rgba(255,255,255,0.4)' }
+        : undefined;
+      return (
+        <blockquote {...props} style={bqStyle}>
+          {children}
+        </blockquote>
+      );
+    },
   };
 };
 
-const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, onToggleArchive, onTogglePublic, onTagClick, onColorChange, isHighlighted, documents, readOnly }: MemoCardProps) {
+const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, onToggleArchive, onTogglePublic, onToggleAI, onTagClick, onColorChange, isHighlighted, documents, readOnly }: MemoCardProps) {
   const isDark = useIsDark();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(memo.content);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showExpandEditor, setShowExpandEditor] = useState(false);
+  const [showAIPanel, setShowAIPanel] = useState(false);
+  const activeTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [showConvertDialog, setShowConvertDialog] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -762,15 +851,14 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
     return { top, left };
   }, []);
 
-  const detectTagSearch = useCallback((text: string, cursorPos: number) => {
+  const detectTagSearch = useCallback((text: string, cursorPos: number, externalEl?: HTMLTextAreaElement) => {
     const before = text.slice(0, cursorPos);
     const match = before.match(/(?:^|\s)#([a-zA-Z0-9_一-龥]*)$/);
     if (match) {
       const start = cursorPos - match[0].length + (match[0][0] === '#' ? 0 : 1);
       setTagSearch({ keyword: match[1], start });
       setTagDropdownIndex(0);
-      // 用当前光标位置定位（而非 # 字符位置）
-      const el = textareaRef.current;
+      const el = externalEl || activeTextareaRef.current || textareaRef.current;
       if (el) {
         setTagDropdownPos(getCursorPos(el, cursorPos));
       }
@@ -779,14 +867,14 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
     }
   }, [getCursorPos]);
 
-  const detectMentionSearch = useCallback((text: string, cursorPos: number) => {
+  const detectMentionSearch = useCallback((text: string, cursorPos: number, externalEl?: HTMLTextAreaElement) => {
     const before = text.slice(0, cursorPos);
     const match = before.match(/(?:^|\s)@([a-zA-Z0-9_一-龥]*)$/);
     if (match) {
       const start = cursorPos - match[0].length + (match[0][0] === '@' ? 0 : 1);
       setMentionSearch({ keyword: match[1], start });
       setMentionDropdownIndex(0);
-      const el = textareaRef.current;
+      const el = externalEl || activeTextareaRef.current || textareaRef.current;
       if (el) {
         setMentionDropdownPos(getCursorPos(el, cursorPos));
       }
@@ -810,7 +898,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   }, [mentionSearch, documents]);
 
   const insertTag = useCallback((tagName: string) => {
-    const el = textareaRef.current;
+    const el = activeTextareaRef.current || textareaRef.current;
     if (!el || !tagSearch) return;
     const cursorPos = el.selectionStart;
     const before = el.value.slice(0, tagSearch.start);
@@ -819,6 +907,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
     el.value = newContent;
     el.dispatchEvent(new Event('input', { bubbles: true }));
     setEditContent(newContent);
+    if (textareaRef.current && textareaRef.current !== el) textareaRef.current.value = newContent;
     setTagSearch(null);
     requestAnimationFrame(() => {
       el.focus();
@@ -829,7 +918,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
 
   // @提及：插入文档链接
   const insertMention = useCallback((doc: Document) => {
-    const el = textareaRef.current;
+    const el = activeTextareaRef.current || textareaRef.current;
     if (!el || !mentionSearch) return;
     const cursorPos = el.selectionStart;
     const before = el.value.slice(0, mentionSearch.start);
@@ -839,6 +928,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
     el.value = newContent;
     el.dispatchEvent(new Event('input', { bubbles: true }));
     setEditContent(newContent);
+    if (textareaRef.current && textareaRef.current !== el) textareaRef.current.value = newContent;
     setMentionSearch(null);
     requestAnimationFrame(() => {
       el.focus();
@@ -907,7 +997,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   // 内容变化时重置 checkbox 计数器
   const checkboxIndexRef = useRef(0);
   checkboxIndexRef.current = 0;
-  const mdComponents = useMemo(() => markdownComponents(setPreviewImage, toggleCheckboxRef, checkboxIndexRef, (...args) => navigateRef.current(...args)), []);
+  const mdComponents = useMemo(() => markdownComponents(setPreviewImage, toggleCheckboxRef, checkboxIndexRef, (...args) => navigateRef.current(...args), memo.color), [memo.color]);
 
   // 编辑模式下自动调整 textarea 高度
   // 用 useEffect + 双重 rAF 替代 useLayoutEffect，确保浏览器完成布局后再测量
@@ -1041,12 +1131,179 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
     setEditContent(memo.content);
   }, [memo.content]);
 
+  // 展开编辑器 portal（编辑/显示模式都需要渲染）
+  const expandEditorPortal = showExpandEditor && createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => {
+      const expandEl = document.querySelector('[data-expand-textarea]') as HTMLTextAreaElement;
+      if (expandEl) {
+        setEditContent(expandEl.value);
+        if (textareaRef.current) textareaRef.current.value = expandEl.value;
+      }
+      activeTextareaRef.current = textareaRef.current;
+      setShowExpandEditor(false);
+    }}>
+      <div className="flex flex-col w-[90vw] max-w-[680px] h-[75vh] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 shrink-0">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => imageInputRef.current?.click()}
+              disabled={uploading}
+              className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40"
+              title="添加图片"
+            >
+              <Image className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40"
+              title="添加附件"
+            >
+              <Paperclip className="w-4 h-4" />
+            </button>
+            {uploading && <span className="text-xs text-blue-500">上传中...</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const expandEl = document.querySelector('[data-expand-textarea]') as HTMLTextAreaElement;
+                if (expandEl) {
+                  setEditContent(expandEl.value);
+                  if (textareaRef.current) textareaRef.current.value = expandEl.value;
+                }
+                activeTextareaRef.current = textareaRef.current;
+                setShowExpandEditor(false);
+                setTimeout(() => handleSave(), 0);
+              }}
+              disabled={uploading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white dark:text-gray-900 bg-gray-900 dark:bg-gray-100 hover:bg-gray-700 dark:hover:bg-gray-300 rounded-lg transition-colors disabled:opacity-40"
+            >
+              <Check className="w-4 h-4" />
+              <span>保存</span>
+            </button>
+            <button
+              onClick={() => {
+                const expandEl = document.querySelector('[data-expand-textarea]') as HTMLTextAreaElement;
+                if (expandEl) {
+                  setEditContent(expandEl.value);
+                  if (textareaRef.current) textareaRef.current.value = expandEl.value;
+                }
+                activeTextareaRef.current = textareaRef.current;
+                setShowExpandEditor(false);
+              }}
+              className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        <textarea
+          data-expand-textarea
+          defaultValue={textareaRef.current?.value ?? editContent}
+          onFocus={(e) => { activeTextareaRef.current = e.target as HTMLTextAreaElement; }}
+          onChange={(e) => {
+            const expandEl = e.target as HTMLTextAreaElement;
+            const newVal = expandEl.value;
+            const cursorPos = expandEl.selectionStart;
+            setEditContent(newVal);
+            if (textareaRef.current) textareaRef.current.value = newVal;
+            detectTagSearch(newVal, cursorPos, expandEl);
+            if (mentionSearch) detectMentionSearch(newVal, cursorPos, expandEl);
+            if (newVal.length > editContent.length && newVal.charAt(cursorPos - 1) === '@') {
+              detectMentionSearch(newVal, cursorPos, expandEl);
+            }
+          }}
+          onKeyDown={(e) => {
+            const expandEl = e.currentTarget as HTMLTextAreaElement;
+            // 提及下拉导航
+            if (mentionSearch && filteredMentionDocs.length > 0) {
+              if (e.key === 'ArrowDown') { e.preventDefault(); setMentionDropdownIndex(prev => (prev + 1) % filteredMentionDocs.length); return; }
+              if (e.key === 'ArrowUp') { e.preventDefault(); setMentionDropdownIndex(prev => (prev - 1 + filteredMentionDocs.length) % filteredMentionDocs.length); return; }
+              if ((e.key === 'Enter' && !e.nativeEvent.isComposing) || e.key === 'Tab') { e.preventDefault(); insertMention(filteredMentionDocs[mentionDropdownIndex]); return; }
+              if (e.key === 'Escape') { e.preventDefault(); setMentionSearch(null); return; }
+            }
+            // 标签下拉导航
+            if (tagSearch && filteredTags.length > 0) {
+              if (e.key === 'ArrowDown') { e.preventDefault(); setTagDropdownIndex(prev => (prev + 1) % filteredTags.length); return; }
+              if (e.key === 'ArrowUp') { e.preventDefault(); setTagDropdownIndex(prev => (prev - 1 + filteredTags.length) % filteredTags.length); return; }
+              if ((e.key === 'Enter' && !e.nativeEvent.isComposing) || e.key === 'Tab') { e.preventDefault(); insertTag(filteredTags[tagDropdownIndex]); return; }
+              if (e.key === 'Escape') { e.preventDefault(); setTagSearch(null); return; }
+            }
+            // 列表续行
+            if (handleListContinuation(e, expandEl.value, setEditContent, { current: expandEl })) return;
+            // Esc 关闭
+            if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              setEditContent(expandEl.value);
+              if (textareaRef.current) textareaRef.current.value = expandEl.value;
+              activeTextareaRef.current = textareaRef.current;
+              setShowExpandEditor(false);
+            }
+          }}
+          className="flex-1 w-full bg-transparent text-gray-800 dark:text-gray-200 text-base p-4 resize-none focus:outline-none scrollbar-none"
+          style={{ fontFamily: 'inherit', lineHeight: '1.75' }}
+          autoFocus
+        />
+        {/* 标签下拉 */}
+        {tagSearch && filteredTags.length > 0 && (
+          <div className="fixed w-40 z-[10000] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg max-h-48 overflow-y-auto" style={{ top: tagDropdownPos.top, left: tagDropdownPos.left }}>
+            {filteredTags.map((tag, i) => (
+              <button
+                key={tag}
+                onMouseDown={(e) => { e.preventDefault(); insertTag(tag); }}
+                className={`w-full text-left px-4 py-2 text-base transition-colors ${
+                  i === tagDropdownIndex
+                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        )}
+        {/* 提及下拉 */}
+        {mentionSearch && filteredMentionDocs.length > 0 && (
+          <div className="fixed w-52 z-[10000] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg max-h-48 overflow-y-auto" style={{ top: mentionDropdownPos.top, left: mentionDropdownPos.left }}>
+            {filteredMentionDocs.map((doc, i) => (
+              <button
+                key={doc.id}
+                onMouseDown={(e) => { e.preventDefault(); insertMention(doc); }}
+                className={`w-full text-left px-4 py-2 text-base transition-colors ${
+                  i === mentionDropdownIndex
+                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
+              >
+                {doc.title || '无标题'}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+
+  // AI 对话 portal（编辑/显示模式都需要渲染）
+  const aiChatPanel = showAIPanel && createPortal(
+    <AIChatPanel
+      context={editContent}
+      onWriteBack={(newContent) => {
+        setEditContent(newContent);
+        if (textareaRef.current) textareaRef.current.value = newContent;
+      }}
+      onClose={() => setShowAIPanel(false)}
+    />,
+    document.body
+  );
+
   if (isEditing) {
     return (
-      <div className={`rounded-2xl p-4 border min-w-0 overflow-visible ${
+      <div className={`rounded-xl p-4 border min-w-0 overflow-visible ${
         memo.is_pinned
           ? 'border-amber-200 dark:border-amber-800/60'
-          : 'border-[#ebebeb] dark:border-gray-700'
+          : 'border-[#dad9d4] dark:border-gray-700'
       }`}
       style={{ backgroundColor: bgColor }}
       >
@@ -1055,6 +1312,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
             ref={textareaRef}
             data-resizable-textarea
             defaultValue={editContent}
+            onFocus={(e) => { activeTextareaRef.current = e.target as HTMLTextAreaElement; }}
             onChange={(e) => {
               const newValue = e.target.value;
               const cursorPos = e.target.selectionStart;
@@ -1164,6 +1422,22 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
         <div className="flex items-center justify-between mt-2">
           <div className="flex items-center gap-1">
             <button
+              onClick={() => setShowExpandEditor(true)}
+              disabled={uploading}
+              className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40"
+              title="展开编辑"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowAIPanel(true); }}
+              disabled={uploading}
+              className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40"
+              title="AI 整理"
+            >
+              <Sparkles className="w-4 h-4" />
+            </button>
+            <button
               onClick={() => imageInputRef.current?.click()}
               disabled={uploading}
               className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40"
@@ -1219,16 +1493,15 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
             e.target.value = '';
           }}
         />
+        {expandEditorPortal}
+        {aiChatPanel}
       </div>
     );
   }
 
   return (
-    <div className={`group rounded-2xl p-4 min-w-0 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 ${
-      memo.is_pinned
-        ? 'border border-amber-200 dark:border-amber-800/60'
-        : ''
-    } ${isHighlighted ? 'outline outline-2 outline-blue-400 dark:outline-blue-500 outline-offset-2' : ''}`}
+    <div className={`group rounded-xl p-4 min-w-0 overflow-hidden border border-[#dad9d4] dark:border-gray-700 ${
+      isHighlighted ? 'outline outline-2 outline-blue-400 dark:outline-blue-500 outline-offset-2' : ''}`}
     style={{ backgroundColor: bgColor, contain: 'layout' }}
     >
       <div className="flex items-center justify-between mb-2">
@@ -1236,32 +1509,44 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
           {memo.is_pinned && (
             <Pin className="w-3 h-3 text-amber-500 dark:text-amber-400 fill-current" />
           )}
-          <span className="text-sm text-gray-400 dark:text-gray-500">
+          <span className={`text-sm ${getMemoTextColor(isDark, memo.color) || 'text-gray-400 dark:text-gray-500'}`}>
             {formatTime(memo.created_at)}
           </span>
         </div>
 
-        {/* 右侧：地球图标 + 三点菜单 */}
+        {/* 右侧：AI排除图标 + 地球图标 + 三点菜单 */}
         <div className="flex items-center gap-1">
-          {memo.is_public && (
-            <Globe className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
+          {memo.ai_excluded && (
+            <svg className={`w-3.5 h-3.5 ${getMemoTextColor(isDark, memo.color) || 'text-gray-400 dark:text-gray-500'}`} viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5"/>
+              <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
           )}
-        {!readOnly && (
-          <button
-            ref={menuButtonRef}
-            onClick={() => setShowMenu(!showMenu)}
-            className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded transition-colors"
-            title="更多操作"
-          >
-            <MoreVertical className="w-4 h-4" />
-          </button>
-        )}
+          {memo.is_public && (
+            <Globe className={`w-3.5 h-3.5 ${getMemoTextColor(isDark, memo.color) || 'text-gray-400 dark:text-gray-500'}`} />
+          )}
+        {!readOnly && (() => {
+          const iconClass = getMemoTextColor(isDark, memo.color) || 'text-gray-400 dark:text-gray-500';
+          const hoverClass = (memo.color && MEMO_COLORS.find(cl => cl.value === memo.color)?.whiteText && !isDark)
+            ? 'hover:text-white/80'
+            : 'hover:text-gray-600 dark:hover:text-gray-300';
+          return (
+            <button
+              ref={menuButtonRef}
+              onClick={() => setShowMenu(!showMenu)}
+              className={`p-1 rounded transition-colors ${iconClass} ${hoverClass}`}
+              title="更多操作"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+          );
+        })()}
         </div>
       </div>
 
       <div
         ref={contentRef}
-        className={`memo-content text-base text-gray-700 dark:text-gray-300 relative ${readOnly ? '' : 'cursor-text'}`}
+        className={`memo-content text-base relative ${getMemoTextColor(isDark, memo.color) || 'text-gray-700 dark:text-gray-300'} ${readOnly ? '' : 'cursor-text'}`}
         style={{ lineHeight: '1.75' }}
         style={!expanded && isLong ? { maxHeight: '400px', overflow: 'hidden' } : undefined}
         onDoubleClick={readOnly ? undefined : handleContentDoubleClick}
@@ -1278,93 +1563,67 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       {isLong && (
         <button
           onClick={() => setExpanded(prev => !prev)}
-          className="mt-1 text-sm text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 transition-colors"
+          className={`mt-1 text-sm transition-colors ${
+            (memo.color && MEMO_COLORS.find(cl => cl.value === memo.color)?.whiteText && !isDark)
+              ? 'text-white/70 hover:text-white'
+              : 'text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300'
+          }`}
         >
           {expanded ? '收起' : '显示更多'}
         </button>
       )}
 
-      {/* 图片网格 */}
-      {images.length > 0 && (() => {
-        const imgClass = "w-full h-full object-cover rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:opacity-80 transition-opacity";
-
-        if (images.length === 1) {
-          return (
-            <div className="mt-3">
-              <img src={getThumbnailUrl(images[0].url)} alt={images[0].alt} className={imgClass} style={{ aspectRatio: '16/10' }} onClick={() => setPreviewImage(images[0].url)} />
-            </div>
-          );
-        }
-
-        if (images.length === 2) {
-          return (
-            <div className="mt-3 grid grid-cols-2 gap-1">
-              {images.map((img, i) => (
-                <img key={i} src={getThumbnailUrl(img.url)} alt={img.alt} className={imgClass} style={{ aspectRatio: '1/1' }} onClick={() => setPreviewImage({ url: img.url, index: i })} />
-              ))}
-            </div>
-          );
-        }
-
-        if (images.length === 3) {
-          return (
-            <div className="mt-3 grid grid-cols-2 gap-1" style={{ gridTemplateRows: '1fr 1fr' }}>
-              <div className="row-span-2">
-                <img src={getThumbnailUrl(images[0].url)} alt={images[0].alt} className={imgClass} style={{ aspectRatio: '1/2' }} onClick={() => setPreviewImage(images[0].url)} />
-              </div>
-              <img src={getThumbnailUrl(images[1].url)} alt={images[1].alt} className={imgClass} style={{ aspectRatio: '1/1' }} onClick={() => setPreviewImage(images[1].url)} />
-              <img src={getThumbnailUrl(images[2].url)} alt={images[2].alt} className={imgClass} style={{ aspectRatio: '1/1' }} onClick={() => setPreviewImage(images[2].url)} />
-            </div>
-          );
-        }
-
-        if (images.length === 4) {
-          return (
-            <div className="mt-3 grid grid-cols-2 gap-1">
-              {images.map((img, i) => (
-                <img key={i} src={getThumbnailUrl(img.url)} alt={img.alt} className={imgClass} style={{ aspectRatio: '1/1' }} onClick={() => setPreviewImage({ url: img.url, index: i })} />
-              ))}
-            </div>
-          );
-        }
-
-        // 5+ images: 3-column first row, then 2-column rows
-        const firstRow = images.slice(0, 3);
-        const rest = images.slice(3);
-        return (
-          <div className="mt-3 flex flex-col gap-1">
-            <div className="grid grid-cols-3 gap-1">
-              {firstRow.map((img, i) => (
-                <img key={i} src={getThumbnailUrl(img.url)} alt={img.alt} className={imgClass} style={{ aspectRatio: '1/1' }} onClick={() => setPreviewImage({ url: img.url, index: i })} />
-              ))}
-            </div>
-            {rest.length > 0 && (
-              <div className="grid grid-cols-2 gap-1">
-                {rest.map((img, i) => (
-                  <img key={i + 3} src={getThumbnailUrl(img.url)} alt={img.alt} className={imgClass} style={{ aspectRatio: '1/1' }} onClick={() => setPreviewImage({ url: img.url, index: i + 3 })} />
-                ))}
-              </div>
-            )}
+      {/* 图片画廊 */}
+      {images.length > 0 && (
+        <div className={`mt-3 rounded-lg overflow-hidden border ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}>
+          <div
+            className={`px-3 py-1.5 text-xs border-b ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'} ${getMemoTextColor(isDark, memo.color) || 'text-gray-500 dark:text-gray-400'} ${getMemoSecondaryBg(isDark, memo.color) || ''}`}
+            style={getMemoSecondaryBg(isDark, memo.color) ? undefined : { background: isDark ? '#1f2937' : '#f6f5f0' }}
+          >
+            图片 ({images.length})
           </div>
-        );
-      })()}
+          <div
+            className={`flex gap-2 p-3 overflow-x-auto ${getMemoSecondaryBg(isDark, memo.color) || ''}`}
+            style={getMemoSecondaryBg(isDark, memo.color) ? { scrollbarWidth: 'thin', scrollbarColor: isDark ? '#4b5563 transparent' : '#d1d5db transparent' } : { background: isDark ? '#111827' : '#fbfbf8', scrollbarWidth: 'thin', scrollbarColor: isDark ? '#4b5563 transparent' : '#d1d5db transparent' }}
+          >
+            {images.map((img, i) => (
+              <img
+                key={i}
+                src={getThumbnailUrl(img.url)}
+                alt={img.alt}
+                className={`flex-shrink-0 w-[155px] h-[155px] object-cover border cursor-pointer hover:opacity-80 transition-opacity ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}
+                style={{ borderRadius: '0.5rem' }}
+                onClick={() => setPreviewImage(img.url)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 附件列表 */}
       {fileLinks.length > 0 && (
-        <div className="flex flex-col gap-1.5 mt-3">
-          {fileLinks.map((file, i) => (
-            <a
-              key={i}
-              href={file.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700/50 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors min-w-0"
-            >
-              <FileText className="w-3.5 h-3.5 flex-shrink-0 text-gray-400 dark:text-gray-500" />
-              <span className="truncate">{file.name}</span>
-              <Download className="w-3 h-3 flex-shrink-0 text-gray-400 dark:text-gray-500 ml-auto" />
-            </a>
-          ))}
+        <div className={`mt-3 rounded-lg overflow-hidden border ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}>
+          <div
+            className={`px-3 py-1.5 text-xs border-b ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'} ${getMemoTextColor(isDark, memo.color) || 'text-gray-500 dark:text-gray-400'} ${getMemoSecondaryBg(isDark, memo.color) || ''}`}
+            style={getMemoSecondaryBg(isDark, memo.color) ? undefined : { background: isDark ? '#1f2937' : '#f6f5f0' }}
+          >
+            附件 ({fileLinks.length})
+          </div>
+          <div className={`flex flex-col gap-1 p-3 ${getMemoSecondaryBg(isDark, memo.color) || ''}`} style={getMemoSecondaryBg(isDark, memo.color) ? undefined : { background: isDark ? '#111827' : '#fbfbf8' }}>
+            {fileLinks.map((file, i) => (
+              <a
+                key={i}
+                href={file.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-700/50 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors min-w-0"
+              >
+                <FileText className="w-3.5 h-3.5 flex-shrink-0 text-gray-400 dark:text-gray-500" />
+                <span className="truncate">{file.name}</span>
+                <Download className="w-3 h-3 flex-shrink-0 text-gray-400 dark:text-gray-500 ml-auto" />
+              </a>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1382,28 +1641,70 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
         </div>
       )}
 
-      {tags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-3">
-          {tags.map(tag => {
-            const c = TAG_COLORS[tagColorIndex(tag)];
-            return (
-              <button
-                key={tag}
-                onClick={(e) => { e.stopPropagation(); onTagClick(tag); }}
-                className="px-2.5 py-0.5 rounded-full cursor-pointer transition-colors"
-                style={{
-                  fontSize: '11px',
-                  backgroundColor: isDark ? c.darkBg : c.bg,
-                  color: isDark ? c.darkText : c.text,
-                  border: `1px solid ${isDark ? c.darkBorder : c.border}`,
-                }}
-              >
-                {tag}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {tags.length > 0 && (() => {
+        const cardColorDef = memo.color ? MEMO_COLORS.find(cl => cl.value === memo.color) : null;
+        const isCardDark = cardColorDef?.whiteText && !isDark;
+        const isCardMuted = !isDark && cardColorDef && (cardColorDef.value === '#E5DFD2' || cardColorDef.value === '#d1dfe8');
+        return (
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {tags.map(tag => {
+              const c = TAG_COLORS[tagColorIndex(tag)];
+              // 深色卡片：半透明白色
+              if (isCardDark) {
+                return (
+                  <button
+                    key={tag}
+                    onClick={(e) => { e.stopPropagation(); onTagClick(tag); }}
+                    className="px-2.5 py-0.5 rounded-full cursor-pointer transition-colors"
+                    style={{
+                      fontSize: '11px',
+                      backgroundColor: 'rgba(255,255,255,0.2)',
+                      color: '#ffffff',
+                      border: '1px solid rgba(255,255,255,0.3)',
+                    }}
+                  >
+                    {tag}
+                  </button>
+                );
+              }
+              // 柔和底色卡片：深灰色标签
+              if (isCardMuted) {
+                return (
+                  <button
+                    key={tag}
+                    onClick={(e) => { e.stopPropagation(); onTagClick(tag); }}
+                    className="px-2.5 py-0.5 rounded-full cursor-pointer transition-colors"
+                    style={{
+                      fontSize: '11px',
+                      backgroundColor: 'rgba(0,0,0,0.08)',
+                      color: '#374151',
+                      border: '1px solid rgba(0,0,0,0.12)',
+                    }}
+                  >
+                    {tag}
+                  </button>
+                );
+              }
+              // 默认白色卡片：原有彩色标签
+              return (
+                <button
+                  key={tag}
+                  onClick={(e) => { e.stopPropagation(); onTagClick(tag); }}
+                  className="px-2.5 py-0.5 rounded-full cursor-pointer transition-colors"
+                  style={{
+                    fontSize: '11px',
+                    backgroundColor: isDark ? c.darkBg : c.bg,
+                    color: isDark ? c.darkText : c.text,
+                    border: `1px solid ${isDark ? c.darkBorder : c.border}`,
+                  }}
+                >
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* 删除确认弹窗 - portal 到 body 避免被 contain:layout 裁剪 */}
       {showDeleteConfirm && createPortal(
@@ -1483,6 +1784,13 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
             <Globe className="w-3.5 h-3.5" />
             {memo.is_public ? '取消公开' : '公开'}
           </button>
+          <button
+            onClick={() => { setShowMenu(false); onToggleAI?.(memo.id, !memo.ai_excluded); }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <Sparkles className={`w-3.5 h-3.5 ${memo.ai_excluded ? 'text-gray-400' : 'text-blue-500'}`} />
+            {memo.ai_excluded ? '取消不参与 AI' : '不参与 AI'}
+          </button>
           <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
           <div className="px-3 py-2">
             <div className="flex items-center gap-1.5">
@@ -1491,7 +1799,11 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
                   key={c.value}
                   onClick={() => handleColorChange(memo.color === c.value ? null : c.value)}
                   className={`w-5 h-5 rounded-full border transition-transform hover:scale-110 ${
-                    memo.color === c.value ? 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-gray-800' : c.name === '白' ? 'border-gray-400 dark:border-gray-500' : 'border-gray-200 dark:border-gray-600'
+                    memo.color === c.value
+                      ? 'ring-2 ring-offset-1 dark:ring-offset-gray-800 ' + (c.whiteText ? 'ring-white/70' : 'ring-gray-400 dark:ring-gray-500')
+                      : c.value === '#ffffff'
+                        ? 'border-gray-400 dark:border-gray-500'
+                        : 'border-white/20 dark:border-white/10'
                   }`}
                   style={{ backgroundColor: isDark ? c.dark : c.value }}
                   title={c.name}
@@ -1517,6 +1829,9 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
         </div>,
         document.body
       )}
+
+      {expandEditorPortal}
+      {aiChatPanel}
     </div>
   );
 });

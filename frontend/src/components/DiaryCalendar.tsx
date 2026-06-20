@@ -294,13 +294,13 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
                   dragOverDay === day
                     ? 'bg-blue-200 dark:bg-blue-800 ring-2 ring-blue-400 dark:ring-blue-500'
                     : isToday
-                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold'
+                    ? 'bg-[#3f587f] dark:bg-[#3f587f] text-white dark:text-white font-semibold'
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                 }`}
               >
                 <span>{day}</span>
                 {hasEntry && (
-                  <span className={`absolute bottom-0.5 w-1 h-1 rounded-full ${isToday ? 'bg-blue-500' : 'bg-gray-400 dark:bg-gray-500'}`} />
+                  <span className={`absolute bottom-0.5 w-1 h-1 rounded-full ${isToday ? 'bg-white' : 'bg-gray-400 dark:bg-gray-500'}`} />
                 )}
               </button>
             );
@@ -433,7 +433,7 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
                       onClick={() => handleMonthClick(item.year, m)}
                       className={`px-2 py-1 text-xs rounded transition-colors ${
                         item.year === year && m === month
-                          ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium'
+                          ? 'bg-[#3f587f] dark:bg-[#3f587f] text-white dark:text-white font-medium'
                           : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
                       }`}
                     >

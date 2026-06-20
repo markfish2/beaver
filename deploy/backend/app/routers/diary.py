@@ -58,4 +58,4 @@ def get_diary_summary(
     current_user: schemas.User = Depends(get_current_user)
 ):
     tasks, tags = crud.get_diary_summary(db)
-    return schemas.DiarySummaryResponse(tasks=tasks, tags=tags)
+    return {"tasks": tasks, "tags": tags}
