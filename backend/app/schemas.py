@@ -403,6 +403,7 @@ class AIConfigBase(BaseModel):
     api_url: str
     api_key: str
     model: str
+    purpose: str = "chat"          # chat/embedding
     is_default: bool = False
 
 class AIConfigCreate(AIConfigBase):
