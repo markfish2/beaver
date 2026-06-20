@@ -18,11 +18,31 @@ EMBEDDING_DIMENSIONS = 1536  # OpenAI text-embedding-3-small
 
 
 def get_embedding_config(db: Session):
-    """获取用于 embedding 的 AI 配置"""
-    config = crud.get_default_ai_config(db)
-    if not config:
-        return None
-    return config
+    """获取用于 embedding 的 AI 配置（优先找 purpose=embedding 的配置）"""
+    # 先找专用 embedding 配置
+    from sqlalchemy import text
+    row = db.execute(
+        text("SELECT id FROM ai_configs WHERE purpose = 'embedding' LIMIT 1")
+    ).fetchone()
+    if row:
+        config = db.query(models.AIConfig).filter(models.AIConfig.id == row[0]).first()
+        if config:
+            return config
+    # 回退到默认配置
+    return crud.get_default_ai_config(db)
+
+
+def _get_embedding_model(config) -> str:
+    """根据 provider 确定 embedding 模型名"""
+    provider = config.provider.lower()
+    model = config.model
+    if 'openai' in provider:
+        return "text-embedding-3-small"
+    if 'deepseek' in provider:
+        return "deepseek-embedding"
+    if 'qwen' in provider or 'dashscope' in provider:
+        return "text-embedding-v3"
+    return model
 
 
 def chunk_text(text: str, max_chars: int = 800, min_chars: int = 50) -> list[str]:
@@ -68,9 +88,7 @@ async def check_embedding_support(config) -> bool:
     else:
         embedding_url = f"{api_url}/v1/embeddings"
 
-    model = config.model
-    if 'openai' in config.provider.lower():
-        model = "text-embedding-3-small"
+    model = _get_embedding_model(config)
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -98,11 +116,7 @@ async def generate_embedding(text: str, config) -> Optional[list[float]]:
     else:
         embedding_url = f"{api_url}/v1/embeddings"
 
-    # 根据 provider 确定 embedding 模型
-    model = config.model
-    # 某些 provider 使用不同的 embedding 模型名
-    if 'openai' in config.provider.lower():
-        model = "text-embedding-3-small"
+    model = _get_embedding_model(config)
 
     try:
         async with httpx.AsyncClient(timeout=30) as client:
