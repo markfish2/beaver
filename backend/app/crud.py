@@ -233,6 +233,7 @@ def delete_document(db: Session, document_id: uuid.UUID, delete_children: bool =
             db_doc.parent_id = None
             db_doc.deleted_at = now
             db.commit()
+        _delete_embeddings("document", str(document_id))
         return True
     return False
 
@@ -327,6 +328,7 @@ def permanent_delete_document(db: Session, document_id: uuid.UUID):
             permanent_delete_document(db, child.id)
     db.delete(db_doc)
     db.commit()
+    _delete_embeddings("document", str(document_id))
     return True
 
 
@@ -338,6 +340,7 @@ def permanent_delete_memo(db: Session, memo_id: uuid.UUID):
     db.delete(db_memo)
     db.commit()
     invalidate_memo_tags_cache()
+    _delete_embeddings("memo", str(memo_id))
     return True
 
 
@@ -441,6 +444,10 @@ def batch_move_nodes(db: Session, updates: list[schemas.NodeBatchUpdateItem]):
     return updated_nodes
 
 def delete_node(db: Session, node_id: uuid.UUID):
+    # 获取所属文档 ID（用于清理向量）
+    node = db.query(models.Node).filter(models.Node.id == node_id).first()
+    doc_id = str(node.document_id) if node else None
+
     # 使用循环收集所有子孙节点，然后批量删除
     all_ids = {node_id}
     to_process = {node_id}
@@ -458,11 +465,22 @@ def delete_node(db: Session, node_id: uuid.UUID):
         synchronize_session=False
     )
     db.commit()
+
+    # 清理该文档的向量数据
+    if doc_id:
+        _delete_embeddings("document", doc_id)
     return True
 
 def batch_delete_nodes(db: Session, node_ids: list[uuid.UUID]):
     if not node_ids:
         return True
+
+    # 收集涉及的文档 ID（用于清理向量）
+    doc_ids = set()
+    for nid in node_ids:
+        node = db.query(models.Node.document_id).filter(models.Node.id == nid).first()
+        if node:
+            doc_ids.add(str(node.document_id))
 
     # 收集所有需要删除的节点 ID（包括子孙节点）
     all_ids = set(node_ids)
@@ -481,6 +499,10 @@ def batch_delete_nodes(db: Session, node_ids: list[uuid.UUID]):
         synchronize_session=False
     )
     db.commit()
+
+    # 清理相关文档的向量数据
+    for doc_id in doc_ids:
+        _delete_embeddings("document", doc_id)
     return True
 
 def batch_create_nodes(db: Session, nodes_data: list[schemas.NodeBatchCreateItem]):
@@ -1024,6 +1046,7 @@ def delete_memo(db: Session, memo_id: uuid.UUID):
         db_memo.deleted_at = datetime.utcnow()
         db.commit()
         invalidate_memo_tags_cache()
+        _delete_embeddings("memo", str(memo_id))
         return True
     return False
 
