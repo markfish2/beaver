@@ -216,14 +216,14 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
   return (
     <div className="flex-1 flex flex-col h-full bg-white dark:bg-gray-900">
       {/* Messages */}
-      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${messages.length === 0 && !loadingConv ? 'flex flex-col justify-center' : ''}`}>
+      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${messages.length === 0 && !loadingConv ? 'flex flex-col justify-center items-center' : ''}`}>
         {loadingConv ? (
           <div className="text-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
           </div>
         ) : messages.length === 0 ? (
-          <div className="text-center">
-            <p className="text-lg text-gray-300 dark:text-gray-600 mb-6">有什么可以帮你的？</p>
+          <div className="text-center mb-4">
+            <p className="text-lg text-gray-300 dark:text-gray-600">有什么可以帮你的？</p>
           </div>
         ) : null}
         {messages.map((msg, i) => (
@@ -308,7 +308,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
       {/* Input */}
       <div className={`px-4 pb-4 ${messages.length === 0 ? 'pb-8' : ''}`}>
         <div className="max-w-2xl mx-auto">
-          <div className="flex items-center bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-full focus-within:border-gray-400 dark:focus-within:border-gray-500 transition-colors shadow-sm">
+          <div className="flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-full focus-within:border-gray-400 dark:focus-within:border-gray-500 transition-colors shadow-sm">
             {/* 模式切换按钮 */}
             <button
               onClick={() => setMode(mode === 'data' ? 'web' : 'data')}
@@ -332,7 +332,11 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
             <button
               onClick={handleSend}
               disabled={!input.trim() || loading}
-              className="flex-shrink-0 mr-1.5 w-8 h-8 flex items-center justify-center bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className={`flex-shrink-0 mr-1.5 w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
+                input.trim()
+                  ? 'bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
+              } disabled:opacity-30 disabled:cursor-not-allowed`}
             >
               <Send className="w-4 h-4" />
             </button>
