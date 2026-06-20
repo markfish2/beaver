@@ -876,7 +876,7 @@ export const aiChat = async function* (
   }
 };
 
-// AI 问答（流式返回，包含来源信息）
+// AI 问答（流式返回，按行分割 JSON）
 export const askAI = async function* (
   messages: { role: string; content: string }[],
   conversationId?: string
@@ -899,12 +899,19 @@ export const askAI = async function* (
   const reader = resp.body?.getReader();
   if (!reader) return;
   const decoder = new TextDecoder();
+  let buffer = '';
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    yield decoder.decode(value);
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      if (line.trim()) yield line;
+    }
   }
+  if (buffer.trim()) yield buffer;
 };
 
 // AI 对话历史
