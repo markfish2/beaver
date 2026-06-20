@@ -375,24 +375,28 @@ async def ask_ai(
         else:
             # 用 AI 扩展搜索关键词
             search_queries = await _expand_query(query, config)
-            # 收集所有关键词（原始查询 + 扩展查询的每个词）
+            # 收集关键词：原始查询的完整词组 + 扩展查询的词组和 bigram
             import re
             all_keywords = set()
-            for sq in [query] + search_queries:
-                # 提取2字以上的中文词组
+            # 原始查询：只提取完整词组（不做 bigram，避免无意义碎片）
+            for w in re.findall(r'[一-鿿]{2,}', query):
+                all_keywords.add(w)
+            for w in re.findall(r'[a-zA-Z]{3,}', query):
+                all_keywords.add(w)
+            # 扩展查询：提取词组 + bigram
+            for sq in search_queries:
                 for w in re.findall(r'[一-鿿]{2,}', sq):
                     all_keywords.add(w)
-                # 提取英文单词
                 for w in re.findall(r'[a-zA-Z]{3,}', sq):
                     all_keywords.add(w)
-            # 把长词组拆成2字 bigram（增加匹配机会）
+            # 把长词组拆成 bigram（只对扩展查询的词）
             extra = set()
             for kw in list(all_keywords):
                 if len(kw) > 2:
                     for i in range(len(kw) - 1):
                         extra.add(kw[i:i+2])
             all_keywords.update(extra)
-            # 过滤停用词和太短的
+            # 过滤停用词
             stopwords = {'笔记', '里面', '哪些', '什么', '怎么', '如何', '可以', '这个', '那个', '有没有', '是什么', '我的'}
             keywords = [kw for kw in all_keywords if len(kw) >= 2 and kw not in stopwords]
             # 搜索
