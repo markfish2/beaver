@@ -1009,7 +1009,6 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
         >
           <Star className={`w-5 h-5 ${viewMode === 'starred' && contentExpanded ? 'fill-current text-yellow-500' : ''}`} />
         </button>
-        <div className="border-t border-gray-200 dark:border-gray-700 my-1 w-6 mx-auto" />
         <button
           onClick={() => {
             setIsSearchMode(false);
@@ -1361,7 +1360,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                   <>
                     <div className="px-3 py-2 flex items-center justify-between">
                       <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        {viewMode === 'diary' ? '日记' : viewMode === 'starred' ? '收藏' : viewMode === 'memo' ? '随想笔记' : viewMode === 'user' ? '用户' : '文件'}
+                        {viewMode === 'diary' ? '日记' : viewMode === 'starred' ? '收藏' : viewMode === 'memo' ? '随想笔记' : viewMode === 'user' ? '用户' : viewMode === 'ai' ? 'AI 问答' : '文件'}
                       </span>
                       <button onClick={toggleSidebar} className="w-5 h-5 flex items-center justify-center rounded text-[#8B8B80] hover:text-[#5A5A52] hover:bg-[#EDEDE8] dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-colors shrink-0" title="收起面板">
                         <ChevronLeft className="w-4 h-4" />
