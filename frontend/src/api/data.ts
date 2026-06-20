@@ -81,8 +81,8 @@ export const getDocument = async (id: string): Promise<Document> => {
   return response.data;
 };
 
-export const createDocument = async (title: string, type: string = 'document', parent_id: string | null = null, sort_order: number = Date.now()) => {
-  const response = await api.post<Document>('/documents/', { title, type, parent_id, sort_order });
+export const createDocument = async (title: string, type: string = 'document', parent_id: string | null = null, sort_order: number = Date.now(), aiExcluded: boolean = false) => {
+  const response = await api.post<Document>('/documents/', { title, type, parent_id, sort_order, ai_excluded: aiExcluded });
   dataCache.invalidate('documents:');
   return response.data;
 };
@@ -375,8 +375,8 @@ export interface MemoHeatmapResponse {
   days: Record<string, number>;
 }
 
-export const createMemo = async (content: string): Promise<Memo> => {
-  const response = await api.post<Memo>('/memos/', { content });
+export const createMemo = async (content: string, aiExcluded: boolean = false): Promise<Memo> => {
+  const response = await api.post<Memo>('/memos/', { content, ai_excluded: aiExcluded });
   dataCache.invalidate('memos:');
   return response.data;
 };

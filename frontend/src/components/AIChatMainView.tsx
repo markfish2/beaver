@@ -67,7 +67,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
   const handleSaveToMemo = useCallback(async (content: string) => {
     setSaving(true);
     try {
-      await createMemo(content);
+      await createMemo(content, true);
       setSaveMenuIndex(null);
       alert('已保存到随想');
     } catch (e) {
@@ -82,7 +82,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
     setSaving(true);
     try {
       const title = content.split('\n')[0].slice(0, 50) || 'AI 回复';
-      const doc = await createDocument(title, 'note');
+      const doc = await createDocument(title, 'note', null, Date.now(), true);
       await createNode(doc.id, content);
       addDocument(doc);
       setSaveMenuIndex(null);

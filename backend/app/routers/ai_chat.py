@@ -130,7 +130,21 @@ def _search_notes(db: Session, query: str, limit: int = 10) -> list[dict]:
                 "snippet": snippet,
             })
 
-    return results[:limit]
+    # 去重：按 id 去除完全重复，按 title 去除相似结果
+    seen_ids = set()
+    seen_titles = set()
+    deduped = []
+    for r in results:
+        if r["id"] in seen_ids:
+            continue
+        title_key = re.sub(r'[\s\W]', '', r["title"]) if r["title"] else ""
+        if title_key and title_key in seen_titles:
+            continue
+        seen_ids.add(r["id"])
+        if title_key:
+            seen_titles.add(title_key)
+        deduped.append(r)
+    return deduped[:limit]
 
 
 def _search_todos(db: Session, query: str, limit: int = 10) -> list[dict]:
