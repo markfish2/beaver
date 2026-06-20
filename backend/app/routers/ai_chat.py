@@ -374,21 +374,18 @@ async def ask_ai(
         else:
             # 用 AI 扩展搜索关键词
             search_queries = await _expand_query(query, config)
-            # 收集关键词：原始查询的完整词组 + 扩展查询的词组和 bigram
+            # 收集关键词：扩展查询的词组和 bigram（不含原始查询，避免无意义碎片）
             import re
             all_keywords = set()
-            # 原始查询：只提取完整词组（不做 bigram，避免无意义碎片）
-            for w in re.findall(r'[一-鿿]{2,}', query):
-                all_keywords.add(w)
-            for w in re.findall(r'[a-zA-Z]{3,}', query):
-                all_keywords.add(w)
-            # 扩展查询：提取词组 + bigram
+            # 扩展查询：提取词组
             for sq in search_queries:
+                if sq == query:
+                    continue  # 跳过原始查询
                 for w in re.findall(r'[一-鿿]{2,}', sq):
                     all_keywords.add(w)
                 for w in re.findall(r'[a-zA-Z]{3,}', sq):
                     all_keywords.add(w)
-            # 把长词组拆成 bigram（只对扩展查询的词）
+            # 把长词组拆成 bigram
             extra = set()
             for kw in list(all_keywords):
                 if len(kw) > 2:
