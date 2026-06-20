@@ -879,7 +879,8 @@ export const aiChat = async function* (
 // AI 问答（流式返回，按行分割 JSON）
 export const askAI = async function* (
   messages: { role: string; content: string }[],
-  conversationId?: string
+  conversationId?: string,
+  mode: 'data' | 'web' = 'data'
 ): AsyncGenerator<string> {
   const token = localStorage.getItem('token');
   const resp = await fetch('/api/ai/ask', {
@@ -888,7 +889,7 @@ export const askAI = async function* (
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`
     },
-    body: JSON.stringify({ messages, conversation_id: conversationId })
+    body: JSON.stringify({ messages, conversation_id: conversationId, mode })
   });
 
   if (!resp.ok) {

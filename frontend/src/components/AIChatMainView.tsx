@@ -47,6 +47,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
   const [loadingConv, setLoadingConv] = useState(false);
   const [saveMenuIndex, setSaveMenuIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [mode, setMode] = useState<'data' | 'web'>('data');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const saveMenuRef = useRef<HTMLDivElement>(null);
@@ -130,7 +131,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
       let sources: Source[] = [];
       let convId = conversationId || undefined;
 
-      for await (const chunk of askAI(newMessages, convId)) {
+      for await (const chunk of askAI(newMessages, convId, mode)) {
         try {
           const data = JSON.parse(chunk);
           if (data.type === 'conversation_id') {
@@ -197,7 +198,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
     } finally {
       setLoading(false);
     }
-  }, [input, messages, loading, conversationId, onConversationCreated]);
+  }, [input, messages, loading, conversationId, onConversationCreated, mode]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -307,13 +308,38 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
 
       {/* Input */}
       <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+        <div className="max-w-3xl mx-auto">
+          {/* 模式切换 */}
+          <div className="flex gap-1 mb-2">
+            <button
+              onClick={() => setMode('data')}
+              className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                mode === 'data'
+                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium'
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              📚 数据
+            </button>
+            <button
+              onClick={() => setMode('web')}
+              className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                mode === 'web'
+                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium'
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              🌐 网络
+            </button>
+          </div>
+        </div>
         <div className="flex items-end gap-2 max-w-3xl mx-auto">
           <textarea
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="输入问题..."
+            placeholder={mode === 'data' ? '基于笔记内容回答...' : '输入任何问题...'}
             rows={1}
             className="flex-1 resize-none px-4 py-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg placeholder-gray-400 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
             style={{ maxHeight: 120 }}

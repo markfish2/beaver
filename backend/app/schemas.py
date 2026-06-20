@@ -452,3 +452,4 @@ class AIChatRequest(BaseModel):
     context: str = ""
     ai_config_id: Optional[UUID] = None
     conversation_id: Optional[UUID] = None
+    mode: str = "data"  # "data" = 搜索本地笔记, "web" = 网络问答

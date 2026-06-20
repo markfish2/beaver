@@ -323,39 +323,37 @@ async def ask_ai(
     if not query.strip():
         raise HTTPException(status_code=400, detail="消息内容为空")
 
-    # 检测是否支持向量搜索
-    from ..vector_search import check_embedding_support, search_similar
-    embedding_supported = await check_embedding_support(config)
-
-    if embedding_supported:
-        # 使用向量搜索
-        sources = await search_similar(db, query, config)
+    # 根据模式构建 prompt
+    sources = []
+    if request.mode == "web":
+        # 网络模式：直接问答，不搜索本地笔记
+        system_prompt = "你是一个智能助手。请直接回答用户的问题，用中文回答。回答要简洁准确。"
     else:
-        # 使用关键词搜索 + Query Expansion
-        search_queries = await _expand_query(query, config)
+        # 数据模式：搜索本地笔记
+        from ..vector_search import check_embedding_support, search_similar
+        embedding_supported = await check_embedding_support(config)
 
-        sources = []
-        seen_ids = set()
-        for sq in search_queries:
-            results = _search_notes(db, sq)
-            for r in results:
-                key = f"{r['type']}:{r['id']}"
-                if key not in seen_ids:
-                    seen_ids.add(key)
-                    sources.append(r)
+        if embedding_supported:
+            sources = await search_similar(db, query, config)
+        else:
+            search_queries = await _expand_query(query, config)
+            seen_ids = set()
+            for sq in search_queries:
+                results = _search_notes(db, sq)
+                for r in results:
+                    key = f"{r['type']}:{r['id']}"
+                    if key not in seen_ids:
+                        seen_ids.add(key)
+                        sources.append(r)
+            if not sources:
+                sources = _search_notes(db, query)
 
-        # 如果扩展搜索没有结果，回退到原始查询
-        if not sources:
-            sources = _search_notes(db, query)
+        context_parts = []
+        for i, source in enumerate(sources, 1):
+            context_parts.append(f"[{i}] {source['type'].upper()}: {source['title']}\n{source['snippet']}")
+        context = "\n\n".join(context_parts) if context_parts else "未找到相关笔记。"
 
-    # 构建上下文
-    context_parts = []
-    for i, source in enumerate(sources, 1):
-        context_parts.append(f"[{i}] {source['type'].upper()}: {source['title']}\n{source['snippet']}")
-    context = "\n\n".join(context_parts) if context_parts else "未找到相关笔记。"
-
-    # 构建 prompt
-    system_prompt = f"""你是一个笔记助手。根据用户的笔记内容回答问题。
+        system_prompt = f"""你是一个笔记助手。根据用户的笔记内容回答问题。
 
 用户的笔记内容：
 ---
