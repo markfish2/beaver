@@ -307,50 +307,41 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+      <div className="p-4">
         <div className="max-w-3xl mx-auto">
-          {/* 模式切换 */}
-          <div className="flex gap-1 mb-2">
+          <div className="flex items-end gap-0 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl focus-within:border-gray-300 dark:focus-within:border-gray-600 transition-colors">
+            {/* 模式切换按钮 */}
             <button
-              onClick={() => setMode('data')}
-              className={`px-3 py-1 text-xs rounded-full transition-colors ${
+              onClick={() => setMode(mode === 'data' ? 'web' : 'data')}
+              className={`flex-shrink-0 ml-2 mb-2.5 px-2.5 py-1.5 text-xs rounded-full transition-all ${
                 mode === 'data'
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium'
-                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50'
+                  : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50'
               }`}
+              title={mode === 'data' ? '当前：数据模式，点击切换' : '当前：网络模式，点击切换'}
             >
-              📚 数据
+              {mode === 'data' ? '📚 数据' : '🌐 网络'}
             </button>
+            {/* 输入框 */}
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={mode === 'data' ? '基于笔记内容回答...' : '输入任何问题...'}
+              rows={1}
+              className="flex-1 resize-none py-3 px-2 text-sm bg-transparent placeholder-gray-400 text-gray-800 dark:text-gray-200 focus:outline-none"
+              style={{ maxHeight: 120 }}
+            />
+            {/* 发送按钮 */}
             <button
-              onClick={() => setMode('web')}
-              className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                mode === 'web'
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium'
-                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
+              onClick={handleSend}
+              disabled={!input.trim() || loading}
+              className="flex-shrink-0 mr-2 mb-2.5 p-2 bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
-              🌐 网络
+              <Send className="w-4 h-4" />
             </button>
           </div>
-        </div>
-        <div className="flex items-end gap-2 max-w-3xl mx-auto">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={mode === 'data' ? '基于笔记内容回答...' : '输入任何问题...'}
-            rows={1}
-            className="flex-1 resize-none px-4 py-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg placeholder-gray-400 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            style={{ maxHeight: 120 }}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || loading}
-            className="p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <Send className="w-4 h-4" />
-          </button>
         </div>
       </div>
     </div>
