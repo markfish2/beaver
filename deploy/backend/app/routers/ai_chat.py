@@ -412,9 +412,17 @@ async def ask_ai(
             full_response = error_msg
             yield json.dumps({"type": "error", "content": error_msg}, ensure_ascii=False)
         finally:
-            # 保存 AI 回复到数据库
+            # 保存 AI 回复到数据库（使用新 session，因为 FastAPI 已关闭注入的 db）
             if full_response:
                 sources_json = json.dumps(sources, ensure_ascii=False) if sources else None
-                crud.add_message(db, conv.id, "assistant", full_response, sources_json)
+                from ..database import SessionLocal
+                save_db = SessionLocal()
+                try:
+                    crud.add_message(save_db, conv.id, "assistant", full_response, sources_json)
+                except Exception:
+                    save_db.rollback()
+                    raise
+                finally:
+                    save_db.close()
 
     return StreamingResponse(generate(), media_type="text/plain")
