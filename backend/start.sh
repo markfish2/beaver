@@ -30,6 +30,8 @@ sqlite3 /app/data/app.db "ALTER TABLE nodes ADD COLUMN is_in_progress BOOLEAN DE
 sqlite3 /app/data/app.db "ALTER TABLE nodes ADD COLUMN content_type VARCHAR(20) DEFAULT 'text';" 2>/dev/null && echo "Added content_type column" || echo "content_type column already exists"
 sqlite3 /app/data/app.db "ALTER TABLE nodes ADD COLUMN file_path VARCHAR(500);" 2>/dev/null && echo "Added file_path column" || echo "file_path column already exists"
 sqlite3 /app/data/app.db "ALTER TABLE nodes ADD COLUMN file_name VARCHAR(255);" 2>/dev/null && echo "Added file_name column" || echo "file_name column already exists"
+sqlite3 /app/data/app.db "ALTER TABLE nodes ADD COLUMN is_collapsed BOOLEAN DEFAULT 0;" 2>/dev/null && echo "Added is_collapsed column" || echo "is_collapsed column already exists"
+sqlite3 /app/data/app.db "ALTER TABLE nodes ADD COLUMN version INTEGER DEFAULT 1;" 2>/dev/null && echo "Added nodes.version column" || echo "nodes.version column already exists"
 
 # Document 表字段迁移
 sqlite3 /app/data/app.db "ALTER TABLE documents ADD COLUMN is_pinned BOOLEAN DEFAULT 0;" 2>/dev/null && echo "Added is_pinned column" || echo "is_pinned column already exists"
@@ -126,6 +128,64 @@ sqlite3 /app/data/app.db "CREATE TABLE IF NOT EXISTS ai_messages (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );" && echo "Created ai_messages table" || echo "ai_messages table already exists"
 sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_ai_messages_conversation ON ai_messages(conversation_id);" 2>/dev/null
+
+# Todos 表
+sqlite3 /app/data/app.db "CREATE TABLE IF NOT EXISTS todos (
+    id TEXT PRIMARY KEY,
+    content TEXT DEFAULT '',
+    is_completed BOOLEAN DEFAULT 0,
+    sort_order REAL DEFAULT 0.0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);" && echo "Created todos table" || echo "todos table already exists"
+sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_todos_created_at ON todos(created_at);" 2>/dev/null
+
+# API Tokens 表
+sqlite3 /app/data/app.db "CREATE TABLE IF NOT EXISTS api_tokens (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name VARCHAR(100) DEFAULT 'API Token',
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMP
+);" && echo "Created api_tokens table" || echo "api_tokens table already exists"
+sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_api_tokens_user_id ON api_tokens(user_id);" 2>/dev/null
+sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_api_tokens_token_hash ON api_tokens(token_hash);" 2>/dev/null
+
+# Habits 表
+sqlite3 /app/data/app.db "CREATE TABLE IF NOT EXISTS habits (
+    id TEXT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    icon VARCHAR(10) DEFAULT 'emoji',
+    sort_order REAL DEFAULT 0.0,
+    is_archived BOOLEAN DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);" && echo "Created habits table" || echo "habits table already exists"
+
+# Habit Records 表
+sqlite3 /app/data/app.db "CREATE TABLE IF NOT EXISTS habit_records (
+    id TEXT PRIMARY KEY,
+    habit_id TEXT NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+    record_date VARCHAR(10) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);" && echo "Created habit_records table" || echo "habit_records table already exists"
+sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_habit_records_habit_id ON habit_records(habit_id);" 2>/dev/null
+sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_habit_records_record_date ON habit_records(record_date);" 2>/dev/null
+
+# Excalidraw 数据表
+sqlite3 /app/data/app.db "CREATE TABLE IF NOT EXISTS excalidraw_data (
+    id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL UNIQUE REFERENCES documents(id) ON DELETE CASCADE,
+    scene_data TEXT,
+    thumbnail TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);" && echo "Created excalidraw_data table" || echo "excalidraw_data table already exists"
+sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_excalidraw_data_document_id ON excalidraw_data(document_id);" 2>/dev/null
+
+# Documents 表补充迁移
+sqlite3 /app/data/app.db "ALTER TABLE documents ADD COLUMN version INTEGER DEFAULT 1;" 2>/dev/null && echo "Added documents.version column" || echo "documents.version column already exists"
+sqlite3 /app/data/app.db "ALTER TABLE documents ADD COLUMN updated_at TIMESTAMP;" 2>/dev/null && echo "Added documents.updated_at column" || echo "documents.updated_at column already exists"
 
 echo "Database migrations complete."
 
