@@ -5,7 +5,7 @@ AI 问答路由：基于笔记内容的检索问答（使用向量搜索）
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, func
+from sqlalchemy import and_, or_, func
 from .. import crud, schemas, models
 from ..database import get_db
 from ..dependencies import get_current_user
@@ -37,8 +37,9 @@ def _search_notes(db: Session, query: str, limit: int = 10) -> list[dict]:
                 keywords.append(seg[i:i+2])
     if not keywords:
         keywords = [query.strip()]
-    # 过滤太短的关键词（避免匹配过多结果）
-    keywords = [kw for kw in keywords if len(kw) >= 2]
+    # 过滤太短和太常见的关键词
+    stopwords = {'笔记', '里面', '哪些', '什么', '怎么', '如何', '可以', '这个', '那个', '有没有', '是什么'}
+    keywords = [kw for kw in keywords if len(kw) >= 2 and kw not in stopwords]
 
     # 搜索 memos（排除 ai_excluded 和已删除）
     memo_conditions = [
@@ -46,12 +47,18 @@ def _search_notes(db: Session, query: str, limit: int = 10) -> list[dict]:
         models.Memo.ai_excluded == False,
         models.Memo.is_archived == False,
     ]
-    # 任一关键词匹配即可
-    keyword_conditions = [models.Memo.content.like(f"%{kw}%") for kw in keywords]
+    # 优先 AND 匹配（所有关键词都要出现），无结果时回退到 OR
+    and_conditions = [models.Memo.content.like(f"%{kw}%") for kw in keywords]
     memos = db.query(models.Memo).filter(
         *memo_conditions,
-        or_(*keyword_conditions)
+        and_(*and_conditions)
     ).limit(limit).all()
+    if not memos and len(keywords) > 1:
+        keyword_conditions = [models.Memo.content.like(f"%{kw}%") for kw in keywords]
+        memos = db.query(models.Memo).filter(
+            *memo_conditions,
+            or_(*keyword_conditions)
+        ).limit(limit).all()
 
     for memo in memos:
         # 提取匹配片段
@@ -70,9 +77,14 @@ def _search_notes(db: Session, query: str, limit: int = 10) -> list[dict]:
             models.Node.note.like(f"%{kw}%")
         ) for kw in keywords
     ]
+    # 优先 AND 匹配
     nodes = db.query(models.Node).filter(
-        or_(*node_keyword_conditions)
+        and_(*node_keyword_conditions)
     ).limit(limit).all()
+    if not nodes and len(keywords) > 1:
+        nodes = db.query(models.Node).filter(
+            or_(*node_keyword_conditions)
+        ).limit(limit).all()
 
     # 按 document 分组，每个 document 只取最相关的片段
     doc_snippets = {}
