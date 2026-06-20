@@ -213,17 +213,15 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
     }
   };
 
+  const isEmpty = messages.length === 0 && !loadingConv;
+
   return (
-    <div className="flex-1 flex flex-col h-full bg-white dark:bg-gray-900">
+    <div className={`flex-1 flex flex-col h-full bg-white dark:bg-gray-900 ${isEmpty ? 'items-center justify-center' : ''}`}>
       {/* Messages */}
-      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${messages.length === 0 && !loadingConv ? 'flex flex-col justify-center items-center' : ''}`}>
+      <div className={`${isEmpty ? 'hidden' : 'flex-1 overflow-y-auto p-4 space-y-4'}`}>
         {loadingConv ? (
           <div className="text-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="text-center mb-4">
-            <p className="text-lg text-gray-300 dark:text-gray-600">有什么可以帮你的？</p>
           </div>
         ) : null}
         {messages.map((msg, i) => (
@@ -306,7 +304,10 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
       </div>
 
       {/* Input */}
-      <div className={`px-4 pb-4 ${messages.length === 0 ? 'pb-8' : ''}`}>
+      <div className={`px-4 ${isEmpty ? 'w-full max-w-2xl' : 'pb-4'}`}>
+        {isEmpty && (
+          <p className="text-lg text-gray-300 dark:text-gray-600 text-center mb-4">有什么可以帮你的？</p>
+        )}
         <div className="max-w-2xl mx-auto">
           <div className="flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-full focus-within:border-gray-400 dark:focus-within:border-gray-500 transition-colors shadow-sm">
             {/* 模式切换按钮 */}
