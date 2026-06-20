@@ -309,11 +309,11 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
       {/* Input */}
       <div className="p-4">
         <div className="max-w-3xl mx-auto">
-          <div className="flex items-end gap-0 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl focus-within:border-gray-300 dark:focus-within:border-gray-600 transition-colors">
+          <div className="flex items-center gap-0 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl focus-within:border-gray-300 dark:focus-within:border-gray-600 transition-colors">
             {/* 模式切换按钮 */}
             <button
               onClick={() => setMode(mode === 'data' ? 'web' : 'data')}
-              className={`flex-shrink-0 ml-2 mb-2.5 px-2.5 py-1.5 text-xs rounded-full transition-all ${
+              className={`flex-shrink-0 ml-2 px-2.5 py-1.5 text-xs rounded-full transition-all ${
                 mode === 'data'
                   ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50'
                   : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50'
@@ -337,7 +337,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
             <button
               onClick={handleSend}
               disabled={!input.trim() || loading}
-              className="flex-shrink-0 mr-2 mb-2.5 p-2 bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="flex-shrink-0 mr-2 p-2 bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               <Send className="w-4 h-4" />
             </button>
