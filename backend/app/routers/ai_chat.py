@@ -69,13 +69,13 @@ def _search_notes(db: Session, query: str, keywords: list[str] = None, limit: in
             if score > 0:
                 scored_memos.append((score, memo))
         scored_memos.sort(key=lambda x: -x[0])
-        # 关键词 >= 3 个时，要求至少匹配 2 个；否则取最好的几个
+        # 关键词 >= 3 个时，要求至少匹配 2 个
         min_score = 2 if len(keywords) >= 3 else 1
         if scored_memos:
             filtered = [(s, m) for s, m in scored_memos if s >= min_score]
             if filtered:
                 memos = [m for _, m in filtered[:limit]]
-            else:
+            elif min_score == 1:
                 memos = [m for _, m in scored_memos[:3]]
 
         # 搜索节点
@@ -98,7 +98,7 @@ def _search_notes(db: Session, query: str, keywords: list[str] = None, limit: in
             filtered = [(s, n) for s, n in scored_nodes if s >= min_score]
             if filtered:
                 nodes = [n for _, n in filtered[:limit]]
-            else:
+            elif min_score == 1:
                 nodes = [n for _, n in scored_nodes[:3]]
 
     for memo in memos:
