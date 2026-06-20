@@ -27,18 +27,18 @@ def _search_notes(db: Session, query: str, limit: int = 10) -> list[dict]:
 
     # 提取搜索关键词（中文按 bigram 分词，英文按单词）
     keywords = []
-    # 英文单词
-    keywords.extend(re.findall(r'[a-zA-Z]+', query))
+    # 英文单词（至少3个字符）
+    keywords.extend([w for w in re.findall(r'[a-zA-Z]+', query) if len(w) >= 3])
     # 中文 bigram（连续2个汉字）
     chinese = re.findall(r'[一-鿿]+', query)
     for seg in chinese:
         if len(seg) >= 2:
             for i in range(len(seg) - 1):
                 keywords.append(seg[i:i+2])
-        elif len(seg) == 1:
-            keywords.append(seg)
     if not keywords:
         keywords = [query.strip()]
+    # 过滤太短的关键词（避免匹配过多结果）
+    keywords = [kw for kw in keywords if len(kw) >= 2]
 
     # 搜索 memos（排除 ai_excluded 和已删除）
     memo_conditions = [
@@ -299,6 +299,11 @@ async def ask_ai(
     if not config:
         raise HTTPException(status_code=400, detail="未配置 AI 模型，请先在设置中添加")
 
+    # 提前提取配置值为普通字符串，避免流式生成器中访问 SQLAlchemy 对象
+    api_url = config.api_url
+    api_key = config.api_key
+    model_name = config.model
+
     # 提取最后一条用户消息作为查询
     user_messages = [m for m in request.messages if m.get("role") == "user"]
     if not user_messages:
@@ -336,17 +341,23 @@ async def ask_ai(
         if embedding_supported:
             sources = await search_similar(db, query, config)
         else:
-            search_queries = await _expand_query(query, config)
-            seen_ids = set()
-            for sq in search_queries:
-                results = _search_notes(db, sq)
-                for r in results:
-                    key = f"{r['type']}:{r['id']}"
-                    if key not in seen_ids:
-                        seen_ids.add(key)
-                        sources.append(r)
-            if not sources:
-                sources = _search_notes(db, query)
+            # 优先用原始查询搜索
+            sources = _search_notes(db, query)
+            # 用扩展查询补充结果
+            if len(sources) < 5:
+                search_queries = await _expand_query(query, config)
+                seen_ids = {f"{r['type']}:{r['id']}" for r in sources}
+                for sq in search_queries:
+                    results = _search_notes(db, sq)
+                    for r in results:
+                        key = f"{r['type']}:{r['id']}"
+                        if key not in seen_ids:
+                            seen_ids.add(key)
+                            sources.append(r)
+                            if len(sources) >= 8:
+                                break
+                    if len(sources) >= 8:
+                        break
 
         context_parts = []
         for i, source in enumerate(sources, 1):
@@ -386,13 +397,13 @@ async def ask_ai(
             async with httpx.AsyncClient(timeout=120) as client:
                 async with client.stream(
                     "POST",
-                    f"{config.api_url}/chat/completions",
+                    f"{api_url}/chat/completions",
                     headers={
-                        "Authorization": f"Bearer {config.api_key}",
+                        "Authorization": f"Bearer {api_key}",
                         "Content-Type": "application/json"
                     },
                     json={
-                        "model": config.model,
+                        "model": model_name,
                         "messages": messages,
                         "stream": True
                     }
