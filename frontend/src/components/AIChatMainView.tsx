@@ -313,11 +313,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
             {/* 模式切换按钮 */}
             <button
               onClick={() => setMode(mode === 'data' ? 'web' : 'data')}
-              className={`flex-shrink-0 ml-2 px-2.5 py-1.5 text-xs rounded-full transition-all ${
-                mode === 'data'
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50'
-                  : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50'
-              }`}
+              className="flex-shrink-0 ml-2 px-2.5 py-1.5 text-xs rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
               title={mode === 'data' ? '当前：数据模式，点击切换' : '当前：网络模式，点击切换'}
             >
               {mode === 'data' ? '📚 数据' : '🌐 网络'}
