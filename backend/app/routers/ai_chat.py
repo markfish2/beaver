@@ -379,12 +379,22 @@ async def ask_ai(
             import re
             all_keywords = set()
             for sq in [query] + search_queries:
-                # 提取有意义的词（2字以上的中文词组、英文单词）
+                # 提取2字以上的中文词组
                 for w in re.findall(r'[一-鿿]{2,}', sq):
                     all_keywords.add(w)
+                # 提取英文单词
                 for w in re.findall(r'[a-zA-Z]{3,}', sq):
                     all_keywords.add(w)
-            keywords = list(all_keywords)
+            # 把长词组拆成2字 bigram（增加匹配机会）
+            extra = set()
+            for kw in list(all_keywords):
+                if len(kw) > 2:
+                    for i in range(len(kw) - 1):
+                        extra.add(kw[i:i+2])
+            all_keywords.update(extra)
+            # 过滤停用词和太短的
+            stopwords = {'笔记', '里面', '哪些', '什么', '怎么', '如何', '可以', '这个', '那个', '有没有', '是什么', '我的'}
+            keywords = [kw for kw in all_keywords if len(kw) >= 2 and kw not in stopwords]
             # 搜索
             sources = _search_notes(db, query, keywords=keywords if keywords else None)
 
