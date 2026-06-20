@@ -77,10 +77,7 @@ const AIChatSidebar = forwardRef<AIChatSidebarHandle, AIChatSidebarProps>(
     };
 
     return (
-      <div className="flex flex-col h-full bg-white dark:bg-gray-900">
-        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-sm font-medium text-gray-800 dark:text-gray-200">AI 问答</h2>
-        </div>
+      <div className="flex flex-col h-full bg-[#FAFAF5] dark:bg-gray-800">
         <div className="px-3 py-2">
           <button
             onClick={() => onSelectConversation(null)}
