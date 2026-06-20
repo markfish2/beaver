@@ -161,7 +161,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     return () => clearTimeout(timer);
   }, [searchQuery, isSearchMode]);
   const [viewMode, setViewMode] = useState<ViewMode>('diary');
-  const { userSubView, setUserSubView: setUserSubViewContext } = useUserView();
+  const { userSubView, setUserSubView: setUserSubViewContext, activeConvId, setActiveConvId } = useUserView();
   const [showNewMenu, setShowNewMenu] = useState(false);
 
   // Wrapper to update both context and notify parent
@@ -1011,7 +1011,18 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
         </button>
         <div className="border-t border-gray-200 dark:border-gray-700 my-1 w-6 mx-auto" />
         <button
-          onClick={() => { setIsSearchMode(false); setUserSubViewContext(null); viewMode === 'ai' && contentExpanded ? setContentExpanded(false) : (setViewMode('ai'), setContentExpanded(true)); }}
+          onClick={() => {
+            setIsSearchMode(false);
+            if (viewMode === 'ai' && contentExpanded) {
+              setContentExpanded(false);
+              setUserSubViewContext(null);
+              setActiveConvId(null);
+            } else {
+              setViewMode('ai');
+              setContentExpanded(true);
+              setUserSubViewContext('ai-chat');
+            }
+          }}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
             viewMode === 'ai' && contentExpanded && !isSearchMode
               ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
@@ -1216,14 +1227,13 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                           {renderFileTree(null, 0, true)}
                         </div>
                       ) : viewMode === 'ai' ? (
-                        <AIChatSidebar onNavigate={(type, id) => {
-                          if (type === 'memo') {
-                            navigate(`/?highlight=${id}`);
-                          } else {
-                            navigate(`/d/${id}`);
-                          }
-                          onDocumentSelect?.();
-                        }} />
+                        <AIChatSidebar
+                          onSelectConversation={(convId) => {
+                            setActiveConvId(convId);
+                            setUserSubViewContext('ai-chat');
+                          }}
+                          activeConvId={activeConvId}
+                        />
                       ) : (
                         <div className="px-1 py-1">
                           {renderFileTree(null, 0, false)}
@@ -1421,14 +1431,13 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                         ) : viewMode === 'starred' ? (
                           filteredDocuments.length === 0 ? <div className="p-4 text-xs text-gray-400 text-center">暂无收藏</div> : <div className="pt-2">{renderFileTree(null, 0)}</div>
                         ) : viewMode === 'ai' ? (
-                          <AIChatSidebar onNavigate={(type, id) => {
-                            if (type === 'memo') {
-                              navigate(`/?highlight=${id}`);
-                            } else {
-                              navigate(`/d/${id}`);
-                            }
-                            onDocumentSelect?.();
-                          }} />
+                          <AIChatSidebar
+                            onSelectConversation={(convId) => {
+                              setActiveConvId(convId);
+                              setUserSubViewContext('ai-chat');
+                            }}
+                            activeConvId={activeConvId}
+                          />
                         ) : (
                           filteredDocuments.filter(d => !d.parent_id).length === 0 ? <div className="p-4 text-xs text-gray-400 text-center">暂无文章</div> : <div className="pt-2">{renderFileTree(null, 0)}</div>
                         )}
