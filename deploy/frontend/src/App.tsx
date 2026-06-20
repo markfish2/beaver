@@ -91,10 +91,10 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
 
 const PageLoading = () => <div className="h-screen flex items-center justify-center bg-white dark:bg-gray-900 text-gray-500">Loading...</div>;
 
-// Wrapper to pass userSubView from context to MainArea
+// Wrapper to pass userSubView and activeConvId from context to MainArea
 function MainAreaWithUserView() {
-  const { userSubView } = useUserView();
-  return <MainArea userSubView={userSubView} />;
+  const { userSubView, activeConvId } = useUserView();
+  return <MainArea userSubView={userSubView} activeConvId={activeConvId} />;
 }
 
 function AppRoutes() {

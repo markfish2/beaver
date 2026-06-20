@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { RotateCcw, Trash2, AlertTriangle, Loader2, ListTree, FileText, StickyNote, Folder, PenTool } from 'lucide-react';
+import { RotateCcw, Trash2, Loader2, ListTree, FileText, StickyNote, Folder, PenTool } from 'lucide-react';
 import { getTrash, restoreFromTrash, permanentDelete, emptyTrash } from '../api/data';
 import type { TrashItem, TrashResponse } from '../api/data';
 import { showToast } from '../utils/toast';

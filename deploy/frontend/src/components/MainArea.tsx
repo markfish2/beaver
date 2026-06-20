@@ -21,6 +21,8 @@ import TokenPanel from './TokenPanel';
 import TrashPanel from './TrashPanel';
 import PasswordPanel from './PasswordPanel';
 import AISettingsPanel from './AISettingsPanel';
+import AIChatMainView from './AIChatMainView';
+import { useUserView } from '../context/UserViewContext';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { getNodes, getDocument, updateNode, updateDocument, deleteNode, createNode, createNodesBatch, uploadFile, batchUpdateNodes, batchMoveNodes, batchDeleteNodes, moveNode, getDiaryDayDates, getOrCreateDayNode, getMonthlyDiary } from '../api/data';
 import type { Node, Document } from '../api/data';
@@ -266,9 +268,11 @@ interface MainAreaProps {
   diaryDocId?: string | null;
   onDiaryDocChange?: (docId: string) => void;
   userSubView?: UserSubView | null;
+  activeConvId?: string | null;
 }
 
-const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null }: MainAreaProps = {}) => {
+const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, activeConvId = null }: MainAreaProps = {}) => {
+  const { setActiveConvId, refreshConvList } = useUserView();
   const { documentId: urlDocumentId } = useParams();
   const navigate = useNavigate();
   const documentId = diaryDocId || urlDocumentId;
@@ -2459,6 +2463,19 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null }: M
         {userSubView === 'ai' && <AISettingsPanel />}
         {userSubView === 'trash' && <TrashPanel />}
         {userSubView === 'password' && <PasswordPanel />}
+        {userSubView === 'ai-chat' && (
+          <AIChatMainView
+            conversationId={activeConvId}
+            onConversationCreated={(convId) => { setActiveConvId(convId); refreshConvList(); }}
+            onNavigate={(type, id) => {
+              if (type === 'memo') {
+                navigate(`/?highlight=${id}`);
+              } else {
+                navigate(`/d/${id}`);
+              }
+            }}
+          />
+        )}
       </div>
     );
   }
