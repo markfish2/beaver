@@ -224,8 +224,11 @@ def _extract_title(content: str) -> str:
     if not content:
         return "无标题"
     first_line = content.split('\n')[0].strip()
-    # 去掉 markdown 标记
-    title = first_line.lstrip('#').lstrip('*').lstrip('-').strip()
+    # 去掉 markdown 标记（标题、加粗、列表等）
+    import re
+    title = re.sub(r'^[#*\-\s]+', '', first_line)  # 去掉开头的 #, *, -, 空格
+    title = re.sub(r'[*_]{1,3}', '', title)         # 去掉 *, **, ***, _, __, ___
+    title = title.strip()
     return title[:50] if title else "无标题"
 
 
@@ -351,10 +354,7 @@ async def ask_ai(
 3. 如果笔记内容与问题无关，不要引用它
 4. 如果笔记中没有相关内容，如实告知"未找到相关笔记"
 5. 用中文回答
-6. 回答格式：
-   - 先回答问题
-   - 如果引用了笔记，在回答末尾用 "📎 来源：" 列出实际使用的笔记标题和类型
-   - 如果没有使用任何笔记，不要列出来源"""
+6. 直接回答问题，不要在回答中列出来源（来源会由系统自动展示）"""
 
     messages = [{"role": "system", "content": system_prompt}] + request.messages
 
