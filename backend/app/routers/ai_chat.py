@@ -69,13 +69,14 @@ def _search_notes(db: Session, query: str, keywords: list[str] = None, limit: in
             if score > 0:
                 scored_memos.append((score, memo))
         scored_memos.sort(key=lambda x: -x[0])
-        # 只取匹配关键词数 >= 2 的，或者全部结果中最好的几个
+        # 关键词 >= 3 个时，要求至少匹配 2 个；否则取最好的几个
+        min_score = 2 if len(keywords) >= 3 else 1
         if scored_memos:
-            max_score = scored_memos[0][0]
-            if max_score >= 2:
-                memos = [m for s, m in scored_memos if s >= 2][:limit]
+            filtered = [(s, m) for s, m in scored_memos if s >= min_score]
+            if filtered:
+                memos = [m for _, m in filtered[:limit]]
             else:
-                memos = [m for _, m in scored_memos[:limit]]
+                memos = [m for _, m in scored_memos[:3]]
 
         # 搜索节点
         node_kw_conds = [
@@ -94,11 +95,11 @@ def _search_notes(db: Session, query: str, keywords: list[str] = None, limit: in
                 scored_nodes.append((score, node))
         scored_nodes.sort(key=lambda x: -x[0])
         if scored_nodes:
-            max_score = scored_nodes[0][0]
-            if max_score >= 2:
-                nodes = [n for s, n in scored_nodes if s >= 2][:limit]
+            filtered = [(s, n) for s, n in scored_nodes if s >= min_score]
+            if filtered:
+                nodes = [n for _, n in filtered[:limit]]
             else:
-                nodes = [n for _, n in scored_nodes[:limit]]
+                nodes = [n for _, n in scored_nodes[:3]]
 
     for memo in memos:
         snippet = _extract_snippet(memo.content, query)
