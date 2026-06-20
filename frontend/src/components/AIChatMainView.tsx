@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { askAI, getAIConversation, createMemo, createDocument, createNode } from '../api/data';
+import { useDocuments } from '../context/DocumentContext';
 
 interface Source {
   id: string;
@@ -39,6 +40,7 @@ interface AIChatMainViewProps {
 }
 
 export default function AIChatMainView({ conversationId, onConversationCreated, onNavigate }: AIChatMainViewProps) {
+  const { addDocument } = useDocuments();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -82,6 +84,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
       const title = content.split('\n')[0].slice(0, 50) || 'AI 回复';
       const doc = await createDocument(title, 'note');
       await createNode(doc.id, content);
+      addDocument(doc);
       setSaveMenuIndex(null);
       if (onNavigate) onNavigate('note', doc.id);
     } catch (e) {
@@ -89,7 +92,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
     } finally {
       setSaving(false);
     }
-  }, [onNavigate]);
+  }, [onNavigate, addDocument]);
 
   // 加载已有对话消息
   useEffect(() => {
