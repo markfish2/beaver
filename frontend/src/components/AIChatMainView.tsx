@@ -238,10 +238,10 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
                 </div>
               )}
               {msg.role === 'assistant' && msg.content && !msg.content.startsWith('请求失败') && (
-                <div className="absolute -bottom-3 right-1" ref={saveMenuIndex === i ? saveMenuRef : undefined}>
+                <div className="flex justify-end mt-1.5 relative" ref={saveMenuIndex === i ? saveMenuRef : undefined}>
                   <button
                     onClick={(e) => { e.stopPropagation(); setSaveMenuIndex(saveMenuIndex === i ? null : i); }}
-                    className="p-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md shadow-sm text-gray-400 hover:text-blue-500 transition-colors"
+                    className="p-1 text-gray-400 hover:text-blue-500 rounded transition-colors"
                     title="保存"
                   >
                     <BookmarkPlus className="w-3.5 h-3.5" />
