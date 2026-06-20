@@ -135,33 +135,6 @@ def _search_notes(db: Session, query: str, keywords: list[str] = None, limit: in
 
     results.extend(list(doc_snippets.values())[:limit])
 
-    # 搜索普通笔记（markdown 内容）
-    note_docs = db.query(models.Document).filter(
-        models.Document.type == "note",
-        models.Document.deleted_at.is_(None),
-        models.Document.ai_excluded == False,
-    ).all()
-
-    for doc in note_docs:
-        note_conditions = [
-            or_(
-                models.Node.content.like(f"%{kw}%"),
-                models.Node.note.like(f"%{kw}%")
-            ) for kw in keywords
-        ]
-        nodes = db.query(models.Node).filter(
-            models.Node.document_id == doc.id,
-            or_(*note_conditions)
-        ).first()
-        if nodes:
-            snippet = _extract_snippet(nodes.content or nodes.note or "", query)
-            results.append({
-                "id": str(doc.id),
-                "title": doc.title,
-                "type": "note",
-                "snippet": snippet,
-            })
-
     # 去重：按 id 去除完全重复，按 title 去除相似结果
     seen_ids = set()
     seen_titles = set()
