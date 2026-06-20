@@ -358,23 +358,27 @@ async def ask_ai(
         if embedding_supported:
             sources = await search_similar(db, query, config)
         else:
-            # 优先用原始查询搜索
-            sources = _search_notes(db, query)
-            # 用扩展查询补充结果
-            if len(sources) < 5:
-                search_queries = await _expand_query(query, config)
-                seen_ids = {f"{r['type']}:{r['id']}" for r in sources}
-                for sq in search_queries:
-                    results = _search_notes(db, sq)
-                    for r in results:
-                        key = f"{r['type']}:{r['id']}"
-                        if key not in seen_ids:
-                            seen_ids.add(key)
-                            sources.append(r)
-                            if len(sources) >= 8:
-                                break
-                    if len(sources) >= 8:
-                        break
+            # 优先用扩展查询搜索（更精准）
+            search_queries = await _expand_query(query, config)
+            seen_ids = set()
+            for sq in search_queries:
+                results = _search_notes(db, sq)
+                for r in results:
+                    key = f"{r['type']}:{r['id']}"
+                    if key not in seen_ids:
+                        seen_ids.add(key)
+                        sources.append(r)
+                        if len(sources) >= 8:
+                            break
+                if len(sources) >= 8:
+                    break
+            # 用原始查询补充
+            if len(sources) < 3:
+                for r in _search_notes(db, query):
+                    key = f"{r['type']}:{r['id']}"
+                    if key not in seen_ids:
+                        seen_ids.add(key)
+                        sources.append(r)
 
         context_parts = []
         for i, source in enumerate(sources, 1):
