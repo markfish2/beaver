@@ -296,9 +296,11 @@ async def ask_ai(
     else:
         conv = crud.create_conversation(db)
 
-    # 保存用户消息
+    # 保存用户消息（提前捕获为普通值，避免后续访问 SQLAlchemy 对象）
+    conv_id_str = str(conv.id)
+    conv_uuid = conv.id
     user_query = user_messages[-1].get("content", "")
-    crud.add_message(db, conv.id, "user", user_query)
+    crud.add_message(db, conv_uuid, "user", user_query)
 
     query = user_messages[-1].get("content", "")
     if not query.strip():
@@ -363,7 +365,7 @@ async def ask_ai(
         nonlocal full_response
         try:
             # 先发送 conversation_id
-            yield json.dumps({"type": "conversation_id", "id": str(conv.id)}, ensure_ascii=False) + "\n"
+            yield json.dumps({"type": "conversation_id", "id": conv_id_str}, ensure_ascii=False) + "\n"
 
             # 发送来源信息
             if sources:
@@ -418,7 +420,7 @@ async def ask_ai(
                 from ..database import SessionLocal
                 save_db = SessionLocal()
                 try:
-                    crud.add_message(save_db, conv.id, "assistant", full_response, sources_json)
+                    crud.add_message(save_db, conv_uuid, "assistant", full_response, sources_json)
                 except Exception:
                     save_db.rollback()
                     raise
