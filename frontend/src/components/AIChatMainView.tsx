@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader2, FileText, ListTree, StickyNote, PenTool, BookmarkPlus, Database, Globe } from 'lucide-react';
+import { Send, Loader2, FileText, ListTree, StickyNote, PenTool, BookmarkPlus, Database, Globe, Wand2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { askAI, getAIConversation, createMemo, createDocument, createNode } from '../api/data';
+import { askAI, getAIConversation, createMemo, createDocument, createNode, getSkills, Skill } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -51,9 +51,29 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
   const [saveMenuIndex, setSaveMenuIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<'data' | 'web'>('data');
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [showSkillMenu, setShowSkillMenu] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const saveMenuRef = useRef<HTMLDivElement>(null);
+  const skillMenuRef = useRef<HTMLDivElement>(null);
+
+  // 加载 skills
+  useEffect(() => {
+    getSkills().then(setSkills).catch(() => {});
+  }, []);
+
+  // 点击外部关闭 skill 菜单
+  useEffect(() => {
+    if (!showSkillMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (skillMenuRef.current && !skillMenuRef.current.contains(e.target as Node)) {
+        setShowSkillMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showSkillMenu]);
 
   // 点击外部关闭保存菜单
   useEffect(() => {
@@ -328,6 +348,34 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
             >
               {mode === 'data' ? <Database className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
             </button>
+            {/* Skill 按钮 */}
+            <div className="relative" ref={skillMenuRef}>
+              <button
+                onClick={() => setShowSkillMenu(!showSkillMenu)}
+                className="flex-shrink-0 ml-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                title="Skills"
+              >
+                <Wand2 className="w-4 h-4" />
+              </button>
+              {showSkillMenu && skills.length > 0 && (
+                <div className="absolute left-0 bottom-full mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1.5 min-w-[180px] z-20">
+                  {skills.map(skill => (
+                    <button
+                      key={skill.id}
+                      onClick={() => {
+                        setInput(skill.prompt);
+                        setShowSkillMenu(false);
+                        setTimeout(() => inputRef.current?.focus(), 50);
+                      }}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                    >
+                      <span className="text-base">{skill.icon}</span>
+                      <span>{skill.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             {/* 输入框 */}
             <textarea
               ref={inputRef}
