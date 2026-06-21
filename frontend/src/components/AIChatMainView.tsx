@@ -342,7 +342,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
         <div className={`relative ${isEmpty ? 'mb-6' : ''}`}>
           {/* 光晕渐变背景 */}
           {isEmpty && (
-            <div className="absolute -inset-x-48 -inset-y-32 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, rgba(186,230,253,0.5) 0%, rgba(224,242,254,0.2) 50%, transparent 70%)' }} />
+            <div className="absolute -inset-x-96 -inset-y-64 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, rgba(186,230,253,0.5) 0%, rgba(224,242,254,0.2) 50%, transparent 70%)' }} />
           )}
           {isEmpty && (
             <p className="relative text-xl text-gray-800 dark:text-gray-200 text-center font-medium mb-6">
