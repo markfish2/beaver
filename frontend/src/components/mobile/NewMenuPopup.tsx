@@ -5,7 +5,7 @@ import { useDocuments } from '../../context/DocumentContext';
 
 interface NewMenuPopupProps {
   onClose: () => void;
-  onDocumentCreated: (id: string) => void;
+  onDocumentCreated: (id: string, type: string) => void;
 }
 
 export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopupProps) {
@@ -42,7 +42,7 @@ export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopu
           return;
       }
       addDocument(doc);
-      onDocumentCreated(doc.id);
+      onDocumentCreated(doc.id, type);
     } catch (error) {
       console.error('Failed to create document:', error);
     }

@@ -20,7 +20,6 @@ interface MobileLayoutProps {
 }
 
 // ToolbarSlot reads from MobileToolbarContext and renders MobileToolbar
-// Toolbar is position: fixed at bottom, above keyboard
 function ToolbarSlot({ showZoom, hasTabBar }: { showZoom?: boolean; hasTabBar?: boolean }) {
   const { isVisible, handlers } = useMobileToolbar();
   return (
@@ -47,14 +46,57 @@ function ToolbarSlot({ showZoom, hasTabBar }: { showZoom?: boolean; hasTabBar?: 
 export default function MobileLayout({ children }: MobileLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { activeConvId, setActiveConvId, refreshConvList } = useUserView();
+  const { activeConvId, setActiveConvId, refreshConvList, setUserSubView } = useUserView();
   const [activeTab, setActiveTab] = useState<MobileTab>('memos');
   const [showNewMenu, setShowNewMenu] = useState(false);
   const [showAIHistory, setShowAIHistory] = useState(false);
-  const prevTabRef = useRef<MobileTab>('memos');
   const [keyboardOpen, setKeyboardOpen] = useState(false);
 
-  // 监听键盘状态（由 MobileToolbar 通过 CustomEvent 通知）
+  // ── 状态导航：用 editingDocId 控制编辑器显示 ──
+  const [editingDocId, setEditingDocId] = useState<string | null>(null);
+  const [prevTab, setPrevTab] = useState<MobileTab>('memos');
+  const isEditing = editingDocId !== null;
+  // 标记是否由代码触发的 pushState，避免 popstate 重复处理
+  const programmaticNav = useRef(false);
+
+  // 初始化：从 URL 读取 editingDocId（处理直接访问 /d/{id} 的情况）
+  useEffect(() => {
+    const match = location.pathname.match(/^\/d\/(.+)$/);
+    if (match && !editingDocId) {
+      setEditingDocId(match[1]);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // editingDocId 变化时同步 URL（pushState 不触发 React 重渲染）
+  useEffect(() => {
+    if (editingDocId) {
+      programmaticNav.current = true;
+      window.history.pushState(null, '', `/d/${editingDocId}`);
+    }
+  }, [editingDocId]);
+
+  // 监听浏览器返回按钮（popstate）
+  useEffect(() => {
+    const handler = () => {
+      if (programmaticNav.current) {
+        programmaticNav.current = false;
+        return;
+      }
+      // 浏览器返回：从 URL 判断应该显示什么
+      const match = window.location.pathname.match(/^\/d\/(.+)$/);
+      if (match) {
+        setEditingDocId(match[1]);
+      } else {
+        setEditingDocId(null);
+        // 恢复 tab（从 URL 或默认）
+        setActiveTab('memos');
+      }
+    };
+    window.addEventListener('popstate', handler);
+    return () => window.removeEventListener('popstate', handler);
+  }, []);
+
+  // 监听键盘状态
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
@@ -66,9 +108,6 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
 
   // Diary state
   const [diaryDocId, setDiaryDocId] = useState<string | null>(null);
-
-  // Is user viewing a specific document (not diary tab)?
-  const isEditing = location.pathname.startsWith('/d/');
 
   // Load diary when switching to diary tab
   useEffect(() => {
@@ -84,8 +123,6 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
         const data = await getMonthlyDiary(y, m);
         if (cancelled) return;
         setDiaryDocId(data.document.id);
-
-        // Auto-create today's node if needed
         await getOrCreateDayNode(y, m, d);
       } catch (err) {
         console.error('Failed to load diary:', err);
@@ -100,39 +137,39 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     return () => { delete document.documentElement.dataset.mobileLayout; };
   }, []);
 
-  const prevEditingRef = useRef(false);
-  useEffect(() => {
-    if (prevEditingRef.current && !isEditing) {
-      setActiveTab(prevTabRef.current);
-    }
-    if (isEditing) {
-      prevTabRef.current = activeTab;
-    }
-    prevEditingRef.current = isEditing;
-  }, [isEditing, activeTab]);
+  // ── 进入编辑器 ──
+  const enterEditor = useCallback((id: string) => {
+    setPrevTab(activeTab);
+    setUserSubView(null);
+    setDiaryDocId(null);
+    setEditingDocId(id);
+  }, [activeTab, setUserSubView]);
+
+  // ── 返回 ──
+  const handleBack = useCallback(() => {
+    setEditingDocId(null);
+    setActiveTab(prevTab);
+    setUserSubView(null);
+    programmaticNav.current = true;
+    window.history.replaceState(null, '', '/');
+  }, [prevTab, setUserSubView]);
 
   const handleTabChange = useCallback((tab: MobileTab) => {
     if (tab === 'new') {
       setShowNewMenu(true);
       return;
     }
+    if (tab !== 'diary') {
+      setDiaryDocId(null);
+    }
     setActiveTab(tab);
-    // Navigate to root when switching away from editor (but not diary)
-    // Use replace to avoid polluting browser history stack
-    if (isEditing && tab !== 'diary') {
-      navigate('/', { replace: true });
+    // 切换 tab 时如果在编辑中，退出编辑
+    if (isEditing) {
+      setEditingDocId(null);
+      programmaticNav.current = true;
+      window.history.replaceState(null, '', '/');
     }
-  }, [isEditing, navigate]);
-
-  // location.key === "default" 表示用户直接通过 URL 打开（历史栈无上一页）
-  // 否则用 navigate(-1) 返回应用内上一页
-  const handleBack = useCallback(() => {
-    if (location.key === 'default') {
-      navigate('/', { replace: true });
-    } else {
-      navigate(-1);
-    }
-  }, [navigate, location.key]);
+  }, [isEditing]);
 
   const handleSearch = useCallback((query: string) => {
     navigate(`/search?q=${encodeURIComponent(query)}`);
@@ -142,10 +179,17 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     setShowNewMenu(false);
   }, []);
 
-  const handleDocumentCreated = useCallback((id: string) => {
+  const handleDocumentCreated = useCallback((id: string, type: string) => {
     setShowNewMenu(false);
-    navigate(`/d/${id}`);
-  }, [navigate]);
+    setUserSubView(null);
+    setDiaryDocId(null);
+    if (type === 'folder') {
+      setActiveTab('files');
+    } else {
+      setPrevTab(activeTab);
+      setEditingDocId(id);
+    }
+  }, [activeTab, setUserSubView]);
 
   // Determine top bar title
   const getTopBarTitle = () => {
@@ -161,7 +205,6 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
 
   const showTabBar = (!isEditing || activeTab === 'diary') && !keyboardOpen;
 
-
   return (
     <MobileToolbarProvider>
     <div className="flex flex-col bg-white dark:bg-gray-900" style={{ height: '100dvh' }}>
@@ -174,14 +217,14 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
 
       <div className="flex-1 overflow-hidden flex flex-col">
         {isEditing && activeTab !== 'diary' ? (
-          // Document editor mode: toolbar below topbar, then content
+          // Document editor mode
           <>
             <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 44px)', flexShrink: 0 }} />
             <ToolbarSlot showZoom={true} hasTabBar={false} />
             {children}
           </>
         ) : activeTab === 'diary' ? (
-          // Diary tab: todos + toolbar + inline MainArea
+          // Diary tab
           <div className="flex-1 overflow-hidden flex flex-col">
             <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 44px)', flexShrink: 0 }} />
             <div className="max-h-[40vh] overflow-y-auto scrollbar-none shrink-0">
@@ -204,7 +247,6 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
             <FileTreeView />
           </Suspense>
         ) : activeTab === 'ai' ? (
-          // AI 问答
           <div className="flex-1 flex flex-col overflow-hidden">
             <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 44px)', flexShrink: 0 }} />
             <div className="flex-1 relative overflow-hidden flex flex-col">
@@ -214,9 +256,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
                   onConversationCreated={(convId) => { setActiveConvId(convId); refreshConvList(); }}
                 />
               </div>
-              {/* 底部间距，避免输入框被 tab 栏遮挡 */}
               <div style={{ height: 'calc(60px + env(safe-area-inset-bottom, 0px))', flexShrink: 0 }} />
-              {/* 历史对话按钮 */}
               <button
                 onClick={() => setShowAIHistory(true)}
                 className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center bg-white/80 dark:bg-gray-800/80 backdrop-blur border border-gray-200 dark:border-gray-700 rounded-full shadow-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
@@ -225,7 +265,6 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
                 <MessageSquare className="w-4 h-4" />
               </button>
             </div>
-            {/* 历史对话侧边栏 */}
             {showAIHistory && (
               <>
                 <div
@@ -245,12 +284,10 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
             )}
           </div>
         ) : (
-          // Memos tab: MainArea renders MemoHome
           children
         )}
       </div>
 
-      {/* Fixed bottom tab bar */}
       {showTabBar && (
         <MobileBottomTabBar
           activeTab={activeTab}
@@ -269,7 +306,6 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   );
 }
 
-// Inline diary rendering - uses MainArea with diaryDocId prop
 import MainArea from '../MainArea';
 
 function DiaryMainArea({ diaryDocId, onDiaryDocChange }: { diaryDocId: string; onDiaryDocChange: (id: string) => void }) {
