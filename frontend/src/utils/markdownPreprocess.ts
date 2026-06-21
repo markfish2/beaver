@@ -97,7 +97,42 @@ export function stripAttachments(content: string): string {
     .trim();
 }
 
-/** Full preprocessing pipeline: strip tags/attachments, then normalize lists/highlights/code blocks. */
+/**
+ * 将 GitHub 风格的 callout 语法转换为 HTML
+ * 输入：> [!note] 标题\n> 内容
+ * 输出：<div class="callout callout-note"><div class="callout-title">📝 标题</div><div class="callout-content">内容</div></div>
+ */
+export function normalizeCallouts(content: string): string {
+  const calloutTypes: Record<string, { icon: string; label: string }> = {
+    note: { icon: '📝', label: '注意' },
+    tip: { icon: '💡', label: '提示' },
+    warning: { icon: '⚠️', label: '警告' },
+    danger: { icon: '🚨', label: '危险' },
+    info: { icon: 'ℹ️', label: '信息' },
+    question: { icon: '❓', label: '问题' },
+    quote: { icon: '💬', label: '引用' },
+  };
+
+  // 匹配 > [!type] title 开头的 blockquote 块
+  return content.replace(
+    /^>\s*\[!(\w+)\]\s*(.*?)\n((?:>.*\n?)*)/gm,
+    (_match, type: string, title: string, body: string) => {
+      const lowerType = type.toLowerCase();
+      const config = calloutTypes[lowerType] || { icon: '📌', label: type };
+      const icon = config.icon;
+      const displayTitle = title.trim() || config.label;
+      // 去掉每行开头的 > 和可选的空格
+      const cleanBody = body
+        .split('\n')
+        .map((line: string) => line.replace(/^>\s?/, ''))
+        .join('\n')
+        .trim();
+      return `<div class="callout callout-${lowerType}"><div class="callout-title">${icon} ${displayTitle}</div><div class="callout-content">${cleanBody}</div></div>\n`;
+    }
+  );
+}
+
+/** Full preprocessing pipeline: strip tags/attachments, then normalize lists/highlights/code blocks/callouts. */
 export function preprocessMarkdown(content: string): string {
-  return escapeFullWidthColon(normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(stripAttachments(stripTags(content)))))));
+  return escapeFullWidthColon(normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(stripAttachments(stripTags(normalizeCallouts(content))))))));
 }
