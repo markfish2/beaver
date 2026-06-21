@@ -1576,12 +1576,15 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       {/* 图片画廊 */}
       {images.length > 0 && (() => {
         const count = images.length;
-        const displayCount = Math.min(count, 4);
         const hasMore = count > 4;
-        // 每张图宽度 = (容器 - 左右padding 10px - 间距) / 数量
+        // 1张=50%, 2张=各50%, 3张=各33.3%, 4张=各25%
+        // 图片宽度 = (容器内容区 - 间距) / 数量
+        // 容器内容区 = 100% - 左右padding 10px
         // 间距 = (数量-1) * 5px
-        // 统一用 calc 公式：calc((100% - 10px - (n-1)*5px) / n)
-        const imgWidth = `calc((100% - 10px - ${displayCount - 1}px * 5) / ${displayCount})`;
+        const gapPx = (Math.min(count, 4) - 1) * 5;
+        const imgWidth = count === 1
+          ? 'calc(50% - 5px)'
+          : `calc((100% - 10px - ${gapPx}px) / ${Math.min(count, 4)})`;
         return (
           <div className={`mt-3 rounded-lg overflow-hidden border ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}>
             <div
