@@ -1615,7 +1615,6 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
           </div>
         );
       })()}
-      )}
 
       {/* 附件列表 */}
       {fileLinks.length > 0 && (
