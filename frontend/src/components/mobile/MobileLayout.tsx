@@ -47,7 +47,7 @@ function ToolbarSlot({ showZoom, hasTabBar }: { showZoom?: boolean; hasTabBar?: 
 export default function MobileLayout({ children }: MobileLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { activeConvId, setActiveConvId, refreshConvList } = useUserView();
+  const { activeConvId, setActiveConvId, refreshConvList, setUserSubView } = useUserView();
   const [activeTab, setActiveTab] = useState<MobileTab>('memos');
   const [showNewMenu, setShowNewMenu] = useState(false);
   const [showAIHistory, setShowAIHistory] = useState(false);
@@ -106,6 +106,8 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       setActiveTab(prevTabRef.current);
     }
     if (isEditing) {
+      // 进入编辑模式时清除用户子视图，确保 MainArea 渲染文档编辑器
+      setUserSubView(null);
       prevTabRef.current = activeTab;
     }
     prevEditingRef.current = isEditing;
@@ -152,11 +154,12 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       // 文件夹不需要打开编辑器，跳转到文件列表
       setActiveTab('files');
     } else {
-      // 清除日记状态，避免 diaryDocId 覆盖 URL 中的 documentId
+      // 清除日记状态和用户子视图，避免干扰文档加载
       setDiaryDocId(null);
+      setUserSubView(null);
       navigate(`/d/${id}`);
     }
-  }, [navigate]);
+  }, [navigate, setUserSubView]);
 
   // Determine top bar title
   const getTopBarTitle = () => {
