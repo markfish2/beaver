@@ -272,10 +272,11 @@ interface MainAreaProps {
 }
 
 const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, activeConvId = null }: MainAreaProps = {}) => {
-  const { setActiveConvId, refreshConvList } = useUserView();
+  const { setActiveConvId, refreshConvList, mobileEditingDocId } = useUserView();
   const { documentId: urlDocumentId } = useParams();
   const navigate = useNavigate();
-  const documentId = diaryDocId || urlDocumentId;
+  // mobileEditingDocId 优先（移动端状态导航），其次 diaryDocId，最后 URL
+  const documentId = mobileEditingDocId || diaryDocId || urlDocumentId;
   const [searchParams, setSearchParams] = useSearchParams();
   const { updateDocumentTitle, documents } = useDocuments();
   const { searchQuery, setSearchQuery } = useSearch();

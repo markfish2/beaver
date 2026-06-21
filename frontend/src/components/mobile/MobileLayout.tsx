@@ -46,7 +46,7 @@ function ToolbarSlot({ showZoom, hasTabBar }: { showZoom?: boolean; hasTabBar?: 
 export default function MobileLayout({ children }: MobileLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { activeConvId, setActiveConvId, refreshConvList, setUserSubView } = useUserView();
+  const { activeConvId, setActiveConvId, refreshConvList, setUserSubView, setMobileEditingDocId } = useUserView();
   const [activeTab, setActiveTab] = useState<MobileTab>('memos');
   const [showNewMenu, setShowNewMenu] = useState(false);
   const [showAIHistory, setShowAIHistory] = useState(false);
@@ -56,6 +56,11 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
   const [prevTab, setPrevTab] = useState<MobileTab>('memos');
   const isEditing = editingDocId !== null;
+
+  // 同步 editingDocId 到 context，让 MainArea 能读取
+  useEffect(() => {
+    setMobileEditingDocId(editingDocId);
+  }, [editingDocId, setMobileEditingDocId]);
   // 标记是否由代码触发的 pushState，避免 popstate 重复处理
   const programmaticNav = useRef(false);
 
