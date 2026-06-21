@@ -158,9 +158,10 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       // 文件夹跳转到文件列表 tab
       setActiveTab('files');
     } else {
-      navigate(`/d/${id}`);
+      // React Router v7 在移动端 navigate() 不触发重渲染，用 assign 强制跳转
+      window.location.assign(`/d/${id}`);
     }
-  }, [navigate, setUserSubView]);
+  }, [setUserSubView]);
 
   // Determine top bar title
   const getTopBarTitle = () => {
