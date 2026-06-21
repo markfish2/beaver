@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { askAI, getAIConversation, createMemo, createDocument, createNode } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
+import { useAuth } from '../context/AuthContext';
 
 interface Source {
   id: string;
@@ -41,6 +42,8 @@ interface AIChatMainViewProps {
 
 export default function AIChatMainView({ conversationId, onConversationCreated, onNavigate }: AIChatMainViewProps) {
   const { addDocument } = useDocuments();
+  const { user } = useAuth();
+  const nickname = user?.nickname || user?.username || '';
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -306,7 +309,13 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
       {/* Input */}
       <div className={`px-4 ${isEmpty ? 'w-full max-w-2xl' : 'pb-4'}`}>
         {isEmpty && (
-          <p className="text-lg text-gray-300 dark:text-gray-600 text-center mb-4">有什么可以帮你的？</p>
+          <div className="relative mb-6">
+            {/* 光晕渐变背景 */}
+            <div className="absolute inset-0 -m-16 bg-gradient-to-b from-sky-100/60 via-sky-50/40 to-transparent dark:from-sky-900/20 dark:via-sky-900/10 dark:to-transparent rounded-full blur-3xl pointer-events-none" />
+            <p className="relative text-xl text-gray-800 dark:text-gray-200 text-center font-medium">
+              {nickname ? `${nickname}，` : ''}有什么新灵感想聊聊吗？
+            </p>
+          </div>
         )}
         <div className="max-w-2xl mx-auto">
           <div className="flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-full focus-within:border-gray-400 dark:focus-within:border-gray-500 transition-colors shadow-sm">
