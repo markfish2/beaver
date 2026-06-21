@@ -355,15 +355,15 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
             <div className="flex items-center gap-1 px-3 pt-2.5">
               <button
                 onClick={() => setMode(mode === 'data' ? 'web' : 'data')}
-                className="flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                 title={mode === 'data' ? '当前：数据模式，点击切换' : '当前：网络模式，点击切换'}
               >
                 {mode === 'data' ? <Database className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
               </button>
-              <div className="relative" ref={skillMenuRef}>
+              <div className="relative flex items-center" ref={skillMenuRef}>
                 <button
                   onClick={() => setShowSkillMenu(!showSkillMenu)}
-                  className="flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                   title="Skills"
                 >
                   <Wand2 className="w-4 h-4" />
