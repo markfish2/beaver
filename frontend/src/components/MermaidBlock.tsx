@@ -29,9 +29,13 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
     const render = async () => {
       if (!containerRef.current) return;
       try {
-        // 生成唯一 ID
+        // 预处理：修复常见语法问题
+        let processedCode = code.trim()
+          .replace(/<br\s*\/?>/gi, '<br/>')  // 统一 <br> 格式
+          .replace(/&(?!amp;|lt;|gt;|quot;|apos;|#)/g, '&amp;');  // 转义未转义的 &
+
         const id = `mermaid-${Math.random().toString(36).slice(2, 10)}`;
-        const { svg } = await mermaid.render(id, code.trim());
+        const { svg } = await mermaid.render(id, processedCode);
         if (!cancelled && containerRef.current) {
           containerRef.current.innerHTML = svg;
           setError(null);
