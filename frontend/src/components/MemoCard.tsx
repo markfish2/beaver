@@ -1591,6 +1591,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
             <div
               className={`flex ${hasMore ? 'overflow-x-auto' : ''} ${getMemoSecondaryBg(isDark, memo.color) || ''}`}
               style={{
+                gap: '5px',
                 ...(getMemoSecondaryBg(isDark, memo.color) ? {} : { background: isDark ? '#111827' : '#fbfbf8' }),
                 scrollbarWidth: 'thin',
                 scrollbarColor: isDark ? '#4b5563 transparent' : '#d1d5db transparent',
