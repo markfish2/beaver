@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader2, FileText, ListTree, StickyNote, PenTool, BookmarkPlus } from 'lucide-react';
+import { Send, Loader2, FileText, ListTree, StickyNote, PenTool, BookmarkPlus, Database, Globe, Wand2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { askAI, getAIConversation, createMemo, createDocument, createNode } from '../api/data';
+import { askAI, getAIConversation, createMemo, createDocument, createNode, getSkills, Skill } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
+import { useAuth } from '../context/AuthContext';
 
 interface Source {
   id: string;
@@ -41,6 +42,8 @@ interface AIChatMainViewProps {
 
 export default function AIChatMainView({ conversationId, onConversationCreated, onNavigate }: AIChatMainViewProps) {
   const { addDocument } = useDocuments();
+  const { user } = useAuth();
+  const nickname = user?.nickname || user?.username || '';
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -48,9 +51,30 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
   const [saveMenuIndex, setSaveMenuIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<'data' | 'web'>('data');
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [showSkillMenu, setShowSkillMenu] = useState(false);
+  const [activeSkill, setActiveSkill] = useState<Skill | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const saveMenuRef = useRef<HTMLDivElement>(null);
+  const skillMenuRef = useRef<HTMLDivElement>(null);
+
+  // 加载 skills
+  useEffect(() => {
+    getSkills().then(setSkills).catch(() => {});
+  }, []);
+
+  // 点击外部关闭 skill 菜单
+  useEffect(() => {
+    if (!showSkillMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (skillMenuRef.current && !skillMenuRef.current.contains(e.target as Node)) {
+        setShowSkillMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showSkillMenu]);
 
   // 点击外部关闭保存菜单
   useEffect(() => {
@@ -117,13 +141,23 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // 输入清空时重置 textarea 高度
+  useEffect(() => {
+    if (input === '' && inputRef.current) {
+      inputRef.current.style.height = 'auto';
+    }
+  }, [input]);
+
   // 发送消息
   const handleSend = useCallback(async () => {
     if (!input.trim() || loading) return;
-    const userMsg: Message = { role: 'user', content: input.trim() };
+    // 如果有选中的 skill，将 prompt 拼接到用户消息前面
+    const content = activeSkill ? `${activeSkill.prompt}\n\n${input.trim()}` : input.trim();
+    const userMsg: Message = { role: 'user', content };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     setInput('');
+    setActiveSkill(null);
     setLoading(true);
 
     try {
@@ -198,7 +232,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
     } finally {
       setLoading(false);
     }
-  }, [input, messages, loading, conversationId, onConversationCreated, mode]);
+  }, [input, messages, loading, conversationId, onConversationCreated, mode, activeSkill]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -305,42 +339,96 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
 
       {/* Input */}
       <div className={`px-4 ${isEmpty ? 'w-full max-w-2xl' : 'pb-4'}`}>
-        {isEmpty && (
-          <p className="text-lg text-gray-300 dark:text-gray-600 text-center mb-4">有什么可以帮你的？</p>
-        )}
-        <div className="max-w-2xl mx-auto">
-          <div className="flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-full focus-within:border-gray-400 dark:focus-within:border-gray-500 transition-colors shadow-sm">
-            {/* 模式切换按钮 */}
-            <button
-              onClick={() => setMode(mode === 'data' ? 'web' : 'data')}
-              className="flex-shrink-0 ml-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              title={mode === 'data' ? '当前：数据模式，点击切换' : '当前：网络模式，点击切换'}
-            >
-              <span className="text-base">{mode === 'data' ? '📚' : '🌐'}</span>
-            </button>
-            {/* 输入框 */}
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={mode === 'data' ? '基于笔记内容回答...' : '输入任何问题...'}
-              rows={1}
-              className="flex-1 resize-none py-3.5 px-2 text-sm bg-transparent placeholder-gray-400 text-gray-800 dark:text-gray-200 focus:outline-none"
-              style={{ maxHeight: 120 }}
-            />
-            {/* 发送按钮 */}
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || loading}
-              className={`flex-shrink-0 mr-1.5 w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
-                input.trim()
-                  ? 'bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
-              } disabled:opacity-30 disabled:cursor-not-allowed`}
-            >
-              <Send className="w-4 h-4" />
-            </button>
+        <div className={`relative ${isEmpty ? 'mb-6' : ''}`}>
+          {/* 光晕渐变背景 */}
+          {isEmpty && (
+            <div className="absolute -inset-x-96 -inset-y-64 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, rgba(186,230,253,0.5) 0%, rgba(224,242,254,0.2) 50%, transparent 70%)' }} />
+          )}
+          {isEmpty && (
+            <p className="relative text-xl text-gray-800 dark:text-gray-200 text-center font-medium mb-6">
+              {nickname ? `${nickname}，` : ''}有什么新灵感想聊聊吗？
+            </p>
+          )}
+          <div className="max-w-2xl mx-auto">
+            <div className="relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-2xl focus-within:border-gray-400 dark:focus-within:border-gray-500 transition-colors shadow-sm">
+            {/* 第一行：模式 + Skill + Skill 标签 */}
+            <div className="flex items-center gap-1 px-3 pt-2.5">
+              <button
+                onClick={() => setMode(mode === 'data' ? 'web' : 'data')}
+                className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                title={mode === 'data' ? '当前：数据模式，点击切换' : '当前：网络模式，点击切换'}
+              >
+                {mode === 'data' ? <Database className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
+              </button>
+              <div className="relative flex items-center" ref={skillMenuRef}>
+                <button
+                  onClick={() => setShowSkillMenu(!showSkillMenu)}
+                  className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  title="Skills"
+                >
+                  <Wand2 className="w-4 h-4" />
+                </button>
+                {showSkillMenu && skills.length > 0 && (
+                  <div className="absolute left-0 bottom-full mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1.5 min-w-[180px] z-20">
+                    {skills.map(skill => (
+                      <button
+                        key={skill.id}
+                        onClick={() => {
+                          setActiveSkill(skill);
+                          setShowSkillMenu(false);
+                          setTimeout(() => inputRef.current?.focus(), 50);
+                        }}
+                        className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                      >
+                        <span className="text-base">{skill.icon}</span>
+                        <span>{skill.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {activeSkill && (
+                <span className="flex-shrink-0 flex items-center gap-1 px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full">
+                  <span>{activeSkill.icon}</span>
+                  <span>{activeSkill.name}</span>
+                  <button
+                    onClick={() => setActiveSkill(null)}
+                    className="ml-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                  >
+                    ×
+                  </button>
+                </span>
+              )}
+            </div>
+            {/* 第二行：输入框 + 发送按钮 */}
+            <div className="flex items-end px-3 pb-2.5 pt-1">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={e => {
+                  setInput(e.target.value);
+                  const el = e.target;
+                  el.style.height = 'auto';
+                  el.style.height = Math.min(el.scrollHeight, 150) + 'px';
+                }}
+                onKeyDown={handleKeyDown}
+                placeholder={mode === 'data' ? '基于笔记内容回答...' : '输入任何问题...'}
+                rows={1}
+                className="flex-1 resize-none py-1.5 text-sm bg-transparent placeholder-gray-400 text-gray-800 dark:text-gray-200 focus:outline-none"
+              />
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || loading}
+                className={`flex-shrink-0 ml-2 w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
+                  input.trim()
+                    ? 'bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200'
+                    : 'bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400'
+                } disabled:opacity-30 disabled:cursor-not-allowed`}
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+            </div>
           </div>
         </div>
       </div>

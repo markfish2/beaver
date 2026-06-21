@@ -1591,7 +1591,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
                 key={i}
                 src={getThumbnailUrl(img.url)}
                 alt={img.alt}
-                className={`flex-shrink-0 w-[155px] h-[155px] object-cover border cursor-pointer hover:opacity-80 transition-opacity ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}
+                className={`flex-shrink-0 w-[110px] h-[110px] object-cover border cursor-pointer hover:opacity-80 transition-opacity ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}
                 style={{ borderRadius: '0.5rem' }}
                 onClick={() => setPreviewImage(img.url)}
               />

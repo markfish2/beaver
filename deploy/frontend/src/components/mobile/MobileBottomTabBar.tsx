@@ -1,6 +1,6 @@
-import { StickyNote, CalendarDays, Plus, FileText, Star } from 'lucide-react';
+import { StickyNote, CalendarDays, Plus, FileText, Sparkles } from 'lucide-react';
 
-export type MobileTab = 'memos' | 'diary' | 'new' | 'files' | 'starred';
+export type MobileTab = 'memos' | 'diary' | 'new' | 'files' | 'ai';
 
 interface MobileBottomTabBarProps {
   activeTab: MobileTab;
@@ -12,7 +12,7 @@ const tabs: { id: MobileTab; label: string; icon: typeof StickyNote }[] = [
   { id: 'diary', label: '日记', icon: CalendarDays },
   { id: 'new', label: '新建', icon: Plus },
   { id: 'files', label: '文件', icon: FileText },
-  { id: 'starred', label: '收藏', icon: Star },
+  { id: 'ai', label: 'AI', icon: Sparkles },
 ];
 
 export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBottomTabBarProps) {

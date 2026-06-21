@@ -948,3 +948,17 @@ export const getAIConversation = async (id: string): Promise<AIConversationDetai
 export const deleteAIConversation = async (id: string): Promise<void> => {
   await api.delete(`/ai/conversations/${id}`);
 };
+
+// AI Skills
+export interface Skill {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  prompt: string;
+}
+
+export const getSkills = async (): Promise<Skill[]> => {
+  const response = await api.get<Skill[]>('/skills/');
+  return response.data;
+};

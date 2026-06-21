@@ -6,10 +6,13 @@ import MobileToolbar from '../MobileToolbar';
 import { MobileToolbarProvider, useMobileToolbar } from '../../context/MobileToolbarContext';
 import { getMonthlyDiary, getOrCreateDayNode } from '../../api/data';
 import NewMenuPopup from './NewMenuPopup';
+import AIChatMainView from '../AIChatMainView';
+import AIChatSidebar from '../AIChatSidebar';
+import { useUserView } from '../../context/UserViewContext';
+import { MessageSquare } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 const FileTreeView = lazy(() => import('./FileTreeView'));
-const StarredView = lazy(() => import('./StarredView'));
 const MobileTodos = lazy(() => import('./MobileTodos'));
 
 interface MobileLayoutProps {
@@ -44,8 +47,10 @@ function ToolbarSlot({ showZoom, hasTabBar }: { showZoom?: boolean; hasTabBar?: 
 export default function MobileLayout({ children }: MobileLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { activeConvId, setActiveConvId, refreshConvList } = useUserView();
   const [activeTab, setActiveTab] = useState<MobileTab>('memos');
   const [showNewMenu, setShowNewMenu] = useState(false);
+  const [showAIHistory, setShowAIHistory] = useState(false);
   const prevTabRef = useRef<MobileTab>('memos');
   const [keyboardOpen, setKeyboardOpen] = useState(false);
 
@@ -149,7 +154,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       case 'memos': return '随想';
       case 'diary': return '日记';
       case 'files': return '文件';
-      case 'starred': return '收藏';
+      case 'ai': return 'AI 问答';
       default: return '随想';
     }
   };
@@ -198,11 +203,47 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
             <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 44px)', flexShrink: 0 }} />
             <FileTreeView />
           </Suspense>
-        ) : activeTab === 'starred' ? (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center text-gray-400 text-sm">加载中...</div>}>
+        ) : activeTab === 'ai' ? (
+          // AI 问答
+          <div className="flex-1 flex flex-col overflow-hidden">
             <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 44px)', flexShrink: 0 }} />
-            <StarredView />
-          </Suspense>
+            <div className="flex-1 relative overflow-hidden flex flex-col">
+              <div className="flex-1 min-h-0">
+                <AIChatMainView
+                  conversationId={activeConvId}
+                  onConversationCreated={(convId) => { setActiveConvId(convId); refreshConvList(); }}
+                />
+              </div>
+              {/* 底部间距，避免输入框被 tab 栏遮挡 */}
+              <div style={{ height: 'calc(60px + env(safe-area-inset-bottom, 0px))', flexShrink: 0 }} />
+              {/* 历史对话按钮 */}
+              <button
+                onClick={() => setShowAIHistory(true)}
+                className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center bg-white/80 dark:bg-gray-800/80 backdrop-blur border border-gray-200 dark:border-gray-700 rounded-full shadow-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                title="历史对话"
+              >
+                <MessageSquare className="w-4 h-4" />
+              </button>
+            </div>
+            {/* 历史对话侧边栏 */}
+            {showAIHistory && (
+              <>
+                <div
+                  className="fixed inset-0 bg-black/40 z-40"
+                  onClick={() => setShowAIHistory(false)}
+                />
+                <div className="fixed top-0 right-0 bottom-0 w-72 bg-[#FAFAF5] dark:bg-gray-800 z-50 shadow-xl flex flex-col">
+                  <AIChatSidebar
+                    activeConvId={activeConvId}
+                    onSelectConversation={(convId) => {
+                      setActiveConvId(convId);
+                      setShowAIHistory(false);
+                    }}
+                  />
+                </div>
+              </>
+            )}
+          </div>
         ) : (
           // Memos tab: MainArea renders MemoHome
           children

@@ -20,6 +20,151 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _estimate_tokens(text: str) -> int:
+    """估算文本的 token 数量（中英混合场景）"""
+    if not text:
+        return 0
+    import re
+    # 中文字符数 * 1.5（中文通常 1-2 token/字）
+    chinese_chars = len(re.findall(r'[一-鿿]', text))
+    # 英文单词数 * 1.3
+    english_words = len(re.findall(r'[a-zA-Z]+', text))
+    # 其他字符（标点、数字、空格等）按 0.5 token/字符估算
+    other_chars = len(text) - chinese_chars - sum(len(w) for w in re.findall(r'[a-zA-Z]+', text))
+    return int(chinese_chars * 1.5 + english_words * 1.3 + other_chars * 0.5) + 4  # +4 for message overhead
+
+
+async def _summarize_messages(messages: list, config) -> str:
+    """用 AI 生成对话摘要"""
+    import httpx
+    # 构建摘要请求
+    conversation_text = ""
+    for msg in messages:
+        role = "用户" if msg.get("role") == "user" else "AI"
+        content = msg.get("content", "")[:500]  # 截断过长内容
+        conversation_text += f"{role}：{content}\n"
+
+    prompt = f"""请用中文简洁地总结以下对话的关键信息（不超过200字）。保留重要问题、结论和关键数据。
+
+{conversation_text}
+
+要求：只输出摘要内容，不要加标题或前缀。"""
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{config.api_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {config.api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": config.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 300,
+                    "temperature": 0.3
+                }
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return data["choices"][0]["message"]["content"].strip()
+    except Exception:
+        pass
+    return ""
+
+
+async def _truncate_messages(messages: list, system_prompt: str, config=None, max_context_tokens: int = 800000) -> list:
+    """截断消息以适配模型上下文窗口，支持摘要压缩
+
+    策略：
+    1. 始终保留 system prompt
+    2. 始终保留最后 8 条对话（最近的上下文）
+    3. 旧消息超出限制时，调用 AI 生成摘要替代
+    4. 如果单条消息就超限，截断其内容
+    """
+    if not messages:
+        return messages
+
+    # 预留 20% 给 AI 回复
+    available_tokens = int(max_context_tokens * 0.8)
+
+    # 计算 system prompt 的 token
+    system_tokens = _estimate_tokens(system_prompt)
+    available_tokens -= system_tokens
+
+    # 始终保留最后 N 条消息（最近的上下文）
+    keep_recent = min(8, len(messages))
+    recent_messages = messages[-keep_recent:]
+    older_messages = messages[:-keep_recent] if len(messages) > keep_recent else []
+
+    # 计算总 token
+    recent_tokens = sum(_estimate_tokens(m.get("content", "")) for m in recent_messages)
+    older_tokens = sum(_estimate_tokens(m.get("content", "")) for m in older_messages)
+    total_tokens = recent_tokens + older_tokens
+
+    # 未超限，直接返回
+    if total_tokens <= available_tokens:
+        return messages
+
+    # 超限了，需要处理旧消息
+    # 计算给旧消息的空间（减去摘要预留的 ~500 token）
+    summary_budget = 500
+    older_available = available_tokens - recent_tokens - summary_budget
+
+    if older_available <= 0:
+        # 连最近消息都超限，只截断最近消息
+        result = []
+        tokens_used = 0
+        for msg in reversed(recent_messages):
+            msg_tokens = _estimate_tokens(msg.get("content", ""))
+            if tokens_used + msg_tokens > available_tokens:
+                content = msg.get("content", "")
+                max_chars = int((available_tokens - tokens_used) / 1.5)
+                if max_chars > 100:
+                    result.insert(0, {**msg, "content": content[:max_chars] + "\n[已截断]"})
+                break
+            result.insert(0, msg)
+            tokens_used += msg_tokens
+        return result
+
+    # 收集需要被摘要压缩的旧消息
+    kept_older = []
+    tokens_used = 0
+    summarize_from = len(older_messages)
+    for i, msg in enumerate(older_messages):
+        msg_tokens = _estimate_tokens(msg.get("content", ""))
+        if tokens_used + msg_tokens > older_available:
+            summarize_from = i
+            break
+        kept_older.append(msg)
+        tokens_used += msg_tokens
+
+    # 需要摘要的消息
+    to_summarize = older_messages[:summarize_from]
+
+    # 生成摘要
+    summary_text = ""
+    if to_summarize and config:
+        summary_text = await _summarize_messages(to_summarize, config)
+
+    # 构建最终消息列表
+    result = []
+    if summary_text:
+        result.append({
+            "role": "system",
+            "content": f"[以下为更早的对话摘要]\n{summary_text}"
+        })
+    elif to_summarize:
+        result.append({
+            "role": "system",
+            "content": f"[已省略 {len(to_summarize)} 条早期对话消息]"
+        })
+
+    result.extend(kept_older)
+    result.extend(recent_messages)
+    return result
+
+
 def _search_notes(db: Session, query: str, keywords: list[str] = None, limit: int = 10) -> list[dict]:
     """搜索笔记内容，按关键词匹配数量评分排序"""
     import re
@@ -391,7 +536,9 @@ async def ask_ai(
 5. 用中文回答
 6. 直接回答问题，不要在回答中列出来源（来源会由系统自动展示）"""
 
-    messages = [{"role": "system", "content": system_prompt}] + request.messages
+    # 上下文管理：截断超长对话
+    truncated = await _truncate_messages(request.messages, system_prompt, config=config)
+    messages = [{"role": "system", "content": system_prompt}] + truncated
 
     # 收集完整回复用于保存
     full_response = ""
