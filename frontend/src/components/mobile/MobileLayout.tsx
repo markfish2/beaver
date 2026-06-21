@@ -142,9 +142,14 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     setShowNewMenu(false);
   }, []);
 
-  const handleDocumentCreated = useCallback((id: string) => {
+  const handleDocumentCreated = useCallback((id: string, type: string) => {
     setShowNewMenu(false);
-    navigate(`/d/${id}`);
+    if (type === 'folder') {
+      // 文件夹不需要打开编辑器，跳转到文件列表
+      setActiveTab('files');
+    } else {
+      navigate(`/d/${id}`);
+    }
   }, [navigate]);
 
   // Determine top bar title
