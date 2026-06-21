@@ -63,9 +63,15 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   }, [editingDocId, setMobileEditingDocId]);
   // 标记是否由代码触发的 pushState，避免 popstate 重复处理
   const programmaticNav = useRef(false);
+  // 标记是否跳过下一次 URL 同步（handleBack 返回时用）
+  const skipNextUrlSync = useRef(false);
 
   // 监听 URL 变化：处理直接访问 /d/{id} 和文件树点击导航
   useEffect(() => {
+    if (skipNextUrlSync.current) {
+      skipNextUrlSync.current = false;
+      return;
+    }
     const match = location.pathname.match(/^\/d\/(.+)$/);
     if (match) {
       const urlDocId = match[1];
@@ -74,7 +80,6 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
         setEditingDocId(urlDocId);
       }
     } else if (editingDocId && !programmaticNav.current) {
-      // URL 变成 / 且不是代码触发的 → 清除编辑状态
       setEditingDocId(null);
     }
   }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -159,6 +164,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
 
   // ── 返回 ──
   const handleBack = useCallback(() => {
+    skipNextUrlSync.current = true;
     setEditingDocId(null);
     setActiveTab(prevTab);
     setUserSubView(null);
