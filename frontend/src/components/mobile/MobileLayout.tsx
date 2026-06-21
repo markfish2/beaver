@@ -207,11 +207,15 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
           // AI 问答
           <div className="flex-1 flex flex-col overflow-hidden">
             <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 44px)', flexShrink: 0 }} />
-            <div className="flex-1 relative overflow-hidden">
-              <AIChatMainView
-                conversationId={activeConvId}
-                onConversationCreated={(convId) => { setActiveConvId(convId); refreshConvList(); }}
-              />
+            <div className="flex-1 relative overflow-hidden flex flex-col">
+              <div className="flex-1 min-h-0">
+                <AIChatMainView
+                  conversationId={activeConvId}
+                  onConversationCreated={(convId) => { setActiveConvId(convId); refreshConvList(); }}
+                />
+              </div>
+              {/* 底部间距，避免输入框被 tab 栏遮挡 */}
+              <div style={{ height: 'calc(60px + env(safe-area-inset-bottom, 0px))', flexShrink: 0 }} />
               {/* 历史对话按钮 */}
               <button
                 onClick={() => setShowAIHistory(true)}
