@@ -141,6 +141,13 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // 输入清空时重置 textarea 高度
+  useEffect(() => {
+    if (input === '' && inputRef.current) {
+      inputRef.current.style.height = 'auto';
+    }
+  }, [input]);
+
   // 发送消息
   const handleSend = useCallback(async () => {
     if (!input.trim() || loading) return;
@@ -396,12 +403,17 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
             <textarea
               ref={inputRef}
               value={input}
-              onChange={e => setInput(e.target.value)}
+              onChange={e => {
+                setInput(e.target.value);
+                // 自动调整高度
+                const el = e.target;
+                el.style.height = 'auto';
+                el.style.height = Math.min(el.scrollHeight, 150) + 'px';
+              }}
               onKeyDown={handleKeyDown}
               placeholder={mode === 'data' ? '基于笔记内容回答...' : '输入任何问题...'}
               rows={1}
               className="flex-1 resize-none py-3.5 px-2 text-sm bg-transparent placeholder-gray-400 text-gray-800 dark:text-gray-200 focus:outline-none"
-              style={{ maxHeight: 120 }}
             />
             {/* 发送按钮 */}
             <button
