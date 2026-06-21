@@ -1476,20 +1476,30 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
           ref={imageInputRef}
           type="file"
           accept="image/*"
+          multiple
           className="hidden"
           onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleFileUpload(file, true);
+            const files = e.target.files;
+            if (files) {
+              for (let i = 0; i < files.length; i++) {
+                handleFileUpload(files[i], true);
+              }
+            }
             e.target.value = '';
           }}
         />
         <input
           ref={fileInputRef}
           type="file"
+          multiple
           className="hidden"
           onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleFileUpload(file, false);
+            const files = e.target.files;
+            if (files) {
+              for (let i = 0; i < files.length; i++) {
+                handleFileUpload(files[i], false);
+              }
+            }
             e.target.value = '';
           }}
         />
