@@ -64,13 +64,20 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   // 标记是否由代码触发的 pushState，避免 popstate 重复处理
   const programmaticNav = useRef(false);
 
-  // 初始化：从 URL 读取 editingDocId（处理直接访问 /d/{id} 的情况）
+  // 监听 URL 变化：处理直接访问 /d/{id} 和文件树点击导航
   useEffect(() => {
     const match = location.pathname.match(/^\/d\/(.+)$/);
-    if (match && !editingDocId) {
-      setEditingDocId(match[1]);
+    if (match) {
+      const urlDocId = match[1];
+      if (urlDocId !== editingDocId) {
+        setPrevTab(activeTab);
+        setEditingDocId(urlDocId);
+      }
+    } else if (editingDocId && !programmaticNav.current) {
+      // URL 变成 / 且不是代码触发的 → 清除编辑状态
+      setEditingDocId(null);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // editingDocId 变化时同步 URL（pushState 不触发 React 重渲染）
   useEffect(() => {
