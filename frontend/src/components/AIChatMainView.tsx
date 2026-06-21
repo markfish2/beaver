@@ -53,6 +53,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
   const [mode, setMode] = useState<'data' | 'web'>('data');
   const [skills, setSkills] = useState<Skill[]>([]);
   const [showSkillMenu, setShowSkillMenu] = useState(false);
+  const [activeSkill, setActiveSkill] = useState<Skill | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const saveMenuRef = useRef<HTMLDivElement>(null);
@@ -143,10 +144,13 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
   // 发送消息
   const handleSend = useCallback(async () => {
     if (!input.trim() || loading) return;
-    const userMsg: Message = { role: 'user', content: input.trim() };
+    // 如果有选中的 skill，将 prompt 拼接到用户消息前面
+    const content = activeSkill ? `${activeSkill.prompt}\n\n${input.trim()}` : input.trim();
+    const userMsg: Message = { role: 'user', content };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     setInput('');
+    setActiveSkill(null);
     setLoading(true);
 
     try {
@@ -221,7 +225,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
     } finally {
       setLoading(false);
     }
-  }, [input, messages, loading, conversationId, onConversationCreated, mode]);
+  }, [input, messages, loading, conversationId, onConversationCreated, mode, activeSkill]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -363,7 +367,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
                     <button
                       key={skill.id}
                       onClick={() => {
-                        setInput(skill.prompt);
+                        setActiveSkill(skill);
                         setShowSkillMenu(false);
                         setTimeout(() => inputRef.current?.focus(), 50);
                       }}
@@ -377,6 +381,18 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
               )}
             </div>
             {/* 输入框 */}
+            {activeSkill && (
+              <span className="flex-shrink-0 flex items-center gap-1 ml-1 px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full">
+                <span>{activeSkill.icon}</span>
+                <span>{activeSkill.name}</span>
+                <button
+                  onClick={() => setActiveSkill(null)}
+                  className="ml-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                >
+                  ×
+                </button>
+              </span>
+            )}
             <textarea
               ref={inputRef}
               value={input}
