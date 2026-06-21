@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
+import { flushSync } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import MobileTopBar from './MobileTopBar';
 import MobileBottomTabBar, { type MobileTab } from './MobileBottomTabBar';
@@ -151,17 +152,18 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   }, []);
 
   const handleDocumentCreated = useCallback((id: string, type: string) => {
-    setShowNewMenu(false);
-    setDiaryDocId(null);
-    setUserSubView(null);
-    if (type === 'folder') {
-      // 文件夹跳转到文件列表 tab
-      setActiveTab('files');
-    } else {
-      // React Router v7 在移动端 navigate() 不触发重渲染，用 assign 强制跳转
-      window.location.assign(`/d/${id}`);
+    flushSync(() => {
+      setShowNewMenu(false);
+      setDiaryDocId(null);
+      setUserSubView(null);
+      if (type === 'folder') {
+        setActiveTab('files');
+      }
+    });
+    if (type !== 'folder') {
+      navigate(`/d/${id}`);
     }
-  }, [setUserSubView]);
+  }, [navigate, setUserSubView]);
 
   // Determine top bar title
   const getTopBarTitle = () => {
