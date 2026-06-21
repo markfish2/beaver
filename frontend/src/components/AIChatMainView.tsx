@@ -350,85 +350,86 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
             </p>
           )}
           <div className="max-w-2xl mx-auto">
-            <div className="relative flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-full focus-within:border-gray-400 dark:focus-within:border-gray-500 transition-colors shadow-sm">
-            {/* 模式切换按钮 */}
-            <button
-              onClick={() => setMode(mode === 'data' ? 'web' : 'data')}
-              className="flex-shrink-0 ml-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              title={mode === 'data' ? '当前：数据模式，点击切换' : '当前：网络模式，点击切换'}
-            >
-              {mode === 'data' ? <Database className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
-            </button>
-            {/* Skill 按钮 */}
-            <div className="relative" ref={skillMenuRef}>
+            <div className="relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-2xl focus-within:border-gray-400 dark:focus-within:border-gray-500 transition-colors shadow-sm">
+            {/* 第一行：模式 + Skill + Skill 标签 */}
+            <div className="flex items-center gap-1 px-3 pt-2.5">
               <button
-                onClick={() => setShowSkillMenu(!showSkillMenu)}
-                className="flex-shrink-0 ml-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                title="Skills"
+                onClick={() => setMode(mode === 'data' ? 'web' : 'data')}
+                className="flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                title={mode === 'data' ? '当前：数据模式，点击切换' : '当前：网络模式，点击切换'}
               >
-                <Wand2 className="w-4 h-4" />
+                {mode === 'data' ? <Database className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
               </button>
-              {showSkillMenu && skills.length > 0 && (
-                <div className="absolute left-0 bottom-full mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1.5 min-w-[180px] z-20">
-                  {skills.map(skill => (
-                    <button
-                      key={skill.id}
-                      onClick={() => {
-                        setActiveSkill(skill);
-                        setShowSkillMenu(false);
-                        setTimeout(() => inputRef.current?.focus(), 50);
-                      }}
-                      className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
-                    >
-                      <span className="text-base">{skill.icon}</span>
-                      <span>{skill.name}</span>
-                    </button>
-                  ))}
-                </div>
+              <div className="relative" ref={skillMenuRef}>
+                <button
+                  onClick={() => setShowSkillMenu(!showSkillMenu)}
+                  className="flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  title="Skills"
+                >
+                  <Wand2 className="w-4 h-4" />
+                </button>
+                {showSkillMenu && skills.length > 0 && (
+                  <div className="absolute left-0 bottom-full mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1.5 min-w-[180px] z-20">
+                    {skills.map(skill => (
+                      <button
+                        key={skill.id}
+                        onClick={() => {
+                          setActiveSkill(skill);
+                          setShowSkillMenu(false);
+                          setTimeout(() => inputRef.current?.focus(), 50);
+                        }}
+                        className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                      >
+                        <span className="text-base">{skill.icon}</span>
+                        <span>{skill.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {activeSkill && (
+                <span className="flex-shrink-0 flex items-center gap-1 px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full">
+                  <span>{activeSkill.icon}</span>
+                  <span>{activeSkill.name}</span>
+                  <button
+                    onClick={() => setActiveSkill(null)}
+                    className="ml-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                  >
+                    ×
+                  </button>
+                </span>
               )}
             </div>
-            {/* 输入框 */}
-            {activeSkill && (
-              <span className="flex-shrink-0 flex items-center gap-1 ml-1 px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full">
-                <span>{activeSkill.icon}</span>
-                <span>{activeSkill.name}</span>
-                <button
-                  onClick={() => setActiveSkill(null)}
-                  className="ml-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                >
-                  ×
-                </button>
-              </span>
-            )}
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={e => {
-                setInput(e.target.value);
-                // 自动调整高度
-                const el = e.target;
-                el.style.height = 'auto';
-                el.style.height = Math.min(el.scrollHeight, 150) + 'px';
-              }}
-              onKeyDown={handleKeyDown}
-              placeholder={mode === 'data' ? '基于笔记内容回答...' : '输入任何问题...'}
-              rows={1}
-              className="flex-1 resize-none py-3.5 px-2 text-sm bg-transparent placeholder-gray-400 text-gray-800 dark:text-gray-200 focus:outline-none"
-            />
-            {/* 发送按钮 */}
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || loading}
-              className={`flex-shrink-0 mr-1.5 w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
-                input.trim()
-                  ? 'bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200'
-                  : 'bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400'
-              } disabled:opacity-30 disabled:cursor-not-allowed`}
-            >
-              <Send className="w-4 h-4" />
-            </button>
+            {/* 第二行：输入框 + 发送按钮 */}
+            <div className="flex items-end px-3 pb-2.5 pt-1">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={e => {
+                  setInput(e.target.value);
+                  const el = e.target;
+                  el.style.height = 'auto';
+                  el.style.height = Math.min(el.scrollHeight, 150) + 'px';
+                }}
+                onKeyDown={handleKeyDown}
+                placeholder={mode === 'data' ? '基于笔记内容回答...' : '输入任何问题...'}
+                rows={1}
+                className="flex-1 resize-none py-1.5 text-sm bg-transparent placeholder-gray-400 text-gray-800 dark:text-gray-200 focus:outline-none"
+              />
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || loading}
+                className={`flex-shrink-0 ml-2 w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
+                  input.trim()
+                    ? 'bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200'
+                    : 'bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400'
+                } disabled:opacity-30 disabled:cursor-not-allowed`}
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+            </div>
           </div>
-        </div>
         </div>
       </div>
     </div>
