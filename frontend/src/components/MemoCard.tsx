@@ -1588,6 +1588,8 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
         const count = images.length;
         const cols = count === 1 ? 2 : count === 2 ? 2 : count === 3 ? 3 : 4;
         const hasMore = count > 4;
+        const bgStyle = getMemoSecondaryBg(isDark, memo.color) ? {} : { background: isDark ? '#111827' : '#fbfbf8' };
+        const scrollbarStyle = { scrollbarWidth: 'thin' as const, scrollbarColor: isDark ? '#4b5563 transparent' : '#d1d5db transparent' };
         return (
           <div className={`mt-3 rounded-lg overflow-hidden border ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}>
             <div
@@ -1596,30 +1598,41 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
             >
               图片 ({count})
             </div>
-            <div
-              className={getMemoSecondaryBg(isDark, memo.color) || ''}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: `repeat(${cols}, 1fr)`,
-                gap: '5px',
-                padding: '5px',
-                ...(hasMore ? { overflowX: 'auto', gridAutoFlow: 'column', gridAutoColumns: `calc((100% - ${(cols - 1) * 5}px) / ${cols})` } : {}),
-                ...(getMemoSecondaryBg(isDark, memo.color) ? {} : { background: isDark ? '#111827' : '#fbfbf8' }),
-                scrollbarWidth: 'thin',
-                scrollbarColor: isDark ? '#4b5563 transparent' : '#d1d5db transparent',
-              }}
-            >
-              {images.map((img, i) => (
-                <img
-                  key={i}
-                  src={getThumbnailUrl(img.url)}
-                  alt={img.alt}
-                  className={`w-full aspect-square object-cover border cursor-pointer hover:opacity-80 transition-opacity ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}
-                  style={{ borderRadius: 0 }}
-                  onClick={() => setPreviewImage(img.url)}
-                />
-              ))}
-            </div>
+            {hasMore ? (
+              // >4张：横向滚动，每张大小和4张一致
+              <div
+                className={`flex ${getMemoSecondaryBg(isDark, memo.color) || ''}`}
+                style={{ gap: '5px', padding: '5px', overflowX: 'auto', ...bgStyle, ...scrollbarStyle }}
+              >
+                {images.map((img, i) => (
+                  <img
+                    key={i}
+                    src={getThumbnailUrl(img.url)}
+                    alt={img.alt}
+                    className={`flex-shrink-0 aspect-square object-cover border cursor-pointer hover:opacity-80 transition-opacity ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}
+                    style={{ width: 'calc((100% - 25px) / 4)', borderRadius: 0 }}
+                    onClick={() => setPreviewImage(img.url)}
+                  />
+                ))}
+              </div>
+            ) : (
+              // ≤4张：Grid 均分
+              <div
+                className={getMemoSecondaryBg(isDark, memo.color) || ''}
+                style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '5px', padding: '5px', ...bgStyle }}
+              >
+                {images.map((img, i) => (
+                  <img
+                    key={i}
+                    src={getThumbnailUrl(img.url)}
+                    alt={img.alt}
+                    className={`w-full aspect-square object-cover border cursor-pointer hover:opacity-80 transition-opacity ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}
+                    style={{ borderRadius: 0 }}
+                    onClick={() => setPreviewImage(img.url)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         );
       })()}
