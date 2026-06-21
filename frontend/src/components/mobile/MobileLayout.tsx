@@ -129,12 +129,8 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   // location.key === "default" 表示用户直接通过 URL 打开（历史栈无上一页）
   // 否则用 navigate(-1) 返回应用内上一页
   const handleBack = useCallback(() => {
-    if (location.key === 'default') {
-      navigate('/', { replace: true });
-    } else {
-      navigate(-1);
-    }
-  }, [navigate, location.key]);
+    window.history.back();
+  }, []);
 
   const handleSearch = useCallback((query: string) => {
     navigate(`/search?q=${encodeURIComponent(query)}`);
@@ -145,16 +141,15 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   }, []);
 
   const handleDocumentCreated = useCallback((id: string, type: string) => {
-    console.log('[Mobile] handleDocumentCreated', { id, type, currentPath: location.pathname });
+    console.log('[Mobile] handleDocumentCreated', { id, type });
     setShowNewMenu(false);
     if (type === 'folder') {
       setActiveTab('files');
       return;
     }
-    console.log('[Mobile] navigating to', `/d/${id}`);
-    navigate(`/d/${id}`);
-    console.log('[Mobile] navigate called, newPath should be', `/d/${id}`);
-  }, [navigate, location.pathname]);
+    // React 19 延迟 navigate()，用 window.location.href 立即跳转
+    window.location.href = `/d/${id}`;
+  }, []);
 
   // Determine top bar title
   const getTopBarTitle = () => {
