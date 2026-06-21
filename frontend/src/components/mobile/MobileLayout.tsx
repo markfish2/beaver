@@ -116,6 +116,10 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       setShowNewMenu(true);
       return;
     }
+    // 切离日记 tab 时清除 diaryDocId，避免影响其他页面的 documentId
+    if (tab !== 'diary') {
+      setDiaryDocId(null);
+    }
     setActiveTab(tab);
     // Navigate to root when switching away from editor (but not diary)
     // Use replace to avoid polluting browser history stack
@@ -148,6 +152,8 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       // 文件夹不需要打开编辑器，跳转到文件列表
       setActiveTab('files');
     } else {
+      // 清除日记状态，避免 diaryDocId 覆盖 URL 中的 documentId
+      setDiaryDocId(null);
       navigate(`/d/${id}`);
     }
   }, [navigate]);
