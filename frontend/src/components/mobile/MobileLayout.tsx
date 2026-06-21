@@ -69,7 +69,12 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   const [diaryDocId, setDiaryDocId] = useState<string | null>(null);
 
   // Is user viewing a specific document (not diary tab)?
-  const isEditing = location.pathname.startsWith('/d/');
+  // 用 state 追踪，确保 navigate() 后能触发重渲染
+  const [editingPath, setEditingPath] = useState(location.pathname);
+  useEffect(() => {
+    setEditingPath(location.pathname);
+  }, [location.pathname]);
+  const isEditing = editingPath.startsWith('/d/');
 
   // Load diary when switching to diary tab
   useEffect(() => {
@@ -152,9 +157,11 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   }, []);
 
   const handleDocumentCreated = useCallback((id: string, type: string) => {
-    setShowNewMenu(false);
-    setDiaryDocId(null);
-    setUserSubView(null);
+    flushSync(() => {
+      setShowNewMenu(false);
+      setDiaryDocId(null);
+      setUserSubView(null);
+    });
     if (type === 'folder') {
       setActiveTab('files');
     } else {

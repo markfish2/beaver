@@ -100,7 +100,6 @@ function MainAreaWithUserView() {
 function AppRoutes() {
   useRetryFailedPreviews();
   const { isAuthenticated } = useAuth();
-  const location = useLocation();
 
   // 登录后检查是否有待处理的分享数据（从 ShareTargetPage 存入的）
   useEffect(() => {
@@ -123,7 +122,7 @@ function AppRoutes() {
 
   return (
     <Suspense fallback={<PageLoading />}>
-      <Routes location={location} key={location.pathname}>
+      <Routes>
         <Route path="/setup" element={<SetupPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/s/:shareToken" element={<SharePage />} />
