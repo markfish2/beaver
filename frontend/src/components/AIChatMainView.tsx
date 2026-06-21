@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { askAI, getAIConversation, createMemo, createDocument, createNode, getSkills, Skill } from '../api/data';
+import MermaidBlock from './MermaidBlock';
 import { useDocuments } from '../context/DocumentContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -269,7 +270,18 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
                 <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
               ) : (
                 <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
-                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{msg.content}</ReactMarkdown>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm, remarkBreaks]}
+                    components={{
+                      code: (props: any) => {
+                        const match = /language-(\w+)/.exec(props.className || '');
+                        if (match && match[1] === 'mermaid') {
+                          return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
+                        }
+                        return <code {...props} />;
+                      },
+                    }}
+                  >{msg.content}</ReactMarkdown>
                 </div>
               )}
               {msg.role === 'assistant' && msg.content && !msg.content.startsWith('请求失败') && (

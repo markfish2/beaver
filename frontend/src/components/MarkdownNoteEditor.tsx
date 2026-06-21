@@ -47,6 +47,7 @@ import { useNavigate } from 'react-router-dom';
 import { getNodes, createNode, updateNode, uploadFile, uploadFromUrl, getMemoTags, getDocuments, updateDocument } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
 import type { Node, Document } from '../api/data';
+import MermaidBlock from './MermaidBlock';
 import { handleListContinuation } from '../utils/listContinuation';
 import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks } from '../utils/markdownPreprocess';
 import { getPasteMarkdown, extractExternalImageUrls } from '../utils/htmlToMarkdown';
@@ -516,7 +517,13 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   // Markdown 组件
   const navigate_fn = useNavigate();
   const mdComponents = useMemo((): Components => ({
-    code: CodeBlock as Components['code'],
+    code: (props: any) => {
+      const match = /language-(\w+)/.exec(props.className || '');
+      if (match && match[1] === 'mermaid') {
+        return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
+      }
+      return <CodeBlock {...props} />;
+    },
     img: ({ src, alt }) => <NoteImage src={src} alt={alt} />,
     a: ({ href, children, ...props }) => {
       if (href?.startsWith('/d/')) {

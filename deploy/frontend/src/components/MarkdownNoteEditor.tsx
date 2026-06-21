@@ -713,10 +713,10 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
       </div>
 
       {/* 隐藏文件选择器 */}
-      <input ref={imageInputRef} type="file" accept="image/*" className="hidden"
-        onChange={(e) => { const file = e.target.files?.[0]; if (file) handleFileUpload(file, true); e.target.value = ''; }} />
-      <input ref={fileInputRef} type="file" className="hidden"
-        onChange={(e) => { const file = e.target.files?.[0]; if (file) handleFileUpload(file, false); e.target.value = ''; }} />
+      <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden"
+        onChange={(e) => { const files = e.target.files; if (files) { for (let i = 0; i < files.length; i++) { handleFileUpload(files[i], true); } } e.target.value = ''; }} />
+      <input ref={fileInputRef} type="file" multiple className="hidden"
+        onChange={(e) => { const files = e.target.files; if (files) { for (let i = 0; i < files.length; i++) { handleFileUpload(files[i], false); } } e.target.value = ''; }} />
 
       {/* AI 对话面板 */}
       {showAIPanel && (
