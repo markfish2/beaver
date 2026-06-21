@@ -275,8 +275,14 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const { setActiveConvId, refreshConvList, mobileEditingDocId } = useUserView();
   const { documentId: urlDocumentId } = useParams();
   const navigate = useNavigate();
-  // mobileEditingDocId 优先（移动端状态导航），其次 diaryDocId，最后 URL
-  const documentId = mobileEditingDocId || diaryDocId || urlDocumentId;
+  // 移动端状态导航：mobileEditingDocId 控制编辑器，退出时强制显示首页
+  const mobileEditingActive = useRef(false);
+  if (mobileEditingDocId) mobileEditingActive.current = true;
+  const documentId = mobileEditingDocId
+    ? mobileEditingDocId
+    : mobileEditingActive.current
+      ? (mobileEditingActive.current = false, null)
+      : diaryDocId || urlDocumentId;
   const [searchParams, setSearchParams] = useSearchParams();
   const { updateDocumentTitle, documents } = useDocuments();
   const { searchQuery, setSearchQuery } = useSearch();
