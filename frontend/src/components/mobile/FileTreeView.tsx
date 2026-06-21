@@ -42,7 +42,7 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
     if (doc.type === 'folder') {
       handleToggleFolder(doc.id);
     } else {
-      window.location.href = `/d/${doc.id}`;
+      navigate(`/d/${doc.id}`);
     }
   };
 
