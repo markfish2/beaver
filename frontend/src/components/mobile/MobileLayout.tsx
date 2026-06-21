@@ -8,6 +8,7 @@ import { getMonthlyDiary, getOrCreateDayNode } from '../../api/data';
 import NewMenuPopup from './NewMenuPopup';
 import AIChatMainView from '../AIChatMainView';
 import AIChatSidebar from '../AIChatSidebar';
+import { useUserView } from '../../context/UserViewContext';
 import { MessageSquare } from 'lucide-react';
 import type { ReactNode } from 'react';
 
