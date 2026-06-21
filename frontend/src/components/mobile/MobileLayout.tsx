@@ -133,12 +133,14 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   // location.key === "default" 表示用户直接通过 URL 打开（历史栈无上一页）
   // 否则用 navigate(-1) 返回应用内上一页
   const handleBack = useCallback(() => {
+    setUserSubView(null);
+    setDiaryDocId(null);
     if (location.key === 'default') {
       navigate('/', { replace: true });
     } else {
       navigate(-1);
     }
-  }, [navigate, location.key]);
+  }, [navigate, location.key, setUserSubView]);
 
   const handleSearch = useCallback((query: string) => {
     navigate(`/search?q=${encodeURIComponent(query)}`);
@@ -150,17 +152,15 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
 
   const handleDocumentCreated = useCallback((id: string, type: string) => {
     setShowNewMenu(false);
+    setDiaryDocId(null);
+    setUserSubView(null);
     if (type === 'folder') {
-      // 文件夹不需要打开编辑器，跳转到文件列表
+      // 文件夹跳转到文件列表 tab
       setActiveTab('files');
     } else {
-      // 清除日记状态和用户子视图，避免干扰文档加载
-      setDiaryDocId(null);
-      setUserSubView(null);
-      // 使用 window.location.href 强制刷新，解决 React Router v7 导航不生效的问题
-      window.location.href = `/d/${id}`;
+      navigate(`/d/${id}`);
     }
-  }, [setUserSubView]);
+  }, [navigate, setUserSubView]);
 
   // Determine top bar title
   const getTopBarTitle = () => {
