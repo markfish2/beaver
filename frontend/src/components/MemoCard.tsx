@@ -1586,15 +1586,8 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       {/* 图片画廊 */}
       {images.length > 0 && (() => {
         const count = images.length;
+        const cols = count === 1 ? 2 : count === 2 ? 2 : count === 3 ? 3 : 4;
         const hasMore = count > 4;
-        // 1张=50%, 2张=各50%, 3张=各33.3%, 4张=各25%
-        // 图片宽度 = (容器内容区 - 间距) / 数量
-        // 容器内容区 = 100% - 左右padding 10px
-        // 间距 = (数量-1) * 5px
-        const gapPx = (Math.min(count, 4) - 1) * 5;
-        const imgWidth = count === 1
-          ? 'calc(50% - 5px)'
-          : `calc((100% - 10px - ${gapPx}px) / ${Math.min(count, 4)})`;
         return (
           <div className={`mt-3 rounded-lg overflow-hidden border ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}>
             <div
@@ -1604,10 +1597,13 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
               图片 ({count})
             </div>
             <div
-              className={`flex ${hasMore ? 'overflow-x-auto' : ''} ${getMemoSecondaryBg(isDark, memo.color) || ''}`}
+              className={getMemoSecondaryBg(isDark, memo.color) || ''}
               style={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(${cols}, 1fr)`,
                 gap: '5px',
                 padding: '5px',
+                ...(hasMore ? { overflowX: 'auto', gridAutoFlow: 'column', gridAutoColumns: `calc((100% - ${(cols - 1) * 5}px) / ${cols})` } : {}),
                 ...(getMemoSecondaryBg(isDark, memo.color) ? {} : { background: isDark ? '#111827' : '#fbfbf8' }),
                 scrollbarWidth: 'thin',
                 scrollbarColor: isDark ? '#4b5563 transparent' : '#d1d5db transparent',
@@ -1618,13 +1614,8 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
                   key={i}
                   src={getThumbnailUrl(img.url)}
                   alt={img.alt}
-                  className={`object-cover border cursor-pointer hover:opacity-80 transition-opacity ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}
-                  style={{
-                    width: imgWidth,
-                    aspectRatio: '1',
-                    flexShrink: 0,
-                    borderRadius: 0,
-                  }}
+                  className={`w-full aspect-square object-cover border cursor-pointer hover:opacity-80 transition-opacity ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}
+                  style={{ borderRadius: 0 }}
                   onClick={() => setPreviewImage(img.url)}
                 />
               ))}
