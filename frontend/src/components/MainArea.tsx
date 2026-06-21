@@ -272,17 +272,10 @@ interface MainAreaProps {
 }
 
 const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, activeConvId = null }: MainAreaProps = {}) => {
-  const { setActiveConvId, refreshConvList, mobileEditingDocId } = useUserView();
+  const { setActiveConvId, refreshConvList } = useUserView();
   const { documentId: urlDocumentId } = useParams();
   const navigate = useNavigate();
-  // 移动端状态导航：mobileEditingDocId 控制编辑器，退出时强制显示首页
-  const mobileEditingActive = useRef(false);
-  if (mobileEditingDocId) mobileEditingActive.current = true;
-  const documentId = mobileEditingDocId
-    ? mobileEditingDocId
-    : mobileEditingActive.current
-      ? (mobileEditingActive.current = false, null)
-      : diaryDocId || urlDocumentId;
+  const documentId = diaryDocId || urlDocumentId;
   const [searchParams, setSearchParams] = useSearchParams();
   const { updateDocumentTitle, documents } = useDocuments();
   const { searchQuery, setSearchQuery } = useSearch();

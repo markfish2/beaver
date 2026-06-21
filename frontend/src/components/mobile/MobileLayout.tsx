@@ -8,7 +8,6 @@ import { getMonthlyDiary, getOrCreateDayNode } from '../../api/data';
 import NewMenuPopup from './NewMenuPopup';
 import AIChatMainView from '../AIChatMainView';
 import AIChatSidebar from '../AIChatSidebar';
-import { useUserView } from '../../context/UserViewContext';
 import { MessageSquare } from 'lucide-react';
 import type { ReactNode } from 'react';
 
@@ -46,72 +45,16 @@ function ToolbarSlot({ showZoom, hasTabBar }: { showZoom?: boolean; hasTabBar?: 
 export default function MobileLayout({ children }: MobileLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { activeConvId, setActiveConvId, refreshConvList, setUserSubView, setMobileEditingDocId } = useUserView();
+  const { activeConvId, setActiveConvId, refreshConvList } = useUserView();
   const [activeTab, setActiveTab] = useState<MobileTab>('memos');
   const [showNewMenu, setShowNewMenu] = useState(false);
   const [showAIHistory, setShowAIHistory] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
 
-  // ── 状态导航：用 editingDocId 控制编辑器显示 ──
-  const [editingDocId, setEditingDocId] = useState<string | null>(null);
-  const [prevTab, setPrevTab] = useState<MobileTab>('memos');
-  const isEditing = editingDocId !== null;
+  const prevTabRef = useRef<MobileTab>('memos');
+  const isEditing = location.pathname.startsWith('/d/');
 
-  // 同步 editingDocId 到 context，让 MainArea 能读取
-  useEffect(() => {
-    setMobileEditingDocId(editingDocId);
-  }, [editingDocId, setMobileEditingDocId]);
-  // 标记是否由代码触发的 pushState，避免 popstate 重复处理
-  const programmaticNav = useRef(false);
-  // 标记是否跳过下一次 URL 同步（handleBack 返回时用）
-  const skipNextUrlSync = useRef(false);
 
-  // 监听 URL 变化：处理直接访问 /d/{id} 和文件树点击导航
-  useEffect(() => {
-    if (skipNextUrlSync.current) {
-      skipNextUrlSync.current = false;
-      return;
-    }
-    const match = location.pathname.match(/^\/d\/(.+)$/);
-    if (match) {
-      const urlDocId = match[1];
-      if (urlDocId !== editingDocId) {
-        setPrevTab(activeTab);
-        setEditingDocId(urlDocId);
-      }
-    } else if (editingDocId && !programmaticNav.current) {
-      setEditingDocId(null);
-    }
-  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // editingDocId 变化时同步 URL（pushState 不触发 React 重渲染）
-  useEffect(() => {
-    if (editingDocId) {
-      programmaticNav.current = true;
-      window.history.pushState(null, '', `/d/${editingDocId}`);
-    }
-  }, [editingDocId]);
-
-  // 监听浏览器返回按钮（popstate）
-  useEffect(() => {
-    const handler = () => {
-      if (programmaticNav.current) {
-        programmaticNav.current = false;
-        return;
-      }
-      // 浏览器返回：从 URL 判断应该显示什么
-      const match = window.location.pathname.match(/^\/d\/(.+)$/);
-      if (match) {
-        setEditingDocId(match[1]);
-      } else {
-        setEditingDocId(null);
-        // 恢复 tab（从 URL 或默认）
-        setActiveTab('memos');
-      }
-    };
-    window.addEventListener('popstate', handler);
-    return () => window.removeEventListener('popstate', handler);
-  }, []);
 
   // 监听键盘状态
   useEffect(() => {
@@ -162,15 +105,9 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     setEditingDocId(id);
   }, [activeTab, setUserSubView]);
 
-  // ── 返回 ──
   const handleBack = useCallback(() => {
-    skipNextUrlSync.current = true;
-    setEditingDocId(null);
-    setActiveTab(prevTab);
-    setUserSubView(null);
-    programmaticNav.current = true;
-    window.history.replaceState(null, '', '/');
-  }, [prevTab, setUserSubView]);
+    window.history.back();
+  }, []);
 
   const handleTabChange = useCallback((tab: MobileTab) => {
     if (tab === 'new') {
@@ -181,11 +118,8 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       setDiaryDocId(null);
     }
     setActiveTab(tab);
-    // 切换 tab 时如果在编辑中，退出编辑
     if (isEditing) {
-      setEditingDocId(null);
-      programmaticNav.current = true;
-      window.history.replaceState(null, '', '/');
+      window.location.href = '/';
     }
   }, [isEditing]);
 
@@ -199,15 +133,12 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
 
   const handleDocumentCreated = useCallback((id: string, type: string) => {
     setShowNewMenu(false);
-    setUserSubView(null);
-    setDiaryDocId(null);
     if (type === 'folder') {
       setActiveTab('files');
     } else {
-      setPrevTab(activeTab);
-      setEditingDocId(id);
+      window.location.href = `/d/${id}`;
     }
-  }, [activeTab, setUserSubView]);
+  }, []);
 
   // Determine top bar title
   const getTopBarTitle = () => {
