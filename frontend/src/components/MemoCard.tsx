@@ -1576,10 +1576,12 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       {/* 图片画廊 */}
       {images.length > 0 && (() => {
         const count = images.length;
-        const showImages = count > 4 ? images.slice(0, 4) : images;
+        const displayCount = Math.min(count, 4);
         const hasMore = count > 4;
-        // 1张=50%, 2张=50%, 3张=33.3%, 4张=25%
-        const widthPercent = count === 1 ? 50 : count === 2 ? 50 : count === 3 ? 33.333 : 25;
+        // 每张图宽度 = (容器 - 左右padding 10px - 间距) / 数量
+        // 间距 = (数量-1) * 5px
+        // 统一用 calc 公式：calc((100% - 10px - (n-1)*5px) / n)
+        const imgWidth = `calc((100% - 10px - ${displayCount - 1}px * 5) / ${displayCount})`;
         return (
           <div className={`mt-3 rounded-lg overflow-hidden border ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}>
             <div
@@ -1605,7 +1607,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
                   alt={img.alt}
                   className={`object-cover border cursor-pointer hover:opacity-80 transition-opacity ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}
                   style={{
-                    width: `${widthPercent}%`,
+                    width: imgWidth,
                     aspectRatio: '1',
                     flexShrink: 0,
                     borderRadius: 0,
