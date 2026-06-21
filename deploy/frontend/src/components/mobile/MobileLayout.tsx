@@ -102,7 +102,9 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
 
   const prevEditingRef = useRef(false);
   useEffect(() => {
+    console.log('[Mobile] isEditing effect', { isEditing, activeTab, prevEditing: prevEditingRef.current, path: location.pathname });
     if (prevEditingRef.current && !isEditing) {
+      console.log('[Mobile] exiting editor, restoring tab:', prevTabRef.current);
       setActiveTab(prevTabRef.current);
     }
     if (isEditing) {
@@ -112,27 +114,23 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   }, [isEditing, activeTab]);
 
   const handleTabChange = useCallback((tab: MobileTab) => {
+    console.log('[Mobile] handleTabChange', { tab, isEditing, activeTab, path: location.pathname });
     if (tab === 'new') {
       setShowNewMenu(true);
       return;
     }
     setActiveTab(tab);
-    // Navigate to root when switching away from editor (but not diary)
-    // Use replace to avoid polluting browser history stack
     if (isEditing && tab !== 'diary') {
+      console.log('[Mobile] switching from editor to tab, navigating to /');
       navigate('/', { replace: true });
     }
-  }, [isEditing, navigate]);
+  }, [isEditing, navigate, activeTab, location.pathname]);
 
   // location.key === "default" 表示用户直接通过 URL 打开（历史栈无上一页）
   // 否则用 navigate(-1) 返回应用内上一页
   const handleBack = useCallback(() => {
-    if (location.key === 'default') {
-      navigate('/', { replace: true });
-    } else {
-      navigate(-1);
-    }
-  }, [navigate, location.key]);
+    window.history.back();
+  }, []);
 
   const handleSearch = useCallback((query: string) => {
     navigate(`/search?q=${encodeURIComponent(query)}`);
@@ -142,10 +140,16 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     setShowNewMenu(false);
   }, []);
 
-  const handleDocumentCreated = useCallback((id: string) => {
+  const handleDocumentCreated = useCallback((id: string, type: string) => {
+    console.log('[Mobile] handleDocumentCreated', { id, type });
     setShowNewMenu(false);
-    navigate(`/d/${id}`);
-  }, [navigate]);
+    if (type === 'folder') {
+      setActiveTab('files');
+      return;
+    }
+    // React 19 延迟 navigate()，用 window.location.href 立即跳转
+    window.location.href = `/d/${id}`;
+  }, []);
 
   // Determine top bar title
   const getTopBarTitle = () => {
@@ -173,6 +177,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       />
 
       <div className="flex-1 overflow-hidden flex flex-col">
+        {(() => { console.log('[Mobile] render', { isEditing, activeTab, path: location.pathname }); return null; })()}
         {isEditing && activeTab !== 'diary' ? (
           // Document editor mode: toolbar below topbar, then content
           <>

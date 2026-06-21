@@ -46,6 +46,7 @@ import { MoreVertical, Pencil, Trash2, Pin, PinOff, X, Check, Copy, CheckCheck, 
 import { useNavigate } from 'react-router-dom';
 import type { Memo, Document, LinkPreview } from '../api/data';
 import { uploadFile, getMemoTags, updateMemoColor, getThumbnailUrl, fetchLinkPreview, retryLinkPreview } from '../api/data';
+import MermaidBlock from './MermaidBlock';
 import LinkPreviewCard from './LinkPreviewCard';
 import { handleListContinuation } from '../utils/listContinuation';
 import { getPasteMarkdown } from '../utils/htmlToMarkdown';
@@ -612,7 +613,13 @@ const markdownComponents = (
   const isCardDark = !!cardColorDef?.whiteText;
   const markerClass = isCardDark ? 'text-white/60' : 'text-gray-500 dark:text-gray-400';
   return {
-    code: (props: any) => <CodeBlock {...props} cardColor={cardColor} />,
+    code: (props: any) => {
+      const match = /language-(\w+)/.exec(props.className || '');
+      if (match && match[1] === 'mermaid') {
+        return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
+      }
+      return <CodeBlock {...props} cardColor={cardColor} />;
+    },
     img: ({ src, alt }) => {
       // 检测音频文件
       if (src && /\.(mp4|webm|ogg|wav|mp3|m4a)(\?|$)/i.test(src)) {

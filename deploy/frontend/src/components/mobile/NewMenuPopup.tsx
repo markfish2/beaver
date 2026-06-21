@@ -5,59 +5,59 @@ import { useDocuments } from '../../context/DocumentContext';
 
 interface NewMenuPopupProps {
   onClose: () => void;
-  onDocumentCreated: (id: string) => void;
+  onDocumentCreated: (id: string, type: string) => void;
 }
 
 export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopupProps) {
   const { addDocument } = useDocuments();
-  const [showTodoDialog, setShowTodoDialog] = useState(false);
-  const [todoText, setTodoText] = useState('');
-  const todoInputRef = useRef<HTMLInputElement>(null);
+  const [showInputDialog, setShowInputDialog] = useState(false);
+  const [inputType, setInputType] = useState<string>('');
+  const [inputText, setInputText] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (showTodoDialog && todoInputRef.current) {
-      todoInputRef.current.focus();
+    if (showInputDialog && inputRef.current) {
+      inputRef.current.focus();
     }
-  }, [showTodoDialog]);
+  }, [showInputDialog]);
 
   const handleCreate = async (type: string) => {
-    try {
-      if (type === 'todo') {
-        setShowTodoDialog(true);
-        return;
-      }
+    if (type === 'todo' || type === 'folder') {
+      setInputType(type);
+      setInputText('');
+      setShowInputDialog(true);
+      return;
+    }
 
-      let doc;
-      switch (type) {
-        case 'document':
-          doc = await createDocument('新文章', 'document');
-          break;
-        case 'note':
-          doc = await createDocument('新笔记', 'note');
-          break;
-        case 'folder':
-          doc = await createDocument('新文件夹', 'folder');
-          break;
-        default:
-          return;
-      }
+    try {
+      const title = type === 'document' ? '新文章' : '新笔记';
+      const doc = await createDocument(title, type);
       addDocument(doc);
-      onDocumentCreated(doc.id);
+      onDocumentCreated(doc.id, type);
     } catch (error) {
       console.error('Failed to create document:', error);
     }
   };
 
-  const handleCreateTodo = async () => {
-    const trimmed = todoText.trim();
+  const handleConfirmInput = async () => {
+    const trimmed = inputText.trim();
     if (!trimmed) return;
+
     try {
-      await createTodo(trimmed);
-      setShowTodoDialog(false);
-      setTodoText('');
-      onClose();
+      if (inputType === 'todo') {
+        await createTodo(trimmed);
+        setShowInputDialog(false);
+        setInputText('');
+        onClose();
+      } else if (inputType === 'folder') {
+        const doc = await createDocument(trimmed, 'folder');
+        addDocument(doc);
+        setShowInputDialog(false);
+        setInputText('');
+        onDocumentCreated(doc.id, 'folder');
+      }
     } catch (error) {
-      console.error('Failed to create todo:', error);
+      console.error('Failed to create:', error);
     }
   };
 
@@ -68,10 +68,9 @@ export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopu
     { type: 'folder', label: '文件夹', icon: Folder, color: 'text-yellow-600 dark:text-yellow-400' },
   ];
 
-  // 待办弹窗 — 全屏蒙版 + 宽输入框
-  if (showTodoDialog) {
+  if (showInputDialog) {
     return (
-      <div className="fixed inset-0 z-50 flex items-end" onClick={() => { setShowTodoDialog(false); setTodoText(''); }}>
+      <div className="fixed inset-0 z-50 flex items-end" onClick={() => { setShowInputDialog(false); setInputText(''); }}>
         <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
         <div
           className="relative w-full bg-white dark:bg-gray-900 shadow-xl border-t border-gray-200 dark:border-gray-700 p-4 pb-8"
@@ -79,18 +78,18 @@ export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopu
         >
           <div className="flex items-center gap-3 max-w-lg mx-auto">
             <input
-              ref={todoInputRef}
+              ref={inputRef}
               type="text"
-              value={todoText}
-              onChange={(e) => setTodoText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleCreateTodo(); if (e.key === 'Escape') { setShowTodoDialog(false); setTodoText(''); } }}
-              placeholder="新建待办..."
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmInput(); if (e.key === 'Escape') { setShowInputDialog(false); setInputText(''); } }}
+              placeholder={inputType === 'todo' ? '新建待办...' : '文件夹名称...'}
               className="flex-1 px-4 py-2.5 text-base bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 placeholder-gray-400 text-gray-800 dark:text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
               autoFocus
             />
             <button
-              onClick={handleCreateTodo}
-              disabled={!todoText.trim()}
+              onClick={handleConfirmInput}
+              disabled={!inputText.trim()}
               className="w-10 h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 rounded-lg"
             >
               <span className="text-xl leading-none">+</span>
