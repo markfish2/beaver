@@ -157,9 +157,10 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       // 清除日记状态和用户子视图，避免干扰文档加载
       setDiaryDocId(null);
       setUserSubView(null);
-      navigate(`/d/${id}`);
+      // 使用 window.location.href 强制刷新，解决 React Router v7 导航不生效的问题
+      window.location.href = `/d/${id}`;
     }
-  }, [navigate, setUserSubView]);
+  }, [setUserSubView]);
 
   // Determine top bar title
   const getTopBarTitle = () => {
