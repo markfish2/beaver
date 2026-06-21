@@ -53,7 +53,7 @@ const AIChatSidebar = forwardRef<AIChatSidebarHandle, AIChatSidebarProps>(
     // 删除对话
     const handleDeleteConversation = useCallback(async (convId: string, e: React.MouseEvent) => {
       e.stopPropagation();
-      if (!confirm('确定删除这条对话吗？')) return;
+      if (!window.confirm('确定删除这条对话吗？')) return;
       try {
         await deleteAIConversation(convId);
         setConversations(prev => prev.filter(c => c.id !== convId));
