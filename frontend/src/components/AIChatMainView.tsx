@@ -353,6 +353,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
             </button>
           </div>
         </div>
+        </div>
       </div>
     </div>
   );
