@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronRight, FileText, Folder, ListTree, PenTool, MoreHorizontal, Star, Copy, Trash2, Pencil } from 'lucide-react';
 import { useDocuments } from '../../context/DocumentContext';
 import { deleteDocument, updateDocument, copyDocument } from '../../api/data';
+import DeleteConfirmDialog from '../DeleteConfirmDialog';
 import type { Document } from '../../api/data';
 
 interface FileTreeViewProps {
@@ -24,6 +25,7 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
   const [contextMenu, setContextMenu] = useState<{ docId: string; x: number; y: number } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
 
   const filteredDocs = starredOnly
     ? documents.filter(d => d.is_starred)
@@ -72,12 +74,17 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
     setContextMenu(null);
   };
 
-  const handleDelete = async (docId: string) => {
-    if (confirm('确定要删除吗？')) {
-      await deleteDocument(docId);
-      refreshDocuments();
-    }
+  const handleDeleteClick = (docId: string) => {
+    const doc = documents.find(d => d.id === docId);
+    setDeleteTarget({ id: docId, title: doc?.title || '文档' });
     setContextMenu(null);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    await deleteDocument(deleteTarget.id);
+    refreshDocuments();
+    setDeleteTarget(null);
   };
 
   const handleRename = (docId: string) => {
@@ -243,13 +250,21 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
               <Copy className="w-4 h-4" />
               复制
             </button>
-            <button onClick={() => handleDelete(contextMenu.docId)} className="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2">
+            <button onClick={() => handleDeleteClick(contextMenu.docId)} className="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2">
               <Trash2 className="w-4 h-4" />
               删除
             </button>
           </div>
         );
       })()}
+
+      <DeleteConfirmDialog
+        isOpen={!!deleteTarget}
+        title="删除确认"
+        message={deleteTarget ? `确定要删除「${deleteTarget.title}」吗？` : ''}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
