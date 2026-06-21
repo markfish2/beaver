@@ -34,13 +34,52 @@ def _estimate_tokens(text: str) -> int:
     return int(chinese_chars * 1.5 + english_words * 1.3 + other_chars * 0.5) + 4  # +4 for message overhead
 
 
-def _truncate_messages(messages: list, system_prompt: str, max_context_tokens: int = 800000) -> list:
-    """截断消息以适配模型上下文窗口
+async def _summarize_messages(messages: list, config) -> str:
+    """用 AI 生成对话摘要"""
+    import httpx
+    # 构建摘要请求
+    conversation_text = ""
+    for msg in messages:
+        role = "用户" if msg.get("role") == "user" else "AI"
+        content = msg.get("content", "")[:500]  # 截断过长内容
+        conversation_text += f"{role}：{content}\n"
+
+    prompt = f"""请用中文简洁地总结以下对话的关键信息（不超过200字）。保留重要问题、结论和关键数据。
+
+{conversation_text}
+
+要求：只输出摘要内容，不要加标题或前缀。"""
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{config.api_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {config.api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": config.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 300,
+                    "temperature": 0.3
+                }
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return data["choices"][0]["message"]["content"].strip()
+    except Exception:
+        pass
+    return ""
+
+
+async def _truncate_messages(messages: list, system_prompt: str, config=None, max_context_tokens: int = 800000) -> list:
+    """截断消息以适配模型上下文窗口，支持摘要压缩
 
     策略：
     1. 始终保留 system prompt
-    2. 始终保留最后 4 轮对话（最近的上下文）
-    3. 从旧到新逐条添加，直到接近 token 上限
+    2. 始终保留最后 8 条对话（最近的上下文）
+    3. 旧消息超出限制时，调用 AI 生成摘要替代
     4. 如果单条消息就超限，截断其内容
     """
     if not messages:
@@ -54,45 +93,74 @@ def _truncate_messages(messages: list, system_prompt: str, max_context_tokens: i
     available_tokens -= system_tokens
 
     # 始终保留最后 N 条消息（最近的上下文）
-    keep_recent = min(8, len(messages))  # 最多保留最后 8 条
+    keep_recent = min(8, len(messages))
     recent_messages = messages[-keep_recent:]
     older_messages = messages[:-keep_recent] if len(messages) > keep_recent else []
 
-    # 计算最近消息的 token
+    # 计算总 token
     recent_tokens = sum(_estimate_tokens(m.get("content", "")) for m in recent_messages)
+    older_tokens = sum(_estimate_tokens(m.get("content", "")) for m in older_messages)
+    total_tokens = recent_tokens + older_tokens
 
-    # 如果最近消息就已经超限了，只截断最近消息
-    if recent_tokens > available_tokens:
+    # 未超限，直接返回
+    if total_tokens <= available_tokens:
+        return messages
+
+    # 超限了，需要处理旧消息
+    # 计算给旧消息的空间（减去摘要预留的 ~500 token）
+    summary_budget = 500
+    older_available = available_tokens - recent_tokens - summary_budget
+
+    if older_available <= 0:
+        # 连最近消息都超限，只截断最近消息
         result = []
         tokens_used = 0
-        # 从最新的开始保留
         for msg in reversed(recent_messages):
             msg_tokens = _estimate_tokens(msg.get("content", ""))
             if tokens_used + msg_tokens > available_tokens:
-                # 截断这条消息的内容
                 content = msg.get("content", "")
                 max_chars = int((available_tokens - tokens_used) / 1.5)
                 if max_chars > 100:
-                    truncated_msg = {**msg, "content": content[:max_chars] + "\n[已截断]"}
-                    result.insert(0, truncated_msg)
+                    result.insert(0, {**msg, "content": content[:max_chars] + "\n[已截断]"})
                 break
             result.insert(0, msg)
             tokens_used += msg_tokens
         return result
 
-    # 从旧到新添加消息，直到接近上限
-    result = []
-    tokens_used = recent_tokens
-    for msg in older_messages:
+    # 收集需要被摘要压缩的旧消息
+    kept_older = []
+    tokens_used = 0
+    summarize_from = len(older_messages)
+    for i, msg in enumerate(older_messages):
         msg_tokens = _estimate_tokens(msg.get("content", ""))
-        if tokens_used + msg_tokens > available_tokens:
-            # 跳过这条太旧的消息，但在第一条跳过的位置插入摘要提示
-            if not any(m.get("content", "").startswith("[以下为更早的对话摘要") for m in result):
-                result.insert(0, {"role": "system", "content": f"[以下为更早的对话摘要：共省略了 {len(older_messages) - len(result)} 条历史消息]"})
-            continue
-        result.append(msg)
+        if tokens_used + msg_tokens > older_available:
+            summarize_from = i
+            break
+        kept_older.append(msg)
         tokens_used += msg_tokens
 
+    # 需要摘要的消息
+    to_summarize = older_messages[:summarize_from]
+
+    # 生成摘要
+    summary_text = ""
+    if to_summarize and config:
+        summary_text = await _summarize_messages(to_summarize, config)
+
+    # 构建最终消息列表
+    result = []
+    if summary_text:
+        result.append({
+            "role": "system",
+            "content": f"[以下为更早的对话摘要]\n{summary_text}"
+        })
+    elif to_summarize:
+        result.append({
+            "role": "system",
+            "content": f"[已省略 {len(to_summarize)} 条早期对话消息]"
+        })
+
+    result.extend(kept_older)
     result.extend(recent_messages)
     return result
 
@@ -469,7 +537,7 @@ async def ask_ai(
 6. 直接回答问题，不要在回答中列出来源（来源会由系统自动展示）"""
 
     # 上下文管理：截断超长对话
-    truncated = _truncate_messages(request.messages, system_prompt)
+    truncated = await _truncate_messages(request.messages, system_prompt, config=config)
     messages = [{"role": "system", "content": system_prompt}] + truncated
 
     # 收集完整回复用于保存
