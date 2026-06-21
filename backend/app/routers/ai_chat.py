@@ -20,6 +20,83 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _estimate_tokens(text: str) -> int:
+    """估算文本的 token 数量（中英混合场景）"""
+    if not text:
+        return 0
+    import re
+    # 中文字符数 * 1.5（中文通常 1-2 token/字）
+    chinese_chars = len(re.findall(r'[一-鿿]', text))
+    # 英文单词数 * 1.3
+    english_words = len(re.findall(r'[a-zA-Z]+', text))
+    # 其他字符（标点、数字、空格等）按 0.5 token/字符估算
+    other_chars = len(text) - chinese_chars - sum(len(w) for w in re.findall(r'[a-zA-Z]+', text))
+    return int(chinese_chars * 1.5 + english_words * 1.3 + other_chars * 0.5) + 4  # +4 for message overhead
+
+
+def _truncate_messages(messages: list, system_prompt: str, max_context_tokens: int = 800000) -> list:
+    """截断消息以适配模型上下文窗口
+
+    策略：
+    1. 始终保留 system prompt
+    2. 始终保留最后 4 轮对话（最近的上下文）
+    3. 从旧到新逐条添加，直到接近 token 上限
+    4. 如果单条消息就超限，截断其内容
+    """
+    if not messages:
+        return messages
+
+    # 预留 20% 给 AI 回复
+    available_tokens = int(max_context_tokens * 0.8)
+
+    # 计算 system prompt 的 token
+    system_tokens = _estimate_tokens(system_prompt)
+    available_tokens -= system_tokens
+
+    # 始终保留最后 N 条消息（最近的上下文）
+    keep_recent = min(8, len(messages))  # 最多保留最后 8 条
+    recent_messages = messages[-keep_recent:]
+    older_messages = messages[:-keep_recent] if len(messages) > keep_recent else []
+
+    # 计算最近消息的 token
+    recent_tokens = sum(_estimate_tokens(m.get("content", "")) for m in recent_messages)
+
+    # 如果最近消息就已经超限了，只截断最近消息
+    if recent_tokens > available_tokens:
+        result = []
+        tokens_used = 0
+        # 从最新的开始保留
+        for msg in reversed(recent_messages):
+            msg_tokens = _estimate_tokens(msg.get("content", ""))
+            if tokens_used + msg_tokens > available_tokens:
+                # 截断这条消息的内容
+                content = msg.get("content", "")
+                max_chars = int((available_tokens - tokens_used) / 1.5)
+                if max_chars > 100:
+                    truncated_msg = {**msg, "content": content[:max_chars] + "\n[已截断]"}
+                    result.insert(0, truncated_msg)
+                break
+            result.insert(0, msg)
+            tokens_used += msg_tokens
+        return result
+
+    # 从旧到新添加消息，直到接近上限
+    result = []
+    tokens_used = recent_tokens
+    for msg in older_messages:
+        msg_tokens = _estimate_tokens(msg.get("content", ""))
+        if tokens_used + msg_tokens > available_tokens:
+            # 跳过这条太旧的消息，但在第一条跳过的位置插入摘要提示
+            if not any(m.get("content", "").startswith("[以下为更早的对话摘要") for m in result):
+                result.insert(0, {"role": "system", "content": f"[以下为更早的对话摘要：共省略了 {len(older_messages) - len(result)} 条历史消息]"})
+            continue
+        result.append(msg)
+        tokens_used += msg_tokens
+
+    result.extend(recent_messages)
+    return result
+
+
 def _search_notes(db: Session, query: str, keywords: list[str] = None, limit: int = 10) -> list[dict]:
     """搜索笔记内容，按关键词匹配数量评分排序"""
     import re
@@ -391,7 +468,9 @@ async def ask_ai(
 5. 用中文回答
 6. 直接回答问题，不要在回答中列出来源（来源会由系统自动展示）"""
 
-    messages = [{"role": "system", "content": system_prompt}] + request.messages
+    # 上下文管理：截断超长对话
+    truncated = _truncate_messages(request.messages, system_prompt)
+    messages = [{"role": "system", "content": system_prompt}] + truncated
 
     # 收集完整回复用于保存
     full_response = ""
