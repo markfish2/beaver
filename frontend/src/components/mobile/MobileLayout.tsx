@@ -152,15 +152,12 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   }, []);
 
   const handleDocumentCreated = useCallback((id: string, type: string) => {
-    flushSync(() => {
-      setShowNewMenu(false);
-      setDiaryDocId(null);
-      setUserSubView(null);
-      if (type === 'folder') {
-        setActiveTab('files');
-      }
-    });
-    if (type !== 'folder') {
+    setShowNewMenu(false);
+    setDiaryDocId(null);
+    setUserSubView(null);
+    if (type === 'folder') {
+      setActiveTab('files');
+    } else {
       navigate(`/d/${id}`);
     }
   }, [navigate, setUserSubView]);
