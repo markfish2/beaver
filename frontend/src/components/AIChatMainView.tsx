@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader2, FileText, ListTree, StickyNote, PenTool, BookmarkPlus } from 'lucide-react';
+import { Send, Loader2, FileText, ListTree, StickyNote, PenTool, BookmarkPlus, Database, Globe } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -316,7 +316,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
               className="flex-shrink-0 ml-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
               title={mode === 'data' ? '当前：数据模式，点击切换' : '当前：网络模式，点击切换'}
             >
-              <span className="text-base">{mode === 'data' ? '📚' : '🌐'}</span>
+              {mode === 'data' ? <Database className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
             </button>
             {/* 输入框 */}
             <textarea
@@ -336,7 +336,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
               className={`flex-shrink-0 mr-1.5 w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
                 input.trim()
                   ? 'bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
+                  : 'bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400'
               } disabled:opacity-30 disabled:cursor-not-allowed`}
             >
               <Send className="w-4 h-4" />
