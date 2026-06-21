@@ -22,7 +22,6 @@ export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopu
   }, [showInputDialog]);
 
   const handleCreate = async (type: string) => {
-    // 待办和文件夹需要输入名称
     if (type === 'todo' || type === 'folder') {
       setInputType(type);
       setInputText('');
@@ -30,7 +29,6 @@ export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopu
       return;
     }
 
-    // 大纲笔记和普通笔记直接创建
     try {
       const title = type === 'document' ? '新文章' : '新笔记';
       const doc = await createDocument(title, type);
@@ -63,12 +61,6 @@ export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopu
     }
   };
 
-  const getInputPlaceholder = () => {
-    if (inputType === 'todo') return '新建待办...';
-    if (inputType === 'folder') return '文件夹名称...';
-    return '名称...';
-  };
-
   const menuItems = [
     { type: 'document', label: '大纲笔记', icon: ListTree, color: 'text-emerald-600 dark:text-emerald-400' },
     { type: 'note', label: '普通笔记', icon: FileText, color: 'text-blue-600 dark:text-blue-400' },
@@ -76,7 +68,6 @@ export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopu
     { type: 'folder', label: '文件夹', icon: Folder, color: 'text-yellow-600 dark:text-yellow-400' },
   ];
 
-  // 输入弹窗（待办 / 文件夹）
   if (showInputDialog) {
     return (
       <div className="fixed inset-0 z-50 flex items-end" onClick={() => { setShowInputDialog(false); setInputText(''); }}>
@@ -92,7 +83,7 @@ export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopu
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmInput(); if (e.key === 'Escape') { setShowInputDialog(false); setInputText(''); } }}
-              placeholder={getInputPlaceholder()}
+              placeholder={inputType === 'todo' ? '新建待办...' : '文件夹名称...'}
               className="flex-1 px-4 py-2.5 text-base bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 placeholder-gray-400 text-gray-800 dark:text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
               autoFocus
             />
