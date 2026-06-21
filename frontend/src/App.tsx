@@ -144,14 +144,6 @@ function AppRoutes() {
           </ProtectedRoute>
         } />
 
-        <Route path="/d" element={
-          <ProtectedRoute>
-            <AppLayout>
-              <MainAreaWithUserView />
-            </AppLayout>
-          </ProtectedRoute>
-        } />
-
         <Route path="/search" element={
           <ProtectedRoute>
             <SearchResultsPage />

@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
-import { flushSync } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import MobileTopBar from './MobileTopBar';
 import MobileBottomTabBar, { type MobileTab } from './MobileBottomTabBar';
@@ -48,7 +47,7 @@ function ToolbarSlot({ showZoom, hasTabBar }: { showZoom?: boolean; hasTabBar?: 
 export default function MobileLayout({ children }: MobileLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { activeConvId, setActiveConvId, refreshConvList, setUserSubView } = useUserView();
+  const { activeConvId, setActiveConvId, refreshConvList } = useUserView();
   const [activeTab, setActiveTab] = useState<MobileTab>('memos');
   const [showNewMenu, setShowNewMenu] = useState(false);
   const [showAIHistory, setShowAIHistory] = useState(false);
@@ -69,12 +68,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   const [diaryDocId, setDiaryDocId] = useState<string | null>(null);
 
   // Is user viewing a specific document (not diary tab)?
-  // 用 state 追踪，确保 navigate() 后能触发重渲染
-  const [editingPath, setEditingPath] = useState(location.pathname);
-  useEffect(() => {
-    setEditingPath(location.pathname);
-  }, [location.pathname]);
-  const isEditing = editingPath.startsWith('/d/');
+  const isEditing = location.pathname.startsWith('/d/');
 
   // Load diary when switching to diary tab
   useEffect(() => {
@@ -112,8 +106,6 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       setActiveTab(prevTabRef.current);
     }
     if (isEditing) {
-      // 进入编辑模式时清除用户子视图，确保 MainArea 渲染文档编辑器
-      setUserSubView(null);
       prevTabRef.current = activeTab;
     }
     prevEditingRef.current = isEditing;
@@ -123,10 +115,6 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     if (tab === 'new') {
       setShowNewMenu(true);
       return;
-    }
-    // 切离日记 tab 时清除 diaryDocId，避免影响其他页面的 documentId
-    if (tab !== 'diary') {
-      setDiaryDocId(null);
     }
     setActiveTab(tab);
     // Navigate to root when switching away from editor (but not diary)
@@ -139,14 +127,12 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   // location.key === "default" 表示用户直接通过 URL 打开（历史栈无上一页）
   // 否则用 navigate(-1) 返回应用内上一页
   const handleBack = useCallback(() => {
-    setUserSubView(null);
-    setDiaryDocId(null);
     if (location.key === 'default') {
       navigate('/', { replace: true });
     } else {
       navigate(-1);
     }
-  }, [navigate, location.key, setUserSubView]);
+  }, [navigate, location.key]);
 
   const handleSearch = useCallback((query: string) => {
     navigate(`/search?q=${encodeURIComponent(query)}`);
@@ -156,18 +142,10 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     setShowNewMenu(false);
   }, []);
 
-  const handleDocumentCreated = useCallback((id: string, type: string) => {
-    flushSync(() => {
-      setShowNewMenu(false);
-      setDiaryDocId(null);
-      setUserSubView(null);
-    });
-    if (type === 'folder') {
-      setActiveTab('files');
-    } else {
-      navigate(`/d/${id}`);
-    }
-  }, [navigate, setUserSubView]);
+  const handleDocumentCreated = useCallback((id: string) => {
+    setShowNewMenu(false);
+    navigate(`/d/${id}`);
+  }, [navigate]);
 
   // Determine top bar title
   const getTopBarTitle = () => {
