@@ -94,9 +94,7 @@ const PageLoading = () => <div className="h-screen flex items-center justify-cen
 // Wrapper to pass userSubView and activeConvId from context to MainArea
 function MainAreaWithUserView() {
   const { userSubView, activeConvId } = useUserView();
-  const { documentId } = useParams();
-  // key 强制 MainArea 在 documentId 变化时重新挂载，解决移动端导航不刷新的问题
-  return <MainArea key={documentId || '_home'} userSubView={userSubView} activeConvId={activeConvId} />;
+  return <MainArea userSubView={userSubView} activeConvId={activeConvId} />;
 }
 
 function AppRoutes() {
