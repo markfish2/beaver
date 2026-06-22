@@ -3,6 +3,9 @@ import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import remarkBreaks from 'remark-breaks';
 import rehypeRaw from 'rehype-raw';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -50,7 +53,7 @@ import MermaidBlock from './MermaidBlock';
 import LinkPreviewCard from './LinkPreviewCard';
 import { handleListContinuation } from '../utils/listContinuation';
 import { getPasteMarkdown } from '../utils/htmlToMarkdown';
-import { stripTags, stripAttachments, normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks } from '../utils/markdownPreprocess';
+import { stripTags, stripAttachments, normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts } from '../utils/markdownPreprocess';
 import MemoToDocDialog from './MemoToDocDialog';
 import AudioPlayer from './AudioPlayer';
 import AIChatPanel from './AIChatPanel';
@@ -947,7 +950,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const tags = useMemo(() => extractTags(memo.content), [memo.content]);
   const images = useMemo(() => extractImages(memo.content), [memo.content]);
   const fileLinks = useMemo(() => extractFileLinks(memo.content), [memo.content]);
-  const strippedContent = useMemo(() => normalizeInProgressTasks(normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(stripAttachments(stripTags(memo.content))))))), [memo.content]);
+  const strippedContent = useMemo(() => normalizeInProgressTasks(normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(stripAttachments(stripTags(normalizeCallouts(memo.content)))))))), [memo.content]);
 
   // Link previews (fetchLinkPreview uses localStorage cache, returns instantly for cached URLs)
   const urls = useMemo(() => extractUrls(memo.content), [memo.content]);
@@ -1569,7 +1572,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
         onDoubleClick={readOnly ? undefined : handleContentDoubleClick}
         title={readOnly ? undefined : "双击编辑"}
       >
-        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeRaw]} components={mdComponents}>{strippedContent}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeRaw, rehypeKatex]} components={mdComponents}>{strippedContent}</ReactMarkdown>
         {!expanded && isLong && (
           <>
             <div className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none"

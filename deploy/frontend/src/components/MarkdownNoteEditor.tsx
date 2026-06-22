@@ -3,6 +3,9 @@ import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import remarkBreaks from 'remark-breaks';
 import rehypeRaw from 'rehype-raw';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -49,7 +52,7 @@ import { useDocuments } from '../context/DocumentContext';
 import type { Node, Document } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import { handleListContinuation } from '../utils/listContinuation';
-import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks } from '../utils/markdownPreprocess';
+import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts } from '../utils/markdownPreprocess';
 import { getPasteMarkdown, extractExternalImageUrls } from '../utils/htmlToMarkdown';
 import MentionDropdown from './MentionDropdown';
 import AIChatPanel from './AIChatPanel';
@@ -61,7 +64,7 @@ interface Props {
 
 // 普通笔记预处理：不剥离图片和标签（与 MemoCard 不同，图片内联渲染）
 function preprocess(content: string): string {
-  return normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(content))));
+  return normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(normalizeCallouts(content)))));
 }
 
 // --- 代码块组件 (同 MemoCard) ---
@@ -711,7 +714,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
         ) : (
           <div className="memo-content prose prose-gray dark:prose-invert max-w-[768px] w-full text-base text-gray-700 dark:text-gray-300 p-6" style={{ lineHeight: '1.75' }}>
             {content.trim() ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeRaw]} components={mdComponents}>{processedContent}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeRaw, rehypeKatex]} components={mdComponents}>{processedContent}</ReactMarkdown>
             ) : (
               <p className="text-gray-400 dark:text-gray-500 italic">空笔记</p>
             )}
