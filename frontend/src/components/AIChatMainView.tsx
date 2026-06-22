@@ -382,9 +382,13 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
                 >
                   <Wand2 className="w-4 h-4" />
                 </button>
-                {showSkillMenu && skills.length > 0 && (
+                {showSkillMenu && (
                   <div className="absolute left-0 bottom-full mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1.5 min-w-[180px] z-20">
-                    {skills.map(skill => (
+                    {skills.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-gray-400 dark:text-gray-500">
+                        暂无 Skill，请将 .md 文件放入 data/skill/ 目录
+                      </div>
+                    ) : skills.map(skill => (
                       <button
                         key={skill.id}
                         onClick={() => {
