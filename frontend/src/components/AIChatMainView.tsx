@@ -262,11 +262,11 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
         ) : null}
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[70%] rounded-xl px-4 py-3 relative group ${
+            <div className={`max-w-[70%] px-4 py-3 relative group ${
               msg.role === 'user'
-                ? 'bg-blue-500 text-white'
+                ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
                 : 'bg-white dark:bg-gray-800/50 border border-[#dad9d4] dark:border-gray-700/40 text-gray-800 dark:text-gray-200'
-            }`}>
+            }`} style={{ borderRadius: '8px' }}>
               {msg.role === 'user' ? (
                 <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
               ) : (
