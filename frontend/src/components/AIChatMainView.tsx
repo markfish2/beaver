@@ -253,7 +253,8 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
   return (
     <div className={`flex-1 flex flex-col h-full bg-white dark:bg-gray-900 ${isEmpty ? 'items-center justify-center' : ''}`}>
       {/* Messages */}
-      <div className={`${isEmpty ? 'hidden' : 'flex-1 overflow-y-auto p-4 space-y-4'}`}>
+      <div className={`${isEmpty ? 'hidden' : 'flex-1 overflow-y-auto'}`}>
+        <div className="max-w-[700px] mx-auto p-4 space-y-4">
         {loadingConv ? (
           <div className="text-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-gray-400 mx-auto" />
@@ -347,11 +348,12 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
           </div>
         )}
         <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Input */}
-      <div className={`px-4 ${isEmpty ? 'w-full max-w-2xl' : 'pb-4'}`}>
-        <div className={`relative ${isEmpty ? 'mb-6' : ''}`}>
+      <div className={`px-4 ${isEmpty ? 'w-full' : 'pb-4'}`}>
+        <div className={`relative max-w-[700px] mx-auto ${isEmpty ? 'mb-6' : ''}`}>
           {/* 光晕渐变背景 */}
           {isEmpty && (
             <div className="absolute -inset-x-96 -inset-y-64 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, rgba(186,230,253,0.5) 0%, rgba(224,242,254,0.2) 50%, transparent 70%)' }} />
@@ -361,7 +363,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
               {nickname ? `${nickname}，` : ''}有什么新灵感想聊聊吗？
             </p>
           )}
-          <div className="max-w-2xl mx-auto">
+          <div>
             <div className="relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-2xl focus-within:border-gray-400 dark:focus-within:border-gray-500 transition-colors shadow-sm">
             {/* 第一行：模式 + Skill + Skill 标签 */}
             <div className="flex items-center gap-1 px-3 pt-2.5">
