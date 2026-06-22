@@ -352,7 +352,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
       </div>
 
       {/* Input */}
-      <div className={`px-4 ${isEmpty ? 'w-full' : 'pb-4'}`}>
+      <div className={`px-4 ${isEmpty ? 'w-full' : 'pb-4'}`} style={isEmpty ? {} : { paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}>
         <div className={`relative max-w-[700px] mx-auto ${isEmpty ? 'mb-6' : ''}`}>
           {/* 光晕渐变背景 */}
           {isEmpty && (
