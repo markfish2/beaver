@@ -100,7 +100,7 @@ export function stripAttachments(content: string): string {
 /**
  * 将 GitHub 风格的 callout 语法转换为 HTML
  * 输入：> [!note] 标题\n> 内容
- * 输出：<div class="callout callout-note"><div class="callout-title">📝 标题</div><div class="callout-content">内容</div></div>
+ * 输出：<div class="callout callout-note"><span class="callout-icon">📝</span><div class="callout-body"><div class="callout-title">标题</div><div class="callout-content">内容</div></div></div>
  */
 export function normalizeCallouts(content: string): string {
   const calloutTypes: Record<string, { icon: string; label: string }> = {
@@ -113,7 +113,6 @@ export function normalizeCallouts(content: string): string {
     quote: { icon: '💬', label: '引用' },
   };
 
-  // 匹配 > [!type] title 开头的 blockquote 块
   return content.replace(
     /^>\s*\[!(\w+)\]\s*(.*?)\n((?:>.*\n?)*)/gm,
     (_match, type: string, title: string, body: string) => {
@@ -121,13 +120,12 @@ export function normalizeCallouts(content: string): string {
       const config = calloutTypes[lowerType] || { icon: '📌', label: type };
       const icon = config.icon;
       const displayTitle = title.trim() || config.label;
-      // 去掉每行开头的 > 和可选的空格
       const cleanBody = body
         .split('\n')
         .map((line: string) => line.replace(/^>\s?/, ''))
         .join('\n')
         .trim();
-      return `<div class="callout callout-${lowerType}"><div class="callout-title">${icon} ${displayTitle}</div><div class="callout-content">${cleanBody}</div></div>\n`;
+      return `<div class="callout callout-${lowerType}"><span class="callout-icon">${icon}</span><div class="callout-body"><div class="callout-title">${displayTitle}</div><div class="callout-content">${cleanBody}</div></div></div>\n`;
     }
   );
 }
