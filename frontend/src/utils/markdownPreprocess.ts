@@ -124,13 +124,12 @@ export function normalizeCallouts(content: string): string {
     (_match, type: string, title: string, body: string) => {
       const lowerType = type.toLowerCase();
       const icon = icons[lowerType] || defaultIcon;
-      const displayTitle = title.trim() || labels[lowerType] || type;
       const cleanBody = body
         .split('\n')
         .map((line: string) => line.replace(/^>\s?/, ''))
         .join('\n')
         .trim();
-      return `<div class="callout callout-${lowerType}"><span class="callout-icon">${icon}</span><div class="callout-body"><div class="callout-title">${displayTitle}</div><div class="callout-content">${cleanBody}</div></div></div>\n`;
+      return `<div class="callout callout-${lowerType}"><span class="callout-icon">${icon}</span><div class="callout-body"><div class="callout-content">${cleanBody}</div></div></div>\n`;
     }
   );
 }
