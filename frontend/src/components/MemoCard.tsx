@@ -53,7 +53,7 @@ import MermaidBlock from './MermaidBlock';
 import LinkPreviewCard from './LinkPreviewCard';
 import { handleListContinuation } from '../utils/listContinuation';
 import { getPasteMarkdown } from '../utils/htmlToMarkdown';
-import { stripTags, stripAttachments, normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks } from '../utils/markdownPreprocess';
+import { stripTags, stripAttachments, normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts } from '../utils/markdownPreprocess';
 import MemoToDocDialog from './MemoToDocDialog';
 import AudioPlayer from './AudioPlayer';
 import AIChatPanel from './AIChatPanel';
@@ -950,7 +950,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const tags = useMemo(() => extractTags(memo.content), [memo.content]);
   const images = useMemo(() => extractImages(memo.content), [memo.content]);
   const fileLinks = useMemo(() => extractFileLinks(memo.content), [memo.content]);
-  const strippedContent = useMemo(() => normalizeInProgressTasks(normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(stripAttachments(stripTags(memo.content))))))), [memo.content]);
+  const strippedContent = useMemo(() => normalizeInProgressTasks(normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(stripAttachments(stripTags(normalizeCallouts(memo.content)))))))), [memo.content]);
 
   // Link previews (fetchLinkPreview uses localStorage cache, returns instantly for cached URLs)
   const urls = useMemo(() => extractUrls(memo.content), [memo.content]);
