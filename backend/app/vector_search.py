@@ -235,7 +235,7 @@ async def search_similar(db: Session, query: str, config, limit: int = 10) -> li
 def _fallback_keyword_search(db: Session, query: str, limit: int) -> list[dict]:
     """关键词搜索回退方案"""
     from .routers.ai_chat import _search_notes
-    return _search_notes(db, query, limit)
+    return _search_notes(db, query, limit=limit)
 
 
 def _get_source_title(db: Session, source_type: str, source_id: str) -> str:
