@@ -122,6 +122,7 @@ const CodeBlock = memo(function CodeBlock({ className, children, ...props }: { c
   }, [code]);
 
   if (isBlock) {
+    const useHighlight = language && language !== 'markdown' && language !== 'text';
     return (
       <div className="relative rounded-lg overflow-hidden border border-[#dad9d4] dark:border-gray-700">
         <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#dad9d4] dark:border-gray-700"
@@ -136,14 +137,20 @@ const CodeBlock = memo(function CodeBlock({ className, children, ...props }: { c
             {copied ? <CheckCheck className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           </button>
         </div>
-        <SyntaxHighlighter
-          style={isDark ? oneDark : ghcolors}
-          language={language || 'text'}
-          PreTag="div"
-          customStyle={{ ...codeBlockCustomStyle(isDark) }}
-        >
-          {code}
-        </SyntaxHighlighter>
+        {useHighlight ? (
+          <SyntaxHighlighter
+            style={isDark ? oneDark : ghcolors}
+            language={language}
+            PreTag="div"
+            customStyle={{ ...codeBlockCustomStyle(isDark) }}
+          >
+            {code}
+          </SyntaxHighlighter>
+        ) : (
+          <pre className="p-4 overflow-x-auto text-sm font-mono" style={{ background: isDark ? '#1e1e1e' : '#fafafa', margin: 0 }}>
+            <code>{code}</code>
+          </pre>
+        )}
       </div>
     );
   }
