@@ -135,12 +135,11 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // 加载初始数据 - 先加载数据，再渲染 Excalidraw
+  // 被动加载：等 Excalidraw ref 就绪后再拉数据
   useEffect(() => {
     let cancelled = false;
     hasLoadedInitialData.current = false;
-    // 立即重置，防止切换画布时显示上一个画布的内容
-    setInitialData(null);
+    setInitialData({ elements: [] });
     hasFittedContent.current = false;
     filesRef.current = null;
     filesDirtyRef.current = false;
@@ -149,85 +148,62 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     pendingElementsRef.current = null;
     versionRef.current = 0;
     pendingAppStateRef.current = null;
-    // 取消旧画布的 debounce 保存，防止用旧 ID 写入
     saveDataRef.current?.cancel?.();
+    setIsLoading(true);
 
-    const loadData = async () => {
-      const fetchWithRetry = async (retries = 3): Promise<any> => {
-        try {
-          return await getExcalidrawDataFresh(documentId);
-        } catch (error) {
-          if (retries > 0) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            return fetchWithRetry(retries - 1);
+    const waitForReadyAndLoad = async () => {
+      // 等 Excalidraw ref 就绪（最多 5 秒）
+      const ready = await new Promise<boolean>((resolve) => {
+        if (excalidrawRef.current) { resolve(true); return; }
+        let elapsed = 0;
+        const interval = setInterval(() => {
+          elapsed += 100;
+          if (excalidrawRef.current || elapsed >= 5000) {
+            clearInterval(interval);
+            resolve(!!excalidrawRef.current);
           }
-          throw error;
-        }
-      };
+        }, 100);
+      });
+      if (cancelled || !ready) {
+        if (!cancelled) setIsLoading(false);
+        return;
+      }
 
+      const loadedDocId = documentId;
       try {
-        const loadedDocId = documentId; // 捕获本次加载的 ID
-        console.log('[Excalidraw] 开始加载画布数据:', loadedDocId);
-        const data = await fetchWithRetry();
-        console.log('[Excalidraw] 数据加载完成:', { hasData: !!data, hasSceneData: !!data?.scene_data, docId: loadedDocId });
-        // 检查：加载期间用户是否已切换到其他画布
-        if (!cancelled && data?.scene_data && documentIdRef.current === loadedDocId) {
-          console.log('[Excalidraw] scene_data 有效，开始解析');
-          // 记录服务端版本号
+        const data = await getExcalidrawDataFresh(loadedDocId);
+        if (cancelled || documentIdRef.current !== loadedDocId) return;
+
+        if (data?.scene_data) {
           versionRef.current = data.version || 0;
           const sceneData = JSON.parse(data.scene_data);
-          console.log('[Excalidraw] 场景数据解析完成:', { elementsCount: sceneData.elements?.length || 0, hasAppState: !!sceneData.appState });
           if (sceneData.elements?.length > 0) {
-            filesDirtyRef.current = false;
-            // 清除保存的视口状态，让 scrollToContent 在加载后自动适配
             const { scrollX, scrollY, zoom, ...restAppState } = sceneData.appState || {};
-            const scenePayload = {
-              elements: sceneData.elements,
-              appState: restAppState,
-            };
-            // 用 updateScene 更新已挂载的 Excalidraw（initialData 只在首次挂载时读取）
-            const applyScene = () => {
-              // 再次检查：Excalidraw 可能在等待期间被重新挂载
-              if (excalidrawRef.current && documentIdRef.current === loadedDocId) {
-                excalidrawRef.current.updateScene(scenePayload);
-                // 自动适配视口
-                requestAnimationFrame(() => {
-                  if (documentIdRef.current !== loadedDocId) return;
-                  const api = excalidrawRef.current;
-                  if (api) {
-                    const elements = api.getSceneElements();
-                    if (elements.length > 0) {
-                      api.scrollToContent(elements, { fitToContent: true, animate: false });
-                    }
+            const scenePayload = { elements: sceneData.elements, appState: restAppState };
+
+            // ref 已就绪，直接 updateScene
+            if (excalidrawRef.current && documentIdRef.current === loadedDocId) {
+              excalidrawRef.current.updateScene(scenePayload);
+              savedFingerprintRef.current = fingerprint(sceneData.elements);
+              requestAnimationFrame(() => {
+                if (cancelled || documentIdRef.current !== loadedDocId) return;
+                const api = excalidrawRef.current;
+                if (api) {
+                  const elements = api.getSceneElements();
+                  if (elements.length > 0) {
+                    api.scrollToContent(elements, { fitToContent: true, animate: false });
                   }
                   hasFittedContent.current = true;
-                });
-              } else if (documentIdRef.current === loadedDocId) {
-                // Excalidraw 还没挂载，等一帧再试
-                requestAnimationFrame(applyScene);
-              }
-            };
-            applyScene();
-            // 同时设置 initialData（作为 fallback，首次挂载时使用）
-            console.log('[Excalidraw] 设置 initialData:', { elementsCount: scenePayload.elements?.length });
-            setInitialData(scenePayload);
-            // 标记当前元素指纹，防止 updateScene 触发的 onChange 误报为未保存
-            savedFingerprintRef.current = fingerprint(sceneData.elements);
-            // 异步加载图片文件
-            const files = await loadExcalidrawFiles(loadedDocId);
-            if (!cancelled && documentIdRef.current === loadedDocId && Object.keys(files).length > 0) {
-              filesRef.current = files;
-              const waitForApi = () => {
-                if (excalidrawRef.current && documentIdRef.current === loadedDocId) {
-                  excalidrawRef.current.addFiles(Object.values(files));
-                } else if (documentIdRef.current === loadedDocId) {
-                  setTimeout(waitForApi, 100);
                 }
-              };
-              waitForApi();
+              });
             }
-          } else if (!cancelled) {
-            console.warn('[Excalidraw] 数据无效或已切换画布:', { hasData: !!data, hasSceneData: !!data?.scene_data, currentDocId: documentIdRef.current, loadedDocId });
+
+            // 加载图片
+            const files = await loadExcalidrawFiles(loadedDocId);
+            if (!cancelled && documentIdRef.current === loadedDocId && excalidrawRef.current && Object.keys(files).length > 0) {
+              filesRef.current = files;
+              excalidrawRef.current.addFiles(Object.values(files));
+            }
           }
         }
       } catch (error) {
@@ -240,7 +216,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
       }
     };
 
-    loadData();
+    waitForReadyAndLoad();
     return () => { cancelled = true; };
   }, [documentId]);
 
