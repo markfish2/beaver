@@ -243,7 +243,7 @@ async def search_similar(db: Session, query: str, config, limit: int = 10) -> li
 
         # 如果向量搜索结果太少，回退到关键词搜索补充
         if len(sources) < 3:
-            kw_results = _fallback_keyword_search(db, query, limit - len(sources))
+            kw_results = await _fallback_keyword_search_async(db, query, config, limit - len(sources))
             seen_ids = {s["id"] for s in sources}
             for r in kw_results:
                 if r["id"] not in seen_ids:
@@ -254,13 +254,43 @@ async def search_similar(db: Session, query: str, config, limit: int = 10) -> li
         return sources
     except Exception as e:
         logger.warning(f"向量搜索失败，回退到关键词搜索: {e}")
-        return _fallback_keyword_search(db, query, limit)
+        return await _fallback_keyword_search_async(db, query, config, limit)
 
 
 def _fallback_keyword_search(db: Session, query: str, limit: int) -> list[dict]:
-    """关键词搜索回退方案"""
+    """关键词搜索回退方案（基础版本，不依赖 AI）"""
     from .routers.ai_chat import _search_notes
     return _search_notes(db, query, limit=limit)
+
+
+async def _fallback_keyword_search_async(db: Session, query: str, config, limit: int) -> list[dict]:
+    """关键词搜索回退方案（使用 AI 扩展关键词）"""
+    from .routers.ai_chat import _search_notes, _expand_query
+    import re
+
+    if not config:
+        return _search_notes(db, query, limit=limit)
+
+    search_queries = await _expand_query(query, config)
+
+    all_keywords = set()
+    for sq in search_queries:
+        if sq == query:
+            continue
+        for w in re.findall(r'[一-鿿]{2,}', sq):
+            all_keywords.add(w)
+        for w in re.findall(r'[a-zA-Z]{3,}', sq):
+            all_keywords.add(w)
+    extra = set()
+    for kw in list(all_keywords):
+        if len(kw) > 2:
+            for i in range(len(kw) - 1):
+                extra.add(kw[i:i+2])
+    all_keywords.update(extra)
+    stopwords = {'笔记', '里面', '哪些', '什么', '怎么', '如何', '可以', '这个', '那个', '有没有', '是什么', '我的'}
+    keywords = [kw for kw in all_keywords if len(kw) >= 2 and kw not in stopwords]
+
+    return _search_notes(db, query, keywords=keywords if keywords else None, limit=limit)
 
 
 def _get_source_title(db: Session, source_type: str, source_id: str) -> str:
