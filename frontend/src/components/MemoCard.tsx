@@ -616,11 +616,20 @@ const markdownComponents = (
   const isCardDark = !!cardColorDef?.whiteText;
   const markerClass = isCardDark ? 'text-white/60' : 'text-gray-500 dark:text-gray-400';
   return {
-    code: (props: any) => {
-      const match = /language-(\w+)/.exec(props.className || '');
-      if (match && match[1] === 'mermaid') {
-        return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
+    pre: ({ children, ...props }: any) => {
+      // 代码块：原样显示，rehypeRaw 不解析内部内容
+      const codeChild = children?.props?.children;
+      const langMatch = /language-(\w+)/.exec(children?.props?.className || '');
+      const lang = langMatch ? langMatch[1] : '';
+      const code = String(codeChild || '').replace(/\n$/, '');
+
+      if (lang === 'mermaid') {
+        return <MermaidBlock code={code} />;
       }
+
+      return <CodeBlock className={`language-${lang}`}>{code}</CodeBlock>;
+    },
+    code: (props: any) => {
       return <CodeBlock {...props} cardColor={cardColor} />;
     },
     img: ({ src, alt }) => {
