@@ -3,6 +3,10 @@ import { Send, Loader2, BookmarkPlus, Database, Globe, Wand2, StickyNote, FileTe
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import remarkMath from 'remark-math';
+import rehypeRaw from 'rehype-raw';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { askAI, getAIConversation, createMemo, createDocument, createNode, getSkills, Skill } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import { useDocuments } from '../context/DocumentContext';
@@ -247,17 +251,18 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
         ) : null}
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[70%] px-4 py-3 relative group ${
+            <div className={`px-4 py-3 relative group overflow-hidden ${
               msg.role === 'user'
-                ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
+                ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 max-w-[70%]'
                 : 'bg-white dark:bg-gray-800/50 border border-[#dad9d4] dark:border-gray-700/40 text-gray-800 dark:text-gray-200'
-            }`} style={{ borderRadius: '8px' }}>
+            }`} style={{ borderRadius: '8px', wordBreak: 'break-word', maxWidth: msg.role === 'user' ? undefined : 'calc(100% - 30px)' }}>
               {msg.role === 'user' ? (
                 <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
               ) : (
-                <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
+                <div className="text-sm prose prose-sm dark:prose-invert max-w-none overflow-hidden">
                   <ReactMarkdown
-                    remarkPlugins={[remarkGfm, remarkBreaks]}
+                    remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
+                    rehypePlugins={[rehypeRaw, rehypeKatex]}
                     components={{
                       code: (props: any) => {
                         const match = /language-(\w+)/.exec(props.className || '');

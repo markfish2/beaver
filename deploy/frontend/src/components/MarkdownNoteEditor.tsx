@@ -8,6 +8,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import remarkBreaks from 'remark-breaks';
 import rehypeRaw from 'rehype-raw';
+import { preserveCodeBlocks } from '../utils/preserveCodeBlocks';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { ghcolors } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -520,11 +521,31 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   // Markdown 组件
   const navigate_fn = useNavigate();
   const mdComponents = useMemo((): Components => ({
-    code: (props: any) => {
-      const match = /language-(\w+)/.exec(props.className || '');
-      if (match && match[1] === 'mermaid') {
-        return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
+    pre: ({ children, ...props }: any) => {
+      // 代码块：原样显示，rehypeRaw 不解析内部内容
+      const codeChild = children?.props?.children;
+      const langMatch = /language-(\w+)/.exec(children?.props?.className || '');
+      const lang = langMatch ? langMatch[1] : '';
+      const code = String(codeChild || '').replace(/\n$/, '');
+
+      if (lang === 'mermaid') {
+        return <MermaidBlock code={code} />;
       }
+
+      const isDark = document.documentElement.classList.contains('dark');
+      return (
+        <div className="relative rounded-lg overflow-hidden border border-[#dad9d4] dark:border-gray-700 my-2">
+          <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#dad9d4] dark:border-gray-700"
+            style={{ background: isDark ? '#282c34' : '#f6f5f0' }}>
+            <span className="text-[11px] font-mono text-gray-500">{lang || 'text'}</span>
+          </div>
+          <pre className="p-3 overflow-x-auto text-sm" style={{ background: isDark ? '#1e1e1e' : '#fafafa' }}>
+            <code>{code}</code>
+          </pre>
+        </div>
+      );
+    },
+    code: (props: any) => {
       return <CodeBlock {...props} />;
     },
     img: ({ src, alt }) => <NoteImage src={src} alt={alt} />,
@@ -714,7 +735,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
         ) : (
           <div className="memo-content prose prose-gray dark:prose-invert max-w-[768px] w-full text-base text-gray-700 dark:text-gray-300 p-6" style={{ lineHeight: '1.75' }}>
             {content.trim() ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeRaw, rehypeKatex]} components={mdComponents}>{processedContent}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[preserveCodeBlocks, rehypeRaw, rehypeKatex]} components={mdComponents}>{processedContent}</ReactMarkdown>
             ) : (
               <p className="text-gray-400 dark:text-gray-500 italic">空笔记</p>
             )}

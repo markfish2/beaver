@@ -8,6 +8,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import remarkBreaks from 'remark-breaks';
 import rehypeRaw from 'rehype-raw';
+import { preserveCodeBlocks } from '../utils/preserveCodeBlocks';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { ghcolors } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -53,7 +54,7 @@ import MermaidBlock from './MermaidBlock';
 import LinkPreviewCard from './LinkPreviewCard';
 import { handleListContinuation } from '../utils/listContinuation';
 import { getPasteMarkdown } from '../utils/htmlToMarkdown';
-import { stripTags, stripAttachments, normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts } from '../utils/markdownPreprocess';
+import { stripTags, stripAttachments, normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts, escapeCodeBlockHtml } from '../utils/markdownPreprocess';
 import MemoToDocDialog from './MemoToDocDialog';
 import AudioPlayer from './AudioPlayer';
 import AIChatPanel from './AIChatPanel';
@@ -616,11 +617,20 @@ const markdownComponents = (
   const isCardDark = !!cardColorDef?.whiteText;
   const markerClass = isCardDark ? 'text-white/60' : 'text-gray-500 dark:text-gray-400';
   return {
-    code: (props: any) => {
-      const match = /language-(\w+)/.exec(props.className || '');
-      if (match && match[1] === 'mermaid') {
-        return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
+    pre: ({ children, ...props }: any) => {
+      // 代码块：原样显示，rehypeRaw 不解析内部内容
+      const codeChild = children?.props?.children;
+      const langMatch = /language-(\w+)/.exec(children?.props?.className || '');
+      const lang = langMatch ? langMatch[1] : '';
+      const code = String(codeChild || '').replace(/\n$/, '');
+
+      if (lang === 'mermaid') {
+        return <MermaidBlock code={code} />;
       }
+
+      return <CodeBlock className={`language-${lang}`}>{code}</CodeBlock>;
+    },
+    code: (props: any) => {
       return <CodeBlock {...props} cardColor={cardColor} />;
     },
     img: ({ src, alt }) => {
@@ -950,7 +960,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const tags = useMemo(() => extractTags(memo.content), [memo.content]);
   const images = useMemo(() => extractImages(memo.content), [memo.content]);
   const fileLinks = useMemo(() => extractFileLinks(memo.content), [memo.content]);
-  const strippedContent = useMemo(() => normalizeInProgressTasks(normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(stripAttachments(stripTags(normalizeCallouts(memo.content)))))))), [memo.content]);
+  const strippedContent = useMemo(() => escapeCodeBlockHtml(normalizeInProgressTasks(normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(stripAttachments(stripTags(normalizeCallouts(memo.content))))))))), [memo.content]);
 
   // Link previews (fetchLinkPreview uses localStorage cache, returns instantly for cached URLs)
   const urls = useMemo(() => extractUrls(memo.content), [memo.content]);
@@ -1572,7 +1582,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
         onDoubleClick={readOnly ? undefined : handleContentDoubleClick}
         title={readOnly ? undefined : "双击编辑"}
       >
-        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeRaw, rehypeKatex]} components={mdComponents}>{strippedContent}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[preserveCodeBlocks, rehypeRaw, rehypeKatex]} components={mdComponents}>{strippedContent}</ReactMarkdown>
         {!expanded && isLong && (
           <>
             <div className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none"
