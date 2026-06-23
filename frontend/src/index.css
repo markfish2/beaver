@@ -358,16 +358,29 @@
 }
 
 /* ── AI Chat Markdown 渲染 ── */
+/* ── Markdown 表格样式 ── */
 .prose table {
   width: 100%;
   border-collapse: collapse;
   margin: 0.5rem 0;
   font-size: 0.85em;
+  display: table !important;
+}
+.prose thead {
+  display: table-header-group;
+}
+.prose tbody {
+  display: table-row-group;
+}
+.prose tr {
+  display: table-row;
 }
 .prose th, .prose td {
+  display: table-cell;
   border: 1px solid #e5e7eb;
   padding: 0.4rem 0.6rem;
   text-align: left;
+  vertical-align: top;
 }
 .dark .prose th, .dark .prose td {
   border-color: #374151;
@@ -379,42 +392,12 @@
 .dark .prose th {
   background: #1f2937;
 }
+
+/* ── Markdown 代码块 ── */
 .prose pre {
   overflow-x: auto;
   max-width: 100%;
 }
 .prose code {
   word-break: break-all;
-}
-
-/* ── AI 回复表格样式 ── */
-.prose table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 0.5rem 0;
-  font-size: 0.85em;
-  display: table;
-  overflow-x: auto;
-}
-.prose thead {
-  background: #f9fafb;
-}
-.dark .prose thead {
-  background: #1f2937;
-}
-.prose th {
-  font-weight: 600;
-  text-align: left;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #e5e7eb;
-}
-.dark .prose th {
-  border-color: #374151;
-}
-.prose td {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #e5e7eb;
-}
-.dark .prose td {
-  border-color: #374151;
 }
