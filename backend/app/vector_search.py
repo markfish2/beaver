@@ -210,13 +210,21 @@ async def search_similar(db: Session, query: str, config, limit: int = 10) -> li
                 ORDER BY distance
                 LIMIT :limit
             """),
-            {"query": query_blob, "limit": limit}
+            {"query": query_blob, "limit": limit * 3}  # 多取一些，后续过滤
         ).fetchall()
 
+        # 过滤相似度过低的结果，按 source 去重
+        MAX_DISTANCE = 0.6  # 距离越小越相似，0.6 以下算相关
+        seen_sources = set()
         sources = []
         for row in results:
             source_type, source_id, chunk_text, distance = row
-            # 获取笔记标题
+            if distance > MAX_DISTANCE:
+                continue
+            source_key = f"{source_type}:{source_id}"
+            if source_key in seen_sources:
+                continue
+            seen_sources.add(source_key)
             title = _get_source_title(db, source_type, source_id)
             sources.append({
                 "id": source_id,
@@ -225,6 +233,8 @@ async def search_similar(db: Session, query: str, config, limit: int = 10) -> li
                 "snippet": chunk_text[:200],
                 "distance": distance,
             })
+            if len(sources) >= limit:
+                break
 
         return sources
     except Exception as e:
