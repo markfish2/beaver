@@ -8,6 +8,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import remarkBreaks from 'remark-breaks';
 import rehypeRaw from 'rehype-raw';
+import { preserveCodeBlocks } from '../utils/preserveCodeBlocks';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { ghcolors } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -734,7 +735,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
         ) : (
           <div className="memo-content prose prose-gray dark:prose-invert max-w-[768px] w-full text-base text-gray-700 dark:text-gray-300 p-6" style={{ lineHeight: '1.75' }}>
             {content.trim() ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeRaw, rehypeKatex]} components={mdComponents}>{processedContent}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[preserveCodeBlocks, rehypeRaw, rehypeKatex]} components={mdComponents}>{processedContent}</ReactMarkdown>
             ) : (
               <p className="text-gray-400 dark:text-gray-500 italic">空笔记</p>
             )}
