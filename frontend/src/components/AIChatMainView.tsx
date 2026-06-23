@@ -7,6 +7,7 @@ import { askAI, getAIConversation, createMemo, createDocument, createNode, getSk
 import MermaidBlock from './MermaidBlock';
 import { useDocuments } from '../context/DocumentContext';
 import { useAuth } from '../context/AuthContext';
+import { showToast } from '../utils/toast';
 
 interface Source {
   id: string;
@@ -81,13 +82,15 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
     try {
       await createMemo(content, true);
       setSaveMenuIndex(null);
-      alert('已保存到随想');
+      showToast('已保存到随想');
+      // 跳转到随想首页
+      if (onNavigate) onNavigate('memo', '');
     } catch (e) {
-      alert('保存失败：' + (e instanceof Error ? e.message : '未知错误'));
+      showToast('保存失败：' + (e instanceof Error ? e.message : '未知错误'), 'error');
     } finally {
       setSaving(false);
     }
-  }, []);
+  }, [onNavigate]);
 
   // 保存到普通笔记
   const handleSaveToNote = useCallback(async (content: string) => {
@@ -98,9 +101,11 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
       await createNode(doc.id, content);
       addDocument(doc);
       setSaveMenuIndex(null);
+      showToast('已保存到笔记');
+      // 跳转到新建的笔记
       if (onNavigate) onNavigate('note', doc.id);
     } catch (e) {
-      alert('保存失败：' + (e instanceof Error ? e.message : '未知错误'));
+      showToast('保存失败：' + (e instanceof Error ? e.message : '未知错误'), 'error');
     } finally {
       setSaving(false);
     }
