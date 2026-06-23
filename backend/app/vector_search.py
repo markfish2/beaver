@@ -214,12 +214,17 @@ async def search_similar(db: Session, query: str, config, limit: int = 10) -> li
         ).fetchall()
 
         # 过滤相似度过低的结果，按 source 去重
-        MAX_DISTANCE = 0.6  # 距离越小越相似，0.6 以下算相关
+        MAX_DISTANCE = 0.45  # 距离越小越相似
         seen_sources = set()
         sources = []
         for row in results:
             source_type, source_id, chunk_text, distance = row
             if distance > MAX_DISTANCE:
+                continue
+            # 跳过无意义内容（图片链接、文件名、太短的片段）
+            if len(chunk_text.strip()) < 30:
+                continue
+            if chunk_text.strip().startswith('![') or chunk_text.strip().startswith('[deploy'):
                 continue
             source_key = f"{source_type}:{source_id}"
             if source_key in seen_sources:
@@ -235,6 +240,16 @@ async def search_similar(db: Session, query: str, config, limit: int = 10) -> li
             })
             if len(sources) >= limit:
                 break
+
+        # 如果向量搜索结果太少，回退到关键词搜索补充
+        if len(sources) < 3:
+            kw_results = _fallback_keyword_search(db, query, limit - len(sources))
+            seen_ids = {s["id"] for s in sources}
+            for r in kw_results:
+                if r["id"] not in seen_ids:
+                    sources.append(r)
+                    if len(sources) >= limit:
+                        break
 
         return sources
     except Exception as e:
