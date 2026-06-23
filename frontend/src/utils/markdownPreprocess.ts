@@ -135,6 +135,16 @@ export function normalizeCallouts(content: string): string {
 }
 
 /** Full preprocessing pipeline: strip tags/attachments, then normalize lists/highlights/code blocks/callouts. */
+/**
+ * 转义代码块内的 HTML 标签，防止 rehypeRaw 解析
+ */
+export function escapeCodeBlockHtml(content: string): string {
+  return content.replace(
+    /(```[\s\S]*?```)/g,
+    (match) => match.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  );
+}
+
 export function preprocessMarkdown(content: string): string {
-  return escapeFullWidthColon(normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(stripAttachments(stripTags(normalizeCallouts(content))))))));
+  return escapeCodeBlockHtml(escapeFullWidthColon(normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(stripAttachments(stripTags(normalizeCallouts(content)))))))));
 }
