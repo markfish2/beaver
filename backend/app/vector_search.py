@@ -19,15 +19,11 @@ EMBEDDING_DIMENSIONS = 1536  # OpenAI text-embedding-3-small
 
 def get_embedding_config(db: Session):
     """获取用于 embedding 的 AI 配置（优先找 purpose=embedding 的配置）"""
+    import uuid as uuid_mod
     # 先找专用 embedding 配置
-    from sqlalchemy import text
-    row = db.execute(
-        text("SELECT id FROM ai_configs WHERE purpose = 'embedding' LIMIT 1")
-    ).fetchone()
-    if row:
-        config = db.query(models.AIConfig).filter(models.AIConfig.id == row[0]).first()
-        if config:
-            return config
+    config = db.query(models.AIConfig).filter(models.AIConfig.purpose == 'embedding').first()
+    if config:
+        return config
     # 回退到默认配置
     return crud.get_default_ai_config(db)
 
