@@ -311,6 +311,18 @@ async def _do_reindex(config_id):
             _reindex_status.update({"running": False, "done": True, "message": "向量模型配置不存在"})
             return
 
+        # 统计不参与 AI 的笔记
+        excluded_memos = db.query(models.Memo).filter(
+            models.Memo.deleted_at.is_(None),
+            models.Memo.ai_excluded == True,
+        ).count()
+        excluded_docs = db.query(models.Document).filter(
+            models.Document.deleted_at.is_(None),
+            models.Document.ai_excluded == True,
+            models.Document.type.in_(["document", "note"]),
+        ).count()
+        excluded_total = excluded_memos + excluded_docs
+
         # 索引 memos
         memos = db.query(models.Memo).filter(
             models.Memo.deleted_at.is_(None),
@@ -320,7 +332,7 @@ async def _do_reindex(config_id):
 
         for i, memo in enumerate(memos):
             _reindex_status["current"] = f"索引随想 {i+1}/{len(memos)}"
-            if not memo.content or len(memo.content.strip()) < 50:
+            if not memo.content or len(memo.content.strip()) < 20:
                 _reindex_status["memos_skipped"] += 1
                 continue
             try:
@@ -345,7 +357,7 @@ async def _do_reindex(config_id):
                 if text.strip():
                     content_parts.append(text.strip())
             full_content = "\n\n".join(content_parts)
-            if len(full_content.strip()) < 50:
+            if len(full_content.strip()) < 20:
                 _reindex_status["docs_skipped"] += 1
                 continue
             try:
@@ -355,11 +367,18 @@ async def _do_reindex(config_id):
                 _reindex_status["errors"] += 1
 
         skipped = _reindex_status['memos_skipped'] + _reindex_status['docs_skipped']
+        msg = f"索引完成：{_reindex_status['memos_indexed']} 条随想，{_reindex_status['docs_indexed']} 篇文档已索引"
+        if excluded_total > 0:
+            msg += f"，{excluded_total} 条不参与AI"
+        if skipped > 0:
+            msg += f"，{skipped} 条内容过短跳过"
+        if _reindex_status['errors'] > 0:
+            msg += f"，{_reindex_status['errors']} 个错误"
         _reindex_status.update({
             "running": False,
             "done": True,
             "current": "",
-            "message": f"索引完成：{_reindex_status['memos_indexed']} 条随想，{_reindex_status['docs_indexed']} 篇文档已索引" + (f"，{skipped} 条空内容跳过" if skipped else "") + (f"，{_reindex_status['errors']} 个错误" if _reindex_status['errors'] else ""),
+            "message": msg,
         })
         logger.info(f"[Reindex] {_reindex_status['message']}")
     except Exception as e:

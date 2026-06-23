@@ -19,15 +19,11 @@ EMBEDDING_DIMENSIONS = 1536  # OpenAI text-embedding-3-small
 
 def get_embedding_config(db: Session):
     """获取用于 embedding 的 AI 配置（优先找 purpose=embedding 的配置）"""
+    import uuid as uuid_mod
     # 先找专用 embedding 配置
-    from sqlalchemy import text
-    row = db.execute(
-        text("SELECT id FROM ai_configs WHERE purpose = 'embedding' LIMIT 1")
-    ).fetchone()
-    if row:
-        config = db.query(models.AIConfig).filter(models.AIConfig.id == row[0]).first()
-        if config:
-            return config
+    config = db.query(models.AIConfig).filter(models.AIConfig.purpose == 'embedding').first()
+    if config:
+        return config
     # 回退到默认配置
     return crud.get_default_ai_config(db)
 
@@ -79,7 +75,12 @@ def chunk_text(text: str, max_chars: int = 800, min_chars: int = 50) -> list[str
 
 
 async def check_embedding_support(config) -> bool:
-    """检测 AI 配置是否支持 embedding API"""
+    """检测 AI 配置是否支持 embedding API（用于默认配置检测）"""
+    return await check_embedding_config(config)
+
+
+async def check_embedding_config(config) -> bool:
+    """检测 embedding 配置是否可用"""
     import httpx
 
     api_url = config.api_url.rstrip('/')
@@ -88,7 +89,7 @@ async def check_embedding_support(config) -> bool:
     else:
         embedding_url = f"{api_url}/v1/embeddings"
 
-    model = _get_embedding_model(config)
+    model = config.model
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -209,13 +210,26 @@ async def search_similar(db: Session, query: str, config, limit: int = 10) -> li
                 ORDER BY distance
                 LIMIT :limit
             """),
-            {"query": query_blob, "limit": limit}
+            {"query": query_blob, "limit": limit * 3}  # 多取一些，后续过滤
         ).fetchall()
 
+        # 过滤相似度过低的结果，按 source 去重
+        MAX_DISTANCE = 0.45  # 距离越小越相似
+        seen_sources = set()
         sources = []
         for row in results:
             source_type, source_id, chunk_text, distance = row
-            # 获取笔记标题
+            if distance > MAX_DISTANCE:
+                continue
+            # 跳过无意义内容（图片链接、文件名、太短的片段）
+            if len(chunk_text.strip()) < 30:
+                continue
+            if chunk_text.strip().startswith('![') or chunk_text.strip().startswith('[deploy'):
+                continue
+            source_key = f"{source_type}:{source_id}"
+            if source_key in seen_sources:
+                continue
+            seen_sources.add(source_key)
             title = _get_source_title(db, source_type, source_id)
             sources.append({
                 "id": source_id,
@@ -224,28 +238,79 @@ async def search_similar(db: Session, query: str, config, limit: int = 10) -> li
                 "snippet": chunk_text[:200],
                 "distance": distance,
             })
+            if len(sources) >= limit:
+                break
+
+        # 如果向量搜索结果太少，回退到关键词搜索补充
+        if len(sources) < 3:
+            kw_results = await _fallback_keyword_search_async(db, query, config, limit - len(sources))
+            seen_ids = {s["id"] for s in sources}
+            for r in kw_results:
+                if r["id"] not in seen_ids:
+                    sources.append(r)
+                    if len(sources) >= limit:
+                        break
 
         return sources
     except Exception as e:
         logger.warning(f"向量搜索失败，回退到关键词搜索: {e}")
-        return _fallback_keyword_search(db, query, limit)
+        return await _fallback_keyword_search_async(db, query, config, limit)
 
 
 def _fallback_keyword_search(db: Session, query: str, limit: int) -> list[dict]:
-    """关键词搜索回退方案"""
+    """关键词搜索回退方案（基础版本，不依赖 AI）"""
     from .routers.ai_chat import _search_notes
-    return _search_notes(db, query, limit)
+    return _search_notes(db, query, limit=limit)
+
+
+async def _fallback_keyword_search_async(db: Session, query: str, config, limit: int) -> list[dict]:
+    """关键词搜索回退方案（使用 AI 扩展关键词）"""
+    from .routers.ai_chat import _search_notes, _expand_query
+    from . import crud
+    import re
+
+    # 扩展关键词需要 chat 模型，不是 embedding 模型
+    chat_config = crud.get_default_ai_config(db)
+    if not chat_config:
+        return _search_notes(db, query, limit=limit)
+
+    search_queries = await _expand_query(query, chat_config)
+
+    all_keywords = set()
+    for sq in search_queries:
+        if sq == query:
+            continue
+        for w in re.findall(r'[一-鿿]{2,}', sq):
+            all_keywords.add(w)
+        for w in re.findall(r'[a-zA-Z]{3,}', sq):
+            all_keywords.add(w)
+    extra = set()
+    for kw in list(all_keywords):
+        if len(kw) > 2:
+            for i in range(len(kw) - 1):
+                extra.add(kw[i:i+2])
+    all_keywords.update(extra)
+    stopwords = {'笔记', '里面', '哪些', '什么', '怎么', '如何', '可以', '这个', '那个', '有没有', '是什么', '我的'}
+    keywords = [kw for kw in all_keywords if len(kw) >= 2 and kw not in stopwords]
+
+    return _search_notes(db, query, keywords=keywords if keywords else None, limit=limit)
 
 
 def _get_source_title(db: Session, source_type: str, source_id: str) -> str:
     """获取笔记标题"""
+    import uuid as uuid_mod
+    try:
+        source_uuid = uuid_mod.UUID(source_id) if isinstance(source_id, str) else source_id
+    except ValueError:
+        return "未知"
+
     if source_type == "memo":
-        memo = db.query(models.Memo).filter(models.Memo.id == source_id).first()
+        memo = db.query(models.Memo).filter(models.Memo.id == source_uuid).first()
         if memo and memo.content:
             first_line = memo.content.split('\n')[0].strip()
             return first_line.lstrip('#').lstrip('*').strip()[:50] or "无标题"
     elif source_type in ("document", "node"):
-        doc = db.query(models.Document).filter(models.Document.id == source_id).first()
+        doc = db.query(models.Document).filter(models.Document.id == source_uuid).first()
         if doc:
             return doc.title
     return "未知"

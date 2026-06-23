@@ -484,11 +484,12 @@ async def ask_ai(
         system_prompt = "你是一个智能助手。请直接回答用户的问题，用中文回答。回答要简洁准确。"
     else:
         # 数据模式：搜索本地笔记
-        from ..vector_search import check_embedding_support, search_similar
-        embedding_supported = await check_embedding_support(config)
+        from ..vector_search import check_embedding_config, get_embedding_config, search_similar
+        embedding_config = get_embedding_config(db)
+        embedding_supported = embedding_config and await check_embedding_config(embedding_config)
 
         if embedding_supported:
-            sources = await search_similar(db, query, config)
+            sources = await search_similar(db, query, embedding_config)
         else:
             # 用 AI 扩展搜索关键词
             search_queries = await _expand_query(query, config)
@@ -518,7 +519,7 @@ async def ask_ai(
 
         context_parts = []
         for i, source in enumerate(sources, 1):
-            context_parts.append(f"[{i}] {source['type'].upper()}: {source['title']}\n{source['snippet']}")
+            context_parts.append(f"[{i}] {source['type'].upper()}: {source['title']} (id:{source['id']})\n{source['snippet']}")
         context = "\n\n".join(context_parts) if context_parts else "未找到相关笔记。"
 
         system_prompt = f"""你是一个笔记助手。根据用户的笔记内容回答问题。
@@ -534,7 +535,8 @@ async def ask_ai(
 3. 如果笔记内容与问题无关，不要引用它
 4. 如果笔记中没有相关内容，如实告知"未找到相关笔记"
 5. 用中文回答
-6. 直接回答问题，不要在回答中列出来源（来源会由系统自动展示）"""
+6. 当你引用某条笔记时，用 Markdown 链接标注来源，格式为 [笔记标题](/d/笔记id)。例如：根据[小熊积分](/d/abc123)，当前积分是112分。
+7. 不要在回答末尾单独列出来源列表，直接在正文中引用即可。"""
 
     # 上下文管理：截断超长对话
     truncated = await _truncate_messages(request.messages, system_prompt, config=config)
@@ -548,10 +550,6 @@ async def ask_ai(
         try:
             # 先发送 conversation_id
             yield json.dumps({"type": "conversation_id", "id": conv_id_str}, ensure_ascii=False) + "\n"
-
-            # 发送来源信息
-            if sources:
-                yield json.dumps({"type": "sources", "sources": sources}, ensure_ascii=False) + "\n"
 
             async with httpx.AsyncClient(timeout=120) as client:
                 async with client.stream(
@@ -595,6 +593,27 @@ async def ask_ai(
             error_msg = f"\n[错误] {str(e)}"
             full_response = error_msg
             yield json.dumps({"type": "error", "content": error_msg}, ensure_ascii=False)
+        else:
+            # 流正常结束，解析 AI 回复中的来源标记
+            if sources:
+                import re as _re
+                match = _re.search(r'\[来源:\s*([^\]]+)\]', full_response)
+                if match:
+                    ref_str = match.group(1).strip()
+                    if ref_str.lower() == 'none':
+                        filtered_sources = []
+                    else:
+                        try:
+                            ref_indices = [int(x.strip()) - 1 for x in ref_str.split(',')]
+                            filtered_sources = [sources[i] for i in ref_indices if 0 <= i < len(sources)]
+                        except (ValueError, IndexError):
+                            filtered_sources = sources[:3]
+                    # 从回复中移除来源标记
+                    full_response = _re.sub(r'\n?\[来源:\s*[^\]]+\]\s*$', '', full_response).strip()
+                else:
+                    # AI 没有按格式标记来源，取前 3 条最相关的
+                    filtered_sources = sources[:3]
+                yield json.dumps({"type": "sources", "sources": filtered_sources}, ensure_ascii=False) + "\n"
         finally:
             # 保存 AI 回复到数据库（使用新 session，因为 FastAPI 已关闭注入的 db）
             if full_response:

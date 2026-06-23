@@ -86,18 +86,34 @@ async def test_config(
 
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                f"{config.api_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {config.api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": config.model,
-                    "messages": [{"role": "user", "content": "hi"}],
-                    "max_tokens": 5
-                }
-            )
+            purpose = config.purpose or 'chat'
+            if purpose == 'embedding':
+                # embedding 模型用 /embeddings 接口
+                resp = await client.post(
+                    f"{config.api_url}/embeddings",
+                    headers={
+                        "Authorization": f"Bearer {config.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": config.model,
+                        "input": "test"
+                    }
+                )
+            else:
+                # chat 模型用 /chat/completions 接口
+                resp = await client.post(
+                    f"{config.api_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {config.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": config.model,
+                        "messages": [{"role": "user", "content": "hi"}],
+                        "max_tokens": 5
+                    }
+                )
             if resp.status_code == 200:
                 return {"ok": True, "message": "连接成功"}
             else:
@@ -206,3 +222,148 @@ async def ai_chat(
             yield f"\n[错误] {str(e)}"
 
     return StreamingResponse(generate(), media_type="text/plain")
+
+
+# 全局索引状态
+_reindex_status = {
+    "running": False,
+    "memos_indexed": 0,
+    "docs_indexed": 0,
+    "memos_skipped": 0,
+    "docs_skipped": 0,
+    "errors": 0,
+    "total_memos": 0,
+    "total_docs": 0,
+    "current": "",
+    "done": False,
+    "message": "",
+}
+
+
+@router.get("/reindex-status")
+async def get_reindex_status(
+    current_user: schemas.User = Depends(get_current_user)
+):
+    """获取索引进度"""
+    return _reindex_status
+
+
+@router.post("/reindex")
+async def reindex_embeddings(
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(get_current_user)
+):
+    """批量重建所有笔记的向量索引（后台执行）"""
+    from ..vector_search import get_embedding_config, check_embedding_config
+
+    if _reindex_status["running"]:
+        raise HTTPException(status_code=409, detail="索引任务正在执行中")
+
+    config = get_embedding_config(db)
+    if not config:
+        raise HTTPException(status_code=400, detail="未配置向量模型，请先在 AI 设置中添加")
+
+    if not await check_embedding_config(config):
+        raise HTTPException(status_code=400, detail="向量模型连接失败，请检查配置")
+
+    config_id = config.id
+
+    # 统计总数
+    from .. import models
+    total_memos = db.query(models.Memo).filter(
+        models.Memo.deleted_at.is_(None),
+        models.Memo.ai_excluded == False,
+        models.Memo.content != '',
+    ).count()
+    total_docs = db.query(models.Document).filter(
+        models.Document.deleted_at.is_(None),
+        models.Document.ai_excluded == False,
+        models.Document.type.in_(["document", "note"]),
+    ).count()
+
+    _reindex_status.update({
+        "running": True,
+        "memos_indexed": 0, "docs_indexed": 0,
+        "memos_skipped": 0, "docs_skipped": 0,
+        "errors": 0,
+        "total_memos": total_memos, "total_docs": total_docs,
+        "current": "准备中...", "done": False, "message": "",
+    })
+
+    import asyncio
+    asyncio.create_task(_do_reindex(config_id))
+
+    return {"success": True, "message": "索引任务已启动", "total_memos": total_memos, "total_docs": total_docs}
+
+
+async def _do_reindex(config_id):
+    """后台执行批量索引"""
+    from ..vector_search import index_note
+    from .. import models
+    from ..database import SessionLocal
+    import logging
+    logger = logging.getLogger(__name__)
+
+    db = SessionLocal()
+    try:
+        config = db.query(models.AIConfig).filter(models.AIConfig.id == config_id).first()
+        if not config:
+            _reindex_status.update({"running": False, "done": True, "message": "向量模型配置不存在"})
+            return
+
+        # 索引 memos
+        memos = db.query(models.Memo).filter(
+            models.Memo.deleted_at.is_(None),
+            models.Memo.ai_excluded == False,
+            models.Memo.content != '',
+        ).all()
+
+        for i, memo in enumerate(memos):
+            _reindex_status["current"] = f"索引随想 {i+1}/{len(memos)}"
+            if not memo.content or len(memo.content.strip()) < 50:
+                _reindex_status["memos_skipped"] += 1
+                continue
+            try:
+                await index_note(db, "memo", memo.id, memo.content, config)
+                _reindex_status["memos_indexed"] += 1
+            except Exception:
+                _reindex_status["errors"] += 1
+
+        # 索引文档
+        docs = db.query(models.Document).filter(
+            models.Document.deleted_at.is_(None),
+            models.Document.ai_excluded == False,
+            models.Document.type.in_(["document", "note"]),
+        ).all()
+
+        for i, doc in enumerate(docs):
+            _reindex_status["current"] = f"索引文档 {i+1}/{len(docs)}"
+            nodes = db.query(models.Node).filter(models.Node.document_id == doc.id).all()
+            content_parts = []
+            for node in nodes:
+                text = (node.content or "") + "\n" + (node.note or "")
+                if text.strip():
+                    content_parts.append(text.strip())
+            full_content = "\n\n".join(content_parts)
+            if len(full_content.strip()) < 50:
+                _reindex_status["docs_skipped"] += 1
+                continue
+            try:
+                await index_note(db, "document", doc.id, full_content, config)
+                _reindex_status["docs_indexed"] += 1
+            except Exception:
+                _reindex_status["errors"] += 1
+
+        skipped = _reindex_status['memos_skipped'] + _reindex_status['docs_skipped']
+        _reindex_status.update({
+            "running": False,
+            "done": True,
+            "current": "",
+            "message": f"索引完成：{_reindex_status['memos_indexed']} 条随想，{_reindex_status['docs_indexed']} 篇文档已索引" + (f"，{skipped} 条空内容跳过" if skipped else "") + (f"，{_reindex_status['errors']} 个错误" if _reindex_status['errors'] else ""),
+        })
+        logger.info(f"[Reindex] {_reindex_status['message']}")
+    except Exception as e:
+        _reindex_status.update({"running": False, "done": True, "current": "", "message": f"索引失败: {e}"})
+        logger.error(f"[Reindex] 失败: {e}")
+    finally:
+        db.close()
