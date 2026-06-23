@@ -1,8 +1,8 @@
-import React, { useRef, useState, useCallback, useEffect, useMemo, Component } from 'react';
+import React, { useRef, useState, useCallback, useEffect, useMemo, Component, Suspense } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
 import { Excalidraw, MainMenu, exportToBlob, exportToSvg } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import { Download, Image, FileJson, FileText } from 'lucide-react';
+import { Download, Image, FileJson, FileText, Loader2 } from 'lucide-react';
 import { getExcalidrawDataFresh, updateExcalidrawData, loadExcalidrawFiles, VersionConflictError } from '../api/excalidraw';
 
 // Error boundary to catch Excalidraw rendering errors (React 19 compatibility)
@@ -654,6 +654,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         }}
       >
         <ExcalidrawErrorBoundary onRetry={() => setInitialData(prev => ({ ...prev }))}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-gray-400"><Loader2 className="w-6 h-6 animate-spin" /></div>}>
         <Excalidraw
           key={documentId}
           ref={excalidrawRef}
@@ -686,6 +687,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
             </MainMenu.ItemCustom>
           </MainMenu>
         </Excalidraw>
+        </Suspense>
         </ExcalidrawErrorBoundary>
       </div>
     </div>
