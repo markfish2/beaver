@@ -535,7 +535,7 @@ async def ask_ai(
 3. 如果笔记内容与问题无关，不要引用它
 4. 如果笔记中没有相关内容，如实告知"未找到相关笔记"
 5. 用中文回答
-6. 直接回答问题，不要在回答中列出来源（来源会由系统自动展示）"""
+6. 在回答的最末尾，另起一行，用以下格式列出你实际引用的来源编号：[来源: 1, 3]。如果没有引用任何笔记，写 [来源: none]。"""
 
     # 上下文管理：截断超长对话
     truncated = await _truncate_messages(request.messages, system_prompt, config=config)
@@ -549,10 +549,6 @@ async def ask_ai(
         try:
             # 先发送 conversation_id
             yield json.dumps({"type": "conversation_id", "id": conv_id_str}, ensure_ascii=False) + "\n"
-
-            # 发送来源信息
-            if sources:
-                yield json.dumps({"type": "sources", "sources": sources}, ensure_ascii=False) + "\n"
 
             async with httpx.AsyncClient(timeout=120) as client:
                 async with client.stream(
@@ -596,6 +592,27 @@ async def ask_ai(
             error_msg = f"\n[错误] {str(e)}"
             full_response = error_msg
             yield json.dumps({"type": "error", "content": error_msg}, ensure_ascii=False)
+        else:
+            # 流正常结束，解析 AI 回复中的来源标记
+            if sources:
+                import re as _re
+                match = _re.search(r'\[来源:\s*([^\]]+)\]', full_response)
+                if match:
+                    ref_str = match.group(1).strip()
+                    if ref_str.lower() == 'none':
+                        filtered_sources = []
+                    else:
+                        try:
+                            ref_indices = [int(x.strip()) - 1 for x in ref_str.split(',')]
+                            filtered_sources = [sources[i] for i in ref_indices if 0 <= i < len(sources)]
+                        except (ValueError, IndexError):
+                            filtered_sources = sources[:3]
+                    # 从回复中移除来源标记
+                    full_response = _re.sub(r'\n?\[来源:\s*[^\]]+\]\s*$', '', full_response).strip()
+                else:
+                    # AI 没有按格式标记来源，取前 3 条最相关的
+                    filtered_sources = sources[:3]
+                yield json.dumps({"type": "sources", "sources": filtered_sources}, ensure_ascii=False) + "\n"
         finally:
             # 保存 AI 回复到数据库（使用新 session，因为 FastAPI 已关闭注入的 db）
             if full_response:
