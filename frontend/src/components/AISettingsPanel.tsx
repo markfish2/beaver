@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Check, Loader2, Sparkles, Database } from 'lucide-react';
-import { getAIConfigs, createAIConfig, updateAIConfig, deleteAIConfig, testAIConfig, reindexEmbeddings, type AIConfig, type AIConfigCreate } from '../api/data';
+import { getAIConfigs, createAIConfig, updateAIConfig, deleteAIConfig, testAIConfig, reindexEmbeddings, getReindexStatus, type AIConfig, type AIConfigCreate, type ReindexStatus } from '../api/data';
 import { showToast } from '../utils/toast';
 
 // 预设配置 - Chat 模型
@@ -26,8 +26,7 @@ export default function AISettingsPanel() {
   const [testing, setTesting] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ id: string; ok: boolean; message: string } | null>(null);
   const [embeddingSupport, setEmbeddingSupport] = useState<Record<string, boolean>>({});
-  const [reindexing, setReindexing] = useState(false);
-  const [reindexResult, setReindexResult] = useState<string | null>(null);
+  const [reindexStatus, setReindexStatus] = useState<ReindexStatus | null>(null);
 
   const [form, setForm] = useState<AIConfigCreate>({
     name: '',
@@ -141,19 +140,27 @@ export default function AISettingsPanel() {
     }
   };
 
+  // 轮询索引进度
+  useEffect(() => {
+    if (!reindexStatus?.running) return;
+    const interval = setInterval(async () => {
+      try {
+        const status = await getReindexStatus();
+        setReindexStatus(status);
+      } catch {}
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [reindexStatus?.running]);
+
   const handleReindex = async () => {
-    setReindexing(true);
-    setReindexResult(null);
     try {
-      const result = await reindexEmbeddings();
-      setReindexResult(result.message);
-      showToast('索引完成');
+      await reindexEmbeddings();
+      // 开始轮询
+      setReindexStatus({ running: true, memos_indexed: 0, docs_indexed: 0, memos_skipped: 0, docs_skipped: 0, errors: 0, total_memos: 0, total_docs: 0, current: '启动中...', done: false, message: '' });
+      showToast('索引任务已启动');
     } catch (e) {
       const msg = e instanceof Error ? e.message : '索引失败';
-      setReindexResult(msg);
-      showToast('索引失败', 'error');
-    } finally {
-      setReindexing(false);
+      showToast(msg, 'error');
     }
   };
 
@@ -265,19 +272,44 @@ export default function AISettingsPanel() {
           ) : (
             <div className="space-y-3">
               {embeddingConfigs.map(config => renderConfigCard(config))}
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  onClick={handleReindex}
-                  disabled={reindexing}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-                >
-                  {reindexing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
-                  {reindexing ? '索引中...' : '重建索引'}
-                </button>
-                {reindexResult && (
-                  <span className="text-xs text-gray-500 dark:text-gray-400">{reindexResult}</span>
-                )}
-              </div>
+              {/* 索引进度 */}
+              {reindexStatus?.running && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                    <span className="text-sm text-blue-700 dark:text-blue-300">{reindexStatus.current}</span>
+                  </div>
+                  <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-1.5">
+                    <div
+                      className="bg-blue-500 h-1.5 rounded-full transition-all"
+                      style={{
+                        width: `${Math.min(100, ((reindexStatus.memos_indexed + reindexStatus.docs_indexed + reindexStatus.memos_skipped + reindexStatus.docs_skipped) / Math.max(1, reindexStatus.total_memos + reindexStatus.total_docs)) * 100)}%`
+                      }}
+                    />
+                  </div>
+                  <div className="flex gap-3 text-xs text-gray-500 dark:text-gray-400">
+                    <span>随想: {reindexStatus.memos_indexed}/{reindexStatus.total_memos}</span>
+                    <span>文档: {reindexStatus.docs_indexed}/{reindexStatus.total_docs}</span>
+                    {reindexStatus.errors > 0 && <span className="text-red-500">错误: {reindexStatus.errors}</span>}
+                  </div>
+                </div>
+              )}
+
+              {/* 索引完成 */}
+              {reindexStatus?.done && !reindexStatus.running && (
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <p className="text-sm text-green-700 dark:text-green-300">{reindexStatus.message}</p>
+                </div>
+              )}
+
+              <button
+                onClick={handleReindex}
+                disabled={reindexStatus?.running}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+              >
+                {reindexStatus?.running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
+                {reindexStatus?.running ? '索引中...' : '重建索引'}
+              </button>
             </div>
           )}
         </div>

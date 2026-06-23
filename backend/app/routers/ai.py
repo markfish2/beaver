@@ -224,6 +224,30 @@ async def ai_chat(
     return StreamingResponse(generate(), media_type="text/plain")
 
 
+# 全局索引状态
+_reindex_status = {
+    "running": False,
+    "memos_indexed": 0,
+    "docs_indexed": 0,
+    "memos_skipped": 0,
+    "docs_skipped": 0,
+    "errors": 0,
+    "total_memos": 0,
+    "total_docs": 0,
+    "current": "",
+    "done": False,
+    "message": "",
+}
+
+
+@router.get("/reindex-status")
+async def get_reindex_status(
+    current_user: schemas.User = Depends(get_current_user)
+):
+    """获取索引进度"""
+    return _reindex_status
+
+
 @router.post("/reindex")
 async def reindex_embeddings(
     db: Session = Depends(get_db),
@@ -232,26 +256,44 @@ async def reindex_embeddings(
     """批量重建所有笔记的向量索引（后台执行）"""
     from ..vector_search import get_embedding_config, check_embedding_config
 
-    # 检查 embedding 配置
+    if _reindex_status["running"]:
+        raise HTTPException(status_code=409, detail="索引任务正在执行中")
+
     config = get_embedding_config(db)
     if not config:
         raise HTTPException(status_code=400, detail="未配置向量模型，请先在 AI 设置中添加")
 
-    # 测试 embedding 连接
     if not await check_embedding_config(config):
         raise HTTPException(status_code=400, detail="向量模型连接失败，请检查配置")
 
-    # 保存配置信息供后台任务使用
     config_id = config.id
 
-    # 启动后台任务
+    # 统计总数
+    from .. import models
+    total_memos = db.query(models.Memo).filter(
+        models.Memo.deleted_at.is_(None),
+        models.Memo.ai_excluded == False,
+        models.Memo.content != '',
+    ).count()
+    total_docs = db.query(models.Document).filter(
+        models.Document.deleted_at.is_(None),
+        models.Document.ai_excluded == False,
+        models.Document.type.in_(["document", "note"]),
+    ).count()
+
+    _reindex_status.update({
+        "running": True,
+        "memos_indexed": 0, "docs_indexed": 0,
+        "memos_skipped": 0, "docs_skipped": 0,
+        "errors": 0,
+        "total_memos": total_memos, "total_docs": total_docs,
+        "current": "准备中...", "done": False, "message": "",
+    })
+
     import asyncio
     asyncio.create_task(_do_reindex(config_id))
 
-    return {
-        "success": True,
-        "message": "索引任务已启动，请稍候查看结果",
-    }
+    return {"success": True, "message": "索引任务已启动", "total_memos": total_memos, "total_docs": total_docs}
 
 
 async def _do_reindex(config_id):
@@ -259,64 +301,68 @@ async def _do_reindex(config_id):
     from ..vector_search import index_note
     from .. import models
     from ..database import SessionLocal
+    import logging
+    logger = logging.getLogger(__name__)
 
     db = SessionLocal()
     try:
         config = db.query(models.AIConfig).filter(models.AIConfig.id == config_id).first()
         if not config:
+            _reindex_status.update({"running": False, "done": True, "message": "向量模型配置不存在"})
             return
 
-        logger = __import__('logging').getLogger(__name__)
-        stats = {"memos": 0, "documents": 0, "skipped": 0, "errors": 0}
-
-        # 索引所有 memo
+        # 索引 memos
         memos = db.query(models.Memo).filter(
             models.Memo.deleted_at.is_(None),
             models.Memo.ai_excluded == False,
             models.Memo.content != '',
         ).all()
 
-        for memo in memos:
+        for i, memo in enumerate(memos):
+            _reindex_status["current"] = f"索引随想 {i+1}/{len(memos)}"
             if not memo.content or len(memo.content.strip()) < 50:
-                stats["skipped"] += 1
+                _reindex_status["memos_skipped"] += 1
                 continue
             try:
                 await index_note(db, "memo", memo.id, memo.content, config)
-                stats["memos"] += 1
+                _reindex_status["memos_indexed"] += 1
             except Exception:
-                stats["errors"] += 1
+                _reindex_status["errors"] += 1
 
-        # 索引所有文档
+        # 索引文档
         docs = db.query(models.Document).filter(
             models.Document.deleted_at.is_(None),
             models.Document.ai_excluded == False,
             models.Document.type.in_(["document", "note"]),
         ).all()
 
-        for doc in docs:
-            nodes = db.query(models.Node).filter(
-                models.Node.document_id == doc.id
-            ).all()
-
+        for i, doc in enumerate(docs):
+            _reindex_status["current"] = f"索引文档 {i+1}/{len(docs)}"
+            nodes = db.query(models.Node).filter(models.Node.document_id == doc.id).all()
             content_parts = []
             for node in nodes:
                 text = (node.content or "") + "\n" + (node.note or "")
                 if text.strip():
                     content_parts.append(text.strip())
-
             full_content = "\n\n".join(content_parts)
             if len(full_content.strip()) < 50:
-                stats["skipped"] += 1
+                _reindex_status["docs_skipped"] += 1
                 continue
-
             try:
                 await index_note(db, "document", doc.id, full_content, config)
-                stats["documents"] += 1
+                _reindex_status["docs_indexed"] += 1
             except Exception:
-                stats["errors"] += 1
+                _reindex_status["errors"] += 1
 
-        logger.info(f"[Reindex] 完成：{stats['memos']} 条随想，{stats['documents']} 篇文档，{stats['skipped']} 条跳过，{stats['errors']} 个错误")
+        _reindex_status.update({
+            "running": False,
+            "done": True,
+            "current": "",
+            "message": f"索引完成：{_reindex_status['memos_indexed']} 条随想，{_reindex_status['docs_indexed']} 篇文档，{_reindex_status['memos_skipped'] + _reindex_status['docs_skipped']} 条不参与AI，{_reindex_status['errors']} 个错误",
+        })
+        logger.info(f"[Reindex] {_reindex_status['message']}")
     except Exception as e:
+        _reindex_status.update({"running": False, "done": True, "current": "", "message": f"索引失败: {e}"})
         logger.error(f"[Reindex] 失败: {e}")
     finally:
         db.close()

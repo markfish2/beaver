@@ -847,8 +847,27 @@ export const testAIConfig = async (id: string): Promise<{ ok: boolean; message: 
   return response.data;
 };
 
-export const reindexEmbeddings = async (): Promise<{ success: boolean; message: string; stats: Record<string, number> }> => {
+export const reindexEmbeddings = async (): Promise<{ success: boolean; message: string; total_memos?: number; total_docs?: number }> => {
   const response = await api.post('/ai/reindex');
+  return response.data;
+};
+
+export interface ReindexStatus {
+  running: boolean;
+  memos_indexed: number;
+  docs_indexed: number;
+  memos_skipped: number;
+  docs_skipped: number;
+  errors: number;
+  total_memos: number;
+  total_docs: number;
+  current: string;
+  done: boolean;
+  message: string;
+}
+
+export const getReindexStatus = async (): Promise<ReindexStatus> => {
+  const response = await api.get('/ai/reindex-status');
   return response.data;
 };
 
