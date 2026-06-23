@@ -167,12 +167,16 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
 
       try {
         const loadedDocId = documentId; // 捕获本次加载的 ID
+        console.log('[Excalidraw] 开始加载画布数据:', loadedDocId);
         const data = await fetchWithRetry();
+        console.log('[Excalidraw] 数据加载完成:', { hasData: !!data, hasSceneData: !!data?.scene_data, docId: loadedDocId });
         // 检查：加载期间用户是否已切换到其他画布
         if (!cancelled && data?.scene_data && documentIdRef.current === loadedDocId) {
+          console.log('[Excalidraw] scene_data 有效，开始解析');
           // 记录服务端版本号
           versionRef.current = data.version || 0;
           const sceneData = JSON.parse(data.scene_data);
+          console.log('[Excalidraw] 场景数据解析完成:', { elementsCount: sceneData.elements?.length || 0, hasAppState: !!sceneData.appState });
           if (sceneData.elements?.length > 0) {
             filesDirtyRef.current = false;
             // 清除保存的视口状态，让 scrollToContent 在加载后自动适配
@@ -205,6 +209,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
             };
             applyScene();
             // 同时设置 initialData（作为 fallback，首次挂载时使用）
+            console.log('[Excalidraw] 设置 initialData:', { elementsCount: scenePayload.elements?.length });
             setInitialData(scenePayload);
             // 标记当前元素指纹，防止 updateScene 触发的 onChange 误报为未保存
             savedFingerprintRef.current = fingerprint(sceneData.elements);
@@ -221,10 +226,12 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
               };
               waitForApi();
             }
+          } else if (!cancelled) {
+            console.warn('[Excalidraw] 数据无效或已切换画布:', { hasData: !!data, hasSceneData: !!data?.scene_data, currentDocId: documentIdRef.current, loadedDocId });
           }
         }
       } catch (error) {
-        console.error('Failed to load excalidraw data:', error);
+        console.error('[Excalidraw] 加载失败:', error);
       } finally {
         if (!cancelled) {
           hasLoadedInitialData.current = true;
