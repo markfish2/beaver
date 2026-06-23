@@ -306,6 +306,7 @@ const CodeBlock = memo(function CodeBlock({ className, children, cardColor, ...p
   const codeBorderClass = secondaryBorder || 'border-[#dad9d4] dark:border-gray-700';
 
   if (isBlock) {
+    const useHighlight = language && language !== 'markdown' && language !== 'text';
     return (
       <div className={`relative rounded-lg overflow-hidden border ${codeBorderClass}`}>
         <div className={`flex items-center justify-between px-3 py-1.5 border-b ${codeBorderClass} ${secondaryBg || ''}`}
@@ -320,14 +321,20 @@ const CodeBlock = memo(function CodeBlock({ className, children, cardColor, ...p
             {copied ? <CheckCheck className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           </button>
         </div>
-        <SyntaxHighlighter
-          style={isDark ? oneDark : ghcolors}
-          language={language || 'text'}
-          PreTag="div"
-          customStyle={{ ...codeBlockCustomStyle(isDark) }}
-        >
-          {code}
-        </SyntaxHighlighter>
+        {useHighlight ? (
+          <SyntaxHighlighter
+            style={isDark ? oneDark : ghcolors}
+            language={language}
+            PreTag="div"
+            customStyle={{ ...codeBlockCustomStyle(isDark) }}
+          >
+            {code}
+          </SyntaxHighlighter>
+        ) : (
+          <pre className="p-4 overflow-x-auto text-sm font-mono" style={{ background: isDark ? '#1e1e1e' : '#fafafa', margin: 0 }}>
+            <code>{code}</code>
+          </pre>
+        )}
       </div>
     );
   }
@@ -617,20 +624,11 @@ const markdownComponents = (
   const isCardDark = !!cardColorDef?.whiteText;
   const markerClass = isCardDark ? 'text-white/60' : 'text-gray-500 dark:text-gray-400';
   return {
-    pre: ({ children, ...props }: any) => {
-      // 代码块：原样显示，rehypeRaw 不解析内部内容
-      const codeChild = children?.props?.children;
-      const langMatch = /language-(\w+)/.exec(children?.props?.className || '');
-      const lang = langMatch ? langMatch[1] : '';
-      const code = String(codeChild || '').replace(/\n$/, '');
-
-      if (lang === 'mermaid') {
-        return <MermaidBlock code={code} />;
-      }
-
-      return <CodeBlock className={`language-${lang}`}>{code}</CodeBlock>;
-    },
     code: (props: any) => {
+      const match = /language-(\w+)/.exec(props.className || '');
+      if (match && match[1] === 'mermaid') {
+        return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
+      }
       return <CodeBlock {...props} cardColor={cardColor} />;
     },
     img: ({ src, alt }) => {
@@ -1582,7 +1580,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
         onDoubleClick={readOnly ? undefined : handleContentDoubleClick}
         title={readOnly ? undefined : "双击编辑"}
       >
-        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[preserveCodeBlocks, rehypeRaw, rehypeKatex]} components={mdComponents}>{strippedContent}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]} components={mdComponents}>{strippedContent}</ReactMarkdown>
         {!expanded && isLong && (
           <>
             <div className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none"

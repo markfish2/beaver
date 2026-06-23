@@ -7,6 +7,7 @@ import remarkMath from 'remark-math';
 import rehypeRaw from 'rehype-raw';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
+import { preserveCodeBlocks } from '../utils/preserveCodeBlocks';
 import { askAI, getAIConversation, createMemo, createDocument, createNode, getSkills, Skill } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import { useDocuments } from '../context/DocumentContext';
@@ -262,7 +263,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
                 <div className="text-sm prose prose-sm dark:prose-invert max-w-none overflow-hidden">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
-                    rehypePlugins={[rehypeRaw, rehypeKatex]}
+                    rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]}
                     components={{
                       code: (props: any) => {
                         const match = /language-(\w+)/.exec(props.className || '');
