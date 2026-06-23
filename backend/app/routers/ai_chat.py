@@ -484,11 +484,12 @@ async def ask_ai(
         system_prompt = "你是一个智能助手。请直接回答用户的问题，用中文回答。回答要简洁准确。"
     else:
         # 数据模式：搜索本地笔记
-        from ..vector_search import check_embedding_support, search_similar
-        embedding_supported = await check_embedding_support(config)
+        from ..vector_search import check_embedding_config, get_embedding_config, search_similar
+        embedding_config = get_embedding_config(db)
+        embedding_supported = embedding_config and await check_embedding_config(embedding_config)
 
         if embedding_supported:
-            sources = await search_similar(db, query, config)
+            sources = await search_similar(db, query, embedding_config)
         else:
             # 用 AI 扩展搜索关键词
             search_queries = await _expand_query(query, config)
