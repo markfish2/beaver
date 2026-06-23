@@ -240,13 +240,19 @@ def _fallback_keyword_search(db: Session, query: str, limit: int) -> list[dict]:
 
 def _get_source_title(db: Session, source_type: str, source_id: str) -> str:
     """获取笔记标题"""
+    import uuid as uuid_mod
+    try:
+        source_uuid = uuid_mod.UUID(source_id) if isinstance(source_id, str) else source_id
+    except ValueError:
+        return "未知"
+
     if source_type == "memo":
-        memo = db.query(models.Memo).filter(models.Memo.id == source_id).first()
+        memo = db.query(models.Memo).filter(models.Memo.id == source_uuid).first()
         if memo and memo.content:
             first_line = memo.content.split('\n')[0].strip()
             return first_line.lstrip('#').lstrip('*').strip()[:50] or "无标题"
     elif source_type in ("document", "node"):
-        doc = db.query(models.Document).filter(models.Document.id == source_id).first()
+        doc = db.query(models.Document).filter(models.Document.id == source_uuid).first()
         if doc:
             return doc.title
     return "未知"
