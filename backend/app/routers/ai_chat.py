@@ -519,7 +519,7 @@ async def ask_ai(
 
         context_parts = []
         for i, source in enumerate(sources, 1):
-            context_parts.append(f"[{i}] {source['type'].upper()}: {source['title']}\n{source['snippet']}")
+            context_parts.append(f"[{i}] {source['type'].upper()}: {source['title']} (id:{source['id']})\n{source['snippet']}")
         context = "\n\n".join(context_parts) if context_parts else "未找到相关笔记。"
 
         system_prompt = f"""你是一个笔记助手。根据用户的笔记内容回答问题。
@@ -535,7 +535,8 @@ async def ask_ai(
 3. 如果笔记内容与问题无关，不要引用它
 4. 如果笔记中没有相关内容，如实告知"未找到相关笔记"
 5. 用中文回答
-6. 在回答的最末尾，另起一行，用以下格式列出你实际引用的来源编号：[来源: 1, 3]。如果没有引用任何笔记，写 [来源: none]。"""
+6. 当你引用某条笔记时，用 Markdown 链接标注来源，格式为 [笔记标题](/d/笔记id)。例如：根据[小熊积分](/d/abc123)，当前积分是112分。
+7. 不要在回答末尾单独列出来源列表，直接在正文中引用即可。"""
 
     # 上下文管理：截断超长对话
     truncated = await _truncate_messages(request.messages, system_prompt, config=config)

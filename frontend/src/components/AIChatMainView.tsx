@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader2, FileText, ListTree, StickyNote, PenTool, BookmarkPlus, Database, Globe, Wand2 } from 'lucide-react';
+import { Send, Loader2, BookmarkPlus, Database, Globe, Wand2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -20,20 +20,6 @@ interface Message {
   content: string;
   sources?: Source[];
 }
-
-const TYPE_ICONS: Record<string, typeof FileText> = {
-  document: ListTree,
-  note: FileText,
-  memo: StickyNote,
-  excalidraw: PenTool,
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  document: '大纲笔记',
-  note: '普通笔记',
-  memo: '随想',
-  excalidraw: '画布',
-};
 
 interface AIChatMainViewProps {
   conversationId: string | null;
@@ -242,12 +228,6 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
     }
   };
 
-  const handleSourceClick = (source: Source) => {
-    if (onNavigate) {
-      onNavigate(source.type, source.id);
-    }
-  };
-
   const isEmpty = messages.length === 0 && !loadingConv;
 
   return (
@@ -280,6 +260,24 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
                           return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
                         }
                         return <code {...props} />;
+                      },
+                      a: ({ href, children, ...props }: any) => {
+                        if (href && href.startsWith('/d/')) {
+                          return (
+                            <a
+                              href={href}
+                              className="text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                onNavigate?.('document', href.replace('/d/', ''));
+                              }}
+                              {...props}
+                            >
+                              {children}
+                            </a>
+                          );
+                        }
+                        return <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 underline" {...props}>{children}</a>;
                       },
                     }}
                   >{msg.content}</ReactMarkdown>
@@ -316,27 +314,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
                   )}
                 </div>
               )}
-              {msg.sources && msg.sources.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                  <p className="text-xs text-gray-400 mb-1">来源：</p>
-                  <div className="space-y-1">
-                    {msg.sources.map((source, j) => {
-                      const Icon = TYPE_ICONS[source.type] || FileText;
-                      return (
-                        <button
-                          key={j}
-                          onClick={() => handleSourceClick(source)}
-                          className="flex items-center gap-1.5 w-full text-left px-2 py-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                        >
-                          <Icon className="w-3 h-3 text-gray-400 shrink-0" />
-                          <span className="text-xs text-gray-600 dark:text-gray-300 truncate">{source.title}</span>
-                          <span className="text-[10px] text-gray-400 shrink-0">{TYPE_LABELS[source.type]}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+              {/* 来源已在回复正文中以内嵌链接形式展示 */}
             </div>
           </div>
         ))}
