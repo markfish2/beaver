@@ -354,11 +354,12 @@ async def _do_reindex(config_id):
             except Exception:
                 _reindex_status["errors"] += 1
 
+        skipped = _reindex_status['memos_skipped'] + _reindex_status['docs_skipped']
         _reindex_status.update({
             "running": False,
             "done": True,
             "current": "",
-            "message": f"索引完成：{_reindex_status['memos_indexed']} 条随想，{_reindex_status['docs_indexed']} 篇文档，{_reindex_status['memos_skipped'] + _reindex_status['docs_skipped']} 条不参与AI，{_reindex_status['errors']} 个错误",
+            "message": f"索引完成：{_reindex_status['memos_indexed']} 条随想，{_reindex_status['docs_indexed']} 篇文档已索引" + (f"，{skipped} 条空内容跳过" if skipped else "") + (f"，{_reindex_status['errors']} 个错误" if _reindex_status['errors'] else ""),
         })
         logger.info(f"[Reindex] {_reindex_status['message']}")
     except Exception as e:
