@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader2, BookmarkPlus, Database, Globe, Wand2 } from 'lucide-react';
+import { Send, Loader2, BookmarkPlus, Database, Globe, Wand2, StickyNote, FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
