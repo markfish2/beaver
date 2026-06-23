@@ -2663,11 +2663,18 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       {/* Excalidraw View - Canvas editor */}
       {currentDoc?.type === 'excalidraw' && (
         <div className="main-content-area flex-1" style={{ minHeight: 0, position: 'relative' }}>
-          <ExcalidrawEditor
-            documentId={documentId!}
-            title={currentDoc?.title}
-            onTitleChange={handleTitleChange}
-          />
+          {isMobile ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 text-gray-500 p-8">
+              <p className="text-center text-sm">画布编辑器暂不支持移动端</p>
+              <p className="text-center text-xs text-gray-400">请在 PC 端浏览器中查看和编辑画布</p>
+            </div>
+          ) : (
+            <ExcalidrawEditor
+              documentId={documentId!}
+              title={currentDoc?.title}
+              onTitleChange={handleTitleChange}
+            />
+          )}
         </div>
       )}
 
