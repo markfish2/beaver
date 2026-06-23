@@ -86,18 +86,34 @@ async def test_config(
 
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                f"{config.api_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {config.api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": config.model,
-                    "messages": [{"role": "user", "content": "hi"}],
-                    "max_tokens": 5
-                }
-            )
+            purpose = config.purpose or 'chat'
+            if purpose == 'embedding':
+                # embedding 模型用 /embeddings 接口
+                resp = await client.post(
+                    f"{config.api_url}/embeddings",
+                    headers={
+                        "Authorization": f"Bearer {config.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": config.model,
+                        "input": "test"
+                    }
+                )
+            else:
+                # chat 模型用 /chat/completions 接口
+                resp = await client.post(
+                    f"{config.api_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {config.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": config.model,
+                        "messages": [{"role": "user", "content": "hi"}],
+                        "max_tokens": 5
+                    }
+                )
             if resp.status_code == 200:
                 return {"ok": True, "message": "连接成功"}
             else:
@@ -206,3 +222,78 @@ async def ai_chat(
             yield f"\n[错误] {str(e)}"
 
     return StreamingResponse(generate(), media_type="text/plain")
+
+
+@router.post("/reindex")
+async def reindex_embeddings(
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(get_current_user)
+):
+    """批量重建所有笔记的向量索引"""
+    from ..vector_search import index_note, get_embedding_config, check_embedding_config
+    from .. import models
+    from sqlalchemy import text as sql_text
+
+    # 检查 embedding 配置
+    config = get_embedding_config(db)
+    if not config:
+        raise HTTPException(status_code=400, detail="未配置向量模型，请先在 AI 设置中添加")
+
+    # 测试 embedding 连接
+    if not await check_embedding_config(config):
+        raise HTTPException(status_code=400, detail="向量模型连接失败，请检查配置")
+
+    # 统计
+    stats = {"memos": 0, "documents": 0, "skipped": 0, "errors": 0}
+
+    # 1. 索引所有 memo（未排除、未删除）
+    memos = db.query(models.Memo).filter(
+        models.Memo.deleted_at.is_(None),
+        models.Memo.ai_excluded == False,
+        models.Memo.content != '',
+    ).all()
+
+    for memo in memos:
+        if not memo.content or len(memo.content.strip()) < 50:
+            stats["skipped"] += 1
+            continue
+        try:
+            await index_note(db, "memo", memo.id, memo.content, config)
+            stats["memos"] += 1
+        except Exception:
+            stats["errors"] += 1
+
+    # 2. 索引所有文档（未排除、未删除，有内容的节点）
+    docs = db.query(models.Document).filter(
+        models.Document.deleted_at.is_(None),
+        models.Document.ai_excluded == False,
+        models.Document.type.in_(["document", "note"]),
+    ).all()
+
+    for doc in docs:
+        nodes = db.query(models.Node).filter(
+            models.Node.document_id == doc.id
+        ).all()
+
+        content_parts = []
+        for node in nodes:
+            text = (node.content or "") + "\n" + (node.note or "")
+            if text.strip():
+                content_parts.append(text.strip())
+
+        full_content = "\n\n".join(content_parts)
+        if len(full_content.strip()) < 50:
+            stats["skipped"] += 1
+            continue
+
+        try:
+            await index_note(db, "document", doc.id, full_content, config)
+            stats["documents"] += 1
+        except Exception:
+            stats["errors"] += 1
+
+    return {
+        "success": True,
+        "message": f"索引完成：{stats['memos']} 条随想，{stats['documents']} 篇文档，{stats['skipped']} 条跳过，{stats['errors']} 个错误",
+        "stats": stats
+    }

@@ -847,6 +847,11 @@ export const testAIConfig = async (id: string): Promise<{ ok: boolean; message: 
   return response.data;
 };
 
+export const reindexEmbeddings = async (): Promise<{ success: boolean; message: string; stats: Record<string, number> }> => {
+  const response = await api.post('/ai/reindex');
+  return response.data;
+};
+
 // AI 流式对话（不走 axios，直接 fetch 处理流）
 export const aiChat = async function* (
   messages: { role: string; content: string }[],

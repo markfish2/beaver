@@ -79,7 +79,12 @@ def chunk_text(text: str, max_chars: int = 800, min_chars: int = 50) -> list[str
 
 
 async def check_embedding_support(config) -> bool:
-    """检测 AI 配置是否支持 embedding API"""
+    """检测 AI 配置是否支持 embedding API（用于默认配置检测）"""
+    return await check_embedding_config(config)
+
+
+async def check_embedding_config(config) -> bool:
+    """检测 embedding 配置是否可用"""
     import httpx
 
     api_url = config.api_url.rstrip('/')
@@ -88,7 +93,7 @@ async def check_embedding_support(config) -> bool:
     else:
         embedding_url = f"{api_url}/v1/embeddings"
 
-    model = _get_embedding_model(config)
+    model = config.model
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:

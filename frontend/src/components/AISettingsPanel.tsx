@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Check, Loader2, Sparkles, Database } from 'lucide-react';
-import { getAIConfigs, createAIConfig, updateAIConfig, deleteAIConfig, testAIConfig, type AIConfig, type AIConfigCreate } from '../api/data';
+import { getAIConfigs, createAIConfig, updateAIConfig, deleteAIConfig, testAIConfig, reindexEmbeddings, type AIConfig, type AIConfigCreate } from '../api/data';
 import { showToast } from '../utils/toast';
 
 // 预设配置 - Chat 模型
@@ -26,6 +26,8 @@ export default function AISettingsPanel() {
   const [testing, setTesting] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ id: string; ok: boolean; message: string } | null>(null);
   const [embeddingSupport, setEmbeddingSupport] = useState<Record<string, boolean>>({});
+  const [reindexing, setReindexing] = useState(false);
+  const [reindexResult, setReindexResult] = useState<string | null>(null);
 
   const [form, setForm] = useState<AIConfigCreate>({
     name: '',
@@ -139,6 +141,22 @@ export default function AISettingsPanel() {
     }
   };
 
+  const handleReindex = async () => {
+    setReindexing(true);
+    setReindexResult(null);
+    try {
+      const result = await reindexEmbeddings();
+      setReindexResult(result.message);
+      showToast('索引完成');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '索引失败';
+      setReindexResult(msg);
+      showToast('索引失败', 'error');
+    } finally {
+      setReindexing(false);
+    }
+  };
+
   const chatConfigs = configs.filter(c => (c.purpose || 'chat') === 'chat');
   const embeddingConfigs = configs.filter(c => c.purpose === 'embedding');
 
@@ -247,6 +265,19 @@ export default function AISettingsPanel() {
           ) : (
             <div className="space-y-3">
               {embeddingConfigs.map(config => renderConfigCard(config))}
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={handleReindex}
+                  disabled={reindexing}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                >
+                  {reindexing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
+                  {reindexing ? '索引中...' : '重建索引'}
+                </button>
+                {reindexResult && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{reindexResult}</span>
+                )}
+              </div>
             </div>
           )}
         </div>
