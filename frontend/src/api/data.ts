@@ -797,6 +797,7 @@ export interface AIConfig {
   api_url: string;
   api_key: string;
   model: string;
+  purpose: string;
   is_default: boolean;
   created_at: string;
   updated_at: string;
@@ -808,6 +809,7 @@ export interface AIConfigCreate {
   api_url: string;
   api_key: string;
   model: string;
+  purpose?: string;
   is_default?: boolean;
 }
 
@@ -817,6 +819,7 @@ export interface AIConfigUpdate {
   api_url?: string;
   api_key?: string;
   model?: string;
+  purpose?: string;
   is_default?: boolean;
 }
 

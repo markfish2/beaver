@@ -59,12 +59,13 @@ def _parse_skill_file(filepath: Path) -> dict | None:
 @router.get("/")
 async def list_skills():
     """获取所有 skill 列表"""
+    # 确保 skill 目录存在
+    SKILL_DIR.mkdir(parents=True, exist_ok=True)
     skills = []
-    if SKILL_DIR.exists():
-        for f in sorted(SKILL_DIR.glob("*.md")):
-            skill = _parse_skill_file(f)
-            if skill:
-                skills.append(skill)
+    for f in sorted(SKILL_DIR.glob("*.md")):
+        skill = _parse_skill_file(f)
+        if skill:
+            skills.append(skill)
     return skills
 
 

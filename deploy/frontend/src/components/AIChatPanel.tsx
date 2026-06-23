@@ -99,7 +99,7 @@ export default function AIChatPanel({ context, onWriteBack, onClose }: AIChatPan
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="flex flex-col w-[90vw] max-w-[680px] h-[75vh] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+        className="flex flex-col w-[90vw] max-w-[680px] h-[75vh] bg-[#FAFAF5] dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* 顶栏 */}
@@ -146,7 +146,7 @@ export default function AIChatPanel({ context, onWriteBack, onClose }: AIChatPan
                   <button
                     key={action}
                     onClick={() => handleQuickAction(action)}
-                    className="px-4 py-2 text-xs bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-left w-full max-w-md"
+                    className="px-4 py-2 text-xs bg-white dark:bg-gray-800/50 border border-[#dad9d4] dark:border-gray-700/40 text-gray-500 dark:text-gray-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left w-full max-w-md"
                   >
                     {action}
                   </button>
@@ -156,11 +156,11 @@ export default function AIChatPanel({ context, onWriteBack, onClose }: AIChatPan
           )}
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] px-3 py-2 rounded-xl text-sm whitespace-pre-wrap ${
+              <div className={`max-w-[85%] px-3 py-2 text-sm whitespace-pre-wrap ${
                 msg.role === 'user'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
-              }`}>
+                  ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
+                  : 'bg-white dark:bg-gray-800/50 border border-[#dad9d4] dark:border-gray-700/40 text-gray-800 dark:text-gray-200'
+              }`} style={{ borderRadius: '8px' }}>
                 {msg.content}
               </div>
             </div>
@@ -168,7 +168,7 @@ export default function AIChatPanel({ context, onWriteBack, onClose }: AIChatPan
           {/* 思考中提示 */}
           {loading && !streamingText && (
             <div className="flex justify-start">
-              <div className="px-3 py-2 rounded-xl text-sm bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 flex items-center gap-2">
+              <div className="px-3 py-2 text-sm bg-white dark:bg-gray-800/50 border border-[#dad9d4] dark:border-gray-700/40 text-gray-500 dark:text-gray-400 flex items-center gap-2" style={{ borderRadius: '8px' }}>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 思考中：{thinkingTime}s
               </div>
@@ -177,7 +177,7 @@ export default function AIChatPanel({ context, onWriteBack, onClose }: AIChatPan
           {/* 流式输出 */}
           {streamingText && (
             <div className="flex justify-start">
-              <div className="max-w-[85%] px-3 py-2 rounded-xl text-sm whitespace-pre-wrap bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+              <div className="max-w-[85%] px-3 py-2 text-sm whitespace-pre-wrap bg-white dark:bg-gray-800/50 border border-[#dad9d4] dark:border-gray-700/40 text-gray-800 dark:text-gray-200" style={{ borderRadius: '8px' }}>
                 {streamingText}<span className="animate-pulse">▌</span>
               </div>
             </div>
