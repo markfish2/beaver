@@ -229,10 +229,8 @@ async def reindex_embeddings(
     db: Session = Depends(get_db),
     current_user: schemas.User = Depends(get_current_user)
 ):
-    """批量重建所有笔记的向量索引"""
-    from ..vector_search import index_note, get_embedding_config, check_embedding_config
-    from .. import models
-    from sqlalchemy import text as sql_text
+    """批量重建所有笔记的向量索引（后台执行）"""
+    from ..vector_search import get_embedding_config, check_embedding_config
 
     # 检查 embedding 配置
     config = get_embedding_config(db)
@@ -243,57 +241,82 @@ async def reindex_embeddings(
     if not await check_embedding_config(config):
         raise HTTPException(status_code=400, detail="向量模型连接失败，请检查配置")
 
-    # 统计
-    stats = {"memos": 0, "documents": 0, "skipped": 0, "errors": 0}
+    # 保存配置信息供后台任务使用
+    config_id = config.id
 
-    # 1. 索引所有 memo（未排除、未删除）
-    memos = db.query(models.Memo).filter(
-        models.Memo.deleted_at.is_(None),
-        models.Memo.ai_excluded == False,
-        models.Memo.content != '',
-    ).all()
-
-    for memo in memos:
-        if not memo.content or len(memo.content.strip()) < 50:
-            stats["skipped"] += 1
-            continue
-        try:
-            await index_note(db, "memo", memo.id, memo.content, config)
-            stats["memos"] += 1
-        except Exception:
-            stats["errors"] += 1
-
-    # 2. 索引所有文档（未排除、未删除，有内容的节点）
-    docs = db.query(models.Document).filter(
-        models.Document.deleted_at.is_(None),
-        models.Document.ai_excluded == False,
-        models.Document.type.in_(["document", "note"]),
-    ).all()
-
-    for doc in docs:
-        nodes = db.query(models.Node).filter(
-            models.Node.document_id == doc.id
-        ).all()
-
-        content_parts = []
-        for node in nodes:
-            text = (node.content or "") + "\n" + (node.note or "")
-            if text.strip():
-                content_parts.append(text.strip())
-
-        full_content = "\n\n".join(content_parts)
-        if len(full_content.strip()) < 50:
-            stats["skipped"] += 1
-            continue
-
-        try:
-            await index_note(db, "document", doc.id, full_content, config)
-            stats["documents"] += 1
-        except Exception:
-            stats["errors"] += 1
+    # 启动后台任务
+    import asyncio
+    asyncio.create_task(_do_reindex(config_id))
 
     return {
         "success": True,
-        "message": f"索引完成：{stats['memos']} 条随想，{stats['documents']} 篇文档，{stats['skipped']} 条跳过，{stats['errors']} 个错误",
-        "stats": stats
+        "message": "索引任务已启动，请稍候查看结果",
     }
+
+
+async def _do_reindex(config_id):
+    """后台执行批量索引"""
+    from ..vector_search import index_note
+    from .. import models
+    from ..database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        config = db.query(models.AIConfig).filter(models.AIConfig.id == config_id).first()
+        if not config:
+            return
+
+        logger = __import__('logging').getLogger(__name__)
+        stats = {"memos": 0, "documents": 0, "skipped": 0, "errors": 0}
+
+        # 索引所有 memo
+        memos = db.query(models.Memo).filter(
+            models.Memo.deleted_at.is_(None),
+            models.Memo.ai_excluded == False,
+            models.Memo.content != '',
+        ).all()
+
+        for memo in memos:
+            if not memo.content or len(memo.content.strip()) < 50:
+                stats["skipped"] += 1
+                continue
+            try:
+                await index_note(db, "memo", memo.id, memo.content, config)
+                stats["memos"] += 1
+            except Exception:
+                stats["errors"] += 1
+
+        # 索引所有文档
+        docs = db.query(models.Document).filter(
+            models.Document.deleted_at.is_(None),
+            models.Document.ai_excluded == False,
+            models.Document.type.in_(["document", "note"]),
+        ).all()
+
+        for doc in docs:
+            nodes = db.query(models.Node).filter(
+                models.Node.document_id == doc.id
+            ).all()
+
+            content_parts = []
+            for node in nodes:
+                text = (node.content or "") + "\n" + (node.note or "")
+                if text.strip():
+                    content_parts.append(text.strip())
+
+            full_content = "\n\n".join(content_parts)
+            if len(full_content.strip()) < 50:
+                stats["skipped"] += 1
+                continue
+
+            try:
+                await index_note(db, "document", doc.id, full_content, config)
+                stats["documents"] += 1
+            except Exception:
+                stats["errors"] += 1
+
+        logger.info(f"[Reindex] 完成：{stats['memos']} 条随想，{stats['documents']} 篇文档，{stats['skipped']} 条跳过，{stats['errors']} 个错误")
+    except Exception as e:
+        logger.error(f"[Reindex] 失败: {e}")
+    finally:
+        db.close()
