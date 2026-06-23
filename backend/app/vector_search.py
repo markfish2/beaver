@@ -266,12 +266,15 @@ def _fallback_keyword_search(db: Session, query: str, limit: int) -> list[dict]:
 async def _fallback_keyword_search_async(db: Session, query: str, config, limit: int) -> list[dict]:
     """关键词搜索回退方案（使用 AI 扩展关键词）"""
     from .routers.ai_chat import _search_notes, _expand_query
+    from . import crud
     import re
 
-    if not config:
+    # 扩展关键词需要 chat 模型，不是 embedding 模型
+    chat_config = crud.get_default_ai_config(db)
+    if not chat_config:
         return _search_notes(db, query, limit=limit)
 
-    search_queries = await _expand_query(query, config)
+    search_queries = await _expand_query(query, chat_config)
 
     all_keywords = set()
     for sq in search_queries:
