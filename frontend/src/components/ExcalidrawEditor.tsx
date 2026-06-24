@@ -164,6 +164,19 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
             const scenePayload = { elements: sceneData.elements, appState: restAppState };
             setInitialData(scenePayload);
             savedFingerprintRef.current = fingerprint(sceneData.elements);
+            // 延迟重置未保存状态，防止 Excalidraw 加载初始数据时误报
+            setTimeout(() => {
+              if (!cancelled) {
+                hasUnsavedChangesRef.current = false;
+                // 更新指纹为 Excalidraw 处理后的元素
+                if (excalidrawRef.current) {
+                  const els = excalidrawRef.current.getSceneElements();
+                  if (els && els.length > 0) {
+                    savedFingerprintRef.current = fingerprint(Array.from(els));
+                  }
+                }
+              }
+            }, 1000);
 
             // 异步加载图片
             const files = await loadExcalidrawFiles(loadedDocId);
