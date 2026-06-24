@@ -1607,7 +1607,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                     ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                 }`}
-                style={{ paddingLeft: `${8 + depth * 20}px`, paddingRight: '8px' }}
+                style={{ paddingLeft: `${8 + depth * 10}px`, paddingRight: '8px' }}
               >
                 <FolderIcon className="w-4 h-4 shrink-0" />
                 <span className="truncate">{node.title}</span>
