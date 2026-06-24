@@ -126,13 +126,13 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
         {depth > 0 && (
           <div
             className="absolute top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700"
-            style={{ left: `${8 + (depth - 1) * 16 + 7}px` }}
+            style={{ left: `${8 + (depth - 1) * 10 + 7}px` }}
           />
         )}
 
         <div
           className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 active:bg-gray-200 dark:active:bg-gray-700 transition-colors group relative"
-          style={{ paddingLeft: `${8 + depth * 16}px` }}
+          style={{ paddingLeft: `${8 + depth * 10}px` }}
           onClick={() => handleDocumentClick(doc)}
           onContextMenu={(e) => handleContextMenu(e, doc.id)}
           onTouchStart={(e) => {
