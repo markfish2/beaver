@@ -135,11 +135,11 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // 被动加载：等 Excalidraw ref 就绪后再拉数据
+  // 加载画布数据，设置 initialData 供 Excalidraw 首次渲染
   useEffect(() => {
     let cancelled = false;
     hasLoadedInitialData.current = false;
-    setInitialData({ elements: [] });
+    setInitialData(null);
     hasFittedContent.current = false;
     filesRef.current = null;
     filesDirtyRef.current = false;
@@ -149,26 +149,8 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     versionRef.current = 0;
     pendingAppStateRef.current = null;
     saveDataRef.current?.cancel?.();
-    setIsLoading(true);
 
-    const waitForReadyAndLoad = async () => {
-      // 等 Excalidraw ref 就绪（最多 5 秒）
-      const ready = await new Promise<boolean>((resolve) => {
-        if (excalidrawRef.current) { resolve(true); return; }
-        let elapsed = 0;
-        const interval = setInterval(() => {
-          elapsed += 100;
-          if (excalidrawRef.current || elapsed >= 5000) {
-            clearInterval(interval);
-            resolve(!!excalidrawRef.current);
-          }
-        }, 100);
-      });
-      if (cancelled || !ready) {
-        if (!cancelled) setIsLoading(false);
-        return;
-      }
-
+    const loadData = async () => {
       const loadedDocId = documentId;
       try {
         const data = await getExcalidrawDataFresh(loadedDocId);
@@ -180,29 +162,26 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           if (sceneData.elements?.length > 0) {
             const { scrollX, scrollY, zoom, ...restAppState } = sceneData.appState || {};
             const scenePayload = { elements: sceneData.elements, appState: restAppState };
-
-            // ref 已就绪，直接 updateScene
-            if (excalidrawRef.current && documentIdRef.current === loadedDocId) {
-              excalidrawRef.current.updateScene(scenePayload);
-              savedFingerprintRef.current = fingerprint(sceneData.elements);
-              requestAnimationFrame(() => {
-                if (cancelled || documentIdRef.current !== loadedDocId) return;
-                const api = excalidrawRef.current;
-                if (api) {
-                  const elements = api.getSceneElements();
-                  if (elements.length > 0) {
-                    api.scrollToContent(elements, { fitToContent: true, animate: false });
+            setInitialData(scenePayload);
+            savedFingerprintRef.current = fingerprint(sceneData.elements);
+            // 延迟重置未保存状态，防止 Excalidraw 加载初始数据时误报
+            setTimeout(() => {
+              if (!cancelled) {
+                hasUnsavedChangesRef.current = false;
+                // 更新指纹为 Excalidraw 处理后的元素
+                if (excalidrawRef.current) {
+                  const els = excalidrawRef.current.getSceneElements();
+                  if (els && els.length > 0) {
+                    savedFingerprintRef.current = fingerprint(Array.from(els));
                   }
-                  hasFittedContent.current = true;
                 }
-              });
-            }
+              }
+            }, 1000);
 
-            // 加载图片
+            // 异步加载图片
             const files = await loadExcalidrawFiles(loadedDocId);
-            if (!cancelled && documentIdRef.current === loadedDocId && excalidrawRef.current && Object.keys(files).length > 0) {
+            if (!cancelled && documentIdRef.current === loadedDocId && Object.keys(files).length > 0) {
               filesRef.current = files;
-              excalidrawRef.current.addFiles(Object.values(files));
             }
           }
         }
@@ -216,7 +195,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
       }
     };
 
-    waitForReadyAndLoad();
+    loadData();
     return () => { cancelled = true; };
   }, [documentId]);
 
@@ -276,7 +255,6 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   useEffect(() => {
     if (!initialData || !excalidrawRef.current || hasFittedContent.current) return;
     hasFittedContent.current = true;
-    // 延迟一帧确保 Excalidraw 完成渲染
     requestAnimationFrame(() => {
       const api = excalidrawRef.current;
       if (api) {
@@ -286,6 +264,16 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         }
       }
     });
+  }, [initialData]);
+
+  // 加载图片文件到 Excalidraw
+  useEffect(() => {
+    if (!initialData || !excalidrawRef.current || !filesRef.current) return;
+    const files = filesRef.current;
+    if (Object.keys(files).length > 0) {
+      excalidrawRef.current.addFiles(Object.values(files));
+      filesRef.current = null;
+    }
   }, [initialData]);
 
   // 保存锁、files 缓存、待保存数据
