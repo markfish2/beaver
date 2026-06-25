@@ -177,16 +177,14 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
                 'overlay-opacity': 0,
               } as cytoscape.Css.Node,
             },
-            // Edge style — curved arcs
+            // Edge style — straight lines
             {
               selector: 'edge',
               style: {
                 'line-color': isDark ? '#6b7280' : '#9ca3af',
                 'width': 1.5,
                 'opacity': 0.6,
-                'curve-style': 'unbundled-bezier',
-                'control-point-distances': 40,
-                'control-point-weights': 0.5,
+                'curve-style': 'straight',
               } as cytoscape.Css.Edge,
             },
             // Hovered node
