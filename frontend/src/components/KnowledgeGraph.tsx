@@ -1,24 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
-import { forceSimulation, forceCollide, forceLink, forceManyBody, forceRadial } from 'd3-force';
-import { zoom } from 'd3-zoom';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { forceSimulation, forceCollide, forceLink, forceManyBody, forceCenter, SimulationNodeDatum, SimulationLinkDatum } from 'd3-force';
+import { zoom, zoomIdentity, ZoomTransform } from 'd3-zoom';
 import { select } from 'd3-selection';
 import api from '../api/client';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 
-interface GraphNode {
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface GraphNode extends SimulationNodeDatum {
   id: string;
   title: string;
   type: string;
   source_type: string;
-  x?: number;
-  y?: number;
-  fx?: number | null;
-  fy?: number | null;
+  connectionCount?: number;
 }
 
-interface GraphEdge {
-  source: string | GraphNode;
-  target: string | GraphNode;
+interface GraphEdge extends SimulationLinkDatum<GraphNode> {
   weight: number;
 }
 
@@ -27,190 +24,446 @@ interface GraphData {
   edges: GraphEdge[];
 }
 
-// Claude 配色方案
-const NODE_COLORS: Record<string, { fill: string; stroke: string; darkFill: string; darkStroke: string }> = {
-  memo: { fill: '#f5e6d8', stroke: '#e8a87c', darkFill: '#3d2e1f', darkStroke: '#c08552' },
-  document: { fill: '#dde5ee', stroke: '#89a8c8', darkFill: '#1e2d3d', darkStroke: '#5b8ab5' },
-  note: { fill: '#e0eae4', stroke: '#7fb89e', darkFill: '#1e2d25', darkStroke: '#5a9e7a' },
+// ─── Obsidian-style color palette ─────────────────────────────────────────────
+// Vibrant colors for dark mode, softer for light mode — inspired by Obsidian's color groups
+
+const NODE_COLORS: Record<string, { dark: string; light: string }> = {
+  memo:     { dark: '#f97316', light: '#ea580c' },  // orange
+  document: { dark: '#60a5fa', light: '#2563eb' },  // blue
+  note:     { dark: '#34d399', light: '#059669' },  // green
+  folder:   { dark: '#a78bfa', light: '#7c3aed' },  // purple
+  excalidraw: { dark: '#f472b6', light: '#db2777' }, // pink
 };
 
-function getNodeColor(sourceType: string, isDark: boolean) {
-  const c = NODE_COLORS[sourceType] || NODE_COLORS.document;
-  return isDark ? { fill: c.darkFill, stroke: c.darkStroke } : { fill: c.fill, stroke: c.stroke };
+const DEFAULT_COLOR = { dark: '#94a3b8', light: '#64748b' };
+
+function getNodeColor(sourceType: string, isDark: boolean): string {
+  const c = NODE_COLORS[sourceType] || DEFAULT_COLOR;
+  return isDark ? c.dark : c.light;
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: string, type: string) => void }) {
-  const svgRef = useRef<SVGSVGElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<GraphData | null>(null);
+  const [zoomScale, setZoomScale] = useState(1);
 
+  // Store refs for animation loop access
+  const stateRef = useRef({
+    nodes: [] as GraphNode[],
+    links: [] as GraphEdge[],
+    transform: zoomIdentity as ZoomTransform,
+    hoveredNode: null as GraphNode | null,
+    isDark: false,
+    dpr: 1,
+    width: 0,
+    height: 0,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    zoomBehavior: null as any,
+  });
+
+  // Fetch data
   useEffect(() => {
-    api.get('/knowledge-graph/', { params: { threshold: 0.55, max_edges: 100 } })
+    api.get('/knowledge-graph/', { params: { threshold: 0.55, max_edges: 150 } })
       .then(resp => setData(resp.data))
       .catch(() => setError('加载失败'))
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    if (!data || !svgRef.current || !containerRef.current) return;
+  // Compute connection counts
+  const computeConnectionCounts = useCallback((nodes: GraphNode[], edges: GraphEdge[]) => {
+    const counts = new Map<string, number>();
+    for (const edge of edges) {
+      const sid = typeof edge.source === 'string' ? edge.source : (edge.source as GraphNode).id;
+      const tid = typeof edge.target === 'string' ? edge.target : (edge.target as GraphNode).id;
+      counts.set(sid, (counts.get(sid) || 0) + 1);
+      counts.set(tid, (counts.get(tid) || 0) + 1);
+    }
+    for (const node of nodes) {
+      node.connectionCount = counts.get(node.id) || 0;
+    }
+  }, []);
 
-    const svg = svgRef.current;
+  // Get node radius based on connection count (Obsidian style: scales with links)
+  const getNodeRadius = useCallback((node: GraphNode): number => {
+    const base = 4;
+    const extra = Math.sqrt((node.connectionCount || 0)) * 3;
+    return Math.min(base + extra, 14);
+  }, []);
+
+  // ─── Main canvas effect ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!data || !canvasRef.current || !containerRef.current) return;
+
+    const canvas = canvasRef.current;
     const container = containerRef.current;
+    const ctx = canvas.getContext('2d')!;
+    const dpr = window.devicePixelRatio || 1;
     const width = container.clientWidth;
     const height = container.clientHeight;
+
+    // HiDPI canvas
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
     const isDark = document.documentElement.classList.contains('dark');
-    const radius = Math.min(width, height) / 2 - 60;
+    const state = stateRef.current;
+    state.isDark = isDark;
+    state.dpr = dpr;
+    state.width = width;
+    state.height = height;
 
-    svg.setAttribute('width', String(width));
-    svg.setAttribute('height', String(height));
-    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    // Prepare nodes with random initial positions
+    const nodes: GraphNode[] = data.nodes.map((n) => ({
+      ...n,
+      x: width / 2 + (Math.random() - 0.5) * 100,
+      y: height / 2 + (Math.random() - 0.5) * 100,
+    }));
 
-    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    svg.appendChild(g);
+    const links: GraphEdge[] = data.edges.map(e => ({ ...e, source: e.source, target: e.target }));
+    computeConnectionCounts(nodes, links);
+    state.nodes = nodes;
+    state.links = links;
 
-    // 节点初始位置：随机分布在圆内
-    const nodes = data.nodes.map((n) => {
-      const angle = Math.random() * 2 * Math.PI;
-      const r = Math.sqrt(Math.random()) * radius * 0.8;
-      return {
-        ...n,
-        x: width / 2 + r * Math.cos(angle),
-        y: height / 2 + r * Math.sin(angle),
-      };
-    });
-    const links = data.edges.map(e => ({ ...e, source: e.source, target: e.target }));
-
-    // 力导向模拟：约束在圆形范围内
+    // ─── Force simulation (Obsidian 3-force balance) ───────────────────────
+    // Repulsion (斥力): nodes push apart → uniform spacing
+    // Center force (向心力): pulls to center → circular boundary emerges
+    // Link force (连接力): connected nodes attract → clusters form
+    // The circular shape is the natural equilibrium of these 3 forces.
     const sim = forceSimulation(nodes)
-      .force('radial', forceRadial(radius * 0.85, width / 2, height / 2).strength(0.6))
-      .force('charge', forceManyBody().strength(-40))
-      .force('collision', forceCollide().radius(22))
-      .force('link', forceLink(links).id((d: any) => d.id).distance(50).strength(0.3))
-      .alpha(1)
-      .alphaDecay(0.03);
+      .force('center', forceCenter(width / 2, height / 2).strength(0.12))
+      .force('charge', forceManyBody().strength(-35).distanceMax(250))
+      .force('collision', forceCollide<GraphNode>().radius(d => getNodeRadius(d) + 2).strength(0.7))
+      .force('link', forceLink<GraphNode, GraphEdge>(links).id(d => d.id).distance(60).strength(0.15))
+      .alphaDecay(0.02)
+      .velocityDecay(0.45);
 
-    // 边
-    const linkGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    g.appendChild(linkGroup);
-    const linkEls: SVGLineElement[] = [];
-    for (const link of links) {
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line.setAttribute('stroke', isDark ? '#4b5563' : '#d1d5db');
-      line.setAttribute('stroke-width', String(Math.max(0.5, link.weight * 1.5)));
-      line.setAttribute('stroke-opacity', '0.3');
-      linkGroup.appendChild(line);
-      linkEls.push(line);
-    }
+    // ─── Zoom behavior ─────────────────────────────────────────────────────
+    const zoomBehavior = zoom<HTMLCanvasElement, unknown>()
+      .scaleExtent([0.2, 5])
+      .on('zoom', (event: { transform: ZoomTransform }) => {
+        state.transform = event.transform;
+        setZoomScale(event.transform.k);
+      });
 
-    // 节点
-    const nodeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    g.appendChild(nodeGroup);
-    const nodeEls: SVGGElement[] = [];
+    select(canvas).call(zoomBehavior);
+    stateRef.current.zoomBehavior = zoomBehavior;
 
-    for (const node of nodes) {
-      const el = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      el.style.cursor = 'pointer';
+    // ─── Hit detection ─────────────────────────────────────────────────────
+    const getNodeAt = (mx: number, my: number): GraphNode | null => {
+      // Transform mouse coords to graph coords
+      const t = state.transform;
+      const gx = (mx - t.x) / t.k;
+      const gy = (my - t.y) / t.k;
 
-      const colors = getNodeColor(node.source_type, isDark);
-      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      circle.setAttribute('r', '7');
-      circle.setAttribute('fill', colors.fill);
-      circle.setAttribute('stroke', colors.stroke);
-      circle.setAttribute('stroke-width', '2');
-      el.appendChild(circle);
-
-      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      text.textContent = node.title;
-      text.setAttribute('text-anchor', 'middle');
-      text.setAttribute('dy', '18');
-      text.setAttribute('font-size', '10');
-      text.setAttribute('fill', isDark ? '#9ca3af' : '#6b7280');
-      text.setAttribute('pointer-events', 'none');
-      el.appendChild(text);
-
-      el.addEventListener('click', () => onNodeClick(node.id, node.source_type));
-      nodeGroup.appendChild(el);
-      nodeEls.push(el);
-    }
-
-    // 拖拽
-    let draggingNode: any = null;
-    const handleMouseDown = (e: MouseEvent, i: number) => {
-      e.preventDefault();
-      draggingNode = nodes[i];
-      draggingNode.fx = draggingNode.x;
-      draggingNode.fy = draggingNode.y;
-      sim.alphaTarget(0.3).restart();
+      for (let i = nodes.length - 1; i >= 0; i--) {
+        const n = nodes[i];
+        const r = getNodeRadius(n);
+        const dx = (n.x || 0) - gx;
+        const dy = (n.y || 0) - gy;
+        if (dx * dx + dy * dy < (r + 4) * (r + 4)) return n;
+      }
+      return null;
     };
+
+    // ─── Hover ─────────────────────────────────────────────────────────────
+    const neighborSet = new Set<string>();
+    const edgeSet = new Set<string>();
+
+    const computeNeighbors = (node: GraphNode | null) => {
+      neighborSet.clear();
+      edgeSet.clear();
+      if (!node) return;
+      neighborSet.add(node.id);
+      for (const link of links) {
+        const sid = typeof link.source === 'string' ? link.source : (link.source as GraphNode).id;
+        const tid = typeof link.target === 'string' ? link.target : (link.target as GraphNode).id;
+        if (sid === node.id) {
+          neighborSet.add(tid);
+          edgeSet.add(`${sid}-${tid}`);
+        } else if (tid === node.id) {
+          neighborSet.add(sid);
+          edgeSet.add(`${sid}-${tid}`);
+        }
+      }
+    };
+
+    let hoveredNode: GraphNode | null = null;
+
     const handleMouseMove = (e: MouseEvent) => {
-      if (!draggingNode) return;
-      const rect = svg.getBoundingClientRect();
-      draggingNode.fx = e.clientX - rect.left;
-      draggingNode.fy = e.clientY - rect.top;
+      const rect = canvas.getBoundingClientRect();
+      const node = getNodeAt(e.clientX - rect.left, e.clientY - rect.top);
+      if (node !== hoveredNode) {
+        hoveredNode = node;
+        state.hoveredNode = node;
+        computeNeighbors(node);
+        canvas.style.cursor = node ? 'pointer' : 'grab';
+      }
     };
+
+    canvas.addEventListener('mousemove', handleMouseMove);
+
+    // ─── Drag ──────────────────────────────────────────────────────────────
+    let draggingNode: GraphNode | null = null;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let didDrag = false;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const node = getNodeAt(e.clientX - rect.left, e.clientY - rect.top);
+      if (node) {
+        draggingNode = node;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        didDrag = false;
+        node.fx = node.x;
+        node.fy = node.y;
+        sim.alphaTarget(0.3).restart();
+        canvas.style.cursor = 'grabbing';
+      }
+    };
+
+    const handleMouseDrag = (e: MouseEvent) => {
+      if (!draggingNode) return;
+      const dx = e.clientX - dragStartX;
+      const dy = e.clientY - dragStartY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) didDrag = true;
+      const t = state.transform;
+      draggingNode.fx = (e.clientX - canvas.getBoundingClientRect().left - t.x) / t.k;
+      draggingNode.fy = (e.clientY - canvas.getBoundingClientRect().top - t.y) / t.k;
+    };
+
     const handleMouseUp = () => {
       if (draggingNode) {
+        if (!didDrag) {
+          // Click — navigate
+          onNodeClick(draggingNode.id, draggingNode.source_type);
+        }
         draggingNode.fx = null;
         draggingNode.fy = null;
         draggingNode = null;
         sim.alphaTarget(0);
+        canvas.style.cursor = hoveredNode ? 'pointer' : 'grab';
       }
     };
 
-    nodeEls.forEach((el, i) => {
-      el.addEventListener('mousedown', (e) => handleMouseDown(e, i));
-      el.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        draggingNode = nodes[i];
-        draggingNode.fx = draggingNode.x;
-        draggingNode.fy = draggingNode.y;
-        sim.alphaTarget(0.3).restart();
-      });
-    });
-    svg.addEventListener('mousemove', handleMouseMove);
-    svg.addEventListener('touchmove', (e) => {
-      if (!draggingNode) return;
+    canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('mousemove', handleMouseDrag);
+    canvas.addEventListener('mouseup', handleMouseUp);
+
+    // ─── Touch support ─────────────────────────────────────────────────────
+    let touchDragging: GraphNode | null = null;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
       const touch = e.touches[0];
-      const rect = svg.getBoundingClientRect();
-      draggingNode.fx = touch.clientX - rect.left;
-      draggingNode.fy = touch.clientY - rect.top;
-    });
-    svg.addEventListener('mouseup', handleMouseUp);
-    svg.addEventListener('touchend', handleMouseUp);
+      const rect = canvas.getBoundingClientRect();
+      const node = getNodeAt(touch.clientX - rect.left, touch.clientY - rect.top);
+      if (node) {
+        e.preventDefault();
+        touchDragging = node;
+        node.fx = node.x;
+        node.fy = node.y;
+        sim.alphaTarget(0.3).restart();
+      }
+    };
 
-    // 缩放
-    const zoomBehavior = zoom()
-      .scaleExtent([0.3, 3])
-      .on('zoom', (event: any) => {
-        g.setAttribute('transform', event.transform.toString());
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!touchDragging || e.touches.length !== 1) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      const t = state.transform;
+      touchDragging.fx = (touch.clientX - canvas.getBoundingClientRect().left - t.x) / t.k;
+      touchDragging.fy = (touch.clientY - canvas.getBoundingClientRect().top - t.y) / t.k;
+    };
+
+    const handleTouchEnd = () => {
+      if (touchDragging) {
+        touchDragging.fx = null;
+        touchDragging.fy = null;
+        touchDragging = null;
+        sim.alphaTarget(0);
+      }
+    };
+
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd);
+
+    // ─── Canvas render loop ────────────────────────────────────────────────
+    const TEXT_FADE_THRESHOLD = 1.2; // Show labels only when zoom > this
+
+    const render = () => {
+      const { transform, isDark: dark, dpr: d } = state;
+      ctx.save();
+      ctx.scale(d, d);
+
+      // Clear
+      ctx.fillStyle = dark ? '#0d1117' : '#f8fafc';
+      ctx.fillRect(0, 0, width, height);
+
+      // Apply zoom transform
+      ctx.translate(transform.x, transform.y);
+      ctx.scale(transform.k, transform.k);
+
+      const globalAlpha = hoveredNode ? 0.08 : 1;
+
+      // ─── Draw edges ───────────────────────────────────────────────────
+      for (const link of links) {
+        const s = link.source as GraphNode;
+        const t = link.target as GraphNode;
+        if (!s.x || !s.y || !t.x || !t.y) continue;
+
+        let edgeAlpha = 0.15 * globalAlpha;
+        let edgeColor = dark ? '#475569' : '#94a3b8';
+
+        if (hoveredNode) {
+          const sid = s.id;
+          const tid = t.id;
+          const key1 = `${sid}-${tid}`;
+          const key2 = `${tid}-${sid}`;
+          if (edgeSet.has(key1) || edgeSet.has(key2)) {
+            edgeAlpha = 0.5;
+            edgeColor = getNodeColor(hoveredNode.source_type, dark);
+          }
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(t.x, t.y);
+        ctx.strokeStyle = edgeColor;
+        ctx.globalAlpha = edgeAlpha;
+        ctx.lineWidth = Math.max(0.5, link.weight * 1.2);
+        ctx.stroke();
+      }
+
+      ctx.globalAlpha = 1;
+
+      // ─── Draw nodes (glow + fill) ─────────────────────────────────────
+      // Sort: hovered node on top
+      const sortedNodes = [...nodes].sort((a, b) => {
+        if (a === hoveredNode) return 1;
+        if (b === hoveredNode) return -1;
+        return 0;
       });
-    select(svg as any).call(zoomBehavior as any);
 
-    // 动画
-    sim.on('tick', () => {
-      for (let i = 0; i < links.length; i++) {
-        const link = links[i] as any;
-        const line = linkEls[i];
-        line.setAttribute('x1', String(link.source.x));
-        line.setAttribute('y1', String(link.source.y));
-        line.setAttribute('x2', String(link.target.x));
-        line.setAttribute('y2', String(link.target.y));
-      }
-      for (let i = 0; i < nodes.length; i++) {
-        const node = nodes[i] as any;
-        nodeEls[i].setAttribute('transform', `translate(${node.x},${node.y})`);
-      }
-    });
+      for (const node of sortedNodes) {
+        if (node.x === undefined || node.y === undefined) continue;
 
+        const r = getNodeRadius(node);
+        const color = getNodeColor(node.source_type, dark);
+        const isNeighbor = !hoveredNode || neighborSet.has(node.id);
+        const isHovered = node === hoveredNode;
+
+        ctx.globalAlpha = isNeighbor ? 1 : 0.06;
+
+        // Glow effect (Obsidian signature)
+        if (isNeighbor) {
+          ctx.save();
+          ctx.shadowColor = color;
+          ctx.shadowBlur = isHovered ? 18 : 10;
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.globalAlpha = isHovered ? 0.6 : 0.3;
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Solid node
+        ctx.globalAlpha = isNeighbor ? 1 : 0.06;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+
+        // Subtle border
+        if (isHovered) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.globalAlpha = 0.8;
+          ctx.stroke();
+        }
+
+        // ─── Text labels (fade based on zoom) ──────────────────────────
+        if (transform.k > TEXT_FADE_THRESHOLD && isNeighbor) {
+          const textAlpha = Math.min(1, (transform.k - TEXT_FADE_THRESHOLD) / 0.5);
+          ctx.globalAlpha = textAlpha * (isHovered ? 1 : 0.7);
+          ctx.fillStyle = dark ? '#e2e8f0' : '#1e293b';
+          ctx.font = `${Math.max(10, 11 / transform.k * 1.5)}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          ctx.fillText(node.title, node.x, node.y + r + 4);
+        }
+      }
+
+      ctx.restore();
+
+      // ─── Mini stats (top-right) ───────────────────────────────────────
+      ctx.save();
+      ctx.scale(d, d);
+      ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.fillStyle = dark ? '#64748b' : '#94a3b8';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${nodes.length} 节点 · ${links.length} 连接`, width - 12, 20);
+      ctx.restore();
+    };
+
+    // Animation loop
+    let animFrameId: number;
+    const animate = () => {
+      render();
+      animFrameId = requestAnimationFrame(animate);
+    };
+    animate();
+
+    // Tick the simulation (also triggers render via animate)
+    sim.on('tick', () => {}); // No-op; render loop handles it
+
+    // ─── Cleanup ─────────────────────────────────────────────────────────
     return () => {
       sim.stop();
-      svg.removeEventListener('mousemove', handleMouseMove);
-      svg.removeEventListener('mouseup', handleMouseUp);
+      cancelAnimationFrame(animFrameId);
+      canvas.removeEventListener('mousemove', handleMouseMove);
+      canvas.removeEventListener('mousedown', handleMouseDown);
+      canvas.removeEventListener('mousemove', handleMouseDrag);
+      canvas.removeEventListener('mouseup', handleMouseUp);
+      canvas.removeEventListener('touchstart', handleTouchStart);
+      canvas.removeEventListener('touchmove', handleTouchMove);
+      canvas.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [data, onNodeClick]);
+  }, [data, onNodeClick, computeConnectionCounts, getNodeRadius]);
 
+  // ─── Zoom controls ───────────────────────────────────────────────────────
+  const handleZoomIn = () => {
+    const canvas = canvasRef.current;
+    const zb = stateRef.current.zoomBehavior;
+    if (!canvas || !zb) return;
+    select(canvas).transition().duration(300).call(zb.scaleBy, 1.4);
+  };
+
+  const handleZoomOut = () => {
+    const canvas = canvasRef.current;
+    const zb = stateRef.current.zoomBehavior;
+    if (!canvas || !zb) return;
+    select(canvas).transition().duration(300).call(zb.scaleBy, 0.7);
+  };
+
+  const handleReset = () => {
+    const canvas = canvasRef.current;
+    const zb = stateRef.current.zoomBehavior;
+    if (!canvas || !zb) return;
+    select(canvas).transition().duration(500).call(zb.transform, zoomIdentity);
+  };
+
+  // ─── Render ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -228,14 +481,55 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
   }
 
   return (
-    <div ref={containerRef} className="flex-1 relative overflow-hidden bg-white dark:bg-gray-900">
-      <svg ref={svgRef} className="w-full h-full" />
-      {/* 图例 */}
-      <div className="absolute bottom-4 left-4 flex gap-3 text-xs text-gray-500 dark:text-gray-400 bg-white/80 dark:bg-gray-800/80 backdrop-blur px-3 py-2 rounded-lg">
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full inline-block" style={{ background: '#f5e6d8', border: '2px solid #e8a87c' }} />随想</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full inline-block" style={{ background: '#dde5ee', border: '2px solid #89a8c8' }} />大纲</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full inline-block" style={{ background: '#e0eae4', border: '2px solid #7fb89e' }} />笔记</span>
+    <div ref={containerRef} className="flex-1 relative overflow-hidden bg-[#0d1117] dark:bg-[#0d1117]">
+      <canvas ref={canvasRef} className="w-full h-full" />
+
+      {/* Zoom controls */}
+      <div className="absolute top-3 right-3 flex flex-col gap-1">
+        <button
+          onClick={handleZoomIn}
+          className="w-8 h-8 flex items-center justify-center rounded-md bg-gray-800/80 hover:bg-gray-700/80 text-gray-300 backdrop-blur transition-colors"
+          title="放大"
+        >
+          <ZoomIn size={16} />
+        </button>
+        <button
+          onClick={handleZoomOut}
+          className="w-8 h-8 flex items-center justify-center rounded-md bg-gray-800/80 hover:bg-gray-700/80 text-gray-300 backdrop-blur transition-colors"
+          title="缩小"
+        >
+          <ZoomOut size={16} />
+        </button>
+        <button
+          onClick={handleReset}
+          className="w-8 h-8 flex items-center justify-center rounded-md bg-gray-800/80 hover:bg-gray-700/80 text-gray-300 backdrop-blur transition-colors"
+          title="重置视图"
+        >
+          <Maximize2 size={16} />
+        </button>
       </div>
+
+      {/* Legend */}
+      <div className="absolute bottom-3 left-3 flex gap-3 text-xs text-gray-400 bg-gray-900/80 backdrop-blur px-3 py-2 rounded-lg border border-gray-700/50">
+        {Object.entries(NODE_COLORS).map(([key, colors]) => {
+          const labels: Record<string, string> = {
+            memo: '随想', document: '大纲', note: '笔记', folder: '文件夹', excalidraw: '画布',
+          };
+          return (
+            <span key={key} className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: colors.dark, boxShadow: `0 0 6px ${colors.dark}60` }} />
+              {labels[key] || key}
+            </span>
+          );
+        })}
+      </div>
+
+      {/* Zoom level indicator */}
+      {zoomScale !== 1 && (
+        <div className="absolute bottom-3 right-3 text-xs text-gray-500 bg-gray-900/60 backdrop-blur px-2 py-1 rounded">
+          {Math.round(zoomScale * 100)}%
+        </div>
+      )}
     </div>
   );
 }
