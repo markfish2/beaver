@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { forceSimulation, forceCenter, forceCollide, forceLink, forceManyBody, forceX, forceY } from 'd3-force';
+import { forceSimulation, forceCollide, forceLink, forceManyBody, forceRadial } from 'd3-force';
 import { zoom } from 'd3-zoom';
 import { select } from 'd3-selection';
 import api from '../api/client';
@@ -47,7 +47,7 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
   const [data, setData] = useState<GraphData | null>(null);
 
   useEffect(() => {
-    api.get('/knowledge-graph/', { params: { threshold: 0.35, max_edges: 200 } })
+    api.get('/knowledge-graph/', { params: { threshold: 0.55, max_edges: 100 } })
       .then(resp => setData(resp.data))
       .catch(() => setError('加载失败'))
       .finally(() => setLoading(false));
@@ -73,7 +73,7 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
     // 节点初始位置：随机分布在圆内
     const nodes = data.nodes.map((n) => {
       const angle = Math.random() * 2 * Math.PI;
-      const r = Math.random() * radius * 0.6;
+      const r = Math.sqrt(Math.random()) * radius * 0.8;
       return {
         ...n,
         x: width / 2 + r * Math.cos(angle),
@@ -82,16 +82,14 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
     });
     const links = data.edges.map(e => ({ ...e, source: e.source, target: e.target }));
 
-    // 力导向模拟：球形填充布局
+    // 力导向模拟：约束在圆形范围内
     const sim = forceSimulation(nodes)
-      .force('center', forceCenter(width / 2, height / 2))
-      .force('x', forceX(width / 2).strength(0.08))
-      .force('y', forceY(height / 2).strength(0.08))
-      .force('charge', forceManyBody().strength(-60))
-      .force('collision', forceCollide().radius(24))
-      .force('link', forceLink(links).id((d: any) => d.id).distance(60).strength(0.2))
+      .force('radial', forceRadial(radius * 0.85, width / 2, height / 2).strength(0.6))
+      .force('charge', forceManyBody().strength(-40))
+      .force('collision', forceCollide().radius(22))
+      .force('link', forceLink(links).id((d: any) => d.id).distance(50).strength(0.3))
       .alpha(1)
-      .alphaDecay(0.02);
+      .alphaDecay(0.03);
 
     // 边
     const linkGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
