@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { forceSimulation, forceCenter, forceCollide, forceLink, forceManyBody, forceX, forceY } from 'd3-force';
-import { zoom, zoomIdentity } from 'd3-zoom';
+import { useEffect, useRef, useState } from 'react';
+import { forceSimulation, forceCollide, forceLink, forceManyBody, forceRadial } from 'd3-force';
+import { zoom } from 'd3-zoom';
 import { select } from 'd3-selection';
 import api from '../api/client';
-import { Loader2, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 interface GraphNode {
   id: string;
@@ -27,34 +27,32 @@ interface GraphData {
   edges: GraphEdge[];
 }
 
-interface KnowledgeGraphProps {
-  onNodeClick: (id: string, type: string) => void;
+// Claude 配色方案
+const NODE_COLORS: Record<string, { fill: string; stroke: string; darkFill: string; darkStroke: string }> = {
+  memo: { fill: '#f5e6d8', stroke: '#e8a87c', darkFill: '#3d2e1f', darkStroke: '#c08552' },
+  document: { fill: '#dde5ee', stroke: '#89a8c8', darkFill: '#1e2d3d', darkStroke: '#5b8ab5' },
+  note: { fill: '#e0eae4', stroke: '#7fb89e', darkFill: '#1e2d25', darkStroke: '#5a9e7a' },
+};
+
+function getNodeColor(sourceType: string, isDark: boolean) {
+  const c = NODE_COLORS[sourceType] || NODE_COLORS.document;
+  return isDark ? { fill: c.darkFill, stroke: c.darkStroke } : { fill: c.fill, stroke: c.stroke };
 }
 
-export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
+export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: string, type: string) => void }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<GraphData | null>(null);
-  const simRef = useRef<ReturnType<typeof simulation> | null>(null);
 
-  // 加载图谱数据
   useEffect(() => {
-    const load = async () => {
-      try {
-        const resp = await api.get('/knowledge-graph/', { params: { threshold: 0.5, max_edges: 150 } });
-        setData(resp.data);
-      } catch (e) {
-        setError('加载图谱数据失败');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+    api.get('/knowledge-graph/', { params: { threshold: 0.35, max_edges: 200 } })
+      .then(resp => setData(resp.data))
+      .catch(() => setError('加载失败'))
+      .finally(() => setLoading(false));
   }, []);
 
-  // 渲染图谱
   useEffect(() => {
     if (!data || !svgRef.current || !containerRef.current) return;
 
@@ -62,29 +60,32 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
     const container = containerRef.current;
     const width = container.clientWidth;
     const height = container.clientHeight;
+    const isDark = document.documentElement.classList.contains('dark');
+    const radius = Math.min(width, height) / 2 - 60;
 
     svg.setAttribute('width', String(width));
     svg.setAttribute('height', String(height));
-
-    // 清空
     while (svg.firstChild) svg.removeChild(svg.firstChild);
 
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     svg.appendChild(g);
 
-    // 创建力导向模拟
-    const nodes = data.nodes.map(n => ({ ...n, x: width / 2 + (Math.random() - 0.5) * 200, y: height / 2 + (Math.random() - 0.5) * 200 }));
+    // 节点初始位置：均匀分布在圆上
+    const nodes = data.nodes.map((n, i) => ({
+      ...n,
+      x: width / 2 + radius * Math.cos(2 * Math.PI * i / data.nodes.length),
+      y: height / 2 + radius * Math.sin(2 * Math.PI * i / data.nodes.length),
+    }));
     const links = data.edges.map(e => ({ ...e, source: e.source, target: e.target }));
 
+    // 力导向模拟：圆形布局
     const sim = forceSimulation(nodes)
-      .force('charge', forceManyBody().strength(-120))
-      .force('center', forceCenter(width / 2, height / 2))
-      .force('collision', forceCollide().radius(30))
-      .force('link', forceLink(links).id((d: any) => d.id).distance(80).strength(0.3))
-      .force('x', forceX(width / 2).strength(0.05))
-      .force('y', forceY(height / 2).strength(0.05));
-
-    simRef.current = sim;
+      .force('radial', forceRadial(radius, width / 2, height / 2).strength(0.8))
+      .force('charge', forceManyBody().strength(-80))
+      .force('collision', forceCollide().radius(28))
+      .force('link', forceLink(links).id((d: any) => d.id).distance(radius * 0.4).strength(0.15))
+      .alpha(0.8)
+      .alphaDecay(0.02);
 
     // 边
     const linkGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -92,9 +93,9 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
     const linkEls: SVGLineElement[] = [];
     for (const link of links) {
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line.setAttribute('stroke', '#d1d5db');
-      line.setAttribute('stroke-width', String(Math.max(0.5, link.weight * 2)));
-      line.setAttribute('stroke-opacity', '0.4');
+      line.setAttribute('stroke', isDark ? '#4b5563' : '#d1d5db');
+      line.setAttribute('stroke-width', String(Math.max(0.5, link.weight * 1.5)));
+      line.setAttribute('stroke-opacity', '0.3');
       linkGroup.appendChild(line);
       linkEls.push(line);
     }
@@ -103,29 +104,31 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
     const nodeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.appendChild(nodeGroup);
     const nodeEls: SVGGElement[] = [];
-    for (const node of nodes) {
-      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      g.style.cursor = 'pointer';
 
+    for (const node of nodes) {
+      const el = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      el.style.cursor = 'pointer';
+
+      const colors = getNodeColor(node.source_type, isDark);
       const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      circle.setAttribute('r', node.type === 'folder' ? '6' : '8');
-      circle.setAttribute('fill', node.source_type === 'memo' ? '#3b82f6' : node.type === 'note' ? '#10b981' : '#6b7280');
-      circle.setAttribute('stroke', '#fff');
-      circle.setAttribute('stroke-width', '1.5');
-      g.appendChild(circle);
+      circle.setAttribute('r', '7');
+      circle.setAttribute('fill', colors.fill);
+      circle.setAttribute('stroke', colors.stroke);
+      circle.setAttribute('stroke-width', '2');
+      el.appendChild(circle);
 
       const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       text.textContent = node.title;
       text.setAttribute('text-anchor', 'middle');
-      text.setAttribute('dy', '16');
+      text.setAttribute('dy', '18');
       text.setAttribute('font-size', '10');
-      text.setAttribute('fill', '#6b7280');
+      text.setAttribute('fill', isDark ? '#9ca3af' : '#6b7280');
       text.setAttribute('pointer-events', 'none');
-      g.appendChild(text);
+      el.appendChild(text);
 
-      g.addEventListener('click', () => onNodeClick(node.id, node.source_type));
-      nodeGroup.appendChild(g);
-      nodeEls.push(g);
+      el.addEventListener('click', () => onNodeClick(node.id, node.source_type));
+      nodeGroup.appendChild(el);
+      nodeEls.push(el);
     }
 
     // 拖拽
@@ -156,7 +159,6 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
       el.addEventListener('mousedown', (e) => handleMouseDown(e, i));
       el.addEventListener('touchstart', (e) => {
         e.preventDefault();
-        const touch = e.touches[0];
         draggingNode = nodes[i];
         draggingNode.fx = draggingNode.x;
         draggingNode.fy = draggingNode.y;
@@ -213,9 +215,11 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
     );
   }
 
-  if (error) {
+  if (error || !data || data.nodes.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">{error}</div>
+      <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
+        {error || '暂无数据，请先重建向量索引'}
+      </div>
     );
   }
 
@@ -224,8 +228,9 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
       <svg ref={svgRef} className="w-full h-full" />
       {/* 图例 */}
       <div className="absolute bottom-4 left-4 flex gap-3 text-xs text-gray-500 dark:text-gray-400 bg-white/80 dark:bg-gray-800/80 backdrop-blur px-3 py-2 rounded-lg">
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" />随想</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />笔记</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full inline-block" style={{ background: '#f5e6d8', border: '2px solid #e8a87c' }} />随想</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full inline-block" style={{ background: '#dde5ee', border: '2px solid #89a8c8' }} />大纲</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full inline-block" style={{ background: '#e0eae4', border: '2px solid #7fb89e' }} />笔记</span>
       </div>
     </div>
   );
