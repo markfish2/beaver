@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from .routers import auth, users, documents, nodes, attachments, shares, diary, memos, search, public_memos, link_preview, excalidraw, todos, api_tokens, trash, share, habits, ai, ai_chat, ai_conversations, skills, knowledge_graph
+from .routers import auth, users, documents, nodes, attachments, shares, diary, memos, search, public_memos, link_preview, excalidraw, todos, api_tokens, trash, share, habits, ai, ai_chat, ai_conversations, skills
 from .database import engine, Base
 from .limiter import limiter
 from slowapi import _rate_limit_exceeded_handler
@@ -263,7 +263,6 @@ app.include_router(ai.router, prefix="/api/ai", tags=["ai"])
 app.include_router(ai_chat.router, prefix="/api/ai", tags=["ai-chat"])
 app.include_router(ai_conversations.router, prefix="/api/ai/conversations", tags=["ai-conversations"])
 app.include_router(skills.router, prefix="/api/skills", tags=["skills"])
-app.include_router(knowledge_graph.router, prefix="/api/knowledge-graph", tags=["knowledge-graph"])
 
 # Mount static files for uploads (must be after API routes)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")

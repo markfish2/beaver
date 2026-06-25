@@ -17,7 +17,6 @@ import MarkdownNoteEditor from './MarkdownNoteEditor';
 import { ExcalidrawEditor } from './ExcalidrawEditor';
 import MemoHome from './MemoHome';
 import UserProfileEditor from './UserProfileEditor';
-import KnowledgeGraph from './KnowledgeGraph';
 import TokenPanel from './TokenPanel';
 import TrashPanel from './TrashPanel';
 import PasswordPanel from './PasswordPanel';
@@ -786,7 +785,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   // 当 documents 加载完成后，如果 currentDoc 为 null 但有匹配的文档，更新 currentDoc
   useEffect(() => {
     if (documentId && !currentDoc && documents.length > 0) {
-      const foundDoc = documents.find(d => d.id === documentId);
+      // Normalize: compare without hyphens
+      const normalizedId = documentId.replace(/-/g, '');
+      const foundDoc = documents.find(d => d.id.replace(/-/g, '') === normalizedId);
       if (foundDoc) {
         setCurrentDoc(foundDoc);
       }
@@ -796,7 +797,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   // 侧边栏重命名 → 同步标题到 currentDoc（只更新 title，不覆盖其他本地状态）
   useEffect(() => {
     if (!currentDoc || !documentId) return;
-    const ctxDoc = documents.find(d => d.id === documentId);
+    // Normalize: compare without hyphens
+    const normalizedId = documentId.replace(/-/g, '');
+    const ctxDoc = documents.find(d => d.id.replace(/-/g, '') === normalizedId);
     if (ctxDoc && ctxDoc.title !== currentDoc.title) {
       setCurrentDoc(prev => prev ? { ...prev, title: ctxDoc.title } : prev);
     }
@@ -832,7 +835,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
 
       setNodes(processedNodes);
       // 先从 context 查找，找不到则从 API 获取（日记文档会被 context 过滤）
-      let foundDoc = documents.find(d => d.id === id);
+      // Normalize: compare without hyphens
+      const normalizedId = id.replace(/-/g, '');
+      let foundDoc = documents.find(d => d.id.replace(/-/g, '') === normalizedId);
       if (!foundDoc) {
         try {
           foundDoc = await getDocument(id);
@@ -2464,18 +2469,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         {userSubView === 'ai' && <AISettingsPanel />}
         {userSubView === 'trash' && <TrashPanel />}
         {userSubView === 'password' && <PasswordPanel />}
-        {userSubView === 'graph' && (
-          <KnowledgeGraph onNodeClick={(id, type) => {
-            setUserSubView(null); // Exit graph view first
-            // Normalize UUID: remove hyphens (embeddings use hyphenated, DB uses non-hyphenated)
-            const normalizedId = id.replace(/-/g, '');
-            if (type === 'memo') {
-              navigate(`/?view=wanderer&memoId=${normalizedId}`);
-            } else {
-              navigate(`/d/${normalizedId}`);
-            }
-          }} />
-        )}
         {userSubView === 'ai-chat' && (
           <AIChatMainView
             conversationId={activeConvId}

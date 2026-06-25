@@ -7,7 +7,6 @@ import TokenPanel from '../TokenPanel';
 import AISettingsPanel from '../AISettingsPanel';
 import TrashPanel from '../TrashPanel';
 import PasswordPanel from '../PasswordPanel';
-import KnowledgeGraph from '../KnowledgeGraph';
 
 interface MobileTopBarProps {
   title: string;
@@ -204,16 +203,6 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
             {activeDialog === 'ai' && <AISettingsPanel />}
             {activeDialog === 'trash' && <TrashPanel />}
             {activeDialog === 'password' && <PasswordPanel />}
-            {activeDialog === 'graph' && (
-              <KnowledgeGraph onNodeClick={(id, type) => {
-                setActiveDialog(null);
-                if (type === 'memo') {
-                  window.location.href = `/?view=wanderer&memoId=${id.replace(/-/g, '')}`;
-                } else {
-                  window.location.href = `/d/${id.replace(/-/g, '')}`;
-                }
-              }} />
-            )}
           </div>
         </div>,
         document.body
