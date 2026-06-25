@@ -273,7 +273,7 @@ interface MainAreaProps {
 }
 
 const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, activeConvId = null }: MainAreaProps = {}) => {
-  const { setActiveConvId, refreshConvList } = useUserView();
+  const { setActiveConvId, refreshConvList, setUserSubView } = useUserView();
   const { documentId: urlDocumentId } = useParams();
   const navigate = useNavigate();
   const documentId = diaryDocId || urlDocumentId;
@@ -2466,10 +2466,13 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         {userSubView === 'password' && <PasswordPanel />}
         {userSubView === 'graph' && (
           <KnowledgeGraph onNodeClick={(id, type) => {
+            setUserSubView(null); // Exit graph view first
+            // Normalize UUID: remove hyphens (embeddings use hyphenated, DB uses non-hyphenated)
+            const normalizedId = id.replace(/-/g, '');
             if (type === 'memo') {
-              navigate(`/?highlight=${id}`);
+              navigate(`/?view=wanderer&memoId=${normalizedId}`);
             } else {
-              navigate(`/d/${id}`);
+              navigate(`/d/${normalizedId}`);
             }
           }} />
         )}

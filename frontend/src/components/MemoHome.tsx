@@ -44,8 +44,10 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   });
   const searchFromUrl = searchParams.get('search');
   const highlightFromUrl = searchParams.get('highlight');
+  const viewFromUrl = searchParams.get('view');
+  const memoIdFromUrl = searchParams.get('memoId');
   const [searchFilter, setSearchFilter] = useState<string | null>(searchFromUrl);
-  const [highlightMemoId, setHighlightMemoId] = useState<string | null>(highlightFromUrl);
+  const [highlightMemoId, setHighlightMemoId] = useState<string | null>(highlightFromUrl || memoIdFromUrl);
   const [showRightPanel, setShowRightPanel] = useState(false);
   type PendingTask = (Node & { origin: 'diary'; diary_date?: string }) | (Todo & { origin: 'todo' });
   const [allPendingTasks, setAllPendingTasks] = useState<PendingTask[]>([]);
@@ -146,18 +148,29 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
     fetchMemos();
   }, [memoView, tagFilter, searchFilter]);
 
-  // 从搜索结果页跳转过来时，同步 URL 参数到状态并清理
+  // 从搜索结果页或知识图谱跳转过来时，同步 URL 参数到状态并清理
   useEffect(() => {
-    if (searchFromUrl) {
-      setSearchFilter(searchFromUrl);
-      setTagFilter(null);
+    console.log('MemoHome: URL params - search:', searchFromUrl, 'highlight:', highlightFromUrl, 'view:', viewFromUrl, 'memoId:', memoIdFromUrl);
+    if (searchFromUrl || highlightFromUrl || viewFromUrl || memoIdFromUrl) {
+      if (searchFromUrl) {
+        setSearchFilter(searchFromUrl);
+        setTagFilter(null);
+      }
       if (highlightFromUrl) setHighlightMemoId(highlightFromUrl);
+      if (memoIdFromUrl) {
+        setHighlightMemoId(memoIdFromUrl);
+        if (viewFromUrl === 'wanderer') {
+          setMemoView('wanderer');
+        }
+      }
       const params = new URLSearchParams(searchParams);
       params.delete('search');
       params.delete('highlight');
+      params.delete('view');
+      params.delete('memoId');
       setSearchParams(params, { replace: true });
     }
-  }, [searchFromUrl, highlightFromUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchFromUrl, highlightFromUrl, viewFromUrl, memoIdFromUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 高亮目标 memo（从搜索结果跳转过来）
   useEffect(() => {
@@ -549,7 +562,10 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
               </div>
             )}
             {memoView === 'wanderer' ? (
-              <MemoWanderer onExit={() => { setMemoView('active'); setTagFilter(null); setSearchFilter(null); }} />
+              <MemoWanderer
+                onExit={() => { setMemoView('active'); setTagFilter(null); setSearchFilter(null); }}
+                initialMemoId={highlightMemoId}
+              />
             ) : memoView === 'media' ? (
               <MemoMediaGallery />
             ) : (

@@ -13,7 +13,9 @@ function shuffleArray<T>(arr: T[]): T[] {
   return a;
 }
 
-export default function MemoWanderer({ onExit }: { onExit: () => void }) {
+export default function MemoWanderer({ onExit, initialMemoId }: { onExit: () => void; initialMemoId?: string | null }) {
+  console.log('MemoWanderer: initialMemoId =', initialMemoId);
+
   const [memos, setMemos] = useState<Memo[]>([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -23,20 +25,50 @@ export default function MemoWanderer({ onExit }: { onExit: () => void }) {
     try {
       let all: Memo[] = [];
       let page = 1;
+      // Load both active and archived memos
       while (true) {
         const data = await getMemos(page, 100, false);
+        console.log('MemoWanderer: Page', page, 'active memos:', data.memos.length, 'total:', data.total);
         all = all.concat(data.memos);
         if (all.length >= data.total || data.memos.length === 0) break;
         page++;
       }
-      setMemos(shuffleArray(all));
+      // Also load archived memos
+      let archivedPage = 1;
+      while (true) {
+        const data = await getMemos(archivedPage, 100, true);
+        console.log('MemoWanderer: Page', archivedPage, 'archived memos:', data.memos.length, 'total:', data.total);
+        all = all.concat(data.memos);
+        if (all.length >= data.total || data.memos.length === 0) break;
+        archivedPage++;
+      }
+
+      console.log('MemoWanderer: Loaded', all.length, 'memos total, initialMemoId =', initialMemoId);
+      console.log('MemoWanderer: All memo IDs:', all.map(m => m.id));
+
+      // If initialMemoId is provided, put that memo first
+      if (initialMemoId) {
+        // Normalize: remove hyphens for comparison
+        const normalizedInitialId = initialMemoId.replace(/-/g, '');
+        const targetIndex = all.findIndex(m => m.id.replace(/-/g, '') === normalizedInitialId);
+        console.log('MemoWanderer: targetIndex =', targetIndex);
+        if (targetIndex >= 0) {
+          const [target] = all.splice(targetIndex, 1);
+          all.unshift(target);
+          console.log('MemoWanderer: Moved memo to first position');
+        }
+      } else {
+        all = shuffleArray(all);
+      }
+
+      setMemos(all);
       setIndex(0);
     } catch (e) {
       console.error('Failed to load memos for wanderer', e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initialMemoId]);
 
   useEffect(() => { loadMemos(); }, [loadMemos]);
 

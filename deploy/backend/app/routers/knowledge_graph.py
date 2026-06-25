@@ -45,13 +45,13 @@ async def get_knowledge_graph(
             continue
         if source_type == "memo":
             memo = db.query(models.Memo).filter(models.Memo.id == source_uuid).first()
-            title = (memo.content.split('\n')[0].strip().lstrip('#').lstrip('*').strip()[:30] if memo and memo.content else "无标题")
+            title = (memo.content.split('\n')[0].strip().lstrip('#').lstrip('*').strip()[:60] if memo and memo.content else "无标题")
             doc_type = "memo"
         else:
             doc = db.query(models.Document).filter(models.Document.id == source_uuid).first()
             if not doc or doc.type == "folder":
                 continue
-            title = doc.title[:30] if doc.title else "无标题"
+            title = doc.title[:60] if doc.title else "无标题"
             doc_type = doc.type
         nodes_map[source_id] = {
             "id": source_id,

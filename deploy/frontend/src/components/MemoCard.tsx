@@ -1528,7 +1528,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   }
 
   return (
-    <div className={`group rounded-xl p-4 min-w-0 overflow-hidden border border-[#dad9d4] dark:border-gray-700 ${
+    <div id={`memo-${memo.id}`} className={`group rounded-xl p-4 min-w-0 overflow-hidden border border-[#dad9d4] dark:border-gray-700 ${
       isHighlighted ? 'outline outline-2 outline-blue-400 dark:outline-blue-500 outline-offset-2' : ''}`}
     style={{ backgroundColor: bgColor, contain: 'layout' }}
     >
