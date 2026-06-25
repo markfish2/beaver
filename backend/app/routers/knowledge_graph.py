@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.get("/")
 async def get_knowledge_graph(
-    threshold: float = 0.6,
+    threshold: float = 0.35,
     max_edges: int = 200,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
