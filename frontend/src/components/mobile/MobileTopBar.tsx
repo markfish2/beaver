@@ -205,9 +205,13 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
             {activeDialog === 'trash' && <TrashPanel />}
             {activeDialog === 'password' && <PasswordPanel />}
             {activeDialog === 'graph' && (
-              <KnowledgeGraph onNodeClick={(id) => {
+              <KnowledgeGraph onNodeClick={(id, type) => {
                 setActiveDialog(null);
-                window.location.href = `/d/${id}`;
+                if (type === 'memo') {
+                  window.location.href = `/?view=wanderer&memoId=${id.replace(/-/g, '')}`;
+                } else {
+                  window.location.href = `/d/${id.replace(/-/g, '')}`;
+                }
               }} />
             )}
           </div>

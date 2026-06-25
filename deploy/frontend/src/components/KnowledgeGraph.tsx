@@ -61,16 +61,19 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
     const container = containerRef.current;
     const isDark = document.documentElement.classList.contains('dark');
 
-    console.log('KnowledgeGraph: Container size:', container.clientWidth, 'x', container.clientHeight);
+    // Wait for container to have dimensions (mobile may need a frame)
+    const initGraph = () => {
+      console.log('KnowledgeGraph: Container size:', container.clientWidth, 'x', container.clientHeight);
 
-    // Ensure container has dimensions
-    if (container.clientWidth === 0 || container.clientHeight === 0) {
-      console.warn('KnowledgeGraph: Container has zero dimensions');
-      return;
-    }
+      // Ensure container has dimensions
+      if (container.clientWidth === 0 || container.clientHeight === 0) {
+        console.warn('KnowledgeGraph: Container has zero dimensions, retrying...');
+        requestAnimationFrame(initGraph);
+        return;
+      }
 
-    console.log('KnowledgeGraph: About to call API...');
-    api.get('/knowledge-graph/', { params: { threshold: 0.55, max_edges: 150 } })
+      console.log('KnowledgeGraph: About to call API...');
+      api.get('/knowledge-graph/', { params: { threshold: 0.55, max_edges: 150 } })
       .then(resp => {
         const data: GraphData = resp.data;
         if (!data.nodes || data.nodes.length === 0) {
@@ -182,7 +185,7 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
               selector: 'edge',
               style: {
                 'line-color': isDark ? '#6b7280' : '#9ca3af',
-                'width': 1.5,
+                'width': 1,
                 'opacity': 0.6,
                 'curve-style': 'straight',
               } as cytoscape.Css.Edge,
@@ -319,6 +322,10 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
         setError('加载失败');
         setLoading(false);
       });
+    };
+
+    // Start initialization
+    initGraph();
 
     // Cleanup
     return () => {
@@ -327,6 +334,9 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
         cyRef.current = null;
       }
     };
+
+    // Start initialization
+    initGraph();
   }, [onNodeClick]);
 
   // ─── Zoom controls ─────────────────────────────────────────────────────────
