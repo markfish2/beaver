@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { forceSimulation, forceCollide, forceLink, forceManyBody, forceRadial } from 'd3-force';
+import { forceSimulation, forceCenter, forceCollide, forceLink, forceManyBody, forceX, forceY } from 'd3-force';
 import { zoom } from 'd3-zoom';
 import { select } from 'd3-selection';
 import api from '../api/client';
@@ -70,21 +70,27 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     svg.appendChild(g);
 
-    // 节点初始位置：均匀分布在圆上
-    const nodes = data.nodes.map((n, i) => ({
-      ...n,
-      x: width / 2 + radius * Math.cos(2 * Math.PI * i / data.nodes.length),
-      y: height / 2 + radius * Math.sin(2 * Math.PI * i / data.nodes.length),
-    }));
+    // 节点初始位置：随机分布在圆内
+    const nodes = data.nodes.map((n) => {
+      const angle = Math.random() * 2 * Math.PI;
+      const r = Math.random() * radius * 0.6;
+      return {
+        ...n,
+        x: width / 2 + r * Math.cos(angle),
+        y: height / 2 + r * Math.sin(angle),
+      };
+    });
     const links = data.edges.map(e => ({ ...e, source: e.source, target: e.target }));
 
-    // 力导向模拟：圆形布局
+    // 力导向模拟：球形填充布局
     const sim = forceSimulation(nodes)
-      .force('radial', forceRadial(radius, width / 2, height / 2).strength(0.8))
-      .force('charge', forceManyBody().strength(-80))
-      .force('collision', forceCollide().radius(28))
-      .force('link', forceLink(links).id((d: any) => d.id).distance(radius * 0.4).strength(0.15))
-      .alpha(0.8)
+      .force('center', forceCenter(width / 2, height / 2))
+      .force('x', forceX(width / 2).strength(0.08))
+      .force('y', forceY(height / 2).strength(0.08))
+      .force('charge', forceManyBody().strength(-60))
+      .force('collision', forceCollide().radius(24))
+      .force('link', forceLink(links).id((d: any) => d.id).distance(60).strength(0.2))
+      .alpha(1)
       .alphaDecay(0.02);
 
     // 边
