@@ -31,7 +31,6 @@ const NODE_COLORS: Record<string, { dark: string; light: string }> = {
   memo:     { dark: '#f97316', light: '#ea580c' },  // orange
   document: { dark: '#60a5fa', light: '#2563eb' },  // blue
   note:     { dark: '#34d399', light: '#059669' },  // green
-  folder:   { dark: '#a78bfa', light: '#7c3aed' },  // purple
   excalidraw: { dark: '#f472b6', light: '#db2777' }, // pink
 };
 
@@ -88,11 +87,11 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
     }
   }, []);
 
-  // Get node radius based on connection count (Obsidian style: scales with links)
-  const getNodeRadius = useCallback((node: GraphNode): number => {
-    const base = 4;
-    const extra = Math.sqrt((node.connectionCount || 0)) * 3;
-    return Math.min(base + extra, 14);
+  // Uniform node size — different sizes cause uneven collision forces,
+  // which distorts the circular layout. Obsidian uses uniform base size.
+  const NODE_RADIUS = 5;
+  const getNodeRadius = useCallback((_node: GraphNode): number => {
+    return NODE_RADIUS;
   }, []);
 
   // ─── Main canvas effect ─────────────────────────────────────────────────────
@@ -131,18 +130,16 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
     state.nodes = nodes;
     state.links = links;
 
-    // ─── Force simulation (Obsidian 3-force balance) ───────────────────────
-    // Repulsion (斥力): nodes push apart → uniform spacing
-    // Center force (向心力): pulls to center → circular boundary emerges
-    // Link force (连接力): connected nodes attract → clusters form
-    // The circular shape is the natural equilibrium of these 3 forces.
+    // ─── Force simulation (Obsidian defaults) ────────────────────────────
+    // Obsidian uses d3-force defaults: forceManyBody -300, forceLink dist 30,
+    // forceCenter ~1. These create the characteristic uniform circular layout.
     const sim = forceSimulation(nodes)
-      .force('center', forceCenter(width / 2, height / 2).strength(0.12))
-      .force('charge', forceManyBody().strength(-35).distanceMax(250))
-      .force('collision', forceCollide<GraphNode>().radius(d => getNodeRadius(d) + 2).strength(0.7))
-      .force('link', forceLink<GraphNode, GraphEdge>(links).id(d => d.id).distance(60).strength(0.15))
+      .force('center', forceCenter(width / 2, height / 2).strength(0.6))
+      .force('charge', forceManyBody().strength(-300).distanceMax(400))
+      .force('collision', forceCollide<GraphNode>().radius(NODE_RADIUS + 2).strength(0.8))
+      .force('link', forceLink<GraphNode, GraphEdge>(links).id(d => d.id).distance(30).strength(0.5))
       .alphaDecay(0.02)
-      .velocityDecay(0.45);
+      .velocityDecay(0.4);
 
     // ─── Zoom behavior ─────────────────────────────────────────────────────
     const zoomBehavior = zoom<HTMLCanvasElement, unknown>()
@@ -315,14 +312,15 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
 
       const globalAlpha = hoveredNode ? 0.08 : 1;
 
-      // ─── Draw edges ───────────────────────────────────────────────────
+      // ─── Draw edges (uniform style) ────────────────────────────────────
+      const edgeColor = dark ? '#4a5568' : '#9ca3af';
       for (const link of links) {
         const s = link.source as GraphNode;
         const t = link.target as GraphNode;
         if (!s.x || !s.y || !t.x || !t.y) continue;
 
-        let edgeAlpha = 0.15 * globalAlpha;
-        let edgeColor = dark ? '#475569' : '#94a3b8';
+        let alpha = 0.4 * globalAlpha;
+        let color = edgeColor;
 
         if (hoveredNode) {
           const sid = s.id;
@@ -330,17 +328,17 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
           const key1 = `${sid}-${tid}`;
           const key2 = `${tid}-${sid}`;
           if (edgeSet.has(key1) || edgeSet.has(key2)) {
-            edgeAlpha = 0.5;
-            edgeColor = getNodeColor(hoveredNode.source_type, dark);
+            alpha = 0.6;
+            color = getNodeColor(hoveredNode.source_type, dark);
           }
         }
 
         ctx.beginPath();
         ctx.moveTo(s.x, s.y);
         ctx.lineTo(t.x, t.y);
-        ctx.strokeStyle = edgeColor;
-        ctx.globalAlpha = edgeAlpha;
-        ctx.lineWidth = Math.max(0.5, link.weight * 1.2);
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = alpha;
+        ctx.lineWidth = 1;
         ctx.stroke();
       }
 
@@ -397,7 +395,7 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
           const textAlpha = Math.min(1, (transform.k - TEXT_FADE_THRESHOLD) / 0.5);
           ctx.globalAlpha = textAlpha * (isHovered ? 1 : 0.7);
           ctx.fillStyle = dark ? '#e2e8f0' : '#1e293b';
-          ctx.font = `${Math.max(10, 11 / transform.k * 1.5)}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+          ctx.font = `${Math.max(3, 4 / transform.k * 1.5)}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'top';
           ctx.fillText(node.title, node.x, node.y + r + 4);
@@ -513,7 +511,7 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
       <div className="absolute bottom-3 left-3 flex gap-3 text-xs text-gray-400 bg-gray-900/80 backdrop-blur px-3 py-2 rounded-lg border border-gray-700/50">
         {Object.entries(NODE_COLORS).map(([key, colors]) => {
           const labels: Record<string, string> = {
-            memo: '随想', document: '大纲', note: '笔记', folder: '文件夹', excalidraw: '画布',
+            memo: '随想', document: '大纲', note: '笔记', excalidraw: '画布',
           };
           return (
             <span key={key} className="flex items-center gap-1.5">

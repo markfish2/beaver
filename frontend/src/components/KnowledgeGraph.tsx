@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { forceSimulation, forceCollide, forceLink, forceManyBody, forceCenter, SimulationNodeDatum, SimulationLinkDatum } from 'd3-force';
+import { forceSimulation, forceCollide, forceManyBody, forceCenter, SimulationNodeDatum, SimulationLinkDatum } from 'd3-force';
 import { zoom, zoomIdentity, ZoomTransform } from 'd3-zoom';
 import { select } from 'd3-selection';
 import api from '../api/client';
@@ -87,11 +87,12 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
     }
   }, []);
 
-  // Uniform node size — different sizes cause uneven collision forces,
-  // which distorts the circular layout. Obsidian uses uniform base size.
-  const NODE_RADIUS = 5;
-  const getNodeRadius = useCallback((_node: GraphNode): number => {
-    return NODE_RADIUS;
+  // Node size scales inversely with count — many nodes need bigger dots to be visible
+  const getNodeRadius = useCallback((nodeCount: number): number => {
+    if (nodeCount <= 30) return 5;
+    if (nodeCount <= 80) return 7;
+    if (nodeCount <= 150) return 9;
+    return 11;
   }, []);
 
   // ─── Main canvas effect ─────────────────────────────────────────────────────
@@ -125,19 +126,31 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
       y: height / 2 + (Math.random() - 0.5) * 100,
     }));
 
-    const links: GraphEdge[] = data.edges.map(e => ({ ...e, source: e.source, target: e.target }));
+    // Build node map for resolving link source/target from string IDs to node objects
+    const nodeMap = new Map<string, GraphNode>();
+    for (const n of nodes) nodeMap.set(n.id, n);
+
+    const links: GraphEdge[] = data.edges
+      .map(e => ({
+        ...e,
+        source: nodeMap.get(typeof e.source === 'string' ? e.source : (e.source as GraphNode).id)!,
+        target: nodeMap.get(typeof e.target === 'string' ? e.target : (e.target as GraphNode).id)!,
+      }))
+      .filter(e => e.source && e.target); // filter out broken links
+
     computeConnectionCounts(nodes, links);
     state.nodes = nodes;
     state.links = links;
 
-    // ─── Force simulation (Obsidian defaults) ────────────────────────────
-    // Obsidian uses d3-force defaults: forceManyBody -300, forceLink dist 30,
-    // forceCenter ~1. These create the characteristic uniform circular layout.
+    // ─── Force simulation ──────────────────────────────────────────────
+    // No link force — ALL nodes maintain equal distance regardless of connection.
+    // Only 3 forces: repulsion (spread evenly), center (circular boundary), collision (no overlap).
+    const nodeRadius = getNodeRadius(nodes.length);
+    const minSpacing = 18;
     const sim = forceSimulation(nodes)
       .force('center', forceCenter(width / 2, height / 2).strength(0.6))
       .force('charge', forceManyBody().strength(-300).distanceMax(400))
-      .force('collision', forceCollide<GraphNode>().radius(NODE_RADIUS + 2).strength(0.8))
-      .force('link', forceLink<GraphNode, GraphEdge>(links).id(d => d.id).distance(30).strength(0.5))
+      .force('collision', forceCollide<GraphNode>().radius(nodeRadius + minSpacing).strength(1))
       .alphaDecay(0.02)
       .velocityDecay(0.4);
 
@@ -153,18 +166,17 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
     stateRef.current.zoomBehavior = zoomBehavior;
 
     // ─── Hit detection ─────────────────────────────────────────────────────
+    const hitRadius = getNodeRadius(nodes.length);
     const getNodeAt = (mx: number, my: number): GraphNode | null => {
-      // Transform mouse coords to graph coords
       const t = state.transform;
       const gx = (mx - t.x) / t.k;
       const gy = (my - t.y) / t.k;
 
       for (let i = nodes.length - 1; i >= 0; i--) {
         const n = nodes[i];
-        const r = getNodeRadius(n);
         const dx = (n.x || 0) - gx;
         const dy = (n.y || 0) - gy;
-        if (dx * dx + dy * dy < (r + 4) * (r + 4)) return n;
+        if (dx * dx + dy * dy < (hitRadius + 4) * (hitRadius + 4)) return n;
       }
       return null;
     };
@@ -313,14 +325,13 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
       const globalAlpha = hoveredNode ? 0.08 : 1;
 
       // ─── Draw edges (uniform style) ────────────────────────────────────
-      const edgeColor = dark ? '#4a5568' : '#9ca3af';
       for (const link of links) {
         const s = link.source as GraphNode;
         const t = link.target as GraphNode;
         if (!s.x || !s.y || !t.x || !t.y) continue;
 
-        let alpha = 0.4 * globalAlpha;
-        let color = edgeColor;
+        let alpha = 0.6 * globalAlpha;
+        let color = dark ? '#6b7280' : '#4b5563';
 
         if (hoveredNode) {
           const sid = s.id;
@@ -355,7 +366,7 @@ export default function KnowledgeGraph({ onNodeClick }: { onNodeClick: (id: stri
       for (const node of sortedNodes) {
         if (node.x === undefined || node.y === undefined) continue;
 
-        const r = getNodeRadius(node);
+        const r = getNodeRadius(nodes.length);
         const color = getNodeColor(node.source_type, dark);
         const isNeighbor = !hoveredNode || neighborSet.has(node.id);
         const isHovered = node === hoveredNode;
