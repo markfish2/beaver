@@ -38,13 +38,17 @@ async def get_knowledge_graph(
         source_type, source_id, chunk_text, emb_blob = row
         if source_id in nodes_map:
             continue
-        # 获取标题
+        # 获取标题（source_id 是字符串，需要转为 UUID 查询）
+        try:
+            source_uuid = uuid.UUID(source_id)
+        except ValueError:
+            continue
         if source_type == "memo":
-            memo = db.query(models.Memo).filter(models.Memo.id == source_id).first()
+            memo = db.query(models.Memo).filter(models.Memo.id == source_uuid).first()
             title = (memo.content.split('\n')[0].strip().lstrip('#').lstrip('*').strip()[:30] if memo and memo.content else "无标题")
             doc_type = "memo"
         else:
-            doc = db.query(models.Document).filter(models.Document.id == source_id).first()
+            doc = db.query(models.Document).filter(models.Document.id == source_uuid).first()
             title = doc.title[:30] if doc and doc.title else "无标题"
             doc_type = doc.type if doc else "document"
         nodes_map[source_id] = {
