@@ -23,6 +23,7 @@ import PasswordDialog from './PasswordDialog';
 import MemoSidebarContent from './MemoSidebarContent';
 import AISettings from './AISettings';
 import AIChatSidebar from './AIChatSidebar';
+import KnowledgeGraph from './KnowledgeGraph';
 
 interface SidebarProps {
   onDocumentSelect?: () => void;
@@ -192,6 +193,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
   const [editFolderDialog, setEditFolderDialog] = useState<{ show: boolean; id: string; title: string; icon?: string }>({ show: false, id: '', title: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showGraph, setShowGraph] = useState(false);
   const [draggedItem, setDraggedItem] = useState<{ id: string; type: 'document' | 'folder' } | null>(null);
   const draggedItemRef = useRef<{ id: string; type: 'document' | 'folder' } | null>(null);
   const [dragOverItem, setDragOverItem] = useState<string | null>(null);
@@ -1031,6 +1033,21 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
         >
           <Sparkles className="w-5 h-5" />
         </button>
+        <button
+          onClick={() => setShowGraph(!showGraph)}
+          className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
+            showGraph
+              ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
+              : 'text-[#8B8B80] dark:text-gray-400 hover:text-[#5A5A52] dark:hover:text-gray-200 hover:bg-[#EDEDE8] dark:hover:bg-gray-800'
+          }`}
+          title="知识图谱"
+        >
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" /><circle cx="4" cy="6" r="2" /><circle cx="20" cy="6" r="2" /><circle cx="4" cy="18" r="2" /><circle cx="20" cy="18" r="2" />
+            <line x1="9.5" y1="10.5" x2="5.5" y2="7.5" /><line x1="14.5" y1="10.5" x2="18.5" y2="7.5" />
+            <line x1="9.5" y1="13.5" x2="5.5" y2="16.5" /><line x1="14.5" y1="13.5" x2="18.5" y2="16.5" />
+          </svg>
+        </button>
       </div>
 
       {/* 新建按钮 */}
@@ -1570,6 +1587,25 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       <PasswordDialog open={showPasswordDialog} onClose={() => setShowPasswordDialog(false)} />
       {showAISettings && (
         <AISettings onClose={() => setShowAISettings(false)} />
+      )}
+
+      {/* 知识图谱全屏覆盖 */}
+      {showGraph && (
+        <div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-sm font-medium text-gray-800 dark:text-gray-200">知识图谱</h2>
+            <button
+              onClick={() => setShowGraph(false)}
+              className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+            </button>
+          </div>
+          <KnowledgeGraph onNodeClick={(id, type) => {
+            setShowGraph(false);
+            navigate(`/d/${id}`);
+          }} />
+        </div>
       )}
 
       {/* Move To Folder Dialog */}
