@@ -17,6 +17,7 @@ import MarkdownNoteEditor from './MarkdownNoteEditor';
 import { ExcalidrawEditor } from './ExcalidrawEditor';
 import MemoHome from './MemoHome';
 import UserProfileEditor from './UserProfileEditor';
+import KnowledgeGraph from './KnowledgeGraph';
 import TokenPanel from './TokenPanel';
 import TrashPanel from './TrashPanel';
 import PasswordPanel from './PasswordPanel';
@@ -2463,6 +2464,15 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         {userSubView === 'ai' && <AISettingsPanel />}
         {userSubView === 'trash' && <TrashPanel />}
         {userSubView === 'password' && <PasswordPanel />}
+        {userSubView === 'graph' && (
+          <KnowledgeGraph onNodeClick={(id, type) => {
+            if (type === 'memo') {
+              navigate(`/?highlight=${id}`);
+            } else {
+              navigate(`/d/${id}`);
+            }
+          }} />
+        )}
         {userSubView === 'ai-chat' && (
           <AIChatMainView
             conversationId={activeConvId}
