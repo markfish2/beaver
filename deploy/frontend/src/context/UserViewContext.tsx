@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
 
-export type UserSubView = 'profile' | 'token' | 'ai' | 'trash' | 'password' | 'ai-chat';
+export type UserSubView = 'profile' | 'token' | 'ai' | 'trash' | 'password' | 'ai-chat' | 'graph';
 
 interface UserViewContextType {
   userSubView: UserSubView | null;
