@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { simulation, forceCenter, forceCollide, forceLink, forceManyBody, forceX, forceY } from 'd3-force';
+import { forceSimulation, forceCenter, forceCollide, forceLink, forceManyBody, forceX, forceY } from 'd3-force';
 import { zoom, zoomIdentity } from 'd3-zoom';
 import { select } from 'd3-selection';
-import { api } from '../api/client';
+import api from '../api/client';
 import { Loader2, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 
 interface GraphNode {
@@ -76,7 +76,7 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
     const nodes = data.nodes.map(n => ({ ...n, x: width / 2 + (Math.random() - 0.5) * 200, y: height / 2 + (Math.random() - 0.5) * 200 }));
     const links = data.edges.map(e => ({ ...e, source: e.source, target: e.target }));
 
-    const sim = simulation(nodes)
+    const sim = forceSimulation(nodes)
       .force('charge', forceManyBody().strength(-120))
       .force('center', forceCenter(width / 2, height / 2))
       .force('collision', forceCollide().radius(30))
