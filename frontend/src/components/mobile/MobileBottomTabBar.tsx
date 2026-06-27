@@ -1,4 +1,5 @@
 import { StickyNote, CalendarDays, Plus, FileText, Sparkles } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 
 export type MobileTab = 'memos' | 'diary' | 'new' | 'files' | 'ai';
 
@@ -15,6 +16,8 @@ const tabs: { id: MobileTab; label: string; icon: typeof StickyNote }[] = [
   { id: 'ai', label: 'AI', icon: Sparkles },
 ];
 
+const isNative = Capacitor.isNativePlatform();
+
 export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBottomTabBarProps) {
   return (
     <>
@@ -24,8 +27,13 @@ export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBot
         style={{ height: 'env(safe-area-inset-bottom, 0px)' }}
       />
       <div
-        className="fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-t border-gray-200/50 dark:border-gray-700/50 flex items-center justify-around z-30"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        className={`fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200/50 dark:border-gray-700/50 flex items-center justify-around z-30 ${
+          isNative ? 'shadow-[0_-1px_3px_rgba(0,0,0,0.05)]' : 'bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl'
+        }`}
+        style={{
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          height: `calc(56px + env(safe-area-inset-bottom, 0px))`,
+        }}
       >
       {tabs.map((tab) => {
         const Icon = tab.icon;
@@ -36,7 +44,7 @@ export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBot
           <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
-            className={`flex flex-col items-center justify-center py-1 px-3 min-w-0 flex-1 transition-colors ${
+            className={`flex flex-col items-center justify-center py-1.5 px-3 min-w-0 flex-1 transition-colors active:scale-95 ${
               isNew
                 ? 'text-[#8B8B80] dark:text-gray-400'
                 : isActive
