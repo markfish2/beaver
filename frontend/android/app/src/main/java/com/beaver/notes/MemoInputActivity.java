@@ -63,9 +63,9 @@ public class MemoInputActivity extends Activity {
             return;
         }
 
-        // 从 Capacitor Preferences 读取服务器地址和 token
-        SharedPreferences prefs = getSharedPreferences("CapacitorPreferences", Context.MODE_PRIVATE);
-        String serverUrl = prefs.getString("beaver_server_url", "");
+        // 从 SharedPreferences 读取服务器地址和 token
+        SharedPreferences prefs = getSharedPreferences("BeaverData", Context.MODE_PRIVATE);
+        String serverUrl = prefs.getString("serverUrl", "");
         String token = prefs.getString("token", "");
 
         Log.d(TAG, "serverUrl=" + serverUrl + ", token=" + (token != null && !token.isEmpty() ? "exists" : "empty"));

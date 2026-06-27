@@ -48,7 +48,7 @@ public class MemoWidget extends AppWidgetProvider {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.memo_widget);
 
         // 从 Capacitor Preferences 读取缓存数据
-        SharedPreferences prefs = getCapacitorPreferences(context);
+        SharedPreferences prefs = getAppPreferences(context);
         String todosJson = prefs.getString("widget_todos", "[]");
         String diaryContent = prefs.getString("widget_diary", "");
 
@@ -132,10 +132,10 @@ public class MemoWidget extends AppWidgetProvider {
     }
 
     /**
-     * 获取 Capacitor Preferences 的 SharedPreferences
+     * 获取 SharedPreferences
      */
-    static SharedPreferences getCapacitorPreferences(Context context) {
-        return context.getSharedPreferences("CapacitorPreferences", Context.MODE_PRIVATE);
+    static SharedPreferences getAppPreferences(Context context) {
+        return context.getSharedPreferences("BeaverData", Context.MODE_PRIVATE);
     }
 
     /**
@@ -144,7 +144,7 @@ public class MemoWidget extends AppWidgetProvider {
     static void fetchAndUpdateWidget(Context context) {
         executor.execute(() -> {
             try {
-                SharedPreferences prefs = getCapacitorPreferences(context);
+                SharedPreferences prefs = getAppPreferences(context);
                 String serverUrl = prefs.getString("beaver_server_url", "");
                 String token = prefs.getString("token", "");
 

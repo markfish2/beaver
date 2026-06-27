@@ -2,9 +2,8 @@ import { createContext, useContext, useState, useEffect, useMemo, useCallback, R
 import { checkSetupStatus, getMe, login as apiLogin, setupAdmin as apiSetupAdmin } from '../api/auth';
 import type { User } from '../api/auth';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getServerUrl, setServerUrl } from '../api/client';
-import { Preferences } from '@capacitor/preferences';
-import { Capacitor } from '@capacitor/core';
+import { getServerUrl } from '../api/client';
+import { syncAuthToNative } from '../utils/nativeBridge';
 
 interface AuthContextType {
   user: User | null;
@@ -88,12 +87,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(userData);
     setIsAuthenticated(true);
 
-    // 同步到原生 Preferences（小组件和浮窗使用）
+    // 同步到原生层（小组件使用）
     const serverUrl = getServerUrl();
-    if (serverUrl && Capacitor.isNativePlatform()) {
-      await Preferences.set({ key: 'beaver_server_url', value: serverUrl });
-      await Preferences.set({ key: 'token', value: data.access_token });
-      console.log('Auth synced to Preferences');
+    if (serverUrl) {
+      syncAuthToNative(serverUrl, data.access_token);
     }
 
     navigate('/');
@@ -105,16 +102,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsSetupRequired(false);
   }, [login, navigate]);
 
-  const logout = useCallback(async () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('token');
     setUser(null);
     setIsAuthenticated(false);
-
-    // 清除原生 Preferences
-    if (Capacitor.isNativePlatform()) {
-      await Preferences.remove({ key: 'token' });
-    }
-
     navigate('/login');
   }, [navigate]);
 

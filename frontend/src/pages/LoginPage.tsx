@@ -2,12 +2,11 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { setServerUrl, getServerUrl } from '../api/client';
-import { Preferences } from '@capacitor/preferences';
-import { Capacitor } from '@capacitor/core';
+import { saveToNative } from '../utils/nativeBridge';
 
 const LoginPage = () => {
-  const [serverAddress, setServerAddress] = useState(() => getServerUrl() || '');
-  const [step, setStep] = useState<'server' | 'login'>(() => getServerUrl() ? 'login' : 'server');
+  const [serverAddress, setServerAddress] = useState(() => getServerUrl() || 'https://beaver.arcbox.top');
+  const [step, setStep] = useState<'server' | 'login'>(() => (getServerUrl() || 'https://beaver.arcbox.top') ? 'login' : 'server');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -51,10 +50,8 @@ const LoginPage = () => {
     setServerUrl(url);
     setServerAddress(url);
 
-    // 同步到原生 Preferences（小组件使用）
-    if (Capacitor.isNativePlatform()) {
-      Preferences.set({ key: 'beaver_server_url', value: url }).catch(() => {});
-    }
+    // 同步到原生 SharedPreferences（小组件使用）
+    saveToNative('serverUrl', url);
 
     setStep('login');
   };
