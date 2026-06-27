@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Check, X, Loader2 } from 'lucide-react';
-import { aiChat } from '../api/data-adapter';
+import { aiChat } from '../api/data';
 
 interface Message {
   role: 'user' | 'assistant';

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { FileText, ListTree } from 'lucide-react';
-import type { Document } from '../api/data-adapter';
+import type { Document } from '../api/data';
 
 interface MentionDropdownProps {
   documents: Document[];

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Check, Loader2 } from 'lucide-react';
-import { getAIConfigs, createAIConfig, updateAIConfig, deleteAIConfig, testAIConfig, type AIConfig, type AIConfigCreate } from '../api/data-adapter';
+import { getAIConfigs, createAIConfig, updateAIConfig, deleteAIConfig, testAIConfig, type AIConfig, type AIConfigCreate } from '../api/data';
 
 // 预设配置
 const PRESETS: Record<string, { name: string; api_url: string; model: string }> = {

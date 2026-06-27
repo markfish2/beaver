@@ -1,7 +1,7 @@
 import { useMemo, memo, useRef, useEffect, useCallback, useState } from 'react';
 import { FileText, Loader2 } from 'lucide-react';
 import MemoCard from './MemoCard';
-import type { Memo, Document } from '../api/data-adapter';
+import type { Memo, Document } from '../api/data';
 
 interface MemoListProps {
   memos: Memo[];

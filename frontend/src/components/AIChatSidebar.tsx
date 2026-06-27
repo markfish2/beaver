@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { Plus, Trash2, MessageSquare } from 'lucide-react';
-import { getAIConversations, deleteAIConversation } from '../api/data-adapter';
+import { getAIConversations, deleteAIConversation } from '../api/data';
 import { useUserView } from '../context/UserViewContext';
 
 interface Conversation {

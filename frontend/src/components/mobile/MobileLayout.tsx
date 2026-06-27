@@ -1,19 +1,16 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Capacitor } from '@capacitor/core';
 import MobileTopBar from './MobileTopBar';
 import MobileBottomTabBar, { type MobileTab } from './MobileBottomTabBar';
 import MobileToolbar from '../MobileToolbar';
 import { MobileToolbarProvider, useMobileToolbar } from '../../context/MobileToolbarContext';
-import { getMonthlyDiary, getOrCreateDayNode } from '../../api/data-adapter';
+import { getMonthlyDiary, getOrCreateDayNode } from '../../api/data';
 import NewMenuPopup from './NewMenuPopup';
 import AIChatMainView from '../AIChatMainView';
 import AIChatSidebar from '../AIChatSidebar';
 import { useUserView } from '../../context/UserViewContext';
 import { MessageSquare } from 'lucide-react';
 import type { ReactNode } from 'react';
-
-const isNative = Capacitor.isNativePlatform();
 
 const FileTreeView = lazy(() => import('./FileTreeView'));
 const MobileTodos = lazy(() => import('./MobileTodos'));
@@ -65,27 +62,6 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     };
     window.addEventListener('keyboard-change', handler);
     return () => window.removeEventListener('keyboard-change', handler);
-  }, []);
-
-  // Capacitor 原生键盘监听
-  useEffect(() => {
-    if (!isNative) return;
-    let showListener: any;
-    let hideListener: any;
-    import('@capacitor/keyboard').then(({ Keyboard }) => {
-      showListener = Keyboard.addListener('keyboardWillShow', () => {
-        setKeyboardOpen(true);
-        window.dispatchEvent(new CustomEvent('keyboard-change', { detail: { open: true } }));
-      });
-      hideListener = Keyboard.addListener('keyboardWillHide', () => {
-        setKeyboardOpen(false);
-        window.dispatchEvent(new CustomEvent('keyboard-change', { detail: { open: false } }));
-      });
-    }).catch(() => {});
-    return () => {
-      showListener?.remove();
-      hideListener?.remove();
-    };
   }, []);
 
   // Diary state

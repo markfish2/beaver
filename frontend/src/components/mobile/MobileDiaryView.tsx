@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getMonthlyDiary, getOrCreateDayNode, getDiaryDayDates } from '../../api/data-adapter';
+import { getMonthlyDiary, getOrCreateDayNode, getDiaryDayDates } from '../../api/data';
 import DiaryDateBar from '../DiaryDateBar';
 import MobileTodos from './MobileTodos';
 

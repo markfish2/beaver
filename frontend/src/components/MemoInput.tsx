@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Send, Image, Paperclip, ChevronDown, Mic, MicOff, Maximize2, Minimize2, X, Sparkles } from 'lucide-react';
-import { createMemo, uploadFile, uploadAudio, uploadFromUrl, getMemoTags, createTodo, getAIConfigs } from '../api/data-adapter';
+import { createMemo, uploadFile, uploadAudio, uploadFromUrl, getMemoTags, createTodo, getAIConfigs } from '../api/data';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { useResizableTextarea } from '../hooks/useResizableTextarea';
 import WaveformCanvas from './WaveformCanvas';
@@ -11,7 +11,7 @@ import { handleListContinuation } from '../utils/listContinuation';
 import { getPasteMarkdown, extractExternalImageUrls } from '../utils/htmlToMarkdown';
 import { showToast } from '../utils/toast';
 import MentionDropdown from './MentionDropdown';
-import type { Memo, Document } from '../api/data-adapter';
+import type { Memo, Document } from '../api/data';
 
 interface MemoInputProps {
   onMemoCreated: (memo: Memo) => void;

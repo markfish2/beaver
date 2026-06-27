@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { shareContent } from '../api/data-adapter';
+import { shareContent } from '../api/data';
 
 // X/Twitter URL 匹配
 const X_URL_RE = /^https?:\/\/(x\.com|twitter\.com|mobile\.twitter\.com)\/\w+\/status\/\d+/i;

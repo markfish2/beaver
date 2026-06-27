@@ -6,7 +6,7 @@ import {
   Palette, CupSoda, Dog, Smartphone, Pill, Sparkles, Target, Zap,
   type LucideIcon,
 } from 'lucide-react';
-import { getHabits, createHabit, updateHabit, deleteHabit, toggleHabitRecord, type Habit } from '../api/data-adapter';
+import { getHabits, createHabit, updateHabit, deleteHabit, toggleHabitRecord, type Habit } from '../api/data';
 
 // 习惯相关图标列表（黑白）
 const HABIT_ICONS: { name: string; icon: LucideIcon }[] = [

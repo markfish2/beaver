@@ -2,7 +2,6 @@ import { createContext, useContext, useState, useEffect, useMemo, useCallback, R
 import { getDocuments } from '../api/data';
 import type { Document } from '../api/data';
 import { useAuth } from './AuthContext';
-import { useData } from './DataContext';
 
 interface DocumentContextType {
   documents: Document[];
@@ -21,33 +20,27 @@ export const DocumentProvider = ({ children }: { children: ReactNode }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { isAuthenticated } = useAuth();
-  const { provider, mode, isReady } = useData();
 
-  // Re-fetch documents when authenticated or when local mode is ready
+  // Re-fetch documents when authenticated
   useEffect(() => {
-    if (mode === 'local' && isReady && provider) {
-      // 本地模式：provider 就绪后直接加载
+    if (isAuthenticated) {
       refreshDocuments();
-    } else if (mode !== 'local' && isAuthenticated) {
-      // 远程模式：认证后加载
-      refreshDocuments();
-    } else if (mode !== 'local' && !isAuthenticated) {
+    } else {
       setDocuments([]);
     }
-  }, [isAuthenticated, mode, isReady, provider]);
+  }, [isAuthenticated]);
 
   const refreshDocuments = useCallback(async (search?: string) => {
-    if (!provider) return;
     setIsLoading(true);
     try {
-      const data = await provider.getDocuments(search);
+      const data = await getDocuments(search);
       setDocuments(data);
     } catch (error) {
       console.error('Failed to fetch documents', error);
     } finally {
       setIsLoading(false);
     }
-  }, [provider]);
+  }, []);
 
   const updateDocumentTitle = useCallback((id: string, newTitle: string) => {
     setDocuments(prev => prev.map(d => d.id === id ? { ...d, title: newTitle } : d));

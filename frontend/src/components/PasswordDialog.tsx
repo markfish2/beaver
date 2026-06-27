@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X, Lock, Eye, EyeOff } from 'lucide-react';
-import { updatePassword } from '../api/data-adapter';
+import { updatePassword } from '../api/data';
 import { showToast } from '../utils/toast';
 
 interface PasswordDialogProps {

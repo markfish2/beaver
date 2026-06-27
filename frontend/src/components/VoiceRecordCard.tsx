@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Mic, Square, Loader2, X } from 'lucide-react';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
-import { uploadAudio } from '../api/data-adapter';
+import { uploadAudio } from '../api/data';
 import WaveformCanvas from './WaveformCanvas';
 
 type CardState = 'recording' | 'uploading' | 'done';

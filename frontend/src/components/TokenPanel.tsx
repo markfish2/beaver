@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Copy, Trash2, Plus, Check, Loader2 } from 'lucide-react';
-import { createApiToken, getApiTokens, deleteApiToken } from '../api/data-adapter';
-import type { ApiTokenInfo, ApiTokenCreated } from '../api/data-adapter';
+import { createApiToken, getApiTokens, deleteApiToken } from '../api/data';
+import type { ApiTokenInfo, ApiTokenCreated } from '../api/data';
 import { showToast } from '../utils/toast';
 
 export default function TokenPanel() {

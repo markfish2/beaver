@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { getMemoHeatmap } from '../api/data-adapter';
+import { getMemoHeatmap } from '../api/data';
 
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
 

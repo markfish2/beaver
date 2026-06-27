@@ -1,16 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, X, ArrowLeft, LogOut, Key, Trash, User, Sparkles, Lock, Settings } from 'lucide-react';
-import { Capacitor } from '@capacitor/core';
+import { Search, X, ArrowLeft, LogOut, Key, Trash, User, Sparkles, Lock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useData } from '../../context/DataContext';
 import UserProfileEditor from '../UserProfileEditor';
 import TokenPanel from '../TokenPanel';
 import AISettingsPanel from '../AISettingsPanel';
 import TrashPanel from '../TrashPanel';
 import PasswordPanel from '../PasswordPanel';
-
-const isNative = Capacitor.isNativePlatform();
 
 interface MobileTopBarProps {
   title: string;
@@ -21,7 +17,6 @@ interface MobileTopBarProps {
 
 export default function MobileTopBar({ title, showBack, onBack, onSearch }: MobileTopBarProps) {
   const { user, logout } = useAuth();
-  const { mode, switchMode, resetMode } = useData();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
@@ -59,23 +54,9 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
     setShowUserMenu(false);
   };
 
-  const handleLogout = () => {
-    if (mode === 'local') {
-      // 本地模式：切换回模式选择
-      resetMode();
-    } else {
-      logout();
-    }
-    setShowUserMenu(false);
-  };
-
   return (
     <div
-      className={`fixed top-0 left-0 right-0 z-30 ${
-        isNative
-          ? 'bg-white dark:bg-gray-900 shadow-[0_1px_3px_rgba(0,0,0,0.05)]'
-          : 'bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-700/50'
-      }`}
+      className="fixed top-0 left-0 right-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-700/50 z-30"
       style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
     >
       <div className="flex items-center justify-between h-11 px-3">
@@ -84,7 +65,7 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
           {showBack ? (
             <button
               onClick={() => onBack?.()}
-              className="p-1.5 text-gray-600 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 rounded-lg transition-colors active:scale-95"
+              className="p-1.5 text-gray-600 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 rounded-lg transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
@@ -97,79 +78,55 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
                 {user?.avatar_path ? (
                   <img src={user.avatar_path} alt="avatar" className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
-                    <span className="text-xs font-medium text-white">
-                      {(user?.nickname || user?.username || 'B')[0].toUpperCase()}
-                    </span>
+                  <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                    <User className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
                   </div>
                 )}
               </div>
               {showUserMenu && (
-                <div className="absolute left-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50 overflow-hidden">
-                  {/* 用户信息 */}
-                  <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700">
-                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
-                      {user?.nickname || user?.username || '用户'}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      {mode === 'local' ? '本地模式' : '云端模式'}
-                    </p>
-                  </div>
-
+                <div className="absolute left-0 top-full mt-1 w-40 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
                   <button
                     onClick={() => openDialog('profile')}
-                    className="w-full px-3 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center space-x-2.5 active:bg-gray-100 dark:active:bg-gray-700"
+                    className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
                   >
-                    <User className="w-4 h-4 text-gray-400" />
+                    <User className="w-4 h-4" />
                     <span>个人资料</span>
                   </button>
-
-                  {/* 云端模式专属功能 */}
-                  {mode !== 'local' && (
-                    <>
-                      <button
-                        onClick={() => openDialog('token')}
-                        className="w-full px-3 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center space-x-2.5 active:bg-gray-100 dark:active:bg-gray-700"
-                      >
-                        <Key className="w-4 h-4 text-gray-400" />
-                        <span>API Token</span>
-                      </button>
-                      <button
-                        onClick={() => openDialog('ai')}
-                        className="w-full px-3 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center space-x-2.5 active:bg-gray-100 dark:active:bg-gray-700"
-                      >
-                        <Sparkles className="w-4 h-4 text-gray-400" />
-                        <span>AI 设置</span>
-                      </button>
-                    </>
-                  )}
-
+                  <button
+                    onClick={() => openDialog('token')}
+                    className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
+                  >
+                    <Key className="w-4 h-4" />
+                    <span>API Token</span>
+                  </button>
+                  <button
+                    onClick={() => openDialog('ai')}
+                    className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>AI 设置</span>
+                  </button>
                   <button
                     onClick={() => openDialog('trash')}
-                    className="w-full px-3 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center space-x-2.5 active:bg-gray-100 dark:active:bg-gray-700"
+                    className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
                   >
-                    <Trash className="w-4 h-4 text-gray-400" />
+                    <Trash className="w-4 h-4" />
                     <span>回收站</span>
                   </button>
-
-                  {mode !== 'local' && (
-                    <button
-                      onClick={() => openDialog('password')}
-                      className="w-full px-3 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center space-x-2.5 active:bg-gray-100 dark:active:bg-gray-700"
-                    >
-                      <Lock className="w-4 h-4 text-gray-400" />
-                      <span>修改密码</span>
-                    </button>
-                  )}
-
-                  <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
-
                   <button
-                    onClick={handleLogout}
-                    className="w-full px-3 py-2.5 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-2.5 active:bg-red-100 dark:active:bg-red-900/30"
+                    onClick={() => openDialog('password')}
+                    className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
+                  >
+                    <Lock className="w-4 h-4" />
+                    <span>修改密码</span>
+                  </button>
+                  <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
+                  <button
+                    onClick={() => { logout(); setShowUserMenu(false); }}
+                    className="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-2"
                   >
                     <LogOut className="w-4 h-4" />
-                    <span>{mode === 'local' ? '切换模式' : '退出登录'}</span>
+                    <span>退出登录</span>
                   </button>
                 </div>
               )}
@@ -178,7 +135,7 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
         </div>
 
         {/* Center: title */}
-        <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">
+        <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
           {title}
         </span>
 
@@ -187,14 +144,14 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
           {showSearch ? (
             <button
               onClick={() => { setShowSearch(false); setSearchQuery(''); }}
-              className="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 rounded-lg transition-colors active:scale-95"
+              className="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 rounded-lg transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
           ) : (
             <button
               onClick={() => setShowSearch(true)}
-              className="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 rounded-lg transition-colors active:scale-95"
+              className="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 rounded-lg transition-colors"
             >
               <Search className="w-5 h-5" />
             </button>
@@ -224,17 +181,10 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
       {activeDialog && createPortal(
         <div className="fixed inset-0 z-[9999] bg-white dark:bg-gray-900 flex flex-col">
           {/* Top bar with close button */}
-          <div className="shrink-0 flex items-center justify-between px-3" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)', height: 'calc(env(safe-area-inset-top, 0px) + 44px)' }}>
-            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-              {activeDialog === 'profile' && '个人资料'}
-              {activeDialog === 'token' && 'API Token'}
-              {activeDialog === 'ai' && 'AI 设置'}
-              {activeDialog === 'trash' && '回收站'}
-              {activeDialog === 'password' && '修改密码'}
-            </span>
+          <div className="shrink-0 flex items-center justify-end px-3" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)', height: 'calc(env(safe-area-inset-top, 0px) + 44px)' }}>
             <button
               onClick={() => setActiveDialog(null)}
-              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-95"
+              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
             >
               <X className="w-5 h-5" />
             </button>

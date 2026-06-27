@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { ListTree, FileText, Square, Folder, X } from 'lucide-react';
-import { createDocument, createTodo } from '../../api/data-adapter';
+import { createDocument, createTodo } from '../../api/data';
 import { useDocuments } from '../../context/DocumentContext';
 
 interface NewMenuPopupProps {

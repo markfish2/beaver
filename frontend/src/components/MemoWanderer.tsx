@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, Shuffle } from 'lucide-react';
-import type { Memo } from '../api/data-adapter';
-import { getMemos } from '../api/data-adapter';
+import type { Memo } from '../api/data';
+import { getMemos } from '../api/data';
 import MemoCard from './MemoCard';
 
 function shuffleArray<T>(arr: T[]): T[] {
