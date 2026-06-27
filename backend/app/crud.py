@@ -135,8 +135,7 @@ def copy_document(db: Session, document_id: uuid.UUID):
         icon=db_doc.icon,
     )
     db.add(new_doc)
-    db.commit()
-    db.refresh(new_doc)
+    db.flush()  # Get new_doc.id without committing
 
     # Copy all nodes, maintaining parent-child relationships
     original_nodes = db.query(models.Node).filter(
@@ -144,6 +143,7 @@ def copy_document(db: Session, document_id: uuid.UUID):
     ).order_by(models.Node.sort_order).all()
 
     id_map = {}  # original_id -> new_id
+    new_nodes = []
     for node in original_nodes:
         new_node = models.Node(
             document_id=new_doc.id,
@@ -164,16 +164,19 @@ def copy_document(db: Session, document_id: uuid.UUID):
             file_name=node.file_name,
         )
         db.add(new_node)
-        db.flush()
-        id_map[node.id] = new_node.id
+        new_nodes.append((node, new_node))
 
-    # Fix parent_node_id references
-    for node in original_nodes:
-        if node.parent_node_id and node.parent_node_id in id_map:
-            new_node_id = id_map[node.id]
-            new_node = db.query(models.Node).filter(models.Node.id == new_node_id).first()
-            if new_node:
-                new_node.parent_node_id = id_map[node.parent_node_id]
+    # Flush all new nodes to get their IDs
+    db.flush()
+
+    # Build id_map
+    for orig_node, new_node in new_nodes:
+        id_map[orig_node.id] = new_node.id
+
+    # Fix parent_node_id references in batch
+    for orig_node, new_node in new_nodes:
+        if orig_node.parent_node_id and orig_node.parent_node_id in id_map:
+            new_node.parent_node_id = id_map[orig_node.parent_node_id]
 
     db.commit()
     db.refresh(new_doc)
@@ -464,22 +467,23 @@ def delete_node(db: Session, node_id: uuid.UUID):
     node = db.query(models.Node).filter(models.Node.id == node_id).first()
     doc_id = str(node.document_id) if node else None
 
-    # 使用循环收集所有子孙节点，然后批量删除
-    all_ids = {node_id}
-    to_process = {node_id}
+    # 使用递归 CTE 一次查询收集所有子孙节点
+    from sqlalchemy import text
+    cte_query = text("""
+        WITH RECURSIVE descendants(id) AS (
+            SELECT :root_id
+            UNION ALL
+            SELECT n.id FROM nodes n INNER JOIN descendants d ON n.parent_node_id = d.id
+        )
+        SELECT id FROM descendants
+    """)
+    result = db.execute(cte_query, {"root_id": str(node_id)})
+    all_ids = [row[0] for row in result.fetchall()]
 
-    while to_process:
-        children = db.query(models.Node.id).filter(
-            models.Node.parent_node_id.in_(to_process)
-        ).all()
-        child_ids = {c[0] for c in children}
-        new_ids = child_ids - all_ids
-        all_ids.update(new_ids)
-        to_process = new_ids
-
-    db.query(models.Node).filter(models.Node.id.in_(all_ids)).delete(
-        synchronize_session=False
-    )
+    if all_ids:
+        db.query(models.Node).filter(models.Node.id.in_(all_ids)).delete(
+            synchronize_session=False
+        )
     db.commit()
 
     # 清理该文档的向量数据
@@ -1010,8 +1014,21 @@ def _delete_embeddings(source_type: str, source_id: str):
         logger.warning(f"删除向量数据失败: {e}")
 
 
+# Debounce map: document_id -> last trigger timestamp
+_doc_index_debounce: dict[str, float] = {}
+DOC_INDEX_DEBOUNCE_SECONDS = 5  # Minimum seconds between re-indexing same document
+
 def _trigger_doc_embedding_index(db: Session, document_id):
-    """异步触发文档级 embedding 索引"""
+    """异步触发文档级 embedding 索引（带防抖）"""
+    import time
+    doc_id_str = str(document_id)
+
+    # Debounce: skip if indexed recently
+    now = time.time()
+    last_trigger = _doc_index_debounce.get(doc_id_str, 0)
+    if now - last_trigger < DOC_INDEX_DEBOUNCE_SECONDS:
+        return
+
     try:
         doc = db.query(models.Document).filter(models.Document.id == document_id).first()
         if not doc or doc.ai_excluded:
@@ -1026,6 +1043,7 @@ def _trigger_doc_embedding_index(db: Session, document_id):
                 content_parts.append(node.note)
         full_content = "\n\n".join(content_parts)
         if full_content and len(full_content.strip()) >= 50:
+            _doc_index_debounce[doc_id_str] = now
             _trigger_embedding_index("document", document_id, full_content)
     except Exception as e:
         logger.warning(f"触发文档 embedding 索引失败: {e}")
@@ -1114,19 +1132,29 @@ def get_memo_tags(db: Session):
     if _memo_tags_cache and (now - _memo_tags_cache[0]) < _MEMO_TAGS_CACHE_TTL:
         return _memo_tags_cache[1]
 
-    all_memos = db.query(models.Memo.content).filter(models.Memo.is_archived == False, models.Memo.deleted_at.is_(None)).all()
+    # 使用分页查询避免一次性加载所有内容到内存
     tag_count = {}
     tag_pattern = re.compile(r'#[a-zA-Z0-9_一-龥]+')
-    # 去除代码块和行内代码的正则
     code_block_pattern = re.compile(r'```[\s\S]*?```', re.MULTILINE)
     inline_code_pattern = re.compile(r'`[^`]+`')
-    for (content,) in all_memos:
-        if content:
-            # 先去掉代码块和行内代码，再提取标签
-            cleaned = code_block_pattern.sub('', content)
-            cleaned = inline_code_pattern.sub('', cleaned)
-            for tag in tag_pattern.findall(cleaned):
-                tag_count[tag] = tag_count.get(tag, 0) + 1
+
+    page_size = 500
+    offset = 0
+    while True:
+        batch = db.query(models.Memo.content).filter(
+            models.Memo.is_archived == False,
+            models.Memo.deleted_at.is_(None)
+        ).offset(offset).limit(page_size).all()
+        if not batch:
+            break
+        for (content,) in batch:
+            if content:
+                cleaned = code_block_pattern.sub('', content)
+                cleaned = inline_code_pattern.sub('', cleaned)
+                for tag in tag_pattern.findall(cleaned):
+                    tag_count[tag] = tag_count.get(tag, 0) + 1
+        offset += page_size
+
     sorted_tags = sorted(tag_count.items(), key=lambda x: -x[1])[:100]
     result = [tag for tag, _ in sorted_tags]
     _memo_tags_cache = (now, result)

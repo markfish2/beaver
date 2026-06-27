@@ -1016,11 +1016,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     }
   };
 
-  const getDescendants = (rootId: string, allNodes: Node[]): Node[] => {
-     const children = allNodes.filter(n => n.parent_node_id === rootId);
-     return [...children, ...children.flatMap(c => getDescendants(c.id, allNodes))];
-  };
-
   // 检查 targetId 是否是 sourceId 的子孙节点
   const isDescendantOf = (sourceId: string, targetId: string, allNodes: Node[]): boolean => {
     const descendants = getDescendants(sourceId, allNodes);
@@ -1954,18 +1949,19 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const getSelectionFromRange = (rangeIds: string[], allNodes: Node[]): string[] => {
     const selectedIds = new Set<string>();
     const rangeSet = new Set(rangeIds);
-    
-    const getDescendants = (id: string) => {
+
+    // Helper to collect all descendants into selectedIds
+    const collectDescendants = (id: string) => {
       const children = allNodes.filter(n => n.parent_node_id === id);
       children.forEach(child => {
         selectedIds.add(child.id);
-        getDescendants(child.id);
+        collectDescendants(child.id);
       });
     };
-    
+
     rangeIds.forEach(id => {
       selectedIds.add(id);
-      getDescendants(id);
+      collectDescendants(id);
     });
     
     const isAncestorOf = (ancestorId: string, descendantId: string): boolean => {

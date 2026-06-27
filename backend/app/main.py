@@ -17,14 +17,9 @@ app = FastAPI(title="Dynalist Clone API")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS
-origins = [
-    "http://localhost",
-    "http://localhost:3000", # Vue/React dev server
-    "http://localhost:8080",
-    "http://localhost:5173",
-    "*" 
-]
+# CORS - only allow specific origins
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost,http://localhost:8080,http://localhost:5173")
+origins = [origin.strip() for origin in CORS_ORIGINS.split(",") if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,
@@ -196,6 +191,12 @@ def migrate_database():
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_ai_messages_conversation ON ai_messages(conversation_id)")
+
+        # 性能优化索引
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_documents_sort_order ON documents(sort_order)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_nodes_document_sort ON nodes(document_id, sort_order)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_memos_created_at_desc ON memos(created_at DESC)")
+
         conn.commit()
         logger.info("已确认 ai_conversations / ai_messages 表存在")
         conn.close()

@@ -221,6 +221,11 @@ sqlite3 /app/data/app.db "CREATE TABLE IF NOT EXISTS voice_records (
 sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_voice_records_memo_id ON voice_records(memo_id);" 2>/dev/null
 sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_voice_records_document_id ON voice_records(document_id);" 2>/dev/null
 
+# 性能优化索引
+sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_documents_sort_order ON documents(sort_order);" 2>/dev/null
+sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_nodes_document_sort ON nodes(document_id, sort_order);" 2>/dev/null
+sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_memos_created_at_desc ON memos(created_at DESC);" 2>/dev/null
+
 # 画布数据迁移：将 SQLite scene_data 列中的数据迁移到文件系统
 echo "Running excalidraw data migration..."
 python3 /app/migrate_excalidraw.py

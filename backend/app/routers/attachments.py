@@ -277,7 +277,8 @@ async def upload_from_url(
 @router.get("/download/{filename}")
 async def download_file(
     filename: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     file_path = os.path.join(UPLOAD_DIR, filename)
     
@@ -299,7 +300,8 @@ async def download_file(
 @router.delete("/{attachment_id}")
 async def delete_attachment(
     attachment_id: uuid.UUID,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     attachment = db.query(Attachment).filter(Attachment.id == attachment_id).first()
     if not attachment:

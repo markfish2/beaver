@@ -958,7 +958,19 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const tags = useMemo(() => extractTags(memo.content), [memo.content]);
   const images = useMemo(() => extractImages(memo.content), [memo.content]);
   const fileLinks = useMemo(() => extractFileLinks(memo.content), [memo.content]);
-  const strippedContent = useMemo(() => escapeCodeBlockHtml(normalizeInProgressTasks(normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(stripAttachments(stripTags(normalizeCallouts(memo.content))))))))), [memo.content]);
+  const strippedContent = useMemo(() => {
+    let content = memo.content;
+    content = normalizeCallouts(content);
+    content = stripTags(content);
+    content = stripAttachments(content);
+    content = normalizeTaskLists(content);
+    content = normalizeHighlight(content);
+    content = normalizeListSeparators(content);
+    content = normalizeCodeBlocks(content);
+    content = normalizeInProgressTasks(content);
+    content = escapeCodeBlockHtml(content);
+    return content;
+  }, [memo.content]);
 
   // Link previews (fetchLinkPreview uses localStorage cache, returns instantly for cached URLs)
   const urls = useMemo(() => extractUrls(memo.content), [memo.content]);
