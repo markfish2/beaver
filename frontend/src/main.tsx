@@ -1,7 +1,27 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { Capacitor } from '@capacitor/core'
 import './index.css'
 import App from './App.tsx'
+
+// Capacitor 原生初始化
+if (Capacitor.isNativePlatform()) {
+  // 动态导入原生插件
+  import('@capacitor/status-bar').then(({ StatusBar, Style }) => {
+    const isDark = document.documentElement.classList.contains('dark');
+    StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light });
+    StatusBar.setBackgroundColor({ color: isDark ? '#111827' : '#ffffff' });
+  }).catch(() => {});
+
+  // 监听主题变化更新状态栏
+  window.addEventListener('theme-change', () => {
+    import('@capacitor/status-bar').then(({ StatusBar, Style }) => {
+      const isDark = document.documentElement.classList.contains('dark');
+      StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light });
+      StatusBar.setBackgroundColor({ color: isDark ? '#111827' : '#ffffff' });
+    }).catch(() => {});
+  });
+}
 
 // 系统暗色模式检测 + 监听系统主题变化
 // iOS PWA standalone 模式下首次加载 prefers-color-scheme 可能返回错误值
