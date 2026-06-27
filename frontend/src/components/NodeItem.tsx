@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useLayoutEffect, useState, useCallback, useMe
 import { useNavigate } from 'react-router-dom';
 import type { Node, Document } from '../api/data-adapter';
 import { getFileUrl, getThumbnailUrl, getNodes, createMemo } from '../api/data-adapter';
+import NodeFileDisplay from './NodeFileDisplay';
 import { ArrowUpRight } from 'lucide-react';
 import { nodesToMemoMarkdown } from '../utils/convertNode';
 import MentionDropdown from './MentionDropdown';
@@ -741,66 +742,33 @@ const NodeItem = memo(({
 
               {/* 图片 - 如果有图片则显示 */}
               {node.content_type === 'image' && node.file_path && (
-                <div className="relative group">
-                  <img
-                    src={getThumbnailUrl(node.file_path)}
-                    alt={node.file_name || '图片'}
-                    className="max-w-full max-h-64 rounded cursor-pointer hover:opacity-90 transition-opacity"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setImageViewer({
-                        isOpen: true,
-                        src: getFileUrl(node.file_path),
-                        alt: node.file_name || '图片'
-                      });
-                    }}
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="gray" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
-                    }}
-                  />
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteFileDialog({ show: true, type: 'image' });
-                    }}
-                    className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-black/50 hover:bg-black/70 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="删除图片"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
+                <NodeFileDisplay
+                  filePath={node.file_path}
+                  fileName={node.file_name}
+                  contentType="image"
+                  onImageClick={(url) => {
+                    setImageViewer({
+                      isOpen: true,
+                      src: url,
+                      alt: node.file_name || '图片'
+                    });
+                  }}
+                  onDelete={() => {
+                    setDeleteFileDialog({ show: true, type: 'image' });
+                  }}
+                />
               )}
 
               {/* 附件 - 如果有附件则显示 */}
               {node.content_type === 'attachment' && node.file_path && (
-                <div className="relative group inline-block">
-                  <a
-                    href={getFileUrl(node.file_path)}
-                    download={node.file_name}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded text-sm text-gray-700 dark:text-gray-300 transition-colors"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                    </svg>
-                    <span className="truncate max-w-xs">{node.file_name || '附件'}</span>
-                  </a>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteFileDialog({ show: true, type: 'attachment' });
-                    }}
-                    className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center bg-red-500 hover:bg-red-600 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="删除附件"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
+                <NodeFileDisplay
+                  filePath={node.file_path}
+                  fileName={node.file_name}
+                  contentType="attachment"
+                  onDelete={() => {
+                    setDeleteFileDialog({ show: true, type: 'attachment' });
+                  }}
+                />
               )}
             </div>
           </div>

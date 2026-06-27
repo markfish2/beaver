@@ -174,24 +174,40 @@ export const batchDeleteNodes = async (ids: string[]) => {
   return p.batchDeleteNodes(ids);
 };
 
-// 文件上传（本地模式下存储在本地文件系统）
+// 本地文件缓存
+const localFileCache = new Map<string, string>();
+
+// 文件上传（本地模式下存储在 Capacitor Filesystem）
 export const uploadFile = async (file: File): Promise<any> => {
-  const p = await getProvider();
   const mode = getMode();
 
   if (mode === 'local') {
-    // 本地模式：将文件转换为 base64 存储
+    // 本地模式：将文件转为 base64 data URL 存储在 localStorage
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => {
-        const base64 = reader.result as string;
+        const dataUrl = reader.result as string;
         const id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+        const ext = file.name.split('.').pop() || 'bin';
+        const fileName = `${id}.${ext}`;
+
+        // 缓存 data URL
+        localFileCache.set(fileName, dataUrl);
+
+        // 持久化到 localStorage（小文件）
+        try {
+          const storedFiles = JSON.parse(localStorage.getItem('localFiles') || '{}');
+          storedFiles[fileName] = dataUrl;
+          localStorage.setItem('localFiles', JSON.stringify(storedFiles));
+        } catch (e) {
+          console.warn('Failed to persist file to localStorage:', e);
+        }
+
         resolve({
-          file_path: `local://${id}`,
+          file_path: fileName,
           file_name: file.name,
           file_type: file.type,
           file_size: file.size,
-          data: base64, // 包含 base64 数据
         });
       };
       reader.onerror = reject;
@@ -204,25 +220,58 @@ export const uploadFile = async (file: File): Promise<any> => {
   return remoteUpload(file);
 };
 
+// 获取文件 URL
 export const getFileUrl = (filePath: string): string => {
-  if (filePath.startsWith('local://')) {
-    // 本地模式：返回 base64 数据（需要从存储中获取）
-    return filePath;
+  if (!filePath) return '';
+
+  // 如果是 base64 数据，直接返回
+  if (filePath.startsWith('data:')) return filePath;
+
+  const mode = getMode();
+  if (mode !== 'local') {
+    return `/uploads/${filePath}`;
   }
-  // 远程模式：返回服务器 URL
-  return `/uploads/${filePath}`;
+
+  // 本地模式：从缓存或 localStorage 获取
+  if (localFileCache.has(filePath)) {
+    return localFileCache.get(filePath)!;
+  }
+
+  // 从 localStorage 加载
+  try {
+    const storedFiles = JSON.parse(localStorage.getItem('localFiles') || '{}');
+    if (storedFiles[filePath]) {
+      localFileCache.set(filePath, storedFiles[filePath]);
+      return storedFiles[filePath];
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  return '';
 };
 
 export const getThumbnailUrl = (filePath: string): string => {
-  if (filePath.startsWith('local://')) {
-    return filePath;
+  if (!filePath) return '';
+  if (filePath.startsWith('data:')) return filePath;
+
+  const mode = getMode();
+  if (mode !== 'local') {
+    const base = filePath.replace(/\.[^.]+$/, '');
+    return `/uploads/thumbs/${base}.jpg`;
   }
-  const base = filePath.replace(/\.[^.]+$/, '');
-  return `/uploads/thumbs/${base}.jpg`;
+
+  // 本地模式：直接返回原图
+  return getFileUrl(filePath);
+};
+
+// 预加载文件 URL
+export const preloadFileUrl = async (filePath: string): Promise<string> => {
+  return getFileUrl(filePath);
 };
 
 // Memo 相关
-export const getMemos = async (page = 1, pageSize = 20, archived = false) => {
+export const getMemos = async (page = 1, pageSize = 20, archived = false, tag?: string, search?: string, publicOnly?: boolean) => {
   const p = await getProvider();
   return p.getMemos(page, pageSize, archived);
 };
@@ -234,14 +283,14 @@ export const getMemo = async (id: string) => {
   return memo;
 };
 
-export const createMemo = async (data: any) => {
+export const createMemo = async (content: string, aiExcluded: boolean = false) => {
   const p = await getProvider();
-  return p.createMemo(data);
+  return p.createMemo({ content, ai_excluded: aiExcluded });
 };
 
-export const updateMemo = async (id: string, data: any) => {
+export const updateMemo = async (id: string, content: string) => {
   const p = await getProvider();
-  return p.updateMemo(id, data);
+  return p.updateMemo(id, { content });
 };
 
 export const deleteMemo = async (id: string) => {
@@ -255,9 +304,9 @@ export const getTodos = async (completed?: boolean) => {
   return p.getTodos(completed);
 };
 
-export const createTodo = async (data: any) => {
+export const createTodo = async (content: string) => {
   const p = await getProvider();
-  return p.createTodo(data);
+  return p.createTodo({ content });
 };
 
 export const updateTodo = async (id: string, data: any) => {
@@ -301,8 +350,28 @@ export const getRecentDocuments = async (limit: number = 20) => {
 export const getDiaryMonths = async () => {
   const mode = getMode();
   if (mode === 'local') {
-    // 本地模式：返回空月份列表
-    return [];
+    // 本地模式：从文档中查找日记类型的文档
+    const p = await getProvider();
+    const docs = await p.getDocuments();
+    // 日记文档标题格式：2026年6月
+    const months: { year: number; month: number; count: number }[] = [];
+    const monthRegex = /(\d{4})年(\d{1,2})月/;
+    for (const doc of docs) {
+      const match = doc.title?.match(monthRegex);
+      if (match) {
+        months.push({
+          year: parseInt(match[1]),
+          month: parseInt(match[2]),
+          count: 1,
+        });
+      }
+    }
+    // 如果没有日记文档，返回当前月
+    if (months.length === 0) {
+      const now = new Date();
+      months.push({ year: now.getFullYear(), month: now.getMonth() + 1, count: 0 });
+    }
+    return months.sort((a, b) => b.year - a.year || b.month - a.month);
   }
   const { getDiaryMonths: remoteGet } = await import('./data');
   return remoteGet();
@@ -317,7 +386,7 @@ export const getMonthlyDiary = async (year: number, month: number) => {
     const title = `${year}年${month}月`;
     let doc = docs.find(d => d.title === title && d.type === 'document');
     if (!doc) {
-      doc = await p.createDocument({ title, type: 'document' });
+      doc = await p.createDocument({ title, type: 'document', diary_date: `${year}-${String(month).padStart(2, '0')}` });
     }
     const nodes = await p.getNodes(doc.id);
     return { document: doc, nodes, is_new: nodes.length === 0 };
@@ -329,8 +398,27 @@ export const getMonthlyDiary = async (year: number, month: number) => {
 export const getOrCreateDayNode = async (year: number, month: number, day: number) => {
   const mode = getMode();
   if (mode === 'local') {
-    // 本地模式简化实现
-    return { node_id: '', is_new: false, child_node: null };
+    // 本地模式：获取或创建当天的日记节点
+    const p = await getProvider();
+    const diaryData = await getMonthlyDiary(year, month);
+    const doc = diaryData.document;
+    const nodes = diaryData.nodes;
+
+    // 查找当天的节点（标题格式：day:N）
+    const dayPrefix = `${day}日`;
+    let dayNode = nodes.find(n => n.content?.startsWith(dayPrefix));
+
+    if (!dayNode) {
+      // 创建当天的节点
+      dayNode = await p.createNode({
+        document_id: doc.id,
+        content: `${dayPrefix}`,
+        sort_order: day,
+      });
+      return { node_id: dayNode.id, is_new: true, child_node: dayNode };
+    }
+
+    return { node_id: dayNode.id, is_new: false, child_node: dayNode };
   }
   const { getOrCreateDayNode: remoteGet } = await import('./data');
   return remoteGet(year, month, day);
@@ -339,7 +427,21 @@ export const getOrCreateDayNode = async (year: number, month: number, day: numbe
 export const getDiaryDayDates = async (year: number, month: number) => {
   const mode = getMode();
   if (mode === 'local') {
-    return [];
+    // 本地模式：从日记节点中提取有内容的日期
+    const p = await getProvider();
+    const diaryData = await getMonthlyDiary(year, month);
+    const nodes = diaryData.nodes;
+
+    // 提取日期：节点内容格式 "X日..."
+    const days: number[] = [];
+    const dayRegex = /^(\d+)日/;
+    for (const node of nodes) {
+      const match = node.content?.match(dayRegex);
+      if (match) {
+        days.push(parseInt(match[1]));
+      }
+    }
+    return [...new Set(days)].sort((a, b) => a - b);
   }
   const { getDiaryDayDates: remoteGet } = await import('./data');
   return remoteGet(year, month);

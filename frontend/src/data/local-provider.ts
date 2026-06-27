@@ -534,9 +534,8 @@ export class LocalProvider implements DataProvider {
   // ─── 附件 ───────────────────────────────────────────────
 
   async uploadFile(file: File): Promise<any> {
-    // 本地模式下，文件存储在本地文件系统
-    // TODO: 实现本地文件存储
-    throw new Error('Not implemented');
+    // 本地模式下的文件上传由 data-adapter 处理
+    throw new Error('Use data-adapter uploadFile instead');
   }
 
   async deleteAttachment(id: string): Promise<void> {

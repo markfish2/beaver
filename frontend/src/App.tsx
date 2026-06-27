@@ -24,7 +24,12 @@ const ConflictResolver = lazy(() => import('./components/ConflictResolver'));
 
 // Mode Selection Gate - checks if mode is selected
 const ModeGate = ({ children }: { children: ReactNode }) => {
-  const { mode, isReady } = useData();
+  const { mode, isReady, showModeSelect } = useData();
+
+  // 显示模式选择页面
+  if (showModeSelect) {
+    return <ModeSelectPage />;
+  }
 
   if (!isReady) {
     return (

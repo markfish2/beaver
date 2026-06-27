@@ -21,7 +21,7 @@ interface MobileTopBarProps {
 
 export default function MobileTopBar({ title, showBack, onBack, onSearch }: MobileTopBarProps) {
   const { user, logout } = useAuth();
-  const { mode, switchMode } = useData();
+  const { mode, switchMode, resetMode } = useData();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
@@ -62,8 +62,7 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
   const handleLogout = () => {
     if (mode === 'local') {
       // 本地模式：切换回模式选择
-      localStorage.removeItem('dataMode');
-      window.location.reload();
+      resetMode();
     } else {
       logout();
     }

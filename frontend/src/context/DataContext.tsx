@@ -18,7 +18,9 @@ interface DataContextType {
   mode: DataMode;
   isReady: boolean;
   error: string | null;
+  showModeSelect: boolean;
   switchMode: (mode: DataMode, serverUrl?: string) => Promise<void>;
+  resetMode: () => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -26,6 +28,10 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 export function DataProviderComponent({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
   const [provider, setProvider] = useState<DataProvider | null>(null);
+  const [showModeSelect, setShowModeSelect] = useState(() => {
+    // 如果没有保存的模式，显示模式选择页面
+    return !localStorage.getItem('dataMode');
+  });
   const [mode, setMode] = useState<DataMode>(() => {
     // 从 localStorage 读取上次使用的模式
     const saved = localStorage.getItem('dataMode');
@@ -69,15 +75,26 @@ export function DataProviderComponent({ children }: { children: ReactNode }) {
   // 切换模式
   const switchMode = useCallback(async (newMode: DataMode, serverUrl?: string) => {
     await initProvider(newMode, serverUrl);
+    setShowModeSelect(false);
   }, [initProvider]);
+
+  // 重置模式（显示模式选择页面）
+  const resetMode = useCallback(() => {
+    localStorage.removeItem('dataMode');
+    setProvider(null);
+    setIsReady(false);
+    setShowModeSelect(true);
+  }, []);
 
   // 初始加载
   useEffect(() => {
-    initProvider(mode);
-  }, []);
+    if (!showModeSelect) {
+      initProvider(mode);
+    }
+  }, [showModeSelect]);
 
   return (
-    <DataContext.Provider value={{ provider, mode, isReady, error, switchMode }}>
+    <DataContext.Provider value={{ provider, mode, isReady, error, showModeSelect, switchMode, resetMode }}>
       {children}
     </DataContext.Provider>
   );
