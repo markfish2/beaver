@@ -5,16 +5,13 @@ import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
 import android.content.Context;
 import android.content.Intent;
-import android.net.Uri;
 import android.widget.RemoteViews;
 
 /**
  * MemoWidget - 桌面小组件
- * 点击后打开 APP 并跳转到 memo 输入页面
+ * 显示待办和日记，点击 + 按钮弹出 memo 输入浮窗
  */
 public class MemoWidget extends AppWidgetProvider {
-
-    private static final String ACTION_OPEN_MEMO = "com.beaver.notes.OPEN_MEMO";
 
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
@@ -24,30 +21,30 @@ public class MemoWidget extends AppWidgetProvider {
     }
 
     static void updateAppWidget(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {
-        // 创建 RemoteViews
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.memo_widget);
 
-        // 创建点击 Intent - 打开 APP 并传递参数
-        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("com.beaver.notes://memo"), context, MainActivity.class);
-        intent.putExtra("openMemo", true);
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-
-        PendingIntent pendingIntent = PendingIntent.getActivity(
+        // 点击 + 按钮打开浮窗
+        Intent addIntent = new Intent(context, MemoInputActivity.class);
+        PendingIntent addPendingIntent = PendingIntent.getActivity(
             context,
             0,
-            intent,
+            addIntent,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
+        views.setOnClickPendingIntent(R.id.btn_add_memo, addPendingIntent);
 
-        // 设置点击事件
-        views.setOnClickPendingIntent(R.id.widget_root, pendingIntent);
+        // 点击整个小组件打开 APP
+        Intent openIntent = new Intent(context, MainActivity.class);
+        openIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent openPendingIntent = PendingIntent.getActivity(
+            context,
+            1,
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        views.setOnClickPendingIntent(R.id.widget_root, openPendingIntent);
 
         // 更新小组件
         appWidgetManager.updateAppWidget(appWidgetId, views);
-    }
-
-    @Override
-    public void onReceive(Context context, Intent intent) {
-        super.onReceive(context, intent);
     }
 }

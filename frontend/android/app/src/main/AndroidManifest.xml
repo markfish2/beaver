@@ -44,6 +44,13 @@
                 android:resource="@xml/memo_widget_info" />
         </receiver>
 
+        <!-- Memo Input 浮窗 -->
+        <activity
+            android:name=".MemoInputActivity"
+            android:theme="@style/MemoInputTheme"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
