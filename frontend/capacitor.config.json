@@ -1,5 +1,9 @@
 {
   "appId": "com.beaver.notes",
   "appName": "Beaver",
-  "webDir": "dist"
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  }
 }
