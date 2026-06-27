@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Copy, Trash2, Plus, Check, Key } from 'lucide-react';
-import { createApiToken, getApiTokens, deleteApiToken } from '../api/data';
-import type { ApiTokenInfo, ApiTokenCreated } from '../api/data';
+import { createApiToken, getApiTokens, deleteApiToken } from '../api/data-adapter';
+import type { ApiTokenInfo, ApiTokenCreated } from '../api/data-adapter';
 
 interface TokenDialogProps {
   onClose: () => void;

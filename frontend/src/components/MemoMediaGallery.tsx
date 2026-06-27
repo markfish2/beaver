@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Image, Paperclip, Link, Download, X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { getMemos, getThumbnailUrl, getFileUrl, fetchLinkPreview, retryLinkPreview, type Memo, type LinkPreview } from '../api/data';
+import { getMemos, getThumbnailUrl, getFileUrl, fetchLinkPreview, retryLinkPreview, type Memo, type LinkPreview } from '../api/data-adapter';
 import LinkPreviewCard from './LinkPreviewCard';
 
 interface MediaItem {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { search } from '../api/data';
-import type { SearchResultItem } from '../api/data';
+import { search } from '../api/data-adapter';
+import type { SearchResultItem } from '../api/data-adapter';
 import { FileText, CalendarDays, StickyNote } from 'lucide-react';
 
 const highlightText = (text: string, query: string) => {

@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Globe } from 'lucide-react';
-import type { LinkPreview } from '../api/data';
+import type { LinkPreview } from '../api/data-adapter';
 
 interface LinkPreviewCardProps {
   preview: LinkPreview | null;

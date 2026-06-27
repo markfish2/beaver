@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChevronLeft, ChevronRight, ChevronDown, MoreHorizontal, CalendarDays, Trash2, Pencil } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getDiaryMonths, getMonthlyDiary, getOrCreateDayNode, getDiaryDayDates, deleteTodo, createNode, updateTodo } from '../api/data';
-import type { Todo } from '../api/data';
+import { getDiaryMonths, getMonthlyDiary, getOrCreateDayNode, getDiaryDayDates, deleteTodo, createNode, updateTodo } from '../api/data-adapter';
+import type { Todo } from '../api/data-adapter';
 import { useDiary } from '../context/DiaryContext';
 import { parseTodoDueDate } from '../utils/todoDueDate';
 import { showToast } from '../utils/toast';

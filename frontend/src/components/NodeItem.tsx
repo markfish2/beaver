@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useLayoutEffect, useState, useCallback, useMemo, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Node, Document } from '../api/data';
-import { getFileUrl, getThumbnailUrl, getNodes, createMemo } from '../api/data';
+import type { Node, Document } from '../api/data-adapter';
+import { getFileUrl, getThumbnailUrl, getNodes, createMemo } from '../api/data-adapter';
 import { ArrowUpRight } from 'lucide-react';
 import { nodesToMemoMarkdown } from '../utils/convertNode';
 import MentionDropdown from './MentionDropdown';

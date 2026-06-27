@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Trash2, RotateCcw, AlertTriangle, FileText, ListTree, StickyNote, Folder, PenTool } from 'lucide-react';
-import { getTrash, restoreFromTrash, permanentDelete, emptyTrash } from '../api/data';
-import type { TrashItem, TrashResponse } from '../api/data';
+import { getTrash, restoreFromTrash, permanentDelete, emptyTrash } from '../api/data-adapter';
+import type { TrashItem, TrashResponse } from '../api/data-adapter';
 
 interface TrashDialogProps {
   onClose: () => void;

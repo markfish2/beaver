@@ -4,7 +4,7 @@ import MobileTopBar from './MobileTopBar';
 import MobileBottomTabBar, { type MobileTab } from './MobileBottomTabBar';
 import MobileToolbar from '../MobileToolbar';
 import { MobileToolbarProvider, useMobileToolbar } from '../../context/MobileToolbarContext';
-import { getMonthlyDiary, getOrCreateDayNode } from '../../api/data';
+import { getMonthlyDiary, getOrCreateDayNode } from '../../api/data-adapter';
 import NewMenuPopup from './NewMenuPopup';
 import AIChatMainView from '../AIChatMainView';
 import AIChatSidebar from '../AIChatSidebar';

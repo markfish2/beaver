@@ -3,6 +3,16 @@ import { checkSetupStatus, getMe, login as apiLogin, setupAdmin as apiSetupAdmin
 import type { User } from '../api/auth';
 import { useNavigate, useLocation } from 'react-router-dom';
 
+// 本地模式默认用户
+const LOCAL_USER: User = {
+  id: 'local-user',
+  username: 'local',
+  theme: 'system',
+  font_family: 'system',
+  font_size: 'medium',
+  memo_columns: 1,
+};
+
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
@@ -22,9 +32,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSetupRequired, setIsSetupRequired] = useState<boolean | null>(null);
-  
+
   const navigate = useNavigate();
   const location = useLocation();
+
+  // 获取当前数据模式
+  const dataMode = localStorage.getItem('dataMode') || 'local';
 
   // Initial check
   useEffect(() => {
@@ -33,6 +46,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const checkStatus = useCallback(async () => {
     setIsLoading(true);
+
+    // 本地模式：自动设置为已认证，无需服务器
+    if (dataMode === 'local') {
+      setUser(LOCAL_USER);
+      setIsAuthenticated(true);
+      setIsSetupRequired(false);
+      setIsLoading(false);
+      return;
+    }
+
+    // 远程模式：检查服务器状态
     try {
       const status = await checkSetupStatus();
       setIsSetupRequired(status.setup_required);
@@ -61,7 +85,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [location.pathname, navigate]);
+  }, [location.pathname, navigate, dataMode]);
 
   const login = useCallback(async (username: string, password: string) => {
     const data = await apiLogin(username, password);

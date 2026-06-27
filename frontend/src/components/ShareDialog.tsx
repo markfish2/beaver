@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Link, Copy, Trash2, Check } from 'lucide-react';
-import { createShare, getShare, deleteShare } from '../api/data';
+import { createShare, getShare, deleteShare } from '../api/data-adapter';
 
 interface ShareDialogProps {
   isOpen: boolean;

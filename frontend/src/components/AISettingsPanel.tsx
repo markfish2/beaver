@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Check, Loader2, Sparkles, Database } from 'lucide-react';
-import { getAIConfigs, createAIConfig, updateAIConfig, deleteAIConfig, testAIConfig, reindexEmbeddings, getReindexStatus, type AIConfig, type AIConfigCreate, type ReindexStatus } from '../api/data';
+import { getAIConfigs, createAIConfig, updateAIConfig, deleteAIConfig, testAIConfig, reindexEmbeddings, getReindexStatus, type AIConfig, type AIConfigCreate, type ReindexStatus } from '../api/data-adapter';
 import { showToast } from '../utils/toast';
 
 // 预设配置 - Chat 模型

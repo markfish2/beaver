@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Eye, EyeOff, Save, Loader2 } from 'lucide-react';
-import { updatePassword } from '../api/data';
+import { updatePassword } from '../api/data-adapter';
 import { showToast } from '../utils/toast';
 
 export default function PasswordPanel() {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import type { Node } from '../api/data';
+import type { Node } from '../api/data-adapter';
 
 interface MindMapModalProps {
   isOpen: boolean;

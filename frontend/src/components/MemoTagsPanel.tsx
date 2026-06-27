@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getMemoTags } from '../api/data';
+import { getMemoTags } from '../api/data-adapter';
 
 interface MemoTagsPanelProps {
   onTagClick: (tag: string) => void;

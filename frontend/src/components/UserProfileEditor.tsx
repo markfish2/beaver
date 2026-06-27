@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { Camera, Save, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { updateProfile } from '../api/auth';
-import { uploadFile } from '../api/data';
+import { uploadFile } from '../api/data-adapter';
 import { showToast } from '../utils/toast';
 
 export default function UserProfileEditor() {

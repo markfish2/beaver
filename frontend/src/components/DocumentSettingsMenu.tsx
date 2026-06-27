@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Settings2, Download, Share2, Palette, X } from 'lucide-react';
-import type { Node } from '../api/data';
+import type { Node } from '../api/data-adapter';
 import { FontSettingsPanel, useFontSettings } from './FontSettings';
 import ShareDialog from './ShareDialog';
 

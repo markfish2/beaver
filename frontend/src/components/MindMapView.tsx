@@ -2,8 +2,8 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Layers, ChevronDown } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import type { Node } from '../api/data';
-import { uploadFile, getFileUrl, getThumbnailUrl } from '../api/data';
+import type { Node } from '../api/data-adapter';
+import { uploadFile, getFileUrl, getThumbnailUrl } from '../api/data-adapter';
 
 interface MindMapViewProps {
   nodes: Node[];

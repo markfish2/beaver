@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import type { Node } from '../api/data';
+import type { Node } from '../api/data-adapter';
 
 interface TocItem {
   id: string;

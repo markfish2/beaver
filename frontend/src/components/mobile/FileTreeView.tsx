@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, FileText, Folder, ListTree, PenTool, MoreHorizontal, Star, Copy, Trash2, Pencil } from 'lucide-react';
 import { useDocuments } from '../../context/DocumentContext';
-import { deleteDocument, updateDocument, copyDocument } from '../../api/data';
+import { deleteDocument, updateDocument, copyDocument } from '../../api/data-adapter';
 import DeleteConfirmDialog from '../DeleteConfirmDialog';
-import type { Document } from '../../api/data';
+import type { Document } from '../../api/data-adapter';
 
 interface FileTreeViewProps {
   starredOnly?: boolean;

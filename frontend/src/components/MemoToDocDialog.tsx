@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react';
 import { X, ChevronRight, ChevronDown, Folder, FileText } from 'lucide-react';
 import { useDocuments } from '../context/DocumentContext';
-import { createDocument, createNodesBatch } from '../api/data';
+import { createDocument, createNodesBatch } from '../api/data-adapter';
 import { parseMemoToNodes } from '../utils/convertMemo';
-import type { Document } from '../api/data';
+import type { Document } from '../api/data-adapter';
 
 interface MemoToDocDialogProps {
   content: string;

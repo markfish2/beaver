@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { getSharedDocument } from '../api/data';
-import type { Node } from '../api/data';
+import { getSharedDocument } from '../api/data-adapter';
+import type { Node } from '../api/data-adapter';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 
 const buildTree = (nodes: Node[]): (Node & { children: Node[] })[] => {

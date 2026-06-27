@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle, Cloud, Laptop } from 'lucide-react';
 import { onConflict, type ConflictInfo } from '../utils/conflictResolver';
-import { updateDocument, updateNode } from '../api/data';
+import { updateDocument, updateNode } from '../api/data-adapter';
 import { useDocuments } from '../context/DocumentContext';
 
 export default function ConflictResolver() {

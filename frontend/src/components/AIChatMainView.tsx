@@ -8,7 +8,7 @@ import rehypeRaw from 'rehype-raw';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { preserveCodeBlocks } from '../utils/preserveCodeBlocks';
-import { askAI, getAIConversation, createMemo, createDocument, createNode, getSkills, Skill } from '../api/data';
+import { askAI, getAIConversation, createMemo, createDocument, createNode, getSkills, Skill } from '../api/data-adapter';
 import MermaidBlock from './MermaidBlock';
 import { useDocuments } from '../context/DocumentContext';
 import { useAuth } from '../context/AuthContext';
