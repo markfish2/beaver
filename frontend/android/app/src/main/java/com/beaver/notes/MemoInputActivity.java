@@ -63,39 +63,15 @@ public class MemoInputActivity extends Activity {
             return;
         }
 
-        // 尝试从 Capacitor Preferences 读取服务器地址和 token
-        String serverUrl = null;
-        String token = null;
+        // 从 Capacitor Preferences 读取服务器地址和 token
+        SharedPreferences prefs = getSharedPreferences("CapacitorPreferences", Context.MODE_PRIVATE);
+        String serverUrl = prefs.getString("beaver_server_url", "");
+        String token = prefs.getString("token", "");
 
-        // 方式1: 从 capacitor_storage 读取 (Capacitor Preferences 插件)
-        try {
-            SharedPreferences capacitorPrefs = getSharedPreferences("capacitor_storage", Context.MODE_PRIVATE);
-            serverUrl = capacitorPrefs.getString("beaver_server_url", "");
-            token = capacitorPrefs.getString("token", "");
-            Log.d(TAG, "Read from capacitor_storage: serverUrl=" + serverUrl + ", token=" + (token != null && !token.isEmpty() ? "exists" : "empty"));
-        } catch (Exception e) {
-            Log.e(TAG, "Error reading capacitor_storage", e);
-        }
-
-        // 方式2: 如果 capacitor_storage 没有，尝试 WebView localStorage
-        if (serverUrl == null || serverUrl.isEmpty() || token == null || token.isEmpty()) {
-            try {
-                SharedPreferences webViewPrefs = getSharedPreferences("webview_localStorage", Context.MODE_PRIVATE);
-                if (serverUrl == null || serverUrl.isEmpty()) {
-                    serverUrl = webViewPrefs.getString("beaver_server_url", "");
-                }
-                if (token == null || token.isEmpty()) {
-                    token = webViewPrefs.getString("token", "");
-                }
-                Log.d(TAG, "Read from webview localStorage: serverUrl=" + serverUrl + ", token=" + (token != null && !token.isEmpty() ? "exists" : "empty"));
-            } catch (Exception e) {
-                Log.e(TAG, "Error reading webview localStorage", e);
-            }
-        }
+        Log.d(TAG, "serverUrl=" + serverUrl + ", token=" + (token != null && !token.isEmpty() ? "exists" : "empty"));
 
         if (serverUrl == null || serverUrl.isEmpty() || token == null || token.isEmpty()) {
             Toast.makeText(this, "请先在 APP 中登录", Toast.LENGTH_LONG).show();
-            Log.e(TAG, "Missing serverUrl or token");
             return;
         }
 
@@ -114,8 +90,8 @@ public class MemoInputActivity extends Activity {
                     if (success) {
                         Toast.makeText(MemoInputActivity.this, "已发布", Toast.LENGTH_SHORT).show();
                         // 通知小组件更新
-                        Intent updateIntent = new Intent("com.beaver.notes.UPDATE_WIDGET");
-                        updateIntent.setClass(MemoInputActivity.this, MemoWidget.class);
+                        Intent updateIntent = new Intent(MemoInputActivity.this, MemoWidget.class);
+                        updateIntent.setAction("com.beaver.notes.UPDATE_WIDGET");
                         sendBroadcast(updateIntent);
                         finish();
                     } else {
@@ -127,7 +103,7 @@ public class MemoInputActivity extends Activity {
             } catch (Exception e) {
                 Log.e(TAG, "Post memo error", e);
                 runOnUiThread(() -> {
-                    Toast.makeText(MemoInputActivity.this, "网络错误: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MemoInputActivity.this, "网络错误", Toast.LENGTH_SHORT).show();
                     btnSubmit.setEnabled(true);
                     btnSubmit.setText("发布");
                 });
@@ -163,7 +139,6 @@ public class MemoInputActivity extends Activity {
                 .replace("\r", "\\r")
                 .replace("\t", "\\t");
             String json = "{\"content\":\"" + escapedContent + "\"}";
-            Log.d(TAG, "Request body: " + json);
 
             OutputStream os = conn.getOutputStream();
             os.write(json.getBytes("UTF-8"));
@@ -177,14 +152,18 @@ public class MemoInputActivity extends Activity {
                 return true;
             } else {
                 // 读取错误响应
-                BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getErrorStream()));
-                StringBuilder sb = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    sb.append(line);
+                try {
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getErrorStream()));
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        sb.append(line);
+                    }
+                    reader.close();
+                    Log.e(TAG, "Error response: " + sb.toString());
+                } catch (Exception e) {
+                    // ignore
                 }
-                reader.close();
-                Log.e(TAG, "Error response: " + sb.toString());
                 return false;
             }
         } catch (Exception e) {

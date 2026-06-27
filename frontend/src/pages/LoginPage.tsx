@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { setServerUrl, getServerUrl } from '../api/client';
+import { Preferences } from '@capacitor/preferences';
+import { Capacitor } from '@capacitor/core';
 
 const LoginPage = () => {
   const [serverAddress, setServerAddress] = useState(() => getServerUrl() || '');
@@ -48,6 +50,12 @@ const LoginPage = () => {
 
     setServerUrl(url);
     setServerAddress(url);
+
+    // 同步到原生 Preferences（小组件使用）
+    if (Capacitor.isNativePlatform()) {
+      Preferences.set({ key: 'beaver_server_url', value: url }).catch(() => {});
+    }
+
     setStep('login');
   };
 

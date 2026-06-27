@@ -30,11 +30,9 @@ public class MemoWidget extends AppWidgetProvider {
 
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
-        // 先更新 UI，然后异步获取数据
         for (int appWidgetId : appWidgetIds) {
             updateAppWidget(context, appWidgetManager, appWidgetId);
         }
-        // 异步获取数据并更新
         fetchAndUpdateWidget(context);
     }
 
@@ -49,10 +47,10 @@ public class MemoWidget extends AppWidgetProvider {
     static void updateAppWidget(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.memo_widget);
 
-        // 从 SharedPreferences 读取缓存数据
-        SharedPreferences prefs = context.getSharedPreferences("widget_data", Context.MODE_PRIVATE);
-        String todosJson = prefs.getString("todos", "[]");
-        String diaryContent = prefs.getString("diary", "");
+        // 从 Capacitor Preferences 读取缓存数据
+        SharedPreferences prefs = getCapacitorPreferences(context);
+        String todosJson = prefs.getString("widget_todos", "[]");
+        String diaryContent = prefs.getString("widget_diary", "");
 
         // 更新待办列表
         try {
@@ -67,15 +65,13 @@ public class MemoWidget extends AppWidgetProvider {
                 for (int i = 0; i < maxShow; i++) {
                     JSONObject todo = todos.getJSONObject(i);
                     String content = todo.getString("content");
-                    boolean completed = todo.getBoolean("is_completed");
+                    boolean completed = todo.optBoolean("is_completed", false);
 
                     RemoteViews todoView = new RemoteViews(context.getPackageName(), R.layout.widget_todo_item);
-                    todoView.setTextViewText(R.id.todo_text, content);
+                    todoView.setTextViewText(R.id.todo_text, (completed ? "✓ " : "· ") + content);
                     if (completed) {
-                        todoView.setInt(R.id.todo_text, "setPaintFlags", android.graphics.Paint.STRIKE_THRU_TEXT_FLAG);
                         todoView.setTextColor(R.id.todo_text, 0xFF9CA3AF);
                     } else {
-                        todoView.setInt(R.id.todo_text, "setPaintFlags", 0);
                         todoView.setTextColor(R.id.todo_text, 0xFF1F2937);
                     }
                     views.addView(R.id.todos_container, todoView);
@@ -136,37 +132,21 @@ public class MemoWidget extends AppWidgetProvider {
     }
 
     /**
+     * 获取 Capacitor Preferences 的 SharedPreferences
+     */
+    static SharedPreferences getCapacitorPreferences(Context context) {
+        return context.getSharedPreferences("CapacitorPreferences", Context.MODE_PRIVATE);
+    }
+
+    /**
      * 异步获取待办和日记数据
      */
     static void fetchAndUpdateWidget(Context context) {
         executor.execute(() -> {
             try {
-                String serverUrl = null;
-                String token = null;
-
-                // 方式1: 从 capacitor_storage 读取
-                try {
-                    SharedPreferences prefs = context.getSharedPreferences("capacitor_storage", Context.MODE_PRIVATE);
-                    serverUrl = prefs.getString("beaver_server_url", "");
-                    token = prefs.getString("token", "");
-                } catch (Exception e) {
-                    // ignore
-                }
-
-                // 方式2: 从 webview localStorage 读取
-                if (serverUrl == null || serverUrl.isEmpty() || token == null || token.isEmpty()) {
-                    try {
-                        SharedPreferences prefs = context.getSharedPreferences("webview_localStorage", Context.MODE_PRIVATE);
-                        if (serverUrl == null || serverUrl.isEmpty()) {
-                            serverUrl = prefs.getString("beaver_server_url", "");
-                        }
-                        if (token == null || token.isEmpty()) {
-                            token = prefs.getString("token", "");
-                        }
-                    } catch (Exception e) {
-                        // ignore
-                    }
-                }
+                SharedPreferences prefs = getCapacitorPreferences(context);
+                String serverUrl = prefs.getString("beaver_server_url", "");
+                String token = prefs.getString("token", "");
 
                 if (serverUrl == null || serverUrl.isEmpty() || token == null || token.isEmpty()) {
                     return;
@@ -177,11 +157,14 @@ public class MemoWidget extends AppWidgetProvider {
                 // 获取日记摘要
                 String diarySummary = fetchDiarySummary(serverUrl, token);
 
-                // 保存到 SharedPreferences
-                SharedPreferences widgetPrefs = context.getSharedPreferences("widget_data", Context.MODE_PRIVATE);
-                SharedPreferences.Editor editor = widgetPrefs.edit();
-                editor.putString("todos", todosJson != null ? todosJson : "[]");
-                editor.putString("diary", diarySummary != null ? diarySummary : "");
+                // 保存到 Preferences
+                SharedPreferences.Editor editor = prefs.edit();
+                if (todosJson != null) {
+                    editor.putString("widget_todos", todosJson);
+                }
+                if (diarySummary != null) {
+                    editor.putString("widget_diary", diarySummary);
+                }
                 editor.apply();
 
                 // 更新所有小组件
@@ -198,17 +181,18 @@ public class MemoWidget extends AppWidgetProvider {
     }
 
     private static String fetchUrl(String urlStr, String token) {
+        HttpURLConnection conn = null;
         try {
             URL url = new URL(urlStr);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
             conn.setRequestProperty("Authorization", "Bearer " + token);
             conn.setConnectTimeout(5000);
             conn.setReadTimeout(5000);
+            conn.setInstanceFollowRedirects(true);
 
             int responseCode = conn.getResponseCode();
             if (responseCode != 200) {
-                conn.disconnect();
                 return null;
             }
 
@@ -219,17 +203,19 @@ public class MemoWidget extends AppWidgetProvider {
                 sb.append(line);
             }
             reader.close();
-            conn.disconnect();
 
             return sb.toString();
         } catch (Exception e) {
             return null;
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
         }
     }
 
     private static String fetchDiarySummary(String serverUrl, String token) {
         try {
-            // 获取今天的日记
             java.util.Calendar cal = java.util.Calendar.getInstance();
             int year = cal.get(java.util.Calendar.YEAR);
             int month = cal.get(java.util.Calendar.MONTH) + 1;
@@ -243,7 +229,6 @@ public class MemoWidget extends AppWidgetProvider {
             JSONObject document = diary.getJSONObject("document");
             String title = document.getString("title");
 
-            // 返回简短摘要
             return title + " · " + day + "日";
         } catch (Exception e) {
             return null;

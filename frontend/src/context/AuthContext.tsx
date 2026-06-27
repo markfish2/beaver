@@ -2,8 +2,9 @@ import { createContext, useContext, useState, useEffect, useMemo, useCallback, R
 import { checkSetupStatus, getMe, login as apiLogin, setupAdmin as apiSetupAdmin } from '../api/auth';
 import type { User } from '../api/auth';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getServerUrl } from '../api/client';
-import { syncAuthToWidget } from '../utils/widgetSync';
+import { getServerUrl, setServerUrl } from '../api/client';
+import { Preferences } from '@capacitor/preferences';
+import { Capacitor } from '@capacitor/core';
 
 interface AuthContextType {
   user: User | null;
@@ -71,7 +72,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     } catch (error) {
       console.error('Failed to check status', error);
-      // 服务器连接失败，跳转登录页重新配置
       setIsAuthenticated(false);
       if (location.pathname !== '/login') {
         navigate('/login');
@@ -88,10 +88,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(userData);
     setIsAuthenticated(true);
 
-    // 同步到原生小组件
+    // 同步到原生 Preferences（小组件和浮窗使用）
     const serverUrl = getServerUrl();
-    if (serverUrl) {
-      syncAuthToWidget(serverUrl, data.access_token).catch(() => {});
+    if (serverUrl && Capacitor.isNativePlatform()) {
+      await Preferences.set({ key: 'beaver_server_url', value: serverUrl });
+      await Preferences.set({ key: 'token', value: data.access_token });
+      console.log('Auth synced to Preferences');
     }
 
     navigate('/');
@@ -103,10 +105,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsSetupRequired(false);
   }, [login, navigate]);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
     localStorage.removeItem('token');
     setUser(null);
     setIsAuthenticated(false);
+
+    // 清除原生 Preferences
+    if (Capacitor.isNativePlatform()) {
+      await Preferences.remove({ key: 'token' });
+    }
+
     navigate('/login');
   }, [navigate]);
 

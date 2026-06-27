@@ -11,9 +11,6 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        // 注册小组件数据插件
-        registerPlugin(WidgetDataPlugin.class);
-
         super.onCreate(savedInstanceState);
         handleIntent(getIntent());
     }
