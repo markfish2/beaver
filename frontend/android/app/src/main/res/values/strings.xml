@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Beaver</string>
+    <string name="title_activity_main">Beaver</string>
+    <string name="package_name">com.beaver.notes</string>
+    <string name="custom_url_scheme">com.beaver.notes</string>
+</resources>
