@@ -4,8 +4,22 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 const TIMEOUT = 15000;
 
+// 服务器地址管理
+const SERVER_URL_KEY = 'beaver_server_url';
+
+export function getServerUrl(): string {
+  return localStorage.getItem(SERVER_URL_KEY) || '';
+}
+
+export function setServerUrl(url: string): void {
+  localStorage.setItem(SERVER_URL_KEY, url);
+  // 更新 axios baseURL
+  api.defaults.baseURL = `${url}/api`;
+}
+
+// 创建 axios 实例
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: getServerUrl() ? `${getServerUrl()}/api` : '/api',
   timeout: TIMEOUT,
 });
 

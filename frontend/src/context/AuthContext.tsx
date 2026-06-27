@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useMemo, useCallback, R
 import { checkSetupStatus, getMe, login as apiLogin, setupAdmin as apiSetupAdmin } from '../api/auth';
 import type { User } from '../api/auth';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { getServerUrl } from '../api/client';
 
 interface AuthContextType {
   user: User | null;
@@ -33,6 +34,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const checkStatus = useCallback(async () => {
     setIsLoading(true);
+
+    // 没有配置服务器地址，直接跳转登录页
+    if (!getServerUrl()) {
+      setIsAuthenticated(false);
+      setIsLoading(false);
+      if (location.pathname !== '/login') {
+        navigate('/login');
+      }
+      return;
+    }
+
     try {
       const status = await checkSetupStatus();
       setIsSetupRequired(status.setup_required);
@@ -58,6 +70,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     } catch (error) {
       console.error('Failed to check status', error);
+      // 服务器连接失败，跳转登录页重新配置
+      setIsAuthenticated(false);
+      if (location.pathname !== '/login') {
+        navigate('/login');
+      }
     } finally {
       setIsLoading(false);
     }
