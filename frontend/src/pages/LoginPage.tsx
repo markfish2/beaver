@@ -40,28 +40,11 @@ const LoginPage = () => {
       url = 'https://' + url;
     }
 
+    // 强制使用 https（避免 Mixed Content 错误）
+    url = url.replace('http://', 'https://');
+
     // 移除末尾的 /
     url = url.replace(/\/+$/, '');
-
-    // 验证服务器是否可达
-    try {
-      const testUrl = `${url}/api/health`;
-      const response = await fetch(testUrl, {
-        method: 'GET',
-        signal: AbortSignal.timeout(10000),
-      });
-      if (!response.ok) {
-        setError('服务器返回错误，请检查地址');
-        return;
-      }
-    } catch (err: any) {
-      if (err.name === 'TimeoutError' || err.name === 'AbortError') {
-        setError('连接超时，请检查地址和网络');
-      } else {
-        setError('无法连接到服务器，请检查地址');
-      }
-      return;
-    }
 
     setServerUrl(url);
     setServerAddress(url);
