@@ -11,6 +11,7 @@ import type { DataProvider, DataMode } from '../data/provider';
 import { LocalProvider } from '../data/local-provider';
 import { RemoteProvider } from '../data/remote-provider';
 import { useAuth } from './AuthContext';
+import { setDataProvier } from '../api/data-adapter';
 
 interface DataContextType {
   provider: DataProvider | null;
@@ -48,6 +49,10 @@ export function DataProviderComponent({ children }: { children: ReactNode }) {
       }
 
       await newProvider.initialize();
+
+      // 同步设置到 data-adapter
+      setDataProvier(newProvider);
+
       setProvider(newProvider);
       setMode(targetMode);
       setIsReady(true);

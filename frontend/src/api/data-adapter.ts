@@ -12,25 +12,45 @@ import { RemoteProvider } from '../data/remote-provider';
 
 // 全局数据提供者实例
 let provider: DataProvider | null = null;
+let providerPromise: Promise<DataProvider> | null = null;
 
 // 获取当前模式
-function getMode(): string {
+export function getMode(): string {
   return localStorage.getItem('dataMode') || 'local';
+}
+
+// 设置 provider（由 DataContext 调用）
+export function setDataProvier(p: DataProvider): void {
+  provider = p;
+  providerPromise = null; // 清除等待 promise
+}
+
+// 获取当前 provider
+export function getDataProvider(): DataProvider | null {
+  return provider;
 }
 
 // 获取或初始化提供者
 async function getProvider(): Promise<DataProvider> {
+  // 如果已有 provider，直接返回
   if (provider) return provider;
 
-  const mode = getMode();
-  if (mode === 'local') {
-    provider = new LocalProvider();
-  } else {
-    provider = new RemoteProvider();
-  }
+  // 如果正在初始化，等待完成
+  if (providerPromise) return providerPromise;
 
-  await provider.initialize();
-  return provider;
+  // 创建新的 provider
+  const mode = getMode();
+  providerPromise = (async () => {
+    if (mode === 'local') {
+      provider = new LocalProvider();
+    } else {
+      provider = new RemoteProvider();
+    }
+    await provider.initialize();
+    return provider;
+  })();
+
+  return providerPromise;
 }
 
 // 初始化适配器（应用启动时调用）
