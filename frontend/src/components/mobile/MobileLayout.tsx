@@ -64,6 +64,21 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     return () => window.removeEventListener('keyboard-change', handler);
   }, []);
 
+  // 监听桌面小组件打开 memo 输入框事件
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.fromWidget) {
+        // 切换到 memos tab
+        setActiveTab('memos');
+        // 导航到首页
+        navigate('/', { replace: true });
+      }
+    };
+    window.addEventListener('openMemoInput', handler);
+    return () => window.removeEventListener('openMemoInput', handler);
+  }, [navigate]);
+
   // Diary state
   const [diaryDocId, setDiaryDocId] = useState<string | null>(null);
 

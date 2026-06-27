@@ -1,6 +1,7 @@
 import { Search, FileText, ChevronDown, Plus, Trash, Star, LogOut, ChevronLeft, ChevronRight, Folder, Edit2, CalendarDays, MoreHorizontal, Copy, ArrowUpRight, ListTree, FolderPlus, FilePlus, Move, Frame, StickyNote, Square, Key, Clock, Lock, Sparkles, User } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createDocument, deleteDocument, updateDocument, copyDocument, getNodes, createMemo, uploadFile, search as apiSearch, getTodos, createTodo, updateTodo, getMonthlyDiary, getOrCreateDayNode } from '../api/data';
+import { getServerUrl } from '../api/client';
 import type { Document as DocType, SearchResultItem, Todo } from '../api/data';
 import { createExcalidrawDocument, getExcalidrawData, getExcalidrawDataFresh } from '../api/excalidraw';
 import { exportToBlob } from '@excalidraw/excalidraw';
@@ -898,7 +899,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           }`}
         >
           {user?.avatar_path ? (
-            <img src={user.avatar_path} alt="avatar" className="w-full h-full object-cover" />
+            <img src={user.avatar_path.startsWith('http') ? user.avatar_path : `${getServerUrl()}${user.avatar_path}`} alt="avatar" className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
               <User className="w-4 h-4 text-gray-500 dark:text-gray-400" />
