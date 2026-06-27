@@ -3,6 +3,7 @@ import { checkSetupStatus, getMe, login as apiLogin, setupAdmin as apiSetupAdmin
 import type { User } from '../api/auth';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getServerUrl } from '../api/client';
+import { syncAuthToWidget } from '../utils/widgetSync';
 
 interface AuthContextType {
   user: User | null;
@@ -86,6 +87,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const userData = await getMe();
     setUser(userData);
     setIsAuthenticated(true);
+
+    // 同步到原生小组件
+    const serverUrl = getServerUrl();
+    if (serverUrl) {
+      syncAuthToWidget(serverUrl, data.access_token).catch(() => {});
+    }
+
     navigate('/');
   }, [navigate]);
 

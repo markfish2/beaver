@@ -11,18 +11,17 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // 注册小组件数据插件
+        registerPlugin(WidgetDataPlugin.class);
+
         super.onCreate(savedInstanceState);
         handleIntent(getIntent());
-
-        // 更新桌面小组件数据
-        updateWidget();
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         handleIntent(intent);
-        updateWidget();
     }
 
     private void handleIntent(Intent intent) {
@@ -36,12 +35,5 @@ public class MainActivity extends BridgeActivity {
                 getBridge().getWebView().evaluateJavascript(js, null);
             });
         }
-    }
-
-    private void updateWidget() {
-        // 触发小组件更新
-        Intent updateIntent = new Intent(this, MemoWidget.class);
-        updateIntent.setAction("com.beaver.notes.UPDATE_WIDGET");
-        sendBroadcast(updateIntent);
     }
 }

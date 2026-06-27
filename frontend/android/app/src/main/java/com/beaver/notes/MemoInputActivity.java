@@ -5,7 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.view.View;
+import android.util.Log;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
@@ -25,6 +25,7 @@ import java.util.concurrent.Executors;
  */
 public class MemoInputActivity extends Activity {
 
+    private static final String TAG = "MemoInputActivity";
     private EditText etMemoContent;
     private Button btnCancel;
     private Button btnSubmit;
@@ -34,7 +35,6 @@ public class MemoInputActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // 设置浮窗样式
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         setContentView(R.layout.activity_memo_input);
 
@@ -48,15 +48,11 @@ public class MemoInputActivity extends Activity {
             window.setAttributes(params);
         }
 
-        // 初始化控件
         etMemoContent = findViewById(R.id.et_memo_content);
         btnCancel = findViewById(R.id.btn_cancel);
         btnSubmit = findViewById(R.id.btn_submit);
 
-        // 取消按钮
         btnCancel.setOnClickListener(v -> finish());
-
-        // 提交按钮
         btnSubmit.setOnClickListener(v -> submitMemo());
     }
 
@@ -67,28 +63,60 @@ public class MemoInputActivity extends Activity {
             return;
         }
 
-        // 获取服务器地址和 token
-        SharedPreferences prefs = getSharedPreferences("capacitor_storage", Context.MODE_PRIVATE);
-        String serverUrl = prefs.getString("beaver_server_url", "");
-        String token = prefs.getString("token", "");
+        // 尝试从 Capacitor Preferences 读取服务器地址和 token
+        String serverUrl = null;
+        String token = null;
 
-        if (serverUrl.isEmpty() || token.isEmpty()) {
-            Toast.makeText(this, "请先登录", Toast.LENGTH_SHORT).show();
-            finish();
+        // 方式1: 从 capacitor_storage 读取 (Capacitor Preferences 插件)
+        try {
+            SharedPreferences capacitorPrefs = getSharedPreferences("capacitor_storage", Context.MODE_PRIVATE);
+            serverUrl = capacitorPrefs.getString("beaver_server_url", "");
+            token = capacitorPrefs.getString("token", "");
+            Log.d(TAG, "Read from capacitor_storage: serverUrl=" + serverUrl + ", token=" + (token != null && !token.isEmpty() ? "exists" : "empty"));
+        } catch (Exception e) {
+            Log.e(TAG, "Error reading capacitor_storage", e);
+        }
+
+        // 方式2: 如果 capacitor_storage 没有，尝试 WebView localStorage
+        if (serverUrl == null || serverUrl.isEmpty() || token == null || token.isEmpty()) {
+            try {
+                SharedPreferences webViewPrefs = getSharedPreferences("webview_localStorage", Context.MODE_PRIVATE);
+                if (serverUrl == null || serverUrl.isEmpty()) {
+                    serverUrl = webViewPrefs.getString("beaver_server_url", "");
+                }
+                if (token == null || token.isEmpty()) {
+                    token = webViewPrefs.getString("token", "");
+                }
+                Log.d(TAG, "Read from webview localStorage: serverUrl=" + serverUrl + ", token=" + (token != null && !token.isEmpty() ? "exists" : "empty"));
+            } catch (Exception e) {
+                Log.e(TAG, "Error reading webview localStorage", e);
+            }
+        }
+
+        if (serverUrl == null || serverUrl.isEmpty() || token == null || token.isEmpty()) {
+            Toast.makeText(this, "请先在 APP 中登录", Toast.LENGTH_LONG).show();
+            Log.e(TAG, "Missing serverUrl or token");
             return;
         }
 
-        // 禁用按钮，显示提交中
+        // 禁用按钮
         btnSubmit.setEnabled(false);
         btnSubmit.setText("提交中...");
 
         // 异步提交
+        String finalServerUrl = serverUrl;
+        String finalToken = token;
         executor.execute(() -> {
             try {
-                boolean success = postMemo(serverUrl, token, content);
+                boolean success = postMemo(finalServerUrl, finalToken, content);
+                Log.d(TAG, "Post memo result: " + success);
                 runOnUiThread(() -> {
                     if (success) {
                         Toast.makeText(MemoInputActivity.this, "已发布", Toast.LENGTH_SHORT).show();
+                        // 通知小组件更新
+                        Intent updateIntent = new Intent("com.beaver.notes.UPDATE_WIDGET");
+                        updateIntent.setClass(MemoInputActivity.this, MemoWidget.class);
+                        sendBroadcast(updateIntent);
                         finish();
                     } else {
                         Toast.makeText(MemoInputActivity.this, "发布失败", Toast.LENGTH_SHORT).show();
@@ -97,8 +125,9 @@ public class MemoInputActivity extends Activity {
                     }
                 });
             } catch (Exception e) {
+                Log.e(TAG, "Post memo error", e);
                 runOnUiThread(() -> {
-                    Toast.makeText(MemoInputActivity.this, "网络错误", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MemoInputActivity.this, "网络错误: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                     btnSubmit.setEnabled(true);
                     btnSubmit.setText("发布");
                 });
@@ -107,31 +136,64 @@ public class MemoInputActivity extends Activity {
     }
 
     private boolean postMemo(String serverUrl, String token, String content) {
+        HttpURLConnection conn = null;
         try {
-            URL url = new URL(serverUrl + "/api/memos/");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            // 确保 URL 格式正确
+            if (!serverUrl.startsWith("http")) {
+                serverUrl = "https://" + serverUrl;
+            }
+            String urlStr = serverUrl + "/api/memos/";
+            Log.d(TAG, "Posting to: " + urlStr);
+
+            URL url = new URL(urlStr);
+            conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json");
             conn.setRequestProperty("Authorization", "Bearer " + token);
             conn.setDoOutput(true);
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout(10000);
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(15000);
+            conn.setInstanceFollowRedirects(true);
 
             // 构建 JSON
-            String json = "{\"content\":\"" + content.replace("\"", "\\\"").replace("\n", "\\n") + "\"}";
+            String escapedContent = content
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
+            String json = "{\"content\":\"" + escapedContent + "\"}";
+            Log.d(TAG, "Request body: " + json);
 
             OutputStream os = conn.getOutputStream();
-            os.write(json.getBytes());
+            os.write(json.getBytes("UTF-8"));
             os.flush();
             os.close();
 
             int responseCode = conn.getResponseCode();
-            conn.disconnect();
+            Log.d(TAG, "Response code: " + responseCode);
 
-            return responseCode >= 200 && responseCode < 300;
+            if (responseCode >= 200 && responseCode < 300) {
+                return true;
+            } else {
+                // 读取错误响应
+                BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getErrorStream()));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    sb.append(line);
+                }
+                reader.close();
+                Log.e(TAG, "Error response: " + sb.toString());
+                return false;
+            }
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, "HTTP error", e);
             return false;
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
         }
     }
 

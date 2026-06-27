@@ -49,6 +49,8 @@
             android:name=".MemoInputActivity"
             android:theme="@style/MemoInputTheme"
             android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleInstance"
             android:exported="false" />
 
         <provider

@@ -141,11 +141,34 @@ public class MemoWidget extends AppWidgetProvider {
     static void fetchAndUpdateWidget(Context context) {
         executor.execute(() -> {
             try {
-                SharedPreferences prefs = context.getSharedPreferences("capacitor_storage", Context.MODE_PRIVATE);
-                String serverUrl = prefs.getString("beaver_server_url", "");
-                String token = prefs.getString("token", "");
+                String serverUrl = null;
+                String token = null;
 
-                if (serverUrl.isEmpty() || token.isEmpty()) {
+                // 方式1: 从 capacitor_storage 读取
+                try {
+                    SharedPreferences prefs = context.getSharedPreferences("capacitor_storage", Context.MODE_PRIVATE);
+                    serverUrl = prefs.getString("beaver_server_url", "");
+                    token = prefs.getString("token", "");
+                } catch (Exception e) {
+                    // ignore
+                }
+
+                // 方式2: 从 webview localStorage 读取
+                if (serverUrl == null || serverUrl.isEmpty() || token == null || token.isEmpty()) {
+                    try {
+                        SharedPreferences prefs = context.getSharedPreferences("webview_localStorage", Context.MODE_PRIVATE);
+                        if (serverUrl == null || serverUrl.isEmpty()) {
+                            serverUrl = prefs.getString("beaver_server_url", "");
+                        }
+                        if (token == null || token.isEmpty()) {
+                            token = prefs.getString("token", "");
+                        }
+                    } catch (Exception e) {
+                        // ignore
+                    }
+                }
+
+                if (serverUrl == null || serverUrl.isEmpty() || token == null || token.isEmpty()) {
                     return;
                 }
 
