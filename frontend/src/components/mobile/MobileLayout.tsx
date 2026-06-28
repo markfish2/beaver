@@ -178,7 +178,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     }
   };
 
-  const showTabBar = (!isEditing || activeTab === 'diary') && !keyboardOpen;
+  const showTabBar = (!isEditing || activeTab === 'diary') && !keyboardOpen && activeTab !== 'ai';
 
 
   return (
@@ -224,7 +224,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
             <FileTreeView />
           </Suspense>
         ) : activeTab === 'ai' ? (
-          // AI 问答
+          // AI 问答 - 全屏
           <div className="flex-1 flex flex-col overflow-hidden">
             <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 58px)', flexShrink: 0 }} />
             <div className="flex-1 relative overflow-hidden flex flex-col">
@@ -234,12 +234,10 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
                   onConversationCreated={(convId) => { setActiveConvId(convId); refreshConvList(); }}
                 />
               </div>
-              {/* 底部间距，避免输入框被 tab 栏遮挡 */}
-              <div style={{ height: 'calc(60px + env(safe-area-inset-bottom, 0px))', flexShrink: 0 }} />
               {/* 历史对话按钮 */}
               <button
                 onClick={() => setShowAIHistory(true)}
-                className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center bg-white/80 dark:bg-gray-800/80 backdrop-blur border border-gray-200 dark:border-gray-700 rounded-full shadow-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center bg-white/80 dark:bg-gray-800/80 backdrop-blur border border-gray-200 dark:border-gray-700 rounded-full shadow-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors z-10"
                 title="历史对话"
               >
                 <MessageSquare className="w-4 h-4" />
