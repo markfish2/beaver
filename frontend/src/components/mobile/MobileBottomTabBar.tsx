@@ -89,12 +89,13 @@ export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBot
                                  }`}
                       strokeWidth={isActive ? 2.5 : 1.8}
                     />
-                    {/* 只有选中的 tab 显示标签 */}
-                    {isActive && tab.label && (
-                      <span className="text-[9px] text-blue-600 dark:text-blue-400 font-medium mt-[2px] leading-none">
-                        {tab.label}
-                      </span>
-                    )}
+                    <span className={`text-[9px] font-medium mt-[2px] leading-none h-[11px]
+                                     ${isActive
+                                       ? 'text-blue-600 dark:text-blue-400'
+                                       : 'text-transparent'
+                                     }`}>
+                      {tab.label || ' '}
+                    </span>
                   </>
                 )}
               </button>
