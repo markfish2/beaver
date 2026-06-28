@@ -8,15 +8,15 @@ interface MobileBottomTabBarProps {
   onTabChange: (tab: MobileTab) => void;
 }
 
-const tabs: { id: MobileTab; label: string; icon: typeof StickyNote }[] = [
-  { id: 'memos',  label: '随想', icon: StickyNote },
-  { id: 'diary',  label: '日记', icon: CalendarDays },
-  { id: 'new',    label: '',    icon: Plus },
-  { id: 'files',  label: '文件', icon: FileText },
-  { id: 'ai',     label: 'AI',   icon: Sparkles },
+const tabs: { id: MobileTab; icon: typeof StickyNote }[] = [
+  { id: 'memos',  icon: StickyNote },
+  { id: 'diary',  icon: CalendarDays },
+  { id: 'new',    icon: Plus },
+  { id: 'files',  icon: FileText },
+  { id: 'ai',     icon: Sparkles },
 ];
 
-const INDICATOR_WIDTH = 64;  // 选中指示器宽度 (px)
+const INDICATOR_WIDTH = 48;  // 选中指示器宽度 (px)
 
 export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBottomTabBarProps) {
 
@@ -25,7 +25,7 @@ export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBot
 
   return (
     <>
-      {/* 胶囊容器 - 80% 宽度居中 */}
+      {/* 胶囊容器 */}
       <div
         className="fixed left-0 right-0 z-30 flex items-center justify-center"
         style={{
@@ -37,10 +37,9 @@ export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBot
                         backdrop-blur-2xl
                         rounded-full
                         shadow-[0_2px_20px_-6px_rgba(0,0,0,0.12),0_0_0_0.5px_rgba(0,0,0,0.06)]
-                        dark:shadow-[0_2px_20px_-6px_rgba(0,0,0,0.4),0_0_0_0.5px_rgba(255,255,255,0.08)]
-                        transition-shadow duration-300"
+                        dark:shadow-[0_2px_20px_-6px_rgba(0,0,0,0.4),0_0_0_0.5px_rgba(255,255,255,0.08)]"
         >
-          {/* 选中背景胶囊 (Liquid Glass indicator) - 半圆 */}
+          {/* 选中指示器 */}
           <div
             className="absolute top-[5px] h-[48px] rounded-full
                         bg-blue-500/15 dark:bg-blue-400/25
@@ -58,46 +57,23 @@ export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBot
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
-            const isNew = tab.id === 'new';
 
             return (
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className="relative flex flex-col items-center justify-center flex-1 h-full
+                className="relative flex items-center justify-center flex-1 h-full
                            min-w-0 transition-[transform,color] duration-200 z-10
                            active:scale-90"
               >
-                {isNew ? (
-                  /* 新建按钮 - 圆形凸起 */
-                  <div className={`flex items-center justify-center w-[38px] h-[38px] rounded-full
-                                   shadow-[0_2px_8px_-2px_rgba(0,0,0,0.15)]
-                                   transition-all duration-300
-                                   ${isActive
-                                     ? 'bg-blue-500 text-white shadow-[0_4px_14px_-2px_rgba(59,130,246,0.4)] scale-110'
-                                     : 'bg-gray-500/80 dark:bg-gray-400/80 text-white'
-                                   }`}>
-                    <Icon className="w-[18px] h-[18px]" strokeWidth={2} />
-                  </div>
-                ) : (
-                  <>
-                    <Icon
-                      className={`w-[22px] h-[22px] transition-all duration-300
-                                 ${isActive
-                                   ? 'text-blue-600 dark:text-blue-400'
-                                   : 'text-gray-400 dark:text-gray-500'
-                                 }`}
-                      strokeWidth={isActive ? 2.5 : 1.8}
-                    />
-                    <span className={`text-[9px] font-medium mt-[2px] leading-none h-[11px]
-                                     ${isActive
-                                       ? 'text-blue-600 dark:text-blue-400'
-                                       : 'text-transparent'
-                                     }`}>
-                      {tab.label || ' '}
-                    </span>
-                  </>
-                )}
+                <Icon
+                  className={`w-[22px] h-[22px] transition-all duration-300
+                             ${isActive
+                               ? 'text-blue-600 dark:text-blue-400 scale-110'
+                               : 'text-gray-400 dark:text-gray-500'
+                             }`}
+                  strokeWidth={isActive ? 2.5 : 1.8}
+                />
               </button>
             );
           })}
