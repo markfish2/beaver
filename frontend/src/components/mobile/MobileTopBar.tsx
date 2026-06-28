@@ -69,19 +69,19 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
           {showBack ? (
             <button
               onClick={() => onBack?.()}
-              className="flex items-center justify-center w-[42px] h-[42px] rounded-full
+              className="flex items-center justify-center w-[36px] h-[36px] rounded-full
                          bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
                          shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]
                          text-gray-600 dark:text-gray-300
                          active:scale-95 transition-transform"
             >
-              <ArrowLeft className="w-[20px] h-[20px]" />
+              <ArrowLeft className="w-[18px] h-[18px]" />
             </button>
           ) : (
             <>
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center justify-center w-[42px] h-[42px] rounded-full
+                className="flex items-center justify-center w-[36px] h-[36px] rounded-full
                            bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
                            shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]
                            overflow-hidden
@@ -90,7 +90,7 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
                 {user?.avatar_path ? (
                   <img src={user.avatar_path} alt="avatar" className="w-full h-full object-cover" />
                 ) : (
-                  <User className="w-[18px] h-[18px] text-gray-400 dark:text-gray-500" />
+                  <User className="w-[16px] h-[16px] text-gray-400 dark:text-gray-500" />
                 )}
               </button>
 
@@ -129,7 +129,7 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
         </div>
 
         {/* 中间：标题（胶囊长条形，缩小一半，居中） */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center h-[38px] px-4
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center h-[36px] px-4
                         bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
                         rounded-full
                         shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]">
@@ -143,24 +143,24 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
           {showSearch ? (
             <button
               onClick={() => { setShowSearch(false); setSearchQuery(''); }}
-              className="flex items-center justify-center w-[42px] h-[42px] rounded-full
+              className="flex items-center justify-center w-[36px] h-[36px] rounded-full
                          bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
                          shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]
                          text-gray-500 dark:text-gray-400
                          active:scale-95 transition-transform"
             >
-              <X className="w-[18px] h-[18px]" />
+              <X className="w-[16px] h-[16px]" />
             </button>
           ) : (
             <button
               onClick={() => setShowSearch(true)}
-              className="flex items-center justify-center w-[42px] h-[42px] rounded-full
+              className="flex items-center justify-center w-[36px] h-[36px] rounded-full
                          bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
                          shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]
                          text-gray-500 dark:text-gray-400
                          active:scale-95 transition-transform"
             >
-              <Search className="w-[18px] h-[18px]" />
+              <Search className="w-[16px] h-[16px]" />
             </button>
           )}
         </div>
