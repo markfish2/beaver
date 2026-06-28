@@ -261,15 +261,8 @@ export const uploadFromUrl = async (url: string): Promise<UploadResponse> => {
 };
 
 export const getFileUrl = (filePath: string): string => {
-  if (!filePath) return '';
-  const cleanPath = filePath.replace(/^\/api/, '');
-
-  // 获取服务器地址（APP 模式下需要完整 URL）
-  const serverUrl = localStorage.getItem('beaver_server_url') || '';
-  if (serverUrl) {
-    return `${serverUrl}${cleanPath}`;
-  }
-  return cleanPath;
+  // Remove /api prefix if present since static files are served at /uploads
+  return filePath.replace(/^\/api/, '');
 };
 
 /**
@@ -277,18 +270,10 @@ export const getFileUrl = (filePath: string): string => {
  * /uploads/abc-123.png → /uploads/thumbs/abc-123.jpg
  */
 export const getThumbnailUrl = (filePath: string): string => {
-  if (!filePath) return '';
   const cleanPath = filePath.replace(/^\/api/, '');
   const name = cleanPath.split('/').pop()!;
   const base = name.replace(/\.[^.]+$/, '');
-  const thumbPath = `/uploads/thumbs/${base}.jpg`;
-
-  // 获取服务器地址（APP 模式下需要完整 URL）
-  const serverUrl = localStorage.getItem('beaver_server_url') || '';
-  if (serverUrl) {
-    return `${serverUrl}${thumbPath}`;
-  }
-  return thumbPath;
+  return `/uploads/thumbs/${base}.jpg`;
 };
 
 // Share
