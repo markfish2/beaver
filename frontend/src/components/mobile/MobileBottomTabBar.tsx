@@ -16,7 +16,7 @@ const tabs: { id: MobileTab; label: string; icon: typeof StickyNote }[] = [
   { id: 'ai',     label: 'AI',   icon: Sparkles },
 ];
 
-const INDICATOR_WIDTH = 48;  // 选中指示器宽度 (px)
+const INDICATOR_WIDTH = 64;  // 选中指示器宽度 (px)
 
 export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBottomTabBarProps) {
 
@@ -32,7 +32,7 @@ export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBot
           bottom: `calc(16px + env(safe-area-inset-bottom, 0px))`,
         }}
       >
-        <nav className="relative flex items-center h-[58px] w-[82%] max-w-[420px] px-3
+        <nav className="relative flex items-center h-[58px] w-[80%] max-w-[420px]
                         bg-white/75 dark:bg-gray-800/75
                         backdrop-blur-2xl
                         rounded-full
@@ -80,14 +80,22 @@ export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBot
                     <Icon className="w-[18px] h-[18px]" strokeWidth={2} />
                   </div>
                 ) : (
-                  <Icon
-                    className={`w-[22px] h-[22px] transition-all duration-300
-                               ${isActive
-                                 ? 'text-blue-600 dark:text-blue-400 scale-110'
-                                 : 'text-gray-400 dark:text-gray-500'
-                               }`}
-                    strokeWidth={isActive ? 2.5 : 1.8}
-                  />
+                  <>
+                    <Icon
+                      className={`w-[22px] h-[22px] transition-all duration-300
+                                 ${isActive
+                                   ? 'text-blue-600 dark:text-blue-400'
+                                   : 'text-gray-400 dark:text-gray-500'
+                                 }`}
+                      strokeWidth={isActive ? 2.5 : 1.8}
+                    />
+                    {/* 只有选中的 tab 显示标签 */}
+                    {isActive && tab.label && (
+                      <span className="text-[9px] text-blue-600 dark:text-blue-400 font-medium mt-[2px] leading-none">
+                        {tab.label}
+                      </span>
+                    )}
+                  </>
                 )}
               </button>
             );
