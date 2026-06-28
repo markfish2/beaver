@@ -72,7 +72,7 @@ export default defineConfig({
       srcDir: 'public',
       filename: 'sw-src.ts',
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,ico,svg,png,woff,woff2}', 'icons/**/*', 'beaver.png', 'apple-touch-icon.png', 'maskable-icon.png'],
+        globPatterns: ['**/*.{js,css,html,svg,png,woff,woff2}', 'icons/**/*', 'beaver.png', 'apple-touch-icon.png', 'maskable-icon.png'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
       devOptions: {

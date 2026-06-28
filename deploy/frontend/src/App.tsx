@@ -28,12 +28,10 @@ const ProtectedRoute = ({ children }: { children: ReactNode }) => {
     return <div className="h-screen flex items-center justify-center bg-white dark:bg-gray-900 text-gray-900 dark:text-white">Loading...</div>;
   }
 
-  // If setup is required and we are not on the setup page, redirect to setup
   if (isSetupRequired) {
     return <Navigate to="/setup" replace />;
   }
 
-  // If not authenticated and not on login page, redirect to login
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
@@ -41,15 +39,12 @@ const ProtectedRoute = ({ children }: { children: ReactNode }) => {
   return <>{children}</>;
 };
 
-// Layout Component for authenticated pages
 const AppLayout = ({ children }: { children: ReactNode }) => {
   const [isMobile, setIsMobile] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
@@ -75,12 +70,10 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // Mobile: bottom tab bar layout
   if (isMobile) {
     return <MobileLayout>{children}</MobileLayout>;
   }
 
-  // Desktop: sidebar layout
   return (
     <div className="flex h-screen bg-white dark:bg-gray-900" style={{ paddingBottom: 'var(--safe-area-inset-bottom)' }}>
       <Sidebar isMobile={false} onDocumentSelect={() => {}} />
@@ -91,7 +84,6 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
 
 const PageLoading = () => <div className="h-screen flex items-center justify-center bg-white dark:bg-gray-900 text-gray-500">Loading...</div>;
 
-// Wrapper to pass userSubView and activeConvId from context to MainArea
 function MainAreaWithUserView() {
   const { userSubView, activeConvId } = useUserView();
   return <MainArea userSubView={userSubView} activeConvId={activeConvId} />;
@@ -101,7 +93,6 @@ function AppRoutes() {
   useRetryFailedPreviews();
   const { isAuthenticated } = useAuth();
 
-  // 登录后检查是否有待处理的分享数据（从 ShareTargetPage 存入的）
   useEffect(() => {
     if (!isAuthenticated) return;
     const pending = sessionStorage.getItem('pendingShare');

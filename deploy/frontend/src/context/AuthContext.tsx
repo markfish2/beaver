@@ -22,11 +22,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSetupRequired, setIsSetupRequired] = useState<boolean | null>(null);
-  
+
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Initial check
   useEffect(() => {
     checkStatus();
   }, []);
@@ -44,20 +43,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setIsLoading(false);
         return;
       }
+    } catch (error) {
+      // checkSetupStatus 失败不阻止登录恢复
+      console.warn('checkSetupStatus failed, trying token restore', error);
+    }
 
+    // 无论 checkSetupStatus 成功与否，都尝试用 token 恢复登录
+    try {
       const token = localStorage.getItem('token');
       if (token) {
-        try {
-          const userData = await getMe();
-          setUser(userData);
-          setIsAuthenticated(true);
-        } catch (error) {
-          localStorage.removeItem('token');
-          setIsAuthenticated(false);
-        }
+        const userData = await getMe();
+        setUser(userData);
+        setIsAuthenticated(true);
       }
     } catch (error) {
-      console.error('Failed to check status', error);
+      localStorage.removeItem('token');
+      setIsAuthenticated(false);
     } finally {
       setIsLoading(false);
     }

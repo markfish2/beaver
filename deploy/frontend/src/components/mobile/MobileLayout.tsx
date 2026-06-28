@@ -64,6 +64,21 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     return () => window.removeEventListener('keyboard-change', handler);
   }, []);
 
+  // 监听桌面小组件打开 memo 输入框事件
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.fromWidget) {
+        // 切换到 memos tab
+        setActiveTab('memos');
+        // 导航到首页
+        navigate('/', { replace: true });
+      }
+    };
+    window.addEventListener('openMemoInput', handler);
+    return () => window.removeEventListener('openMemoInput', handler);
+  }, [navigate]);
+
   // Diary state
   const [diaryDocId, setDiaryDocId] = useState<string | null>(null);
 
@@ -181,14 +196,14 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
         {isEditing && activeTab !== 'diary' ? (
           // Document editor mode: toolbar below topbar, then content
           <>
-            <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 44px)', flexShrink: 0 }} />
+            <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 58px)', flexShrink: 0 }} />
             <ToolbarSlot showZoom={true} hasTabBar={false} />
             {children}
           </>
         ) : activeTab === 'diary' ? (
           // Diary tab: todos + toolbar + inline MainArea
           <div className="flex-1 overflow-hidden flex flex-col">
-            <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 44px)', flexShrink: 0 }} />
+            <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 58px)', flexShrink: 0 }} />
             <div className="max-h-[40vh] overflow-y-auto scrollbar-none shrink-0">
               <Suspense fallback={null}>
                 <MobileTodos />
@@ -205,13 +220,13 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
           </div>
         ) : activeTab === 'files' ? (
           <Suspense fallback={<div className="flex-1 flex items-center justify-center text-gray-400 text-sm">加载中...</div>}>
-            <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 44px)', flexShrink: 0 }} />
+            <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 58px)', flexShrink: 0 }} />
             <FileTreeView />
           </Suspense>
         ) : activeTab === 'ai' ? (
           // AI 问答
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 44px)', flexShrink: 0 }} />
+            <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 58px)', flexShrink: 0 }} />
             <div className="flex-1 relative overflow-hidden flex flex-col">
               <div className="flex-1 min-h-0">
                 <AIChatMainView
