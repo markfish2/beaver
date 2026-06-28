@@ -225,8 +225,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
           </Suspense>
         ) : activeTab === 'ai' ? (
           // AI 问答 - 全屏，导航栏悬浮覆盖
-          <div className="flex-1 flex flex-col overflow-hidden"
-               style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 58px)', paddingBottom: 'calc(68px + env(safe-area-inset-bottom, 0px))' }}>
+          <>
             <div className="flex-1 min-h-0 relative">
               <AIChatMainView
                 conversationId={activeConvId}
@@ -235,7 +234,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
               {/* 历史对话按钮 */}
               <button
                 onClick={() => setShowAIHistory(true)}
-                className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center bg-white/80 dark:bg-gray-800/80 backdrop-blur border border-gray-200 dark:border-gray-700 rounded-full shadow-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors z-10"
+                className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center bg-white/80 dark:bg-gray-800/80 backdrop-blur border border-gray-200 dark:border-gray-700 rounded-full shadow-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors z-10"
                 title="历史对话"
               >
                 <MessageSquare className="w-4 h-4" />
@@ -244,10 +243,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
             {/* 历史对话侧边栏 */}
             {showAIHistory && (
               <>
-                <div
-                  className="fixed inset-0 bg-black/40 z-40"
-                  onClick={() => setShowAIHistory(false)}
-                />
+                <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowAIHistory(false)} />
                 <div className="fixed top-0 right-0 bottom-0 w-72 bg-[#FAFAF5] dark:bg-gray-800 z-50 shadow-xl flex flex-col">
                   <AIChatSidebar
                     activeConvId={activeConvId}
@@ -259,7 +255,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
                 </div>
               </>
             )}
-          </div>
+          </>
         ) : (
           // Memos tab: MainArea renders MemoHome
           children
