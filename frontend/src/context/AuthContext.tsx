@@ -2,8 +2,6 @@ import { createContext, useContext, useState, useEffect, useMemo, useCallback, R
 import { checkSetupStatus, getMe, login as apiLogin, setupAdmin as apiSetupAdmin } from '../api/auth';
 import type { User } from '../api/auth';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getServerUrl } from '../api/client';
-import { syncAuthToNative } from '../utils/nativeBridge';
 
 interface AuthContextType {
   user: User | null;
@@ -28,24 +26,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Initial check
   useEffect(() => {
     checkStatus();
   }, []);
 
   const checkStatus = useCallback(async () => {
     setIsLoading(true);
-
-    // 没有配置服务器地址，直接跳转登录页
-    if (!getServerUrl()) {
-      setIsAuthenticated(false);
-      setIsLoading(false);
-      if (location.pathname !== '/login') {
-        navigate('/login');
-      }
-      return;
-    }
-
     try {
       const status = await checkSetupStatus();
       setIsSetupRequired(status.setup_required);
@@ -71,10 +57,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     } catch (error) {
       console.error('Failed to check status', error);
-      setIsAuthenticated(false);
-      if (location.pathname !== '/login') {
-        navigate('/login');
-      }
     } finally {
       setIsLoading(false);
     }
@@ -86,13 +68,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const userData = await getMe();
     setUser(userData);
     setIsAuthenticated(true);
-
-    // 同步到原生层（小组件使用）
-    const serverUrl = getServerUrl();
-    if (serverUrl) {
-      syncAuthToNative(serverUrl, data.access_token);
-    }
-
     navigate('/');
   }, [navigate]);
 

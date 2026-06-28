@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, X, ArrowLeft, LogOut, Key, Trash, User, Sparkles, Lock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getServerUrl } from '../../api/client';
 import UserProfileEditor from '../UserProfileEditor';
 import TokenPanel from '../TokenPanel';
 import AISettingsPanel from '../AISettingsPanel';
@@ -77,7 +76,7 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
                 className="w-7 h-7 rounded-full cursor-pointer hover:opacity-80 transition-opacity overflow-hidden border border-gray-200 dark:border-gray-600"
               >
                 {user?.avatar_path ? (
-                  <img src={user.avatar_path.startsWith('http') ? user.avatar_path : `${getServerUrl()}${user.avatar_path}`} alt="avatar" className="w-full h-full object-cover" />
+                  <img src={user.avatar_path} alt="avatar" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
                     <User className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
