@@ -58,7 +58,7 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
     <>
       {/* 悬浮胶囊顶栏 */}
       <div
-        className="fixed left-3 right-3 z-30 flex items-center gap-2"
+        className="fixed left-3 right-3 z-30 flex items-center justify-between"
         style={{
           top: `calc(8px + env(safe-area-inset-top, 0px))`,
           height: '44px',
@@ -128,12 +128,12 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
           )}
         </div>
 
-        {/* 中间：标题（胶囊长条形） */}
-        <div className="flex-1 flex items-center justify-center h-[42px] px-5 min-w-0
+        {/* 中间：标题（胶囊长条形，缩小一半，居中） */}
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center h-[38px] px-4
                         bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
                         rounded-full
                         shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]">
-          <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200 truncate">
+          <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200 truncate max-w-[80px]">
             {title}
           </span>
         </div>
