@@ -23,14 +23,14 @@ export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBot
 
   return (
     <>
-      {/* 胶囊容器 */}
+      {/* 胶囊容器 - 80% 宽度居中 */}
       <div
-        className="fixed left-4 right-4 z-30 flex items-center justify-center"
+        className="fixed left-0 right-0 z-30 flex items-center justify-center"
         style={{
           bottom: `calc(20px + env(safe-area-inset-bottom, 0px))`,
         }}
       >
-        <nav className="relative flex items-center h-[60px] px-1
+        <nav className="relative flex items-center h-[60px] w-[80%] max-w-[420px] px-1
                         bg-white/70 dark:bg-gray-800/70
                         backdrop-blur-2xl
                         rounded-[22px]
