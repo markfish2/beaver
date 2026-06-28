@@ -178,7 +178,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     }
   };
 
-  const showTabBar = (!isEditing || activeTab === 'diary') && !keyboardOpen && activeTab !== 'ai';
+  const showTabBar = (!isEditing || activeTab === 'diary') && !keyboardOpen;
 
 
   return (
@@ -224,16 +224,14 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
             <FileTreeView />
           </Suspense>
         ) : activeTab === 'ai' ? (
-          // AI 问答 - 全屏
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 58px)', flexShrink: 0 }} />
-            <div className="flex-1 relative overflow-hidden flex flex-col">
-              <div className="flex-1 min-h-0">
-                <AIChatMainView
-                  conversationId={activeConvId}
-                  onConversationCreated={(convId) => { setActiveConvId(convId); refreshConvList(); }}
-                />
-              </div>
+          // AI 问答 - 全屏，导航栏悬浮覆盖
+          <div className="flex-1 flex flex-col overflow-hidden"
+               style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 58px)', paddingBottom: 'calc(68px + env(safe-area-inset-bottom, 0px))' }}>
+            <div className="flex-1 min-h-0 relative">
+              <AIChatMainView
+                conversationId={activeConvId}
+                onConversationCreated={(convId) => { setActiveConvId(convId); refreshConvList(); }}
+              />
               {/* 历史对话按钮 */}
               <button
                 onClick={() => setShowAIHistory(true)}
