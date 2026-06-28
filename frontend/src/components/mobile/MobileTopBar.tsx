@@ -55,115 +55,130 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
   };
 
   return (
-    <div
-      className="fixed top-0 left-0 right-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-700/50 z-30"
-      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
-    >
-      <div className="flex items-center justify-between h-11 px-3">
-        {/* Left: back button or avatar */}
-        <div className="w-10 flex items-center justify-start" ref={userMenuRef}>
+    <>
+      {/* 悬浮胶囊顶栏 */}
+      <div
+        className="fixed left-3 right-3 z-30 flex items-center gap-2"
+        style={{
+          top: `calc(8px + env(safe-area-inset-top, 0px))`,
+          height: '44px',
+        }}
+      >
+        {/* 左侧：头像（圆形胶囊） */}
+        <div ref={userMenuRef} className="relative shrink-0">
           {showBack ? (
             <button
               onClick={() => onBack?.()}
-              className="p-1.5 text-gray-600 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 rounded-lg transition-colors"
+              className="flex items-center justify-center w-[42px] h-[42px] rounded-full
+                         bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
+                         shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]
+                         text-gray-600 dark:text-gray-300
+                         active:scale-95 transition-transform"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-[20px] h-[20px]" />
             </button>
           ) : (
-            <div className="relative">
-              <div
+            <>
+              <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="w-7 h-7 rounded-full cursor-pointer hover:opacity-80 transition-opacity overflow-hidden border border-gray-200 dark:border-gray-600"
+                className="flex items-center justify-center w-[42px] h-[42px] rounded-full
+                           bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
+                           shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]
+                           overflow-hidden border border-gray-200/50 dark:border-gray-700/50
+                           active:scale-95 transition-transform"
               >
                 {user?.avatar_path ? (
                   <img src={user.avatar_path} alt="avatar" className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                    <User className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
-                  </div>
+                  <User className="w-[18px] h-[18px] text-gray-400 dark:text-gray-500" />
                 )}
-              </div>
+              </button>
+
               {showUserMenu && (
-                <div className="absolute left-0 top-full mt-1 w-40 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
-                  <button
-                    onClick={() => openDialog('profile')}
-                    className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
-                  >
-                    <User className="w-4 h-4" />
-                    <span>个人资料</span>
+                <div className="absolute left-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-2xl
+                                shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50
+                                backdrop-blur-2xl bg-white/95 dark:bg-gray-800/95">
+                  <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700">
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+                      {user?.nickname || user?.username || '用户'}
+                    </p>
+                  </div>
+                  <button onClick={() => openDialog('profile')} className="w-full px-3 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center gap-2.5">
+                    <User className="w-4 h-4 text-gray-400" /><span>个人资料</span>
                   </button>
-                  <button
-                    onClick={() => openDialog('token')}
-                    className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
-                  >
-                    <Key className="w-4 h-4" />
-                    <span>API Token</span>
+                  <button onClick={() => openDialog('token')} className="w-full px-3 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center gap-2.5">
+                    <Key className="w-4 h-4 text-gray-400" /><span>API Token</span>
                   </button>
-                  <button
-                    onClick={() => openDialog('ai')}
-                    className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    <span>AI 设置</span>
+                  <button onClick={() => openDialog('ai')} className="w-full px-3 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center gap-2.5">
+                    <Sparkles className="w-4 h-4 text-gray-400" /><span>AI 设置</span>
                   </button>
-                  <button
-                    onClick={() => openDialog('trash')}
-                    className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
-                  >
-                    <Trash className="w-4 h-4" />
-                    <span>回收站</span>
+                  <button onClick={() => openDialog('trash')} className="w-full px-3 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center gap-2.5">
+                    <Trash className="w-4 h-4 text-gray-400" /><span>回收站</span>
                   </button>
-                  <button
-                    onClick={() => openDialog('password')}
-                    className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
-                  >
-                    <Lock className="w-4 h-4" />
-                    <span>修改密码</span>
+                  <button onClick={() => openDialog('password')} className="w-full px-3 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center gap-2.5">
+                    <Lock className="w-4 h-4 text-gray-400" /><span>修改密码</span>
                   </button>
-                  <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
-                  <button
-                    onClick={() => { logout(); setShowUserMenu(false); }}
-                    className="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-2"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    <span>退出登录</span>
+                  <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
+                  <button onClick={() => { logout(); setShowUserMenu(false); }} className="w-full px-3 py-2.5 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2.5">
+                    <LogOut className="w-4 h-4" /><span>退出登录</span>
                   </button>
                 </div>
               )}
-            </div>
+            </>
           )}
         </div>
 
-        {/* Center: title */}
-        <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
-          {title}
-        </span>
+        {/* 中间：标题（胶囊长条形） */}
+        <div className="flex-1 flex items-center justify-center h-[42px] px-5 min-w-0
+                        bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
+                        rounded-full
+                        shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]">
+          <span className="text-[14px] font-semibold text-gray-800 dark:text-gray-200 truncate">
+            {title}
+          </span>
+        </div>
 
-        {/* Right: search */}
-        <div className="w-10 flex items-center justify-end">
+        {/* 右侧：搜索（圆形胶囊） */}
+        <div className="relative shrink-0">
           {showSearch ? (
             <button
               onClick={() => { setShowSearch(false); setSearchQuery(''); }}
-              className="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 rounded-lg transition-colors"
+              className="flex items-center justify-center w-[42px] h-[42px] rounded-full
+                         bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
+                         shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]
+                         text-gray-500 dark:text-gray-400
+                         active:scale-95 transition-transform"
             >
-              <X className="w-5 h-5" />
+              <X className="w-[18px] h-[18px]" />
             </button>
           ) : (
             <button
               onClick={() => setShowSearch(true)}
-              className="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 rounded-lg transition-colors"
+              className="flex items-center justify-center w-[42px] h-[42px] rounded-full
+                         bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
+                         shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]
+                         text-gray-500 dark:text-gray-400
+                         active:scale-95 transition-transform"
             >
-              <Search className="w-5 h-5" />
+              <Search className="w-[18px] h-[18px]" />
             </button>
           )}
         </div>
       </div>
 
-      {/* Search input slide-down */}
+      {/* 搜索展开面板 */}
       {showSearch && (
-        <div className="px-3 pb-2">
+        <div
+          className="fixed left-3 right-3 z-30 px-3 py-2
+                     bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
+                     rounded-2xl
+                     shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]"
+          style={{
+            top: `calc(60px + env(safe-area-inset-top, 0px))`,
+          }}
+        >
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-[16px] h-[16px] text-gray-400" />
             <input
               ref={searchRef}
               type="text"
@@ -171,25 +186,30 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSearchSubmit(); }}
               placeholder="搜索笔记、日记、随想..."
-              className="w-full pl-8 pr-3 py-2 text-sm bg-gray-100 dark:bg-gray-800 border-none rounded-lg placeholder-gray-400 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              className="w-full pl-9 pr-3 py-2.5 text-sm bg-transparent
+                         placeholder-gray-400 text-gray-800 dark:text-gray-200
+                         focus:outline-none"
             />
           </div>
         </div>
       )}
 
-      {/* Full-screen panels - rendered via portal to escape fixed parent */}
+      {/* 弹窗 */}
       {activeDialog && createPortal(
         <div className="fixed inset-0 z-[9999] bg-white dark:bg-gray-900 flex flex-col">
-          {/* Top bar with close button */}
-          <div className="shrink-0 flex items-center justify-end px-3" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)', height: 'calc(env(safe-area-inset-top, 0px) + 44px)' }}>
-            <button
-              onClick={() => setActiveDialog(null)}
-              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-            >
+          <div className="shrink-0 flex items-center justify-between px-3"
+               style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)', height: 'calc(env(safe-area-inset-top, 0px) + 44px)' }}>
+            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+              {activeDialog === 'profile' && '个人资料'}
+              {activeDialog === 'token' && 'API Token'}
+              {activeDialog === 'ai' && 'AI 设置'}
+              {activeDialog === 'trash' && '回收站'}
+              {activeDialog === 'password' && '修改密码'}
+            </span>
+            <button onClick={() => setActiveDialog(null)} className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400">
               <X className="w-5 h-5" />
             </button>
           </div>
-          {/* Panel content */}
           <div className="flex-1 min-h-0 overflow-hidden">
             {activeDialog === 'profile' && <UserProfileEditor />}
             {activeDialog === 'token' && <TokenPanel />}
@@ -200,6 +220,6 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
         </div>,
         document.body
       )}
-    </div>
+    </>
   );
 }
