@@ -84,7 +84,7 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
                 className="flex items-center justify-center w-[42px] h-[42px] rounded-full
                            bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
                            shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]
-                           overflow-hidden border border-gray-200/50 dark:border-gray-700/50
+                           overflow-hidden
                            active:scale-95 transition-transform"
               >
                 {user?.avatar_path ? (
