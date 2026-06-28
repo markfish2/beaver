@@ -133,7 +133,7 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
                         bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
                         rounded-full
                         shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]">
-          <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200 truncate max-w-[80px]">
+          <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200 truncate max-w-[160px]">
             {title}
           </span>
         </div>
