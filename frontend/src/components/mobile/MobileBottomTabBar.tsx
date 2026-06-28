@@ -64,7 +64,7 @@ export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBot
                            active:scale-90"
               >
                 {isNew ? (
-                  <div className={`flex items-center justify-center w-[34px] h-[34px] -mt-3 rounded-full
+                  <div className={`flex items-center justify-center w-[34px] h-[34px] rounded-full
                                    shadow-[0_2px_8px_-2px_rgba(0,0,0,0.15)]
                                    transition-all duration-300
                                    ${isActive
