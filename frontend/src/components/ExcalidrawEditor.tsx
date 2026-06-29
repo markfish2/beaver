@@ -161,7 +161,16 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           const sceneData = JSON.parse(data.scene_data);
           if (sceneData.elements?.length > 0) {
             const { scrollX, scrollY, zoom, ...restAppState } = sceneData.appState || {};
-            const scenePayload = { elements: sceneData.elements, appState: restAppState };
+
+            // 并行加载图片，与场景数据一起传入 initialData
+            const files = await loadExcalidrawFiles(loadedDocId);
+            if (cancelled || documentIdRef.current !== loadedDocId) return;
+
+            const scenePayload: any = { elements: sceneData.elements, appState: restAppState };
+            if (Object.keys(files).length > 0) {
+              scenePayload.files = files;
+              filesRef.current = files;
+            }
             setInitialData(scenePayload);
             savedFingerprintRef.current = fingerprint(sceneData.elements);
             // 延迟重置未保存状态，防止 Excalidraw 加载初始数据时误报
@@ -177,12 +186,6 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
                 }
               }
             }, 1000);
-
-            // 异步加载图片
-            const files = await loadExcalidrawFiles(loadedDocId);
-            if (!cancelled && documentIdRef.current === loadedDocId && Object.keys(files).length > 0) {
-              filesRef.current = files;
-            }
           }
         }
       } catch (error) {
@@ -266,14 +269,16 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     });
   }, [initialData]);
 
-  // 加载图片文件到 Excalidraw
+  // 图片注入：initialData 设置后，将 files 注入已挂载的 Excalidraw
+  // Excalidraw 只在 componentDidMount 处理 initialData.files，
+  // 但 setInitialData 是异步调用的，此时组件已挂载，需要显式调用 addFiles
   useEffect(() => {
     if (!initialData || !excalidrawRef.current || !filesRef.current) return;
     const files = filesRef.current;
     if (Object.keys(files).length > 0) {
       excalidrawRef.current.addFiles(Object.values(files));
-      filesRef.current = null;
     }
+    filesRef.current = null;
   }, [initialData]);
 
   // 保存锁、files 缓存、待保存数据
@@ -408,6 +413,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           }
           const sceneData = JSON.stringify(payload);
           const currentDocId = documentIdRef.current;
+          const filesWereSaved = !!payload.files;
           const result = await updateExcalidrawData(currentDocId, sceneData, versionRef.current);
           // 更新本地版本号
           versionRef.current = result.version || versionRef.current + 1;
@@ -418,6 +424,20 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           savedFingerprintRef.current = fingerprint(elements);
           setSaveStatus('saved');
           setTimeout(() => setSaveStatus('idle'), 2000);
+          // 图片保存成功后，将 pending 状态的图片元素更新为 saved
+          if (filesWereSaved && excalidrawRef.current) {
+            const currentElements = excalidrawRef.current.getSceneElements();
+            const updatedElements = currentElements.map((el: any) => {
+              if (el.type === 'image' && el.status === 'pending' && el.fileId) {
+                return { ...el, status: 'saved' };
+              }
+              return el;
+            });
+            const hasChanges = updatedElements.some((el: any, i: number) => el !== currentElements[i]);
+            if (hasChanges) {
+              excalidrawRef.current.updateScene({ elements: updatedElements });
+            }
+          }
         } catch (error) {
           if (error instanceof VersionConflictError) {
             // 版本冲突：其他窗口已更新，重新加载最新数据

@@ -138,7 +138,7 @@ export const loadExcalidrawFiles = async (documentId: string): Promise<Record<st
         files[fileId] = {
           mimeType,
           id: fileId,
-          dataUrl,
+          dataURL: dataUrl,
           created: 0,
           lastRetrieved: 0,
         };
