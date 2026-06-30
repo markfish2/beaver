@@ -2,7 +2,7 @@
 
 **轻量级个人知识库** — 自托管，支持多端 PWA
 
-> 大纲笔记 · Markdown 笔记 · 日记 · 随想 · 待办 · 思维导图 · 画布 · AI 对话 · 知识图谱
+> 大纲笔记 · Markdown 笔记 · 日记 · 随想 · 待办 · 思维导图 · 画布 · AI 对话 
 
 memo笔记
 <img width="1121" height="822" alt="image" src="https://github.com/user-attachments/assets/927acd90-aec9-4193-a62d-899bccd58a56" />
