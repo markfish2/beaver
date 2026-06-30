@@ -1,0 +1,26 @@
+# 开发模式：前端用 Vite dev server + 热更新，改代码秒级生效
+# 使用方式：docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+services:
+  frontend:
+    build: null
+    image: node:20-alpine
+    container_name: beaver-frontend
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
+    command: sh -c "npm install --registry=https://registry.npmmirror.com && npx vite --host 0.0.0.0 --port 5173"
+    environment:
+      - NODE_OPTIONS=--max-old-space-size=2048
+    networks:
+      - beaver-network
+
+  nginx:
+    volumes:
+      - ./nginx/dev.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+
+volumes:
+  frontend-node-modules:

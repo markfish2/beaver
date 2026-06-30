@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/beaver.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light">
+    <title>Beaver - 轻量个人知识库</title>
+    
+    <!-- ==================== PWA 核心配置 ==================== -->
+    <!-- 鸿蒙浏览器需要明确引用 manifest 文件 -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="application-name" content="Beaver">
+    <meta name="mobile-web-app-capable" content="yes">
+    
+    <!-- ==================== iOS Safari 全屏模式 ==================== -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Beaver">
+    
+    <!-- iOS 图标 (PNG 格式) -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    
+    <!-- ==================== Android / Chrome 全屏模式 ==================== -->
+    <!-- 状态栏沉浸：改为白色与应用顶部背景色融合 -->
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#111827" media="(prefers-color-scheme: dark)">
+    
+    <!-- ==================== HarmonyOS 鸿蒙系统兼容 ==================== -->
+    <!-- 鸿蒙系统全屏模式 -->
+    <meta name="hw-mobile-web-app-capable" content="yes">
+    <meta name="hw-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="hw-mobile-web-app-title" content="Beaver">
+    <!-- 鸿蒙系统主题色：状态栏沉浸 -->
+    <meta name="hw-theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="hw-theme-color" content="#111827" media="(prefers-color-scheme: dark)">
+    <!-- 鸿蒙6 PWA 增强 -->
+    <meta name="applicable-device" content="pc,mobile">
+    <meta name="browsermode" content="application">
+    <meta name="full-screen" content="yes">
+    <meta name="screen-orientation" content="portrait">
+    
+    <!-- ==================== 国内主流浏览器兼容 ==================== -->
+    <!-- QQ 浏览器 / X5 内核 -->
+    <meta name="x5-orientation" content="portrait">
+    <meta name="x5-fullscreen" content="true">
+    <meta name="x5-page-mode" content="app">
+    <!-- UC 浏览器 -->
+    <meta name="screen-orientation" content="portrait">
+    <meta name="full-screen" content="yes">
+    <meta name="browsermode" content="application">
+    <!-- 360 浏览器 -->
+    <meta name="360-fullscreen" content="true">
+    
+    <!-- ==================== Windows / Microsoft ==================== -->
+    <meta name="msapplication-TileColor" content="#ffffff">
+    <meta name="msapplication-TileImage" content="/icons/icon-144x144.png">
+    <meta name="msapplication-tap-highlight" content="no">
+    
+    <!-- ==================== 其他优化 ==================== -->
+    <!-- 禁止电话号码自动检测 -->
+    <meta name="format-detection" content="telephone=no">
+  </head>
+  <body>
+    <!-- Capacitor SQLite Web 平台支持 -->
+    <jeep-sqlite></jeep-sqlite>
+    <div id="root"></div>
+    <!-- iOS PWA 恢复：在 React 渲染前同步恢复滚动位置，避免刷新后跳到顶部 -->
+    <script>
+      try {
+        var sy = sessionStorage.getItem('mf-scroll-y');
+        if (sy) {
+          // 立即设置 CSS 防止闪烁，React 挂载后再恢复到 .main-content-area
+          window.__mf_scroll_restore = Number(sy);
+        }
+      } catch(e) {}
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "appId": "com.beaver.notes",
+  "appName": "Beaver",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true,
+    "allowNavigation": ["*"]
+  }
+}
