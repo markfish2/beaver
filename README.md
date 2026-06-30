@@ -4,7 +4,19 @@
 
 > 大纲笔记 · Markdown 笔记 · 日记 · 随想 · 待办 · 思维导图 · 画布 · AI 对话 · 知识图谱
 
-![Beaver Logo](BEAVERLOGO.png)
+memo笔记
+<img width="1121" height="822" alt="image" src="https://github.com/user-attachments/assets/927acd90-aec9-4193-a62d-899bccd58a56" />
+日记，待办
+<img width="1124" height="682" alt="image" src="https://github.com/user-attachments/assets/6dccaf64-d525-4be3-8c06-6d24cb6e5c1c" />
+普通markdown笔记
+<img width="1121" height="716" alt="image" src="https://github.com/user-attachments/assets/b5521800-7490-4cf6-b145-cdd921566f72" />
+大纲笔记
+<img width="1121" height="695" alt="image" src="https://github.com/user-attachments/assets/166da4c2-8087-4c48-ad36-be216ef0fda0" />
+
+无限画布
+<img width="1116" height="736" alt="image" src="https://github.com/user-attachments/assets/1687ff46-f4d8-455c-bab5-42101a41929f" />
+ai功能
+<img width="1119" height="705" alt="image" src="https://github.com/user-attachments/assets/4fc05059-d2c0-4685-9cc0-fd02be1808a9" />
 
 ---
 
