@@ -290,14 +290,16 @@ def migrate_files_from_json(document_id: str) -> bool:
     failed = 0
     total = 0
     for file_id, file_info in old_files.items():
-        if isinstance(file_info, dict) and 'dataUrl' in file_info:
-            total += 1
-            try:
-                file_meta = write_image_file(document_id, file_id, file_info['dataUrl'])
-                meta[file_id] = file_meta
-            except Exception as e:
-                failed += 1
-                logger.warning(f"迁移图片失败: {document_id}/{file_id}, {e}")
+        if isinstance(file_info, dict):
+            data_url = file_info.get('dataURL') or file_info.get('dataUrl')
+            if data_url:
+                total += 1
+                try:
+                    file_meta = write_image_file(document_id, file_id, data_url)
+                    meta[file_id] = file_meta
+                except Exception as e:
+                    failed += 1
+                    logger.warning(f"迁移图片失败: {document_id}/{file_id}, {e}")
     if meta:
         write_files_meta(document_id, meta)
     # 只有全部迁移成功才删除旧 JSON，避免部分失败时丢失数据

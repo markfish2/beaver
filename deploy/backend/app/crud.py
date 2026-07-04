@@ -1314,12 +1314,14 @@ def get_excalidraw_data(db: Session, document_id: uuid.UUID) -> Optional[models.
         if old_files:
             meta = {}
             for file_id, file_info in old_files.items():
-                if isinstance(file_info, dict) and 'dataUrl' in file_info:
-                    try:
-                        file_meta = ex_storage.write_image_file(doc_id, file_id, file_info['dataUrl'])
-                        meta[file_id] = file_meta
-                    except Exception as e:
-                        logger.warning(f"迁移图片失败: {doc_id}/{file_id}, {e}")
+                if isinstance(file_info, dict):
+                    data_url = file_info.get('dataURL') or file_info.get('dataUrl')
+                    if data_url:
+                        try:
+                            file_meta = ex_storage.write_image_file(doc_id, file_id, data_url)
+                            meta[file_id] = file_meta
+                        except Exception as e:
+                            logger.warning(f"迁移图片失败: {doc_id}/{file_id}, {e}")
             if meta:
                 ex_storage.write_files_meta(doc_id, meta)
                 ex_storage.write_scene(doc_id, scene)  # 保存不含 files 的场景
@@ -1336,12 +1338,14 @@ def get_excalidraw_data(db: Session, document_id: uuid.UUID) -> Optional[models.
                 if old_files:
                     meta = {}
                     for file_id, file_info in old_files.items():
-                        if isinstance(file_info, dict) and 'dataUrl' in file_info:
-                            try:
-                                file_meta = ex_storage.write_image_file(doc_id, file_id, file_info['dataUrl'])
-                                meta[file_id] = file_meta
-                            except Exception as e:
-                                logger.warning(f"迁移图片失败: {doc_id}/{file_id}, {e}")
+                        if isinstance(file_info, dict):
+                            data_url = file_info.get('dataURL') or file_info.get('dataUrl')
+                            if data_url:
+                                try:
+                                    file_meta = ex_storage.write_image_file(doc_id, file_id, data_url)
+                                    meta[file_id] = file_meta
+                                except Exception as e:
+                                    logger.warning(f"迁移图片失败: {doc_id}/{file_id}, {e}")
                     if meta:
                         ex_storage.write_files_meta(doc_id, meta)
                 excalidraw.version = 0
@@ -1416,14 +1420,18 @@ def update_excalidraw_data(
         existing_meta = ex_storage.read_files_meta(doc_id)
         new_meta = {}
         for file_id, file_info in files.items():
-            if not isinstance(file_info, dict) or 'dataUrl' not in file_info:
+            if not isinstance(file_info, dict):
+                continue
+            # 兼容大小写：Excalidraw 用 dataURL，旧数据用 dataUrl
+            data_url = file_info.get('dataURL') or file_info.get('dataUrl')
+            if not data_url:
                 continue
             # 跳过已存在的图片
             if file_id in existing_meta:
                 new_meta[file_id] = existing_meta[file_id]
                 continue
             try:
-                file_meta = ex_storage.write_image_file(doc_id, file_id, file_info['dataUrl'])
+                file_meta = ex_storage.write_image_file(doc_id, file_id, data_url)
                 new_meta[file_id] = file_meta
             except Exception as e:
                 logger.warning(f"保存图片失败: {doc_id}/{file_id}, {e}")

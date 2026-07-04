@@ -1,4 +1,4 @@
-import { Search, FileText, ChevronDown, Plus, Trash, Star, LogOut, ChevronLeft, ChevronRight, Folder, Edit2, CalendarDays, MoreHorizontal, Copy, ArrowUpRight, ListTree, FolderPlus, FilePlus, Move, Frame, StickyNote, Square, Key, Clock, Lock, Sparkles, User } from 'lucide-react';
+import { Search, FileText, ChevronDown, Plus, Trash, Star, LogOut, ChevronLeft, ChevronRight, Folder, Edit2, CalendarDays, MoreHorizontal, Copy, ArrowUpRight, ListTree, FolderPlus, FilePlus, Move, Frame, StickyNote, Square, Key, Clock, Lock, Sparkles, User, Sun, Moon } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createDocument, deleteDocument, updateDocument, copyDocument, getNodes, createMemo, uploadFile, search as apiSearch, getTodos, createTodo, updateTodo, getMonthlyDiary, getOrCreateDayNode } from '../api/data';
 import type { Document as DocType, SearchResultItem, Todo } from '../api/data';
@@ -163,6 +163,54 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   const [viewMode, setViewMode] = useState<ViewMode>('diary');
   const { userSubView, setUserSubView: setUserSubViewContext, activeConvId, setActiveConvId } = useUserView();
   const [showNewMenu, setShowNewMenu] = useState(false);
+
+  // 暗色模式状态
+  const [isDark, setIsDark] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
+      if (saved.theme === 'dark') return true;
+      if (saved.theme && saved.theme !== 'dark') return false;
+    } catch { /* ignore */ }
+    return document.documentElement.classList.contains('dark') ||
+      window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    const onThemeChange = () => {
+      try {
+        const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
+        if (saved.theme === 'dark') { setIsDark(true); return; }
+        if (saved.theme && saved.theme !== 'dark') { setIsDark(false); return; }
+      } catch { /* ignore */ }
+      setIsDark(document.documentElement.classList.contains('dark'));
+    };
+    window.addEventListener('theme-change', onThemeChange);
+    const mql = window.matchMedia('(prefers-color-scheme: dark)');
+    mql.addEventListener('change', onThemeChange);
+    return () => {
+      window.removeEventListener('theme-change', onThemeChange);
+      mql.removeEventListener('change', onThemeChange);
+    };
+  }, []);
+
+  const toggleDark = useCallback(() => {
+    const newDark = !isDark;
+    setIsDark(newDark);
+    document.documentElement.classList.toggle('dark', newDark);
+    try {
+      const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
+      saved.theme = newDark ? 'dark' : 'minimal';
+      localStorage.setItem('outline-font-settings', JSON.stringify(saved));
+      if (newDark) {
+        localStorage.setItem('outline-restored-theme', 'minimal');
+      }
+    } catch { /* ignore */ }
+    const color = newDark ? '#111827' : '#ffffff';
+    document.querySelectorAll('meta[name="theme-color"], meta[name="hw-theme-color"]').forEach(meta => {
+      meta.setAttribute('content', color);
+    });
+    window.dispatchEvent(new CustomEvent('theme-change'));
+  }, [isDark]);
 
   // Wrapper to update both context and notify parent
   const setUserSubView = useCallback((view: UserSubView) => {
@@ -1032,6 +1080,15 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           <Sparkles className="w-5 h-5" />
         </button>
       </div>
+
+      {/* 日/夜模式切换 */}
+      <button
+        onClick={toggleDark}
+        className="w-9 h-9 flex items-center justify-center text-[#8B8B80] hover:text-[#5A5A52] hover:bg-[#EDEDE8] dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors"
+        title={isDark ? '切换到日间模式' : '切换到夜间模式'}
+      >
+        {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+      </button>
 
       {/* 新建按钮 */}
       <div ref={newMenuRef} className="relative">
