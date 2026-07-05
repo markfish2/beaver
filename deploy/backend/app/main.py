@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from .routers import auth, users, documents, nodes, attachments, shares, diary, memos, search, public_memos, link_preview, excalidraw, todos, api_tokens, trash, share, habits, ai, ai_chat, ai_conversations, skills
+from .routers import auth, users, documents, nodes, attachments, shares, diary, memos, search, public_memos, link_preview, excalidraw, todos, api_tokens, trash, share, habits, ai, ai_chat, ai_conversations, skills, projects, tasks
 from .database import engine, Base
 from .limiter import limiter
 from slowapi import _rate_limit_exceeded_handler
@@ -197,6 +197,99 @@ def migrate_database():
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_nodes_document_sort ON nodes(document_id, sort_order)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_memos_created_at_desc ON memos(created_at DESC)")
 
+        # 项目管理表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS projects (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL DEFAULT '',
+                sort_order REAL DEFAULT 0.0,
+                is_archived INTEGER DEFAULT 0,
+                is_deleted INTEGER DEFAULT 0,
+                deleted_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tasks (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                parent_id TEXT REFERENCES tasks(id) ON DELETE CASCADE,
+                title TEXT DEFAULT '',
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                is_done INTEGER DEFAULT 0,
+                sort_order REAL DEFAULT 0.0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_tasks_project_id ON tasks(project_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_tasks_parent_id ON tasks(parent_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_projects_archived ON projects(is_archived)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_projects_deleted ON projects(is_deleted)")
+
+        # 项目管理表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS projects (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL DEFAULT '',
+                sort_order REAL DEFAULT 0.0,
+                is_archived INTEGER DEFAULT 0,
+                is_deleted INTEGER DEFAULT 0,
+                deleted_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tasks (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                parent_id TEXT REFERENCES tasks(id) ON DELETE CASCADE,
+                title TEXT DEFAULT '',
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                is_done INTEGER DEFAULT 0,
+                sort_order REAL DEFAULT 0.0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_tasks_project_id ON tasks(project_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_tasks_parent_id ON tasks(parent_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_projects_archived ON projects(is_archived)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_projects_deleted ON projects(is_deleted)")
+
+        # 项目管理表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS projects (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL DEFAULT '',
+                sort_order REAL DEFAULT 0.0,
+                is_archived INTEGER DEFAULT 0,
+                is_deleted INTEGER DEFAULT 0,
+                deleted_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tasks (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                parent_id TEXT REFERENCES tasks(id) ON DELETE CASCADE,
+                title TEXT DEFAULT '',
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                is_done INTEGER DEFAULT 0,
+                sort_order REAL DEFAULT 0.0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_tasks_project_id ON tasks(project_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_tasks_parent_id ON tasks(parent_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_projects_archived ON projects(is_archived)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_projects_deleted ON projects(is_deleted)")
+
         conn.commit()
         logger.info("已确认 ai_conversations / ai_messages 表存在")
         conn.close()
@@ -264,6 +357,8 @@ app.include_router(ai.router, prefix="/api/ai", tags=["ai"])
 app.include_router(ai_chat.router, prefix="/api/ai", tags=["ai-chat"])
 app.include_router(ai_conversations.router, prefix="/api/ai/conversations", tags=["ai-conversations"])
 app.include_router(skills.router, prefix="/api/skills", tags=["skills"])
+app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
+app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 
 # Mount static files for uploads (must be after API routes)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")

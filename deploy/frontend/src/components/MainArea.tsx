@@ -22,6 +22,7 @@ import TrashPanel from './TrashPanel';
 import PasswordPanel from './PasswordPanel';
 import AISettingsPanel from './AISettingsPanel';
 import AIChatMainView from './AIChatMainView';
+import ProjectView from './ProjectView';
 import { useUserView } from '../context/UserViewContext';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { getNodes, getDocument, updateNode, updateDocument, deleteNode, createNode, createNodesBatch, uploadFile, batchUpdateNodes, batchMoveNodes, batchDeleteNodes, moveNode, getDiaryDayDates, getOrCreateDayNode, getMonthlyDiary } from '../api/data';
@@ -272,7 +273,8 @@ interface MainAreaProps {
 }
 
 const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, activeConvId = null }: MainAreaProps = {}) => {
-  const { setActiveConvId, refreshConvList, setUserSubView } = useUserView();
+  const { setActiveConvId, refreshConvList, setUserSubView, selectedProjectId, setSelectedProjectId } = useUserView();
+  const [showArchivedProjects, setShowArchivedProjects] = useState(false);
   const { documentId: urlDocumentId } = useParams();
   const navigate = useNavigate();
   const documentId = diaryDocId || urlDocumentId;
@@ -2455,6 +2457,20 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     window.addEventListener('keydown', handleGlobalKey, { capture: true });
     return () => window.removeEventListener('keydown', handleGlobalKey, { capture: true });
   }, [undo, redo, commands, execute]);
+
+  // Project view rendering (also handles archived projects view when no project selected)
+  if (selectedProjectId || showArchivedProjects) {
+    return (
+      <div className="flex-1 min-w-0 h-full">
+        <ProjectView
+          projectId={selectedProjectId}
+          showArchived={showArchivedProjects}
+          onToggleArchived={setShowArchivedProjects}
+          onDeselectProject={() => setSelectedProjectId(null)}
+        />
+      </div>
+    );
+  }
 
   // User sub-view rendering
   if (userSubView) {

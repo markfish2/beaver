@@ -454,3 +454,59 @@ class AIChatRequest(BaseModel):
     ai_config_id: Optional[UUID] = None
     conversation_id: Optional[UUID] = None
     mode: str = "data"  # "data" = 搜索本地笔记, "web" = 网络问答
+
+# ==================== Projects ====================
+
+class ProjectCreate(BaseModel):
+    name: str
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    sort_order: Optional[float] = None
+    is_archived: Optional[bool] = None
+
+class ProjectReorder(BaseModel):
+    ids: list[str]  # ordered list of project IDs
+
+class TaskCreate(BaseModel):
+    title: str
+    start_date: str  # YYYY-MM-DD
+    end_date: str    # YYYY-MM-DD
+    parent_id: Optional[UUID] = None
+    sort_order: Optional[float] = None
+
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    is_done: Optional[bool] = None
+    sort_order: Optional[float] = None
+    parent_id: Optional[UUID] = None
+
+class TaskReorder(BaseModel):
+    items: list[dict]  # [{"id": "...", "sort_order": 0.0, "parent_id": null}]
+
+class TaskOut(BaseModel):
+    id: UUID
+    project_id: UUID
+    parent_id: Optional[UUID] = None
+    title: str
+    start_date: str
+    end_date: str
+    is_done: bool
+    sort_order: float
+    created_at: datetime
+    children: list["TaskOut"] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ProjectOut(BaseModel):
+    id: UUID
+    name: str
+    sort_order: float
+    is_archived: bool
+    created_at: datetime
+    updated_at: datetime
+    tasks: list[TaskOut] = []
+
+    model_config = ConfigDict(from_attributes=True)

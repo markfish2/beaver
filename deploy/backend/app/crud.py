@@ -1743,3 +1743,230 @@ def update_voice_record(db: Session, record_id: uuid.UUID, **kwargs) -> models.V
     db.commit()
     db.refresh(db_record)
     return db_record
+
+
+# ==================== Projects ====================
+
+def get_projects(db: Session) -> list:
+    """获取未归档、未删除的项目列表"""
+    return db.query(models.Project).filter(
+        models.Project.is_archived == False,
+        models.Project.is_deleted == False
+    ).order_by(models.Project.sort_order, models.Project.created_at).all()
+
+
+def get_archived_projects(db: Session) -> list:
+    """获取已归档项目"""
+    return db.query(models.Project).filter(
+        models.Project.is_archived == True,
+        models.Project.is_deleted == False
+    ).order_by(models.Project.updated_at.desc()).all()
+
+
+def create_project(db: Session, name: str) -> models.Project:
+    project = models.Project(id=uuid.uuid4(), name=name)
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    return project
+
+
+def update_project(db: Session, project_id, data) -> Optional[models.Project]:
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        return None
+    for field, value in (data if isinstance(data, dict) else data.model_dump(exclude_unset=True)).items():
+        if value is not None:
+            setattr(project, field, value)
+    db.commit()
+    db.refresh(project)
+    return project
+
+
+def delete_project(db: Session, project_id) -> bool:
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        return False
+    db.delete(project)
+    db.commit()
+    return True
+
+
+def archive_project(db: Session, project_id, archive: bool = True) -> Optional[models.Project]:
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        return None
+    project.is_archived = archive
+    db.commit()
+    db.refresh(project)
+    return project
+
+
+def reorder_projects(db: Session, ids: list[str]):
+    for i, pid in enumerate(ids):
+        project = db.query(models.Project).filter(models.Project.id == pid).first()
+        if project:
+            project.sort_order = float(i)
+    db.commit()
+
+
+# ==================== Tasks ====================
+
+def build_task_tree(tasks: list) -> list:
+    """将扁平任务列表构建为树形结构"""
+    task_map = {}
+    for t in tasks:
+        task_dict = {
+            "id": t.id, "project_id": t.project_id, "parent_id": t.parent_id,
+            "title": t.title, "start_date": t.start_date, "end_date": t.end_date,
+            "is_done": t.is_done, "sort_order": t.sort_order, "created_at": t.created_at,
+            "children": []
+        }
+        task_map[str(t.id)] = task_dict
+
+    roots = []
+    for t in tasks:
+        node = task_map[str(t.id)]
+        if t.parent_id and str(t.parent_id) in task_map:
+            task_map[str(t.parent_id)]["children"].append(node)
+        else:
+            roots.append(node)
+
+    # 排序
+    def sort_tree(nodes):
+        nodes.sort(key=lambda x: x["sort_order"])
+        for n in nodes:
+            sort_tree(n["children"])
+    sort_tree(roots)
+    return roots
+
+
+def get_tasks(db: Session, project_id: uuid.UUID) -> list:
+    """获取项目的所有任务（返回树形结构）"""
+    tasks = db.query(models.Task).filter(
+        models.Task.project_id == project_id
+    ).order_by(models.Task.sort_order).all()
+    return build_task_tree(tasks)
+
+
+def get_tasks_flat(db: Session, project_id: uuid.UUID) -> list:
+    """获取项目的所有任务（扁平列表）"""
+    return db.query(models.Task).filter(
+        models.Task.project_id == project_id
+    ).order_by(models.Task.sort_order).all()
+
+
+def create_task(db: Session, project_id, data) -> models.Task:
+    task = models.Task(
+        id=uuid.uuid4(),
+        project_id=project_id,
+        parent_id=data.parent_id if data.parent_id else None,
+        title=data.title,
+        start_date=data.start_date,
+        end_date=data.end_date,
+        sort_order=data.sort_order if data.sort_order is not None else 0.0
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+def update_task(db: Session, task_id: uuid.UUID, data) -> Optional[models.Task]:
+    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+    if not task:
+        return None
+    update_data = data if isinstance(data, dict) else data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        if value is not None:
+            setattr(task, field, value)
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+def delete_task(db: Session, task_id: uuid.UUID) -> bool:
+    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+    if not task:
+        return False
+    db.delete(task)
+    db.commit()
+    return True
+
+
+def toggle_task_done(db: Session, task_id: uuid.UUID) -> tuple[Optional[models.Task], bool]:
+    """
+    切换任务完成状态，级联处理父任务自动完成。
+    返回 (task, 是否应触发日记联动)。
+    """
+    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+    if not task:
+        return None, False
+
+    new_done = not task.is_done
+    task.is_done = new_done
+    diary_trigger = new_done  # 只在标记完成时触发日记
+
+    # 级联：如果标记完成，检查父任务的兄弟是否全完成
+    if new_done and task.parent_id:
+        _check_parent_completion(db, task.parent_id)
+
+    db.commit()
+    db.refresh(task)
+
+    # 自动归档/取消归档：基于项目所有顶级任务的完成状态
+    _auto_toggle_archive(db, task.project_id)
+
+    return task, diary_trigger
+
+
+def _check_parent_completion(db: Session, parent_id):
+    """检查父任务下所有子任务是否都完成，如果是则自动标记父任务完成"""
+    parent = db.query(models.Task).filter(models.Task.id == parent_id).first()
+    if not parent or parent.is_done:
+        return
+
+    siblings = db.query(models.Task).filter(models.Task.parent_id == parent_id).all()
+    if all(s.is_done for s in siblings):
+        parent.is_done = True
+        # 递归向上
+        if parent.parent_id:
+            _check_parent_completion(db, parent.parent_id)
+
+
+def _auto_toggle_archive(db: Session, project_id):
+    """根据项目顶级任务完成状态，自动归档或取消归档"""
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        return
+
+    root_tasks = db.query(models.Task).filter(
+        models.Task.project_id == project_id,
+        models.Task.parent_id == None
+    ).all()
+
+    if not root_tasks:
+        return
+
+    all_done = all(t.is_done for t in root_tasks)
+    any_undone = any(not t.is_done for t in root_tasks)
+
+    if all_done and not project.is_archived:
+        # 所有顶级任务完成 → 自动归档
+        project.is_archived = True
+        db.commit()
+    elif any_undone and project.is_archived:
+        # 有任务未完成但项目已归档 → 自动取消归档
+        project.is_archived = False
+        db.commit()
+
+
+def reorder_tasks(db: Session, items: list[dict]):
+    """批量更新任务排序和层级"""
+    for item in items:
+        task = db.query(models.Task).filter(models.Task.id == item["id"]).first()
+        if task:
+            task.sort_order = item.get("sort_order", task.sort_order)
+            if "parent_id" in item:
+                task.parent_id = item["parent_id"]
+    db.commit()

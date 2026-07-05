@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, X, ArrowLeft, LogOut, Key, Trash, User, Sparkles, Lock } from 'lucide-react';
+import { Search, X, ArrowLeft, LogOut, Key, Trash, User, Sparkles, Lock, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import UserProfileEditor from '../UserProfileEditor';
 import TokenPanel from '../TokenPanel';
@@ -23,6 +23,58 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
   const [searchQuery, setSearchQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // 暗色模式状态
+  const [isDark, setIsDark] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
+      if (saved.theme === 'dark') return true;
+      if (saved.theme && saved.theme !== 'dark') return false;
+    } catch { /* ignore */ }
+    return document.documentElement.classList.contains('dark') ||
+      window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  // 监听主题变化
+  useEffect(() => {
+    const onThemeChange = () => {
+      try {
+        const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
+        if (saved.theme === 'dark') { setIsDark(true); return; }
+        if (saved.theme && saved.theme !== 'dark') { setIsDark(false); return; }
+      } catch { /* ignore */ }
+      setIsDark(document.documentElement.classList.contains('dark'));
+    };
+    window.addEventListener('theme-change', onThemeChange);
+    const mql = window.matchMedia('(prefers-color-scheme: dark)');
+    mql.addEventListener('change', onThemeChange);
+    return () => {
+      window.removeEventListener('theme-change', onThemeChange);
+      mql.removeEventListener('change', onThemeChange);
+    };
+  }, []);
+
+  // 切换暗色/亮色
+  const toggleDark = useCallback(() => {
+    const newDark = !isDark;
+    setIsDark(newDark);
+    document.documentElement.classList.toggle('dark', newDark);
+    // 更新 localStorage
+    try {
+      const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
+      saved.theme = newDark ? 'dark' : 'minimal';
+      localStorage.setItem('outline-font-settings', JSON.stringify(saved));
+      // 保存非暗色主题以便恢复
+      if (newDark) {
+        localStorage.setItem('outline-restored-theme', saved.theme === 'dark' ? 'minimal' : 'minimal');
+      }
+    } catch { /* ignore */ }
+    // 更新 theme-color meta
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', newDark ? '#111827' : '#ffffff');
+    // 派发事件通知其他组件
+    window.dispatchEvent(new CustomEvent('theme-change'));
+  }, [isDark]);
 
   useEffect(() => {
     if (showSearch && searchRef.current) {
@@ -138,14 +190,27 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
           </span>
         </div>
 
-        {/* 右侧：搜索（圆形胶囊） */}
-        <div className="relative shrink-0">
+        {/* 右侧：日/夜切换 + 搜索（胶囊容器） */}
+        <div className="relative shrink-0 flex items-center h-[36px] rounded-full
+                        bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
+                        shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]">
+          {/* 日/夜切换按钮 */}
+          <button
+            onClick={toggleDark}
+            className="flex items-center justify-center w-[36px] h-[36px] rounded-full
+                       text-gray-500 dark:text-gray-400
+                       active:scale-95 transition-transform"
+            aria-label={isDark ? '切换到日间模式' : '切换到夜间模式'}
+          >
+            {isDark ? <Sun className="w-[16px] h-[16px]" /> : <Moon className="w-[16px] h-[16px]" />}
+          </button>
+          {/* 分隔线 */}
+          <div className="w-px h-4 bg-gray-200 dark:bg-gray-600" />
+          {/* 搜索按钮 */}
           {showSearch ? (
             <button
               onClick={() => { setShowSearch(false); setSearchQuery(''); }}
               className="flex items-center justify-center w-[36px] h-[36px] rounded-full
-                         bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
-                         shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]
                          text-gray-500 dark:text-gray-400
                          active:scale-95 transition-transform"
             >
@@ -155,8 +220,6 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
             <button
               onClick={() => setShowSearch(true)}
               className="flex items-center justify-center w-[36px] h-[36px] rounded-full
-                         bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
-                         shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]
                          text-gray-500 dark:text-gray-400
                          active:scale-95 transition-transform"
             >
@@ -168,7 +231,8 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
 
       {/* 搜索展开面板 */}
       {showSearch && (
-        <div
+        <form
+          onSubmit={(e) => { e.preventDefault(); handleSearchSubmit(); }}
           className="fixed left-3 right-3 z-30 px-3 py-2
                      bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
                      rounded-2xl
@@ -177,21 +241,30 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
             top: `calc(60px + env(safe-area-inset-top, 0px))`,
           }}
         >
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-[16px] h-[16px] text-gray-400" />
+          <div className="relative flex items-center gap-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-[16px] h-[16px] text-gray-400 pointer-events-none" />
             <input
               ref={searchRef}
-              type="text"
+              type="search"
+              enterKeyHint="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleSearchSubmit(); }}
               placeholder="搜索笔记、日记、随想..."
-              className="w-full pl-9 pr-3 py-2.5 text-sm bg-transparent
+              className="flex-1 pl-9 pr-3 py-2.5 text-sm bg-transparent
                          placeholder-gray-400 text-gray-800 dark:text-gray-200
                          focus:outline-none"
             />
+            {searchQuery.trim() && (
+              <button
+                type="submit"
+                className="shrink-0 px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400
+                           active:scale-95 transition-transform"
+              >
+                搜索
+              </button>
+            )}
           </div>
-        </div>
+        </form>
       )}
 
       {/* 弹窗 */}

@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { Archive, Globe, Shuffle, Image as ImageIcon } from 'lucide-react';
 import MemoHeatmapCalendar from './MemoHeatmapCalendar';
 import HabitTracker from './HabitTracker';
+import ProjectWeekView from './ProjectWeekView';
 import MemoTagsPanel from './MemoTagsPanel';
 
 const MEMO_VIEW_KEY = 'miniflowy-memo-view';
@@ -66,6 +67,9 @@ export default function MemoSidebarContent() {
     <div className="px-3 py-3 space-y-4">
       {/* 热力日历 */}
       <MemoHeatmapCalendar embedded />
+
+      {/* 近7天计划 */}
+      <ProjectWeekView />
 
       {/* 习惯打卡 */}
       <HabitTracker embedded />
