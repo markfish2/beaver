@@ -369,7 +369,7 @@ export default function ProjectView({ projectId, showArchived = false, onToggleA
       >
         {/* Task list */}
         <div
-          className="overflow-y-auto p-4 space-y-1"
+          className={`overflow-y-auto p-4 space-y-1 ${!isMobile && showGantt ? '' : 'flex-1 min-w-0'}`}
           style={!isMobile && showGantt ? { width: `${splitRatio * 100}%`, flexShrink: 0 } : undefined}
         >
           {isLoading ? (
