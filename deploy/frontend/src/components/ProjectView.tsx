@@ -378,7 +378,7 @@ export default function ProjectView({ projectId, showArchived = false, onToggleA
             <div className="text-center text-gray-400 py-8">暂无任务</div>
           ) : (
             <div className="space-y-1">
-              {tasks.map(task => (
+              {tasks.map((task, idx) => (
                 <TaskCard
                   key={task.id}
                   task={task}
@@ -388,6 +388,7 @@ export default function ProjectView({ projectId, showArchived = false, onToggleA
                   onAddChild={handleAddChild}
                   onMove={handleMove}
                   depth={0}
+                  isLastChild={idx === tasks.length - 1}
                   dragState={dragState}
                   onDragStart={handleDragStart}
                   onDragOver={handleDragOver}

@@ -274,7 +274,7 @@ export default function TaskCard({
               </div>
             ))}
             <div className="w-4 flex items-start justify-center pt-3">
-              <span className="text-gray-300 dark:text-gray-700 text-[13px] leading-none select-none">
+              <span className="text-gray-300 dark:text-gray-700 text-[15px] leading-none select-none">
                 {isLastChild ? '└─' : '├─'}
               </span>
             </div>

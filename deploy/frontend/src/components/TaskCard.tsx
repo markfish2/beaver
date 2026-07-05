@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   Check, Circle, ChevronDown, ChevronRight, Plus, Trash2, GripVertical,
 } from 'lucide-react';
@@ -42,11 +42,7 @@ function useIsDark() {
 // ==================== Depth-based colors ====================
 
 const DEPTH_COLORS = [
-  { bg: 'bg-white dark:bg-gray-900', border: 'border-[#F5D0A9] dark:border-[#5C4A32]' },
-  { bg: 'bg-white dark:bg-gray-900', border: 'border-[#A9C8F5] dark:border-[#324A5C]' },
-  { bg: 'bg-white dark:bg-gray-900', border: 'border-[#A9F5C4] dark:border-[#325C42]' },
-  { bg: 'bg-white dark:bg-gray-900', border: 'border-[#F5A9C8] dark:border-[#5C3242]' },
-  { bg: 'bg-white dark:bg-gray-900', border: 'border-[#C8A9F5] dark:border-[#42325C]' },
+  { bg: 'bg-white dark:bg-gray-900', border: 'border-transparent' },
 ];
 
 function getDepthStyle(depth: number, isDone: boolean) {
@@ -74,6 +70,8 @@ interface TaskCardProps {
   onAddChild: (parentId: string) => void;
   onMove?: (taskId: string, targetId: string, position: 'before' | 'after' | 'inside') => void;
   depth?: number;
+  isLastChild?: boolean;
+  parentTreeLines?: boolean[];
   dragState?: DragState;
   onDragStart?: (id: string) => void;
   onDragOver?: (id: string, position: 'before' | 'after' | 'inside') => void;
@@ -137,6 +135,8 @@ export default function TaskCard({
   onDragStart,
   onDragOver,
   onDragEnd,
+  isLastChild = true,
+  parentTreeLines = [],
 }: TaskCardProps) {
   const isDark = useIsDark();
   const [isEditing, setIsEditing] = useState(false);
@@ -147,6 +147,12 @@ export default function TaskCard({
   const inputRef = useRef<HTMLInputElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const [narrow, setNarrow] = useState(false);
+
+  // Tree line data to pass to children
+  const currentTreeLines = useMemo(() => {
+    if (depth === 0) return [];
+    return [...parentTreeLines, !isLastChild];
+  }, [depth, parentTreeLines, isLastChild]);
 
   useEffect(() => {
     const el = cardRef.current;
@@ -251,29 +257,48 @@ export default function TaskCard({
   const isDragging = dragState?.draggedId === task.id;
 
   return (
-    <div style={{ marginLeft: depth > 0 ? 16 : 0 }}>
+    <div>
       {/* Drop indicator: before */}
       {isDragTarget && dragState?.dropPosition === 'before' && (
         <div className="h-0.5 bg-blue-500 rounded-full mb-0.5 mx-4" />
       )}
 
-      {/* Capsule card */}
-      <div
-        ref={cardRef}
-        draggable
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-        onDragEnd={handleDragEnd}
-        className={`
-          rounded-none px-3 py-2 border transition-all duration-150 shadow-sm
-          ${colors.bg} ${colors.border}
-          ${isDragging ? 'opacity-40 scale-95' : ''}
-          ${isDragTarget && dragState?.dropPosition === 'inside' ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''}
-        `}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
+      {/* Tree + card row */}
+      <div className="flex items-stretch">
+        {/* Tree connectors — outside the card, in the indent area */}
+        {depth > 0 && (
+          <div className="flex-shrink-0 flex" style={{ width: depth * 16 }}>
+            {parentTreeLines.map((continueLine, i) => (
+              <div key={i} className="w-4 flex justify-center">
+                {continueLine && <div className="w-px h-full bg-gray-300 dark:bg-gray-700" />}
+              </div>
+            ))}
+            <div className="w-4 flex items-start justify-center pt-3">
+              <span className="text-gray-300 dark:text-gray-700 text-[13px] leading-none select-none">
+                {isLastChild ? '└─' : '├─'}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Card */}
+        <div
+          ref={cardRef}
+          draggable
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          onDragEnd={handleDragEnd}
+          className={`
+            flex-1 min-w-0
+            rounded-none px-3 py-2 border transition-all duration-150 shadow-sm
+            ${colors.bg} ${colors.border}
+            ${isDragging ? 'opacity-40 scale-95' : ''}
+            ${isDragTarget && dragState?.dropPosition === 'inside' ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''}
+          `}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
         {narrow ? (
           <>
             {/* Row 1: handle + collapse + checkbox + title */}
@@ -443,6 +468,7 @@ export default function TaskCard({
             )}
           </div>
         )}
+        </div>
       </div>
 
       {/* Drop indicator: after */}
@@ -453,7 +479,7 @@ export default function TaskCard({
       {/* Children */}
       {hasChildren && !collapsed && (
         <div className="mt-0.5 space-y-0.5">
-          {task.children.map(child => (
+          {task.children.map((child, idx) => (
             <TaskCard
               key={child.id}
               task={child}
@@ -463,6 +489,8 @@ export default function TaskCard({
               onAddChild={onAddChild}
               onMove={onMove}
               depth={depth + 1}
+              isLastChild={idx === task.children.length - 1}
+              parentTreeLines={currentTreeLines}
               dragState={dragState}
               onDragStart={onDragStart}
               onDragOver={onDragOver}
