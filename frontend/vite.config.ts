@@ -81,7 +81,7 @@ export default defineConfig({
     })
   ],
   server: {
-    allowedHosts: ['flowy.arcbox.top'],
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://localhost:8000',

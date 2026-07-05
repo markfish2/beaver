@@ -243,3 +243,34 @@ class AIMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     conversation: Mapped["AIConversation"] = relationship("AIConversation", back_populates="messages")
+
+
+class Project(Base):
+    __tablename__ = "projects"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(200))
+    sort_order: Mapped[float] = mapped_column(Float, default=0.0)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tasks: Mapped[List["Task"]] = relationship("Task", back_populates="project", cascade="all, delete-orphan")
+
+
+class Task(Base):
+    __tablename__ = "tasks"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(Text, default="")
+    start_date: Mapped[str] = mapped_column(String(10))  # YYYY-MM-DD
+    end_date: Mapped[str] = mapped_column(String(10))    # YYYY-MM-DD
+    is_done: Mapped[bool] = mapped_column(Boolean, default=False)
+    sort_order: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    project: Mapped["Project"] = relationship("Project", back_populates="tasks")
+    children: Mapped[List["Task"]] = relationship("Task", back_populates="parent", cascade="all, delete-orphan")
+    parent: Mapped[Optional["Task"]] = relationship("Task", remote_side=[id], back_populates="children")

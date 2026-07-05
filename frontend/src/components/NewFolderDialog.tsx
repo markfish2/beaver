@@ -6,14 +6,18 @@ interface NewFolderDialogProps {
   onConfirm: (title: string) => void;
   onCancel: () => void;
   isSubmitting?: boolean;
+  dialogTitle?: string;
+  label?: string;
+  placeholder?: string;
+  defaultValue?: string;
 }
 
-const NewFolderDialog = ({ isOpen, onConfirm, onCancel, isSubmitting = false }: NewFolderDialogProps) => {
-  const [title, setTitle] = useState('新文件夹');
+const NewFolderDialog = ({ isOpen, onConfirm, onCancel, isSubmitting = false, dialogTitle = '新建文件夹', label = '文件夹名称', placeholder = '输入文件夹名称', defaultValue = '新文件夹' }: NewFolderDialogProps) => {
+  const [title, setTitle] = useState(defaultValue);
 
   useEffect(() => {
     if (isOpen) {
-      setTitle('新文件夹');
+      setTitle(defaultValue);
     }
   }, [isOpen]);
 
@@ -26,7 +30,6 @@ const NewFolderDialog = ({ isOpen, onConfirm, onCancel, isSubmitting = false }: 
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // 只有在非输入法状态下按Enter才触发创建
     if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
       handleConfirm();
     } else if (e.key === 'Escape') {
@@ -37,11 +40,11 @@ const NewFolderDialog = ({ isOpen, onConfirm, onCancel, isSubmitting = false }: 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
       <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
-      
+
       <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-96 max-w-[90vw]">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            新建文件夹
+            {dialogTitle}
           </h3>
           <button
             onClick={onCancel}
@@ -50,11 +53,11 @@ const NewFolderDialog = ({ isOpen, onConfirm, onCancel, isSubmitting = false }: 
             <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
           </button>
         </div>
-        
+
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              文件夹名称
+              {label}
             </label>
             <input
               type="text"
@@ -62,12 +65,12 @@ const NewFolderDialog = ({ isOpen, onConfirm, onCancel, isSubmitting = false }: 
               onChange={(e) => setTitle(e.target.value)}
               onKeyDown={handleKeyDown}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-              placeholder="输入文件夹名称"
+              placeholder={placeholder}
               autoFocus
             />
           </div>
         </div>
-        
+
         <div className="flex justify-end space-x-3 mt-6">
           <button
             onClick={onCancel}

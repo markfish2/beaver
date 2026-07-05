@@ -2,7 +2,7 @@
 
 import { precacheAndRoute } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
-import { StaleWhileRevalidate, CacheFirst, NetworkFirst } from 'workbox-strategies';
+import { StaleWhileRevalidate, CacheFirst, NetworkOnly } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 
@@ -67,7 +67,7 @@ registerRoute(
 // API GET 请求：网络优先，离线返回缓存
 registerRoute(
   ({ url, request }) => url.pathname.startsWith('/api/') && request.method === 'GET',
-  new NetworkFirst({
+  new NetworkOnly({
     cacheName: 'api-cache',
     plugins: [
       new ExpirationPlugin({ maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 }),

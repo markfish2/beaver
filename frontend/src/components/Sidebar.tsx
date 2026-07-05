@@ -1,4 +1,4 @@
-import { Search, FileText, ChevronDown, Plus, Trash, Star, LogOut, ChevronLeft, ChevronRight, Folder, Edit2, CalendarDays, MoreHorizontal, Copy, ArrowUpRight, ListTree, FolderPlus, FilePlus, Move, Frame, StickyNote, Square, Key, Clock, Lock, Sparkles, User, Sun, Moon } from 'lucide-react';
+import { Search, FileText, ChevronDown, Plus, Trash, Star, LogOut, ChevronLeft, ChevronRight, Folder, Edit2, CalendarDays, MoreHorizontal, Copy, ArrowUpRight, ListTree, FolderPlus, FilePlus, Move, Frame, StickyNote, Square, Key, Clock, Lock, Sparkles, User, Sun, Moon, FolderKanban, Archive } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createDocument, deleteDocument, updateDocument, copyDocument, getNodes, createMemo, uploadFile, search as apiSearch, getTodos, createTodo, updateTodo, getMonthlyDiary, getOrCreateDayNode } from '../api/data';
 import type { Document as DocType, SearchResultItem, Todo } from '../api/data';
@@ -23,6 +23,8 @@ import PasswordDialog from './PasswordDialog';
 import MemoSidebarContent from './MemoSidebarContent';
 import AISettings from './AISettings';
 import AIChatSidebar from './AIChatSidebar';
+import { getProjects, createProject, updateProject, deleteProject, archiveProject } from '../api/projects';
+import type { Project } from '../api/projects';
 
 interface SidebarProps {
   onDocumentSelect?: () => void;
@@ -64,7 +66,7 @@ const DEFAULT_PANEL_WIDTH = 212;  // 260 - 48 = 212 (total visual width stays 26
 const MIN_PANEL_WIDTH = 160;
 const MAX_PANEL_WIDTH = 460;
 
-type ViewMode = 'diary' | 'all' | 'starred' | 'recent' | 'memo' | 'user' | 'ai';
+type ViewMode = 'diary' | 'all' | 'starred' | 'recent' | 'memo' | 'user' | 'ai' | 'projects';
 type UserSubView = 'profile' | 'token' | 'ai' | 'trash' | 'password';
 
 const TabNav = ({ activeTab, onTabChange }: {
@@ -160,8 +162,12 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery, isSearchMode]);
-  const [viewMode, setViewMode] = useState<ViewMode>('diary');
-  const { userSubView, setUserSubView: setUserSubViewContext, activeConvId, setActiveConvId } = useUserView();
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    try {
+      return localStorage.getItem('selectedProjectId') ? 'projects' : 'diary';
+    } catch { return 'diary'; }
+  });
+  const { userSubView, setUserSubView: setUserSubViewContext, activeConvId, setActiveConvId, selectedProjectId, setSelectedProjectId } = useUserView();
   const [showNewMenu, setShowNewMenu] = useState(false);
 
   // 暗色模式状态
@@ -257,6 +263,14 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [showAISettings, setShowAISettings] = useState(false);
   const [todoText, setTodoText] = useState('');
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectContextMenu, setProjectContextMenu] = useState<{ id: string; name: string; x: number; y: number } | null>(null);
+  const [showProjectDeleteDialog, setShowProjectDeleteDialog] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editingProjectName, setEditingProjectName] = useState('');
+  const projectContextMenuRef = useRef<HTMLDivElement>(null);
   const todoInputRef = useRef<HTMLInputElement>(null);
   const [contextMenu, setContextMenu] = useState<{
     docId: string; docTitle: string; docType: 'document' | 'folder'; isStarred: boolean; aiExcluded: boolean; x: number; y: number; buttonBottom: number;
@@ -299,6 +313,120 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   }, [showTodoDialog]);
 
   useEffect(() => {
+    if (viewMode === 'projects' && projects.length === 0) {
+      getProjects().then(setProjects).catch(console.error);
+    } else if (viewMode !== 'projects') {
+      // 切换到非项目视图时，清除选中的项目，让 MainArea 显示正常内容
+      setSelectedProjectId(null);
+    }
+  }, [viewMode, setSelectedProjectId]);
+
+  // 监听从其他组件（如近7天计划）切换到项目视图的事件
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.view === 'projects') {
+        setViewMode('projects');
+        if (detail.projectId) {
+          setSelectedProjectId(detail.projectId);
+        }
+      }
+    };
+    window.addEventListener('switch-view', handler);
+    return () => window.removeEventListener('switch-view', handler);
+  }, [setSelectedProjectId]);
+
+  // 监听从其他组件（如近7天计划）切换到项目视图的事件
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.view === 'projects') {
+        setViewMode('projects');
+        if (detail.projectId) {
+          setSelectedProjectId(detail.projectId);
+        }
+      }
+    };
+    window.addEventListener('switch-view', handler);
+    return () => window.removeEventListener('switch-view', handler);
+  }, [setSelectedProjectId]);
+
+  // 监听从其他组件（如近7天计划）切换到项目视图的事件
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.view === 'projects') {
+        setViewMode('projects');
+        if (detail.projectId) {
+          setSelectedProjectId(detail.projectId);
+        }
+      }
+    };
+    window.addEventListener('switch-view', handler);
+    return () => window.removeEventListener('switch-view', handler);
+  }, [setSelectedProjectId]);
+
+  // 监听从其他组件（如近7天计划）切换到项目视图的事件
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.view === 'projects') {
+        setViewMode('projects');
+        if (detail.projectId) {
+          setSelectedProjectId(detail.projectId);
+        }
+      }
+    };
+    window.addEventListener('switch-view', handler);
+    return () => window.removeEventListener('switch-view', handler);
+  }, [setSelectedProjectId]);
+
+  // 监听从其他组件（如近7天计划）切换到项目视图的事件
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.view === 'projects') {
+        setViewMode('projects');
+        if (detail.projectId) {
+          setSelectedProjectId(detail.projectId);
+        }
+      }
+    };
+    window.addEventListener('switch-view', handler);
+    return () => window.removeEventListener('switch-view', handler);
+  }, [setSelectedProjectId]);
+
+  // 监听从其他组件（如近7天计划）切换到项目视图的事件
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.view === 'projects') {
+        setViewMode('projects');
+        if (detail.projectId) {
+          setSelectedProjectId(detail.projectId);
+        }
+      }
+    };
+    window.addEventListener('switch-view', handler);
+    return () => window.removeEventListener('switch-view', handler);
+  }, [setSelectedProjectId]);
+
+  // 监听从其他组件（如近7天计划）切换到项目视图的事件
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.view === 'projects') {
+        setViewMode('projects');
+        if (detail.projectId) {
+          setSelectedProjectId(detail.projectId);
+        }
+      }
+    };
+    window.addEventListener('switch-view', handler);
+    return () => window.removeEventListener('switch-view', handler);
+  }, [setSelectedProjectId]);
+
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setShowUserMenu(false);
@@ -313,6 +441,17 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!projectContextMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (projectContextMenuRef.current && !projectContextMenuRef.current.contains(e.target as Node)) {
+        setProjectContextMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [projectContextMenu]);
 
   // 监听外部 toggleSidebar 事件（移动端汉堡菜单触发）
   useEffect(() => {
@@ -1025,6 +1164,17 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           <CalendarDays className="w-5 h-5" />
         </button>
         <button
+          onClick={() => { setIsSearchMode(false); setUserSubViewContext(null); viewMode === 'projects' && contentExpanded ? setContentExpanded(false) : (setViewMode('projects'), setContentExpanded(true)); }}
+          className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
+            viewMode === 'projects' && contentExpanded && !isSearchMode
+              ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
+              : 'text-[#8B8B80] dark:text-gray-400 hover:text-[#5A5A52] dark:hover:text-gray-200 hover:bg-[#EDEDE8] dark:hover:bg-gray-800'
+          }`}
+          title="项目"
+        >
+          <FolderKanban className="w-5 h-5" />
+        </button>
+        <button
           onClick={() => { setIsSearchMode(false); setUserSubViewContext(null); viewMode === 'all' && contentExpanded ? setContentExpanded(false) : (setViewMode('all'), setContentExpanded(true)); }}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
             viewMode === 'all' && contentExpanded && !isSearchMode
@@ -1136,6 +1286,16 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
               <Folder className="w-4 h-4" />
               <span>新建文件夹</span>
             </button>
+            <button
+              onClick={() => {
+                setShowNewMenu(false);
+                setShowNewProjectDialog(true);
+              }}
+              className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
+            >
+              <FolderKanban className="w-4 h-4" />
+              <span>新建项目计划</span>
+            </button>
           </div>
         )}
       </div>
@@ -1236,7 +1396,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                   <>
                     <div className="flex items-center justify-between px-3 pt-3 pb-2">
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {viewMode === 'diary' ? '日记' : viewMode === 'starred' ? '收藏' : viewMode === 'user' ? '用户' : viewMode === 'ai' ? 'AI 问答' : '文件'}
+                        {viewMode === 'diary' ? '日记' : viewMode === 'starred' ? '收藏' : viewMode === 'user' ? '用户' : viewMode === 'ai' ? 'AI 问答' : viewMode === 'projects' ? '项目' : '文件'}
                       </span>
                       <button
                         onClick={toggleSidebar}
@@ -1278,6 +1438,68 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                           onTaskToggle={handleTaskToggle}
                           onTaskMoved={fetchPendingTasks}
                         />
+                      ) : viewMode === 'projects' ? (
+                        <div className="flex flex-col h-full">
+                          <div className="flex-1 overflow-y-auto">
+                            {projects.map(p => (
+                              <div key={p.id}
+                                onClick={() => { if (editingProjectId !== p.id) setSelectedProjectId(p.id); }}
+                                onContextMenu={(e) => {
+                                  e.preventDefault();
+                                  setProjectContextMenu({ id: p.id, name: p.name, x: e.clientX, y: e.clientY });
+                                }}
+                                className={`group px-3 py-2 flex items-center gap-2 cursor-pointer transition-colors ${
+                                  selectedProjectId === p.id
+                                    ? 'bg-[#E0E0D8] dark:bg-gray-700'
+                                    : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                                }`}>
+                                <FolderKanban className="w-4 h-4 text-gray-400 shrink-0" />
+                                {editingProjectId === p.id ? (
+                                  <input
+                                    type="text"
+                                    value={editingProjectName}
+                                    onChange={e => setEditingProjectName(e.target.value)}
+                                    onBlur={async () => {
+                                      const trimmed = editingProjectName.trim();
+                                      if (trimmed && trimmed !== p.name) {
+                                        try {
+                                          await updateProject(p.id, { name: trimmed });
+                                          setProjects(prev => prev.map(x => x.id === p.id ? { ...x, name: trimmed } : x));
+                                        } catch (err) { console.error('Failed to rename project:', err); }
+                                      }
+                                      setEditingProjectId(null);
+                                    }}
+                                    onKeyDown={async (e) => {
+                                      if (e.key === 'Enter') {
+                                        e.currentTarget.blur();
+                                      } else if (e.key === 'Escape') {
+                                        setEditingProjectId(null);
+                                      }
+                                    }}
+                                    autoFocus
+                                    className="flex-1 text-sm bg-transparent outline-none border-b border-blue-400 text-gray-800 dark:text-gray-200"
+                                    onClick={e => e.stopPropagation()}
+                                  />
+                                ) : (
+                                  <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1">{p.name}</span>
+                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setProjectContextMenu({ id: p.id, name: p.name, x: rect.left, y: rect.bottom + 4 });
+                                  }}
+                                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <MoreHorizontal size={14} className="text-gray-400" />
+                                </button>
+                              </div>
+                            ))}
+                            {projects.length === 0 && (
+                              <p className="px-3 py-4 text-sm text-gray-400 text-center">暂无项目</p>
+                            )}
+                          </div>
+                        </div>
                       ) : viewMode === 'starred' ? (
                         <div className="px-1 py-1">
                           {renderFileTree(null, 0, true)}
@@ -1417,7 +1639,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                   <>
                     <div className="px-3 py-2 flex items-center justify-between">
                       <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        {viewMode === 'diary' ? '日记' : viewMode === 'starred' ? '收藏' : viewMode === 'memo' ? '随想笔记' : viewMode === 'user' ? '用户' : viewMode === 'ai' ? 'AI 问答' : '文件'}
+                        {viewMode === 'diary' ? '日记' : viewMode === 'starred' ? '收藏' : viewMode === 'memo' ? '随想笔记' : viewMode === 'user' ? '用户' : viewMode === 'ai' ? 'AI 问答' : viewMode === 'projects' ? '项目' : '文件'}
                       </span>
                       <button onClick={toggleSidebar} className="w-5 h-5 flex items-center justify-center rounded text-[#8B8B80] hover:text-[#5A5A52] hover:bg-[#EDEDE8] dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-colors shrink-0" title="收起面板">
                         <ChevronLeft className="w-4 h-4" />
@@ -1484,6 +1706,68 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                           <DiaryCalendar onNavigate={() => { onDocumentSelect?.(); setTimeout(() => { window.dispatchEvent(new CustomEvent('sidebarClose')); }, 0); }} pendingTasks={pendingTasks} onTaskToggle={handleTodoToggle} onTaskMoved={fetchPendingTasks} />
                         ) : isLoading ? (
                           <div className="p-4 text-xs text-gray-400 text-center">加载中...</div>
+                        ) : viewMode === 'projects' ? (
+                          <div className="flex flex-col h-full">
+                            <div className="flex-1 overflow-y-auto">
+                              {projects.map(p => (
+                                <div key={p.id}
+                                  onClick={() => { if (editingProjectId !== p.id) setSelectedProjectId(p.id); }}
+                                  onContextMenu={(e) => {
+                                    e.preventDefault();
+                                    setProjectContextMenu({ id: p.id, name: p.name, x: e.clientX, y: e.clientY });
+                                  }}
+                                  className={`group px-3 py-2 flex items-center gap-2 cursor-pointer transition-colors ${
+                                    selectedProjectId === p.id
+                                      ? 'bg-[#E0E0D8] dark:bg-gray-700'
+                                      : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                                  }`}>
+                                  <FolderKanban className="w-4 h-4 text-gray-400 shrink-0" />
+                                  {editingProjectId === p.id ? (
+                                    <input
+                                      type="text"
+                                      value={editingProjectName}
+                                      onChange={e => setEditingProjectName(e.target.value)}
+                                      onBlur={async () => {
+                                        const trimmed = editingProjectName.trim();
+                                        if (trimmed && trimmed !== p.name) {
+                                          try {
+                                            await updateProject(p.id, { name: trimmed });
+                                            setProjects(prev => prev.map(x => x.id === p.id ? { ...x, name: trimmed } : x));
+                                          } catch (err) { console.error('Failed to rename project:', err); }
+                                        }
+                                        setEditingProjectId(null);
+                                      }}
+                                      onKeyDown={async (e) => {
+                                        if (e.key === 'Enter') {
+                                          e.currentTarget.blur();
+                                        } else if (e.key === 'Escape') {
+                                          setEditingProjectId(null);
+                                        }
+                                      }}
+                                      autoFocus
+                                      className="flex-1 text-sm bg-transparent outline-none border-b border-blue-400 text-gray-800 dark:text-gray-200"
+                                      onClick={e => e.stopPropagation()}
+                                    />
+                                  ) : (
+                                    <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1">{p.name}</span>
+                                  )}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      setProjectContextMenu({ id: p.id, name: p.name, x: rect.left, y: rect.bottom + 4 });
+                                    }}
+                                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  >
+                                    <MoreHorizontal size={14} className="text-gray-400" />
+                                  </button>
+                                </div>
+                              ))}
+                              {projects.length === 0 && (
+                                <p className="px-3 py-4 text-sm text-gray-400 text-center">暂无项目</p>
+                              )}
+                            </div>
+                          </div>
                         ) : viewMode === 'starred' ? (
                           filteredDocuments.length === 0 ? <div className="p-4 text-xs text-gray-400 text-center">暂无收藏</div> : <div className="pt-2">{renderFileTree(null, 0)}</div>
                         ) : viewMode === 'ai' ? (
@@ -1573,6 +1857,28 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
         onCancel={() => setDeleteDialog({ ...deleteDialog, show: false })}
       />
 
+      {/* 项目删除确认弹窗 */}
+      <DeleteConfirmDialog
+        isOpen={showProjectDeleteDialog}
+        title="删除项目"
+        message={`确定要删除「${projectToDelete?.name}」吗？所有任务也会一并删除。`}
+        onConfirm={async () => {
+          if (projectToDelete) {
+            if (selectedProjectId === projectToDelete.id) setSelectedProjectId(null);
+            try {
+              await deleteProject(projectToDelete.id);
+              setProjects(prev => prev.filter(p => p.id !== projectToDelete.id));
+            } catch (err) { console.error('Failed to delete project:', err); }
+          }
+          setShowProjectDeleteDialog(false);
+          setProjectToDelete(null);
+        }}
+        onCancel={() => {
+          setShowProjectDeleteDialog(false);
+          setProjectToDelete(null);
+        }}
+      />
+
 
 
       <NewFolderDialog
@@ -1580,6 +1886,22 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
         onConfirm={handleCreateFolder}
         onCancel={() => setShowNewFolderDialog(false)}
         isSubmitting={isSubmitting}
+      />
+
+      <NewFolderDialog
+        isOpen={showNewProjectDialog}
+        dialogTitle="新建项目计划"
+        label="项目名称"
+        placeholder="输入项目名称"
+        defaultValue="新项目"
+        onConfirm={async (name: string) => {
+          setShowNewProjectDialog(false);
+          try {
+            await createProject(name.trim());
+            getProjects().then(setProjects).catch(console.error);
+          } catch (err) { console.error('Failed to create project:', err); }
+        }}
+        onCancel={() => setShowNewProjectDialog(false)}
       />
 
       {/* 新建待办弹窗 */}
@@ -1711,6 +2033,53 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           </div>
         );
       })()}
+
+      {/* Project Context Menu */}
+      {projectContextMenu && (
+        <div
+          ref={projectContextMenuRef}
+          className="fixed bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-[9999] min-w-[140px]"
+          style={{ left: projectContextMenu.x, top: projectContextMenu.y }}
+        >
+          <button
+            onClick={() => {
+              setEditingProjectId(projectContextMenu.id);
+              setEditingProjectName(projectContextMenu.name);
+              setProjectContextMenu(null);
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <Edit2 className="w-4 h-4 text-gray-400" />
+            <span>重命名</span>
+          </button>
+          <button
+            onClick={async () => {
+              const id = projectContextMenu.id;
+              setProjectContextMenu(null);
+              if (selectedProjectId === id) setSelectedProjectId(null);
+              try {
+                await archiveProject(id);
+                setProjects(prev => prev.filter(p => p.id !== id));
+              } catch (err) { console.error('Failed to archive project:', err); }
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <Archive className="w-4 h-4 text-gray-400" />
+            <span>归档</span>
+          </button>
+          <button
+            onClick={() => {
+              setProjectToDelete({ id: projectContextMenu.id, name: projectContextMenu.name });
+              setProjectContextMenu(null);
+              setShowProjectDeleteDialog(true);
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+          >
+            <Trash className="w-4 h-4" />
+            <span>删除</span>
+          </button>
+        </div>
+      )}
 
       {/* Context Menu */}
       {contextMenu && (() => {
