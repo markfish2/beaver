@@ -1483,7 +1483,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         if (isTextSelected) return;
 
         const currentElement = e.currentTarget as HTMLElement;
-        const currentText = currentElement.textContent || '';
+        const currentText = (currentElement.textContent || '').replace(/\n/g, '').trim();
         
         // 1. 精准计算光标位置（防止富文本标签导致的 offset 计算错误）
         let cursorOffset = 0;
@@ -1498,7 +1498,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
 
         if (isAtStart) {
           if (type === 'content') {
-            if (currentText === '') {
+            if (currentText === '' || (!currentNode.content && currentText.length <= 1)) {
               // 2. 绝对拦截！必须阻止浏览器原生的退格动作，不让它擅自把光标扔到上一行开头
               e.preventDefault();
               

@@ -478,7 +478,7 @@ def delete_node(db: Session, node_id: uuid.UUID):
         SELECT id FROM descendants
     """)
     result = db.execute(cte_query, {"root_id": str(node_id)})
-    all_ids = [row[0] for row in result.fetchall()]
+    all_ids = [uuid.UUID(row[0]) for row in result.fetchall()]
 
     if all_ids:
         db.query(models.Node).filter(models.Node.id.in_(all_ids)).delete(
