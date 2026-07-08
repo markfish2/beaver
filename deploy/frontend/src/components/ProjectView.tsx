@@ -52,7 +52,7 @@ function addChildToTree(tasks: Task[], parentId: string, child: Task): Task[] {
 export default function ProjectView({ projectId, showArchived = false, onToggleArchived, onDeselectProject, isMobile = false }: ProjectViewProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showGantt, setShowGantt] = useState(true);
-  const [splitRatio, setSplitRatio] = useState(0.33); // 0.2 ~ 0.8
+  const [splitRatio, setSplitRatio] = useState(0.5); // 0.2 ~ 0.8
   const isDraggingRef = useRef(false);
   const [ganttScale, setGanttScale] = useState<'day' | 'week'>('day');
   const [isLoading, setIsLoading] = useState(false);
