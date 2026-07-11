@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Tag } from 'lucide-react';
 import { getMemoTags } from '../api/data';
 
 interface MemoTagsPanelProps {
@@ -25,7 +26,10 @@ export default function MemoTagsPanel({ onTagClick, activeTag, embedded = false 
   if (tags.length === 0) {
     return (
       <div className={embedded ? 'px-1' : 'bg-white dark:bg-gray-800/50 rounded-xl p-4 border border-[#e7e7e5] dark:border-gray-700/40'}>
-        <h3 className="text-sm font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">标签</h3>
+        <div className="flex items-center gap-1.5 text-base font-medium text-gray-400 dark:text-gray-500 mb-2">
+          <Tag className="w-4 h-4" />
+          标签
+        </div>
         <p className="text-sm text-gray-400 dark:text-gray-500">使用 #标签 来创建</p>
       </div>
     );
@@ -33,7 +37,10 @@ export default function MemoTagsPanel({ onTagClick, activeTag, embedded = false 
 
   return (
     <div className={embedded ? 'px-1' : 'bg-white dark:bg-gray-800/50 rounded-xl p-4 border border-[#e7e7e5] dark:border-gray-700/40'}>
-      <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">标签</h3>
+      <div className="flex items-center gap-1.5 text-base font-medium text-gray-400 dark:text-gray-500 mb-2">
+        <Tag className="w-4 h-4" />
+        标签
+      </div>
       <div className="flex flex-wrap gap-1.5">
         {tags.map(tag => (
           <button

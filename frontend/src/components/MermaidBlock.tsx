@@ -1,15 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
+import elkLayouts from '@mermaid-js/layout-elk';
 
 let mermaidInitialized = false;
 
-function initMermaid() {
+async function initMermaid() {
   if (mermaidInitialized) return;
+  // 注册 ELK 布局插件
+  await mermaid.registerExternalDiagrams([elkLayouts]);
   mermaid.initialize({
     startOnLoad: false,
     theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
     securityLevel: 'loose',
     fontFamily: 'inherit',
+    flowchart: {
+      curve: 'linear',
+      nodeSpacing: 50,
+      rankSpacing: 80,
+      padding: 15,
+    },
   });
   mermaidInitialized = true;
 }
@@ -23,16 +32,21 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    initMermaid();
     let cancelled = false;
 
     const render = async () => {
+      await initMermaid();
       if (!containerRef.current) return;
       try {
-        // 预处理：修复常见语法问题
+        // 预处理：修复常见语法问题，自动注入 ELK 渲染器
         let processedCode = code.trim()
           .replace(/<br\s*\/?>/gi, '<br/>')  // 统一 <br> 格式
           .replace(/&(?!amp;|lt;|gt;|quot;|apos;|#)/g, '&amp;');  // 转义未转义的 &
+
+        // 如果是 flowchart 且未指定渲染器，自动注入 ELK
+        if (/^(flowchart|graph)\s/i.test(processedCode) && !processedCode.includes('defaultRenderer')) {
+          processedCode = `%%{init: {"flowchart": {"defaultRenderer": "elk"}}}%%\n${processedCode}`;
+        }
 
         const id = `mermaid-${Math.random().toString(36).slice(2, 10)}`;
         const { svg } = await mermaid.render(id, processedCode);
