@@ -121,11 +121,8 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     }
   }, []);
 
-  // validateEmbeddable: 允许 beaver:// 协议
-  const validateEmbeddable = useCallback((link: string) => {
-    if (link.startsWith('beaver://')) return true;
-    return undefined;
-  }, []);
+  // validateEmbeddable: 允许所有链接（禁用 Excalidraw 内置域名验证）
+  const validateEmbeddable = useCallback(() => true, []);
 
   // 插入笔记引用
   const handleInsertNote = useCallback((doc: { id: string; title: string; type: string }) => {
