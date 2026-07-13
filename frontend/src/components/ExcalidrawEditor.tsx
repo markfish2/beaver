@@ -501,13 +501,27 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           const result = await updateExcalidrawData(currentDocId, sceneData, versionRef.current);
           // 更新本地版本号
           versionRef.current = result.version || versionRef.current + 1;
-          // 保存成功，清除待保存标记
-          pendingElementsRef.current = null;
-          pendingAppStateRef.current = null;
-          hasUnsavedChangesRef.current = false;
+          // 保存成功，更新指纹
           savedFingerprintRef.current = fingerprint(elements);
           setSaveStatus('saved');
           setTimeout(() => setSaveStatus('idle'), 2000);
+          // 检查保存期间是否有新变更（竞态保护）
+          // 如果 pendingElementsRef 已被 handleChange 更新为更新的数据，
+          // 说明保存期间有新操作（如插入嵌入引用），需要再保存一次
+          const pendingEls = pendingElementsRef.current;
+          const pendingAs = pendingAppStateRef.current;
+          if (pendingEls && fingerprint(pendingEls) !== fingerprint(elements)) {
+            // 有待保存的新数据，立即触发保存
+            pendingElementsRef.current = null;
+            pendingAppStateRef.current = null;
+            hasUnsavedChangesRef.current = true;
+            saveDataRef.current(pendingEls, pendingAs || {});
+          } else {
+            // 没有新变更，正常清除
+            pendingElementsRef.current = null;
+            pendingAppStateRef.current = null;
+            hasUnsavedChangesRef.current = false;
+          }
           // 图片保存成功后，将 pending 状态的图片元素更新为 saved
           if (filesWereSaved && excalidrawRef.current) {
             const currentElements = excalidrawRef.current.getSceneElements();
