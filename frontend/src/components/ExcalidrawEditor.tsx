@@ -2,8 +2,14 @@ import React, { useRef, useState, useCallback, useEffect, useMemo, Component, Su
 import type { ReactNode, ErrorInfo } from 'react';
 import { Excalidraw, MainMenu, exportToBlob, exportToSvg } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import { Download, Image, FileJson, FileText, Loader2 } from 'lucide-react';
+import { Download, Image, FileJson, FileText, Loader2, StickyNote } from 'lucide-react';
 import { getExcalidrawDataFresh, updateExcalidrawData, loadExcalidrawFiles, VersionConflictError } from '../api/excalidraw';
+import type { Document } from '../api/data';
+import NoteEmbedContent from './NoteEmbedContent';
+import NotePickerDialog from './NotePickerDialog';
+
+// 模块级变量存储 Excalidraw API
+let _excalidrawApiInstance: ExcalidrawImperativeAPI | null = null;
 
 // Error boundary to catch Excalidraw rendering errors (React 19 compatibility)
 class ExcalidrawErrorBoundary extends Component<
@@ -81,6 +87,9 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [localTitle, setLocalTitle] = useState(title);
   const [isMobile, setIsMobile] = useState(false);
+  const [showNotePicker, setShowNotePicker] = useState(false);
+  // 缓存已渲染的笔记引用，避免拖动时每帧重建 React 组件
+  const embedCacheRef = useRef<Map<string, React.ReactNode>>(new Map());
   // 标记是否已加载初始数据
   const hasLoadedInitialData = useRef(false);
   // 版本号（乐观锁）
@@ -90,6 +99,84 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   documentIdRef.current = documentId;
   // saveData ref（用于在 effect 中访问最新的 debounce 函数）
   const saveDataRef = useRef<any>(null);
+
+  // renderEmbeddable: 渲染笔记引用
+  const renderEmbeddable = useCallback((element: any, appState: any) => {
+    const link = element.link as string;
+    if (!link || !link.startsWith('beaver://')) return null;
+    const cacheKey = element.id;
+    if (embedCacheRef.current.has(cacheKey)) {
+      return embedCacheRef.current.get(cacheKey);
+    }
+    try {
+      const url = new URL(link);
+      const noteId = url.pathname.replace(/^\//, '');
+      const noteType = url.searchParams.get('type') || 'document';
+      const noteTitle = url.searchParams.get('title') || '';
+      const node = <NoteEmbedContent noteId={noteId} noteType={noteType} title={noteTitle} />;
+      embedCacheRef.current.set(cacheKey, node);
+      return node;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // validateEmbeddable: 允许 beaver:// 协议
+  const validateEmbeddable = useCallback((link: string) => {
+    if (link.startsWith('beaver://')) return true;
+    return undefined;
+  }, []);
+
+  // 插入笔记引用
+  const handleInsertNote = useCallback((doc: { id: string; title: string; type: string }) => {
+    setShowNotePicker(false);
+    const api = excalidrawRef.current || _excalidrawApiInstance;
+    if (!api) return;
+
+    const noteType = doc.type === 'memo' ? 'memo' : doc.type === 'note' ? 'note' : 'document';
+    const link = `beaver://note/${doc.id}?type=${noteType}&title=${encodeURIComponent(doc.title || '')}`;
+
+    const appState = api.getAppState();
+    const centerX = (appState.scrollX || 0) + ((appState.width || 800) / 2);
+    const centerY = (appState.scrollY || 0) + ((appState.height || 600) / 2);
+
+    const id = `embeddable_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const width = 320;
+    const height = 240;
+
+    const embeddableElement = {
+      id,
+      type: 'embeddable' as const,
+      x: centerX - width / 2,
+      y: centerY - height / 2,
+      width,
+      height,
+      link,
+      strokeColor: 'transparent',
+      backgroundColor: 'transparent',
+      fillStyle: 'solid' as const,
+      strokeWidth: 1,
+      strokeStyle: 'solid' as const,
+      roughness: 0 as const,
+      opacity: 100,
+      angle: 0 as any,
+      groupIds: [],
+      frameId: null,
+      roundness: { type: 3 as const },
+      seed: Math.floor(Math.random() * 2000000000),
+      version: 1,
+      versionNonce: Math.floor(Math.random() * 2000000000),
+      index: null as any,
+      isDeleted: false,
+      boundElements: null,
+      updated: Date.now(),
+      locked: false,
+      customData: { noteType, noteId: doc.id, title: doc.title },
+    };
+
+    const elements = api.getSceneElements();
+    api.updateScene({ elements: [...elements, embeddableElement as any] });
+  }, []);
 
   // React Router 导航拦截：有未保存数据时弹窗确认
   useEffect(() => {
@@ -641,12 +728,17 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         <Suspense fallback={<div className="flex-1 flex items-center justify-center text-gray-400"><Loader2 className="w-6 h-6 animate-spin" /></div>}>
         <Excalidraw
           key={documentId}
-          ref={excalidrawRef}
+          excalidrawAPI={(api) => {
+            excalidrawRef.current = api;
+            _excalidrawApiInstance = api;
+          }}
           initialData={initialData || undefined}
           onChange={handleChange}
           viewModeEnabled={readOnly}
           theme="light"
           langCode="zh-CN"
+          validateEmbeddable={validateEmbeddable}
+          renderEmbeddable={renderEmbeddable}
           UIOptions={{
             canvasActions: {
               changeViewBackgroundColor: true,
@@ -657,6 +749,16 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           }}
         >
           <MainMenu>
+            <MainMenu.ItemCustom>
+              <button
+                onClick={() => setShowNotePicker(true)}
+                className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
+              >
+                <StickyNote className="w-4 h-4" />
+                嵌入笔记引用
+              </button>
+            </MainMenu.ItemCustom>
+            <MainMenu.Separator />
             <MainMenu.DefaultItems.ClearCanvas />
             <MainMenu.DefaultItems.Export />
             <MainMenu.DefaultItems.SaveAsImage />
@@ -674,6 +776,12 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         </Suspense>
         </ExcalidrawErrorBoundary>
       </div>
+
+      <NotePickerDialog
+        isOpen={showNotePicker}
+        onSelect={handleInsertNote}
+        onClose={() => setShowNotePicker(false)}
+      />
     </div>
   );
 };

@@ -192,8 +192,10 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       />
 
       <div className="flex-1 overflow-hidden flex flex-col">
-        {(() => { console.log('[Mobile] render', { isEditing, activeTab, path: location.pathname }); return null; })()}
-        {isEditing && activeTab !== 'diary' ? (
+        {location.pathname === '/search' ? (
+          // 搜索结果页
+          children
+        ) : isEditing && activeTab !== 'diary' ? (
           // Document editor mode: toolbar below topbar, then content
           <>
             <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 58px)', flexShrink: 0 }} />

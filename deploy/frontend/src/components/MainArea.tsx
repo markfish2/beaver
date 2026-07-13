@@ -2192,23 +2192,27 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   }, [undo]);
 
   // Publish toolbar handlers to MobileToolbarContext for MobileLayout to render
+  const toolbarHandlersRef = useRef<any>(null);
+  if (!toolbarHandlersRef.current) {
+    toolbarHandlersRef.current = {};
+  }
+  // 每次更新已有对象的属性（引用不变）
+  Object.assign(toolbarHandlersRef.current, {
+    onIndent: handleMobileIndent,
+    onOutdent: handleMobileOutdent,
+    onToggleTodo: handleMobileToggleComplete,
+    onAddNote: handleMobileAddNote,
+    onMoveUp: handleMobileMoveUp,
+    onMoveDown: handleMobileMoveDown,
+    onZoom: handleMobileZoom,
+    onUndo: handleMobileUndo,
+    onDelete: handleMobileDelete,
+  });
+
   useEffect(() => {
     if (!isMobile) return;
-    publishToolbar(!!focusedNodeIdForToolbar, {
-      onIndent: handleMobileIndent,
-      onOutdent: handleMobileOutdent,
-      onToggleTodo: handleMobileToggleComplete,
-      onAddNote: handleMobileAddNote,
-      onMoveUp: handleMobileMoveUp,
-      onMoveDown: handleMobileMoveDown,
-      onZoom: handleMobileZoom,
-      onUndo: handleMobileUndo,
-      onDelete: handleMobileDelete,
-    });
-  }, [isMobile, focusedNodeIdForToolbar, publishToolbar,
-      handleMobileIndent, handleMobileOutdent, handleMobileToggleComplete,
-      handleMobileAddNote, handleMobileMoveUp, handleMobileMoveDown,
-      handleMobileZoom, handleMobileUndo, handleMobileDelete]);
+    publishToolbar(!!focusedNodeIdForToolbar, toolbarHandlersRef.current);
+  }, [isMobile, focusedNodeIdForToolbar, publishToolbar]);
 
   // 当窗口失焦或非应用复制时，清除内部剪贴板缓存
   // 避免从外部复制文字后粘贴仍使用旧的内部节点数据

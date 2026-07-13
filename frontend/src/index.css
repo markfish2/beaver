@@ -114,6 +114,11 @@
   }
 }
 
+/* Excalidraw 引用块圆角改为 5px */
+.excalidraw__embeddable-container {
+  --embeddable-radius: 5px !important;
+}
+
 @layer utilities {
   .custom-scrollbar::-webkit-scrollbar {
     width: 3px;
