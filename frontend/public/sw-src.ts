@@ -22,6 +22,11 @@ self.addEventListener('message', (event) => {
   }
 });
 
+// 立即接管所有页面，确保新版本生效
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 // Workbox 预缓存（由 vite-plugin-pwa injectManifest 注入清单）
 // 必须使用 self.__WB_MANIFEST 以确保 Workbox 注入标记不被 Rollup 消除
 precacheAndRoute(self.__WB_MANIFEST);
@@ -40,10 +45,10 @@ registerRoute(
   })
 );
 
-// JS/CSS：CacheFirst - Vite 输出的带 hash 文件内容不变
+// JS/CSS：StaleWhileRevalidate - 先用缓存，后台检查更新，下次加载生效
 registerRoute(
   ({ request }) => request.destination === 'script' || request.destination === 'style',
-  new CacheFirst({
+  new StaleWhileRevalidate({
     cacheName: 'static-resources',
     plugins: [
       new ExpirationPlugin({ maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 30 }),
