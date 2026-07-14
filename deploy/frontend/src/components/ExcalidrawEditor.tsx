@@ -592,17 +592,17 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         // 记录最新数据（用于页面关闭时立即保存）
         pendingElementsRef.current = elements;
         pendingAppStateRef.current = appState;
-        // 只在内容真正变化时标记未保存（避免 Excalidraw 内部渲染触发的 onChange 误报）
-        const fp = fingerprint(elements);
-        if (fp !== savedFingerprintRef.current) {
-          hasUnsavedChangesRef.current = true;
-        }
         // 缓存最新的 files，标记为脏
         if (files && Object.keys(files).length > 0) {
           filesRef.current = files;
           filesDirtyRef.current = true;
         }
-        saveDataRef.current(elements, appState);
+        // 只在内容真正变化时才触发保存（避免 Excalidraw 内部渲染触发的无效保存）
+        const fp = fingerprint(elements);
+        if (fp !== savedFingerprintRef.current) {
+          hasUnsavedChangesRef.current = true;
+          saveDataRef.current(elements, appState);
+        }
       }
     },
     [isLoading, readOnly, saveData]
