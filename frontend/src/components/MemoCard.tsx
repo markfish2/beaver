@@ -1064,19 +1064,8 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       setShowExpandEditor(false);
     }}>
       <div className="flex flex-col w-[90vw] max-w-[680px] h-[75vh] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 shrink-0">
-          <div className="flex items-center gap-1">
-            <button onClick={() => imageInputRef.current?.click()} disabled={uploading}
-              className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40" title="添加图片">
-              <Image className="w-4 h-4" />
-            </button>
-            <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
-              className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40" title="添加附件">
-              <Paperclip className="w-4 h-4" />
-            </button>
-            {uploading && <span className="text-xs text-blue-500">上传中...</span>}
-          </div>
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end px-4 py-2 border-b border-gray-200 dark:border-gray-700 shrink-0 gap-2">
+          {uploading && <span className="text-xs text-blue-500 mr-auto">上传中...</span>}
             <button
               onClick={() => {
                 const newContent = expandEditorRef.current?.getValue() ?? editContent;
@@ -1100,9 +1089,8 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
             >
               <X className="w-4 h-4" />
             </button>
-          </div>
         </div>
-          <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden">
             {(() => {
               try {
                 console.log('[MemoCard] Rendering MarkdownEditor, scrollable=true, editContent length:', editContent.length);
