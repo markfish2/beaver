@@ -1,10 +1,12 @@
-import { Heading1, Heading2, Heading3, Bold, Italic, Code, List, ListOrdered, Quote, Link, Minus, Image, Paperclip, Sparkles } from 'lucide-react';
+import { Heading1, Heading2, Heading3, Bold, Italic, Code, List, ListOrdered, Quote, Link, Minus, Image, Paperclip, Mic, MicOff, Sparkles } from 'lucide-react';
 import type { MarkdownEditorHandle } from './MarkdownEditor';
 
 interface EditorToolbarProps {
   editorRef: React.RefObject<MarkdownEditorHandle | null>;
   onUploadImage?: () => void;
   onUploadFile?: () => void;
+  onRecordAudio?: () => void;
+  isRecording?: boolean;
   onOpenAI?: () => void;
 }
 
@@ -21,7 +23,7 @@ function ToolbarBtn({ onClick, title, children }: { onClick: () => void; title: 
   );
 }
 
-export default function EditorToolbar({ editorRef, onUploadImage, onUploadFile, onOpenAI }: EditorToolbarProps) {
+export default function EditorToolbar({ editorRef, onUploadImage, onUploadFile, onRecordAudio, isRecording, onOpenAI }: EditorToolbarProps) {
   const wrap = (before: string, after: string, ph?: string) => editorRef.current?.wrapSelection(before, after, ph);
   const prefix = (p: string) => editorRef.current?.insertLinePrefix(p);
   const insert = (text: string) => editorRef.current?.insertText(text);
@@ -53,6 +55,11 @@ export default function EditorToolbar({ editorRef, onUploadImage, onUploadFile, 
       )}
       {onUploadFile && (
         <ToolbarBtn onClick={onUploadFile} title="上传附件"><Paperclip className="w-4 h-4" /></ToolbarBtn>
+      )}
+      {onRecordAudio && (
+        <ToolbarBtn onClick={onRecordAudio} title={isRecording ? '停止录音' : '录音'}>
+          {isRecording ? <MicOff className="w-4 h-4 text-red-500 animate-pulse" /> : <Mic className="w-4 h-4" />}
+        </ToolbarBtn>
       )}
       {onOpenAI && (
         <>
