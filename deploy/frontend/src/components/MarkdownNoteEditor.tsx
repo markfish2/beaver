@@ -409,11 +409,11 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
         </div>
         <div className="flex items-center gap-1 shrink-0 ml-4">
           <button onClick={() => setViewMode(viewMode === 'preview' ? 'edit' : 'preview')}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg transition-colors ${viewMode === 'preview' ? 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm leading-none rounded-lg transition-colors ${viewMode === 'preview' ? 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>
             {viewMode === 'preview' ? <><Pencil className="w-4 h-4" />编辑</> : <><Eye className="w-4 h-4" />阅读</>}
           </button>
           <button onClick={() => setViewMode(viewMode === 'split' ? 'edit' : 'split')}
-            className={`flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-lg transition-colors ${viewMode === 'split' ? 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+            className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-sm leading-none rounded-lg transition-colors ${viewMode === 'split' ? 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
             title="分屏模式"><Columns2 className="w-4 h-4" /></button>
         </div>
       </div>

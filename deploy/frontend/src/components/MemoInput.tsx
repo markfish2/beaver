@@ -313,29 +313,13 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
           setShowExpandEditor(false);
         }}>
           <div className="flex flex-col w-[90vw] max-w-[680px] h-[75vh] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 shrink-0">
-              <div className="flex items-center gap-1">
-                <button onClick={() => imageInputRef.current?.click()} disabled={uploading || isSubmitting}
-                  className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40" title="添加图片">
-                  <Image className="w-4 h-4" />
-                </button>
-                <button onClick={() => fileInputRef.current?.click()} disabled={uploading || isSubmitting}
-                  className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40" title="添加附件">
-                  <Paperclip className="w-4 h-4" />
-                </button>
-                <button onClick={handleAudioRecord} disabled={uploading || isSubmitting}
-                  className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${recorder.isRecording ? 'text-red-500 animate-pulse bg-red-50 dark:bg-red-900/20' : 'text-gray-400 hover:text-blue-500 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
-                  title={recorder.isRecording ? '停止录音' : '录音'}>
-                  {recorder.isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                </button>
-                {uploading && <span className="text-xs text-blue-500">上传中...</span>}
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => { const newContent = expandEditorRef.current?.getValue() ?? content; setContent(newContent); setShowExpandEditor(false); setTimeout(() => handleSubmit(), 0); }}
-                  disabled={isSubmitting || !content.trim()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white dark:text-gray-900 bg-gray-900 dark:bg-gray-100 hover:bg-gray-700 dark:hover:bg-gray-300 rounded-lg transition-colors disabled:opacity-40">
-                  <Send className="w-4 h-4" /><span>发布</span>
-                </button>
+            <div className="flex items-center justify-end px-4 py-2 border-b border-gray-200 dark:border-gray-700 shrink-0 gap-2">
+              {uploading && <span className="text-xs text-blue-500 mr-auto">上传中...</span>}
+              <button onClick={() => { const newContent = expandEditorRef.current?.getValue() ?? content; setContent(newContent); setShowExpandEditor(false); setTimeout(() => handleSubmit(), 0); }}
+                disabled={isSubmitting || !content.trim()}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white dark:text-gray-900 bg-gray-900 dark:bg-gray-100 hover:bg-gray-700 dark:hover:bg-gray-300 rounded-lg transition-colors disabled:opacity-40">
+                <Send className="w-4 h-4" /><span>发布</span>
+              </button>
                 <button onClick={() => { const newContent = expandEditorRef.current?.getValue() ?? content; setContent(newContent); setShowExpandEditor(false); }}
                   className="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                   <X className="w-4 h-4" />
@@ -353,7 +337,7 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
                 placeholder="记录你的想法... (支持 Markdown，输入 # 添加标签，@ 链接笔记)"
                 className="h-full"
                 extensions={[tmExtension]}
-                toolbar={<EditorToolbar editorRef={expandEditorRef} onUploadImage={() => imageInputRef.current?.click()} onUploadFile={() => fileInputRef.current?.click()} />}
+                toolbar={<EditorToolbar editorRef={expandEditorRef} onUploadImage={() => imageInputRef.current?.click()} onUploadFile={() => fileInputRef.current?.click()} onRecordAudio={handleAudioRecord} isRecording={recorder.isRecording} />}
               />
             </div>
             {/* Tag/mention popups for expanded editor */}
