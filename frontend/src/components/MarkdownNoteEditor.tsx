@@ -349,10 +349,9 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   useEffect(() => {
     if (viewMode !== 'split') return;
 
-    // Find the CodeMirror scroller inside the editor container
-    const editorScroller = editorScrollRef.current?.querySelector('.cm-scroller') as HTMLElement | null;
+    const editor = editorScrollRef.current;
     const preview = previewRef.current;
-    if (!editorScroller || !preview) return;
+    if (!editor || !preview) return;
 
     const echo = { editor: 0, preview: 0 };
 
@@ -381,13 +380,13 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
       };
     };
 
-    const onEditor = makeSync(editorScroller, preview, 'editor', 'preview');
-    const onPreview = makeSync(preview, editorScroller, 'preview', 'editor');
-    editorScroller.addEventListener('scroll', onEditor, { passive: true });
+    const onEditor = makeSync(editor, preview, 'editor', 'preview');
+    const onPreview = makeSync(preview, editor, 'preview', 'editor');
+    editor.addEventListener('scroll', onEditor, { passive: true });
     preview.addEventListener('scroll', onPreview, { passive: true });
 
     return () => {
-      editorScroller.removeEventListener('scroll', onEditor);
+      editor.removeEventListener('scroll', onEditor);
       preview.removeEventListener('scroll', onPreview);
     };
   }, [viewMode]);
