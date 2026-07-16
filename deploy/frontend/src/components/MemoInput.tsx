@@ -320,11 +320,10 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white dark:text-gray-900 bg-gray-900 dark:bg-gray-100 hover:bg-gray-700 dark:hover:bg-gray-300 rounded-lg transition-colors disabled:opacity-40">
                 <Send className="w-4 h-4" /><span>发布</span>
               </button>
-                <button onClick={() => { const newContent = expandEditorRef.current?.getValue() ?? content; setContent(newContent); setShowExpandEditor(false); }}
-                  className="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+              <button onClick={() => { const newContent = expandEditorRef.current?.getValue() ?? content; setContent(newContent); setShowExpandEditor(false); }}
+                className="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
             </div>
             <div className="flex-1 overflow-hidden" onPaste={handlePaste}>
               <MarkdownEditor
