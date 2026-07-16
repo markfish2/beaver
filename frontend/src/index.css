@@ -18,7 +18,14 @@
 :root {
   --outline-font-size: 16px;
   --outline-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  
+
+  /* 编辑器排版 (from markamd) */
+  --writing-font-size: 14px;
+  --writing-line-height: 1.55;
+  --prose-font-size: 15px;
+  --prose-line-height: 1.65;
+  --reading-font-size: 16px;
+
   /* PWA 安全区域变量 */
   --safe-area-inset-top: env(safe-area-inset-top, 0px);
   --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
@@ -231,7 +238,9 @@
   word-break: break-word;
   min-width: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  line-height: 1.75;
+  font-size: 15px;
+  line-height: 1.65;
+  letter-spacing: -0.01em;
   color: #1f2937;
 }
 .dark .memo-content { color: #e5e7eb; }
