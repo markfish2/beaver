@@ -669,11 +669,6 @@ const markdownComponents = (
     li: ({ children, ordered, index, node, ...props }) => {
       const liClassName = typeof props.className === 'string' ? props.className : '';
       const isTaskItem = liClassName.includes('task-list-item');
-      // ReactMarkdown v10 doesn't pass ordered/index to li, check parent tagName
-      const parentTag = (node as any)?.parent?.tagName ?? (node as any)?.parentNode?.tagName ?? '';
-      const isOrdered = ordered ?? parentTag === 'ol';
-      // Get index from parent's children
-      const liIndex = index ?? ((node as any)?.parent?.children?.indexOf(node) ?? 0);
       const hasCheckboxDeep = (nodes: React.ReactNode[]): boolean =>
         nodes.some(child => {
           if (!isValidElement(child)) return false;
@@ -685,32 +680,12 @@ const markdownComponents = (
         });
       const arr = Children.toArray(children);
       const hasCheckbox = isTaskItem || hasCheckboxDeep(arr);
-      const hasNestedList = arr.some(
-        child => isValidElement(child) && (child.type === 'ul' || child.type === 'ol')
-      );
-      // 区分有序/无序标记
-      const marker = isOrdered
-        ? <span className={`shrink-0 select-none tabular-nums ${markerClass}`}>{liIndex + 1}.</span>
-        : <span className={`shrink-0 leading-none select-none ${markerClass}`} aria-hidden="true">•</span>;
-      const mergeClass = (cls: string) => ({ ...props, className: [props.className, cls].filter(Boolean).join(' ') });
-      if (hasCheckbox && !hasNestedList) {
-        return <li {...mergeClass('list-none relative pl-[22px] leading-[1.5]')}>{children}</li>;
+      // 任务列表使用自定义渲染，普通列表使用浏览器原生渲染
+      if (hasCheckbox) {
+        return <li className="list-none relative pl-[22px] leading-[1.5]">{children}</li>;
       }
-      if (hasNestedList) {
-        // 分离嵌套列表和其他内容：保持 children 完整不丢弃文本
-        const nestedLists = arr.filter(c => isValidElement(c) && (c.type === 'ul' || c.type === 'ol'));
-        const rest = arr.filter(c => !(isValidElement(c) && (c.type === 'ul' || c.type === 'ol')));
-        return (
-          <li {...mergeClass('list-none')}>
-            {!hasCheckbox && rest.length > 0 && (
-              <span className="flex items-baseline gap-1.5">{marker}<span className="flex-1">{rest}</span></span>
-            )}
-            {nestedLists}
-          </li>
-        );
-      }
-      // 叶子节点：有序数字或无序圆点
-      return <li {...mergeClass('list-none flex items-baseline gap-1.5')}>{marker}<span className="flex-1">{children}</span></li>;
+      // 普通列表：让浏览器原生渲染标记（有序数字/无序圆点）
+      return <li {...props}>{children}</li>;
     },
     input: ({ checked, type, className: inputClassName, ...props }) => {
       if (type === 'checkbox') {
