@@ -46,8 +46,8 @@ function buildTheme(isDark: boolean) {
   const activeLineBg = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)';
 
   return EditorView.theme({
-    '&': { backgroundColor: bg, color: fg, height: '100%' },
-    '.cm-scroller': { fontFamily: 'inherit', lineHeight: '1.75', overflow: 'auto' },
+    '&': { backgroundColor: bg, color: fg, height: 'auto', minHeight: '100%' },
+    '.cm-scroller': { fontFamily: 'inherit', lineHeight: '1.75', overflow: 'visible', height: 'auto' },
     '.cm-content': { caretColor: accent, fontFamily: 'inherit', fontSize: 'inherit', paddingLeft: '10px' },
     '.cm-cursor, .cm-dropCursor': { borderLeftColor: accent, borderLeftWidth: '2px' },
     '.cm-activeLine': { backgroundColor: activeLineBg },
