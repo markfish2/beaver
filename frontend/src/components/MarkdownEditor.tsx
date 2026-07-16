@@ -35,7 +35,7 @@ const mdHighlight = HighlightStyle.define([
 ]);
 
 // ── CodeMirror 主题（使用 Tailwind 变量 + dark mode class 检测） ──
-function buildTheme(isDark: boolean) {
+function buildTheme(isDark: boolean, scrollable: boolean) {
   const fg = isDark ? '#e5e7eb' : '#1f2937';
   const muted = isDark ? '#6b7280' : '#9ca3af';
   const accent = isDark ? '#60a5fa' : '#2563eb';
@@ -46,8 +46,8 @@ function buildTheme(isDark: boolean) {
   const activeLineBg = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)';
 
   return EditorView.theme({
-    '&': { backgroundColor: bg, color: fg, height: 'auto', minHeight: '100%' },
-    '.cm-scroller': { fontFamily: 'inherit', lineHeight: '1.75', overflow: 'visible', height: 'auto' },
+    '&': { backgroundColor: bg, color: fg, ...(scrollable ? { height: '100%', overflow: 'hidden' } : { height: 'auto', minHeight: '100%' }) },
+    '.cm-scroller': { fontFamily: 'inherit', lineHeight: '1.75', ...(scrollable ? { overflow: 'auto', height: '100%' } : { overflow: 'visible', height: 'auto' }) },
     '.cm-content': { caretColor: accent, fontFamily: 'inherit', fontSize: 'inherit', paddingLeft: '10px' },
     '.cm-cursor, .cm-dropCursor': { borderLeftColor: accent, borderLeftWidth: '2px' },
     '.cm-activeLine': { backgroundColor: activeLineBg },
@@ -75,6 +75,8 @@ export interface MarkdownEditorProps {
   compact?: boolean;
   autoFocus?: boolean;
   readOnly?: boolean;
+  /** CodeMirror 自己处理滚动（用于固定高度容器如弹窗） */
+  scrollable?: boolean;
   /** 外部传入的工具栏（compact=false 时显示） */
   toolbar?: React.ReactNode;
   className?: string;
@@ -109,6 +111,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
     compact = true,
     autoFocus,
     readOnly,
+    scrollable = false,
     toolbar,
     className,
     style,
@@ -216,7 +219,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       syntaxHighlighting(mdHighlight, { fallback: true }),
       search({ top: true }),
       keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
-      buildTheme(isDark),
+      buildTheme(isDark, scrollable),
       enterKeymap,
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {

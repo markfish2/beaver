@@ -349,6 +349,7 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
                 onChange={setContent}
                 compact={false}
                 autoFocus
+                scrollable
                 placeholder="记录你的想法... (支持 Markdown，输入 # 添加标签，@ 链接笔记)"
                 className="h-full"
                 extensions={[tmExtension]}

@@ -1105,6 +1105,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
               onChange={setEditContent}
               compact={false}
               autoFocus
+              scrollable
               placeholder="编辑笔记..."
               className="h-full"
               extensions={[tmExtension]}
