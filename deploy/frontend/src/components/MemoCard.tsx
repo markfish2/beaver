@@ -1053,6 +1053,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   }, [memo.content]);
 
   // 展开编辑器 portal
+  console.log('[MemoCard] expandEditorPortal render, showExpandEditor:', showExpandEditor);
   const expandEditorPortal = showExpandEditor && createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => {
       const newContent = expandEditorRef.current?.getValue() ?? editContent;
@@ -1099,18 +1100,28 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
           </div>
         </div>
           <div className="flex-1 overflow-hidden">
-            <MarkdownEditor
-              ref={expandEditorRef}
-              value={editContent}
-              onChange={setEditContent}
-              compact={false}
-              autoFocus
-              scrollable
-              placeholder="编辑笔记..."
-              className="h-full"
-              extensions={[tmExtension]}
-              toolbar={<EditorToolbar editorRef={expandEditorRef} onUploadImage={() => imageInputRef.current?.click()} onUploadFile={() => fileInputRef.current?.click()} />}
-            />
+            {(() => {
+              try {
+                console.log('[MemoCard] Rendering MarkdownEditor, scrollable=true, editContent length:', editContent.length);
+                return (
+                  <MarkdownEditor
+                    ref={expandEditorRef}
+                    value={editContent}
+                    onChange={setEditContent}
+                    compact={false}
+                    autoFocus
+                    scrollable
+                    placeholder="编辑笔记..."
+                    className="h-full"
+                    extensions={[tmExtension]}
+                    toolbar={<EditorToolbar editorRef={expandEditorRef} onUploadImage={() => imageInputRef.current?.click()} onUploadFile={() => fileInputRef.current?.click()} />}
+                  />
+                );
+              } catch (error) {
+                console.error('[MemoCard] Error rendering MarkdownEditor:', error);
+                return <div className="p-4 text-red-500">Error loading editor</div>;
+              }
+            })()}
           </div>
           {showTagPopup && createPortal(
             <TagMentionPopup items={filteredTags.map((t): PopupItem => ({ label: t, value: t }))} selectedIndex={tagDropdownIndex}
@@ -1183,7 +1194,10 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
         <div className="flex items-center justify-between mt-2">
           <div className="flex items-center gap-1">
             <button
-              onClick={() => setShowExpandEditor(true)}
+              onClick={() => {
+                console.log('[MemoCard] Opening expand editor, editContent length:', editContent.length);
+                setShowExpandEditor(true);
+              }}
               disabled={uploading}
               className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40"
               title="展开编辑"

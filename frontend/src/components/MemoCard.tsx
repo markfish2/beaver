@@ -1052,6 +1052,9 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
     setEditContent(memo.content);
   }, [memo.content]);
 
+  const showTagPopup = tagState.type === 'tag' && filteredTags.length > 0 && tagState.coords;
+  const showMentionPopup = mentionState.type === 'mention' && filteredDocs.length > 0 && mentionState.coords;
+
   // 展开编辑器 portal
   console.log('[MemoCard] expandEditorPortal render, showExpandEditor:', showExpandEditor);
   const expandEditorPortal = showExpandEditor && createPortal(
@@ -1151,9 +1154,6 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
     />,
     document.body
   );
-
-  const showTagPopup = tagState.type === 'tag' && filteredTags.length > 0 && tagState.coords;
-  const showMentionPopup = mentionState.type === 'mention' && filteredDocs.length > 0 && mentionState.coords;
 
   if (isEditing) {
     return (
