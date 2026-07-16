@@ -345,28 +345,51 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
 
   const processedContent = useMemo(() => preprocess(content), [content]);
 
-  // Scroll sync: editor → preview in split mode
+  // Scroll sync: bidirectional editor ↔ preview in split mode (from markamd)
   useEffect(() => {
     if (viewMode !== 'split') return;
-    const editorView = editorRef.current?.view;
-    if (!editorView || !previewRef.current) return;
 
-    const scroller = editorView.scrollDOM;
+    // Find the CodeMirror scroller inside the editor container
+    const editorScroller = editorScrollRef.current?.querySelector('.cm-scroller') as HTMLElement | null;
     const preview = previewRef.current;
-    let ticking = false;
+    if (!editorScroller || !preview) return;
 
-    const handleScroll = () => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        const scrollRatio = scroller.scrollTop / (scroller.scrollHeight - scroller.clientHeight || 1);
-        preview.scrollTop = scrollRatio * (preview.scrollHeight - preview.clientHeight);
-        ticking = false;
-      });
+    const echo = { editor: 0, preview: 0 };
+
+    const makeSync = (
+      src: HTMLElement,
+      dst: HTMLElement,
+      srcKey: 'editor' | 'preview',
+      dstKey: 'editor' | 'preview',
+    ) => {
+      let pending = false;
+      return () => {
+        if (echo[srcKey] > 0) { echo[srcKey] -= 1; return; }
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(() => {
+          pending = false;
+          const srcRange = src.scrollHeight - src.clientHeight;
+          const dstRange = dst.scrollHeight - dst.clientHeight;
+          if (srcRange <= 0 || dstRange <= 0) return;
+          const ratio = src.scrollTop / srcRange;
+          const target = ratio * dstRange;
+          if (Math.abs(dst.scrollTop - target) < 1) return;
+          echo[dstKey] += 1;
+          dst.scrollTop = target;
+        });
+      };
     };
 
-    scroller.addEventListener('scroll', handleScroll, { passive: true });
-    return () => scroller.removeEventListener('scroll', handleScroll);
+    const onEditor = makeSync(editorScroller, preview, 'editor', 'preview');
+    const onPreview = makeSync(preview, editorScroller, 'preview', 'editor');
+    editorScroller.addEventListener('scroll', onEditor, { passive: true });
+    preview.addEventListener('scroll', onPreview, { passive: true });
+
+    return () => {
+      editorScroller.removeEventListener('scroll', onEditor);
+      preview.removeEventListener('scroll', onPreview);
+    };
   }, [viewMode]);
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="text-gray-400 dark:text-gray-500 text-sm">加载中...</div></div>;
