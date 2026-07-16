@@ -46,9 +46,9 @@ function buildTheme(isDark: boolean) {
   const activeLineBg = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)';
 
   return EditorView.theme({
-    '&': { backgroundColor: bg, color: fg },
-    '.cm-scroller': { fontFamily: 'inherit', lineHeight: '1.75' },
-    '.cm-content': { caretColor: accent, fontFamily: 'inherit', fontSize: 'inherit' },
+    '&': { backgroundColor: bg, color: fg, height: '100%' },
+    '.cm-scroller': { fontFamily: 'inherit', lineHeight: '1.75', overflow: 'auto' },
+    '.cm-content': { caretColor: accent, fontFamily: 'inherit', fontSize: 'inherit', paddingLeft: '10px' },
     '.cm-cursor, .cm-dropCursor': { borderLeftColor: accent, borderLeftWidth: '2px' },
     '.cm-activeLine': { backgroundColor: activeLineBg },
     '&.cm-focused': { outline: 'none' },
@@ -307,14 +307,23 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   }, [checkDark]);
 
   const containerStyle: React.CSSProperties = {
-    ...(compact ? {} : { flex: 1, minHeight: 0 }),
+    display: 'flex',
+    flexDirection: 'column',
+    ...(compact ? {} : { flex: 1, minHeight: 0, overflow: 'hidden' }),
     ...style,
   };
 
-  const editorStyle: React.CSSProperties = {};
+  const editorStyle: React.CSSProperties = {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+  };
   if (minHeight !== undefined) editorStyle.minHeight = typeof minHeight === 'number' ? `${minHeight}px` : minHeight;
   if (maxHeight !== undefined) editorStyle.maxHeight = typeof maxHeight === 'number' ? `${maxHeight}px` : maxHeight;
-  if (compact) editorStyle.overflow = 'auto';
+  if (compact) {
+    editorStyle.overflow = 'auto';
+    editorStyle.flex = 'none';
+  }
 
   return (
     <div className={className} style={containerStyle}>
