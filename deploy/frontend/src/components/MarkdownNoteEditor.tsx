@@ -74,8 +74,8 @@ function preprocess(content: string): string {
 }
 
 const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => ({
-  margin: 0, borderRadius: '8px', fontSize: '0.85em', lineHeight: '1.6',
-  background: isDark ? '#1f2937' : '#f9fafb', border: `1px solid ${isDark ? '#374151' : '#e5e7eb'}`, padding: '14px 16px',
+  margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: '0.95em',
+  background: isDark ? '#282c34' : '#fbfbf8', border: 'none', padding: '16px',
 });
 
 const CodeBlock = memo(function CodeBlock({ className, children, ...props }: { className?: string; children: React.ReactNode; [key: string]: any }) {
@@ -90,23 +90,17 @@ const CodeBlock = memo(function CodeBlock({ className, children, ...props }: { c
   if (isBlock) {
     const useHighlight = language && language !== 'markdown' && language !== 'text';
     return (
-      <div className="relative group">
-        {language && (
-          <span className={`absolute top-2 left-3 text-[11px] font-mono ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{language}</span>
-        )}
-        <button onClick={handleCopy}
-          className={`absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono border transition-all opacity-0 group-hover:opacity-100 ${
-            copied
-              ? 'border-green-500/50 text-green-500'
-              : 'border-gray-300 dark:border-gray-600 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:border-gray-400 dark:hover:border-gray-500'
-          }`}
-          title={copied ? '已复制' : '复制代码'}>
-          {copied ? <CheckCheck className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-        </button>
+      <div className="relative rounded-lg overflow-hidden border border-[#dad9d4] dark:border-gray-700">
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#dad9d4] dark:border-gray-700" style={{ background: isDark ? '#282c34' : '#f6f5f0' }}>
+          <span className={`text-[11px] font-mono ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{language || 'text'}</span>
+          <button onClick={handleCopy} className="flex items-center p-1 rounded-md bg-white/90 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-600 transition-all" title={copied ? '已复制' : '复制代码'}>
+            {copied ? <CheckCheck className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+          </button>
+        </div>
         {useHighlight ? (
           <SyntaxHighlighter style={isDark ? oneDark : ghcolors} language={language} PreTag="div" customStyle={{ ...codeBlockCustomStyle(isDark) }}>{code}</SyntaxHighlighter>
         ) : (
-          <pre className="p-4 overflow-x-auto text-sm font-mono" style={{ margin: 0 }}><code>{code}</code></pre>
+          <pre className="p-4 overflow-x-auto text-sm font-mono" style={{ background: isDark ? '#1e1e1e' : '#fafafa', margin: 0 }}><code>{code}</code></pre>
         )}
       </div>
     );
