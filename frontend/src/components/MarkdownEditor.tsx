@@ -195,12 +195,8 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
 
   // Create / destroy EditorView
   useEffect(() => {
-    if (!containerRef.current) {
-      console.log('[MarkdownEditor] containerRef.current is null, skipping initialization');
-      return;
-    }
+    if (!containerRef.current) return;
 
-    console.log('[MarkdownEditor] Initializing EditorView, scrollable:', scrollable, 'compact:', compact);
     const isDark = checkDark();
     isDarkRef.current = isDark;
 

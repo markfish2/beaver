@@ -669,12 +669,11 @@ const markdownComponents = (
     li: ({ children, ordered, index, node, ...props }) => {
       const liClassName = typeof props.className === 'string' ? props.className : '';
       const isTaskItem = liClassName.includes('task-list-item');
-      // ReactMarkdown v10: check multiple sources for ordered state
-      const isOrdered = ordered ?? (node as any)?.properties?.ordered ?? (node as any)?.tagName === 'ol' ?? false;
-      // Debug: log props to see what's being passed
-      if (typeof window !== 'undefined') {
-        console.log('[MemoCard li] ordered:', ordered, 'node:', node, 'isOrdered:', isOrdered, 'index:', index);
-      }
+      // ReactMarkdown v10 doesn't pass ordered/index to li, check parent tagName
+      const parentTag = (node as any)?.parent?.tagName ?? (node as any)?.parentNode?.tagName ?? '';
+      const isOrdered = ordered ?? parentTag === 'ol';
+      // Get index from parent's children
+      const liIndex = index ?? ((node as any)?.parent?.children?.indexOf(node) ?? 0);
       const hasCheckboxDeep = (nodes: React.ReactNode[]): boolean =>
         nodes.some(child => {
           if (!isValidElement(child)) return false;
@@ -691,7 +690,7 @@ const markdownComponents = (
       );
       // 区分有序/无序标记
       const marker = isOrdered
-        ? <span className={`shrink-0 select-none tabular-nums ${markerClass}`}>{(index ?? 0) + 1}.</span>
+        ? <span className={`shrink-0 select-none tabular-nums ${markerClass}`}>{liIndex + 1}.</span>
         : <span className={`shrink-0 leading-none select-none ${markerClass}`} aria-hidden="true">•</span>;
       const mergeClass = (cls: string) => ({ ...props, className: [props.className, cls].filter(Boolean).join(' ') });
       if (hasCheckbox && !hasNestedList) {
