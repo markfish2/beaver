@@ -348,10 +348,11 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   // Scroll sync: editor → preview in split mode
   useEffect(() => {
     if (viewMode !== 'split') return;
-    const scroller = editorScrollRef.current;
-    const preview = previewRef.current;
-    if (!scroller || !preview) return;
+    const editorView = editorRef.current?.view;
+    if (!editorView || !previewRef.current) return;
 
+    const scroller = editorView.scrollDOM;
+    const preview = previewRef.current;
     let ticking = false;
 
     const handleScroll = () => {
