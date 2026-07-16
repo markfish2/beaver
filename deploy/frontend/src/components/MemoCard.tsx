@@ -1061,7 +1061,6 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const showMentionPopup = mentionState.type === 'mention' && filteredDocs.length > 0 && mentionState.coords;
 
   // 展开编辑器 portal
-  console.log('[MemoCard] expandEditorPortal render, showExpandEditor:', showExpandEditor);
   const expandEditorPortal = showExpandEditor && createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => {
       const newContent = expandEditorRef.current?.getValue() ?? editContent;
@@ -1098,7 +1097,6 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
         <div className="flex-1 overflow-hidden">
             {(() => {
               try {
-                console.log('[MemoCard] Rendering MarkdownEditor, scrollable=true, editContent length:', editContent.length);
                 return (
                   <MarkdownEditor
                     ref={expandEditorRef}
@@ -1187,10 +1185,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
         <div className="flex items-center justify-between mt-2">
           <div className="flex items-center gap-1">
             <button
-              onClick={() => {
-                console.log('[MemoCard] Opening expand editor, editContent length:', editContent.length);
-                setShowExpandEditor(true);
-              }}
+              onClick={() => setShowExpandEditor(true)}
               disabled={uploading}
               className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40"
               title="展开编辑"
