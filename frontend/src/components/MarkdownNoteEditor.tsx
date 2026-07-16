@@ -127,6 +127,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   const [documents, setDocuments] = useState<Document[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
   const editorRef = useRef<MarkdownEditorHandle>(null);
+  const editorScrollRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -347,11 +348,10 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   // Scroll sync: editor → preview in split mode
   useEffect(() => {
     if (viewMode !== 'split') return;
-    const editorView = editorRef.current?.view;
-    if (!editorView || !previewRef.current) return;
-
-    const scroller = editorView.scrollDOM;
+    const scroller = editorScrollRef.current;
     const preview = previewRef.current;
+    if (!scroller || !preview) return;
+
     let ticking = false;
 
     const handleScroll = () => {
@@ -398,7 +398,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
       <div className={`flex-1 min-h-0 ${viewMode === 'split' ? 'flex' : ''}`}>
         {(viewMode === 'edit' || viewMode === 'split') && (
           <div className={`${viewMode === 'split' ? 'w-1/2 border-r border-gray-200 dark:border-gray-700' : 'w-full h-full'} flex flex-col`}>
-            <div className="flex-1 min-h-0 flex justify-center overflow-y-auto scrollbar-none">
+            <div ref={editorScrollRef} className="flex-1 min-h-0 flex justify-center overflow-y-auto scrollbar-none">
               <div className="w-full max-w-[768px] flex flex-col" onPaste={handlePaste}>
                 <MarkdownEditor ref={editorRef} value={content} onChange={(val) => { setContent(val); scheduleSave(val); }}
                   compact={false} placeholder="开始书写... (支持 Markdown，输入 # 添加标签，@ 链接笔记)" className="flex-1 min-h-0 px-6 pt-6"
