@@ -46,16 +46,22 @@ SyntaxHighlighter.registerLanguage('cpp', cpp);
 SyntaxHighlighter.registerLanguage('go', go);
 SyntaxHighlighter.registerLanguage('rust', rust);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
-import { Pencil, Eye, Image, Paperclip, Copy, CheckCheck, Save, Bold, Italic, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Code, Link, Minus, Sparkles } from 'lucide-react';
+import { Pencil, Eye, Save, Columns2, Image, Paperclip, Copy, CheckCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getNodes, createNode, updateNode, uploadFile, uploadFromUrl, getMemoTags, getDocuments, updateDocument } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
 import type { Node, Document } from '../api/data';
 import MermaidBlock from './MermaidBlock';
-import { handleListContinuation } from '../utils/listContinuation';
 import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts } from '../utils/markdownPreprocess';
 import { getPasteMarkdown, extractExternalImageUrls } from '../utils/htmlToMarkdown';
-import MentionDropdown from './MentionDropdown';
+import { useIsDark } from '../hooks/useIsDark';
+import MarkdownEditor from './MarkdownEditor';
+import type { MarkdownEditorHandle } from './MarkdownEditor';
+import EditorToolbar from './EditorToolbar';
+import TagMentionPopup from './TagMentionPopup';
+import type { PopupItem } from './TagMentionPopup';
+import { tagMentionExtension } from '../extensions/tagMentionExtension';
+import type { TagMentionState } from '../extensions/tagMentionExtension';
 import AIChatPanel from './AIChatPanel';
 
 interface Props {
@@ -63,48 +69,13 @@ interface Props {
   isNew?: boolean;
 }
 
-// 普通笔记预处理：不剥离图片和标签（与 MemoCard 不同，图片内联渲染）
 function preprocess(content: string): string {
   return normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(normalizeCallouts(content)))));
 }
 
-// --- 代码块组件 (同 MemoCard) ---
-function useIsDark() {
-  const check = () => {
-    try {
-      const saved = localStorage.getItem('outline-font-settings');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.theme === 'dark') return true;
-        if (parsed.theme && parsed.theme !== 'dark') return false;
-      }
-    } catch { /* ignore parse error */ }
-    return document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
-  };
-  const [isDark, setIsDark] = useState(check);
-  useEffect(() => {
-    const update = () => setIsDark(check());
-    window.addEventListener('theme-change', update);
-    const obs = new MutationObserver(update);
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    mq.addEventListener('change', update);
-    return () => {
-      window.removeEventListener('theme-change', update);
-      obs.disconnect();
-      mq.removeEventListener('change', update);
-    };
-  }, []);
-  return isDark;
-}
-
 const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => ({
-  margin: 0,
-  borderRadius: '0 0 0.5rem 0.5rem',
-  fontSize: '0.95em',
-  background: isDark ? '#282c34' : '#fbfbf8',
-  border: 'none',
-  padding: '16px',
+  margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: '0.95em',
+  background: isDark ? '#282c34' : '#fbfbf8', border: 'none', padding: '16px',
 });
 
 const CodeBlock = memo(function CodeBlock({ className, children, ...props }: { className?: string; children: React.ReactNode; [key: string]: any }) {
@@ -114,73 +85,38 @@ const CodeBlock = memo(function CodeBlock({ className, children, ...props }: { c
   const language = match ? match[1] : '';
   const code = String(children).replace(/\n$/, '');
   const isBlock = code.includes('\n') || language;
-
-  const handleCopy = useCallback(async () => {
-    await navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [code]);
+  const handleCopy = useCallback(async () => { await navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000); }, [code]);
 
   if (isBlock) {
     const useHighlight = language && language !== 'markdown' && language !== 'text';
     return (
       <div className="relative rounded-lg overflow-hidden border border-[#dad9d4] dark:border-gray-700">
-        <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#dad9d4] dark:border-gray-700"
-          style={{ background: isDark ? '#282c34' : '#f6f5f0' }}
-        >
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#dad9d4] dark:border-gray-700" style={{ background: isDark ? '#282c34' : '#f6f5f0' }}>
           <span className={`text-[11px] font-mono ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{language || 'text'}</span>
-          <button
-            onClick={handleCopy}
-            className="flex items-center p-1 rounded-md bg-white/90 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-600 transition-all"
-            title={copied ? '已复制' : '复制代码'}
-          >
+          <button onClick={handleCopy} className="flex items-center p-1 rounded-md bg-white/90 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-600 transition-all" title={copied ? '已复制' : '复制代码'}>
             {copied ? <CheckCheck className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           </button>
         </div>
         {useHighlight ? (
-          <SyntaxHighlighter
-            style={isDark ? oneDark : ghcolors}
-            language={language}
-            PreTag="div"
-            customStyle={{ ...codeBlockCustomStyle(isDark) }}
-          >
-            {code}
-          </SyntaxHighlighter>
+          <SyntaxHighlighter style={isDark ? oneDark : ghcolors} language={language} PreTag="div" customStyle={{ ...codeBlockCustomStyle(isDark) }}>{code}</SyntaxHighlighter>
         ) : (
-          <pre className="p-4 overflow-x-auto text-sm font-mono" style={{ background: isDark ? '#1e1e1e' : '#fafafa', margin: 0 }}>
-            <code>{code}</code>
-          </pre>
+          <pre className="p-4 overflow-x-auto text-sm font-mono" style={{ background: isDark ? '#1e1e1e' : '#fafafa', margin: 0 }}><code>{code}</code></pre>
         )}
       </div>
     );
   }
-
-  return (
-    <code className={className} {...props}>{children}</code>
-  );
+  return <code className={className} {...props}>{children}</code>;
 });
 
-// --- 图片组件 ---
 function NoteImage({ src, alt }: { src?: string; alt?: string }) {
   if (!src) return null;
   return <img src={src} alt={alt || ''} className="max-w-full rounded-lg my-2" loading="lazy" />;
 }
 
-// --- 工具栏按钮 ---
-function ToolbarBtn({ onClick, title, children, active }: { onClick: () => void; title: string; children: React.ReactNode; active?: boolean }) {
-  return (
-    <button onClick={onClick} title={title}
-      className={`p-1.5 rounded transition-colors ${active ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
-      {children}
-    </button>
-  );
-}
-
-// --- 主组件 ---
 export default function MarkdownNoteEditor({ documentId, isNew = false }: Props) {
   const navigate = useNavigate();
   const { updateDocumentTitle } = useDocuments();
-  const [isEditing, setIsEditing] = useState(isNew);
+  const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>(isNew ? 'edit' : 'preview');
   const [content, setContent] = useState('');
   const [showAIPanel, setShowAIPanel] = useState(false);
   const [title, setTitle] = useState('');
@@ -189,47 +125,22 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [allTags, setAllTags] = useState<string[]>([]);
+  const editorRef = useRef<MarkdownEditorHandle>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedRef = useRef('');
   const pendingSaveRef = useRef<string | null>(null);
 
-  // 组件卸载时 flush 待保存内容
-  useEffect(() => {
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      if (pendingSaveRef.current !== null && nodeId) {
-        const token = localStorage.getItem('token');
-        const data = JSON.stringify({ content: pendingSaveRef.current });
-        fetch(`/api/nodes/${nodeId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          },
-          body: data,
-          keepalive: true,
-        }).catch(() => {});
-      }
-    };
-  }, [nodeId]);
-
-  // 标签搜索
-  const [allTags, setAllTags] = useState<string[]>([]);
-  const [tagSearch, setTagSearch] = useState<{ keyword: string; start: number } | null>(null);
+  const [tagState, setTagState] = useState<TagMentionState>({ type: null, query: '', coords: null, from: 0, to: 0 });
+  const [mentionState, setMentionState] = useState<TagMentionState>({ type: null, query: '', coords: null, from: 0, to: 0 });
   const [tagDropdownIndex, setTagDropdownIndex] = useState(0);
-
-  // @提及
-  const [showMention, setShowMention] = useState(false);
-  const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
-  const [mentionSearchText, setMentionSearchText] = useState('');
-  const [mentionStartOffset, setMentionStartOffset] = useState<number | null>(null);
+  const [mentionDropdownIndex, setMentionDropdownIndex] = useState(0);
 
   const filteredTags = useMemo(() => {
-    if (!tagSearch) return [];
-    const kw = tagSearch.keyword.toLowerCase();
+    if (!tagState.type || tagState.type !== 'tag') return [];
+    const kw = tagState.query.toLowerCase();
     if (!kw) return allTags.slice(0, 8);
     const prefixMatches: string[] = [];
     const containsMatches: string[] = [];
@@ -239,9 +150,66 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
       else if (name.includes(kw)) containsMatches.push(tag);
     }
     return [...prefixMatches, ...containsMatches].slice(0, 8);
-  }, [tagSearch, allTags]);
+  }, [tagState, allTags]);
 
-  // 加载内容
+  const filteredDocs = useMemo(() => {
+    if (!mentionState.type || mentionState.type !== 'mention') return [];
+    const kw = mentionState.query.toLowerCase();
+    if (!kw) return documents.slice(0, 8);
+    const prefixMatches: Document[] = [];
+    const containsMatches: Document[] = [];
+    for (const doc of documents) {
+      const name = (doc.title || '').toLowerCase();
+      if (name.startsWith(kw)) prefixMatches.push(doc);
+      else if (name.includes(kw)) containsMatches.push(doc);
+    }
+    return [...prefixMatches, ...containsMatches].slice(0, 8);
+  }, [mentionState, documents]);
+
+  const isTagPopupActive = useCallback(() => tagState.type === 'tag' && filteredTags.length > 0, [tagState, filteredTags]);
+  const isMentionPopupActive = useCallback(() => mentionState.type === 'mention' && filteredDocs.length > 0, [mentionState, filteredDocs]);
+
+  const tmExtension = useMemo(() => tagMentionExtension({
+    onTagSearch: (s) => { setTagState(s); setTagDropdownIndex(0); },
+    onMentionSearch: (s) => { setMentionState(s); setMentionDropdownIndex(0); },
+    onNavigateUp: () => {
+      if (isTagPopupActive()) setTagDropdownIndex(i => Math.max(0, i - 1));
+      else if (isMentionPopupActive()) setMentionDropdownIndex(i => Math.max(0, i - 1));
+    },
+    onNavigateDown: () => {
+      if (isTagPopupActive()) setTagDropdownIndex(i => Math.min(filteredTags.length - 1, i + 1));
+      else if (isMentionPopupActive()) setMentionDropdownIndex(i => Math.min(filteredDocs.length - 1, i + 1));
+    },
+    onPopupSelect: () => {
+      if (isTagPopupActive() && filteredTags[tagDropdownIndex]) {
+        handleTagSelect(filteredTags[tagDropdownIndex]);
+      } else if (isMentionPopupActive() && filteredDocs[mentionDropdownIndex]) {
+        handleMentionSelect(filteredDocs[mentionDropdownIndex]);
+      }
+    },
+    onPopupClose: () => {
+      setTagState({ type: null, query: '', coords: null, from: 0, to: 0 });
+      setMentionState({ type: null, query: '', coords: null, from: 0, to: 0 });
+      editorRef.current?.focus();
+    },
+    isPopupActive: () => isTagPopupActive() || isMentionPopupActive(),
+  }), [allTags.length, documents.length, filteredTags, filteredDocs, tagDropdownIndex, mentionDropdownIndex, isTagPopupActive, isMentionPopupActive]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (pendingSaveRef.current !== null && nodeId) {
+        const token = localStorage.getItem('token');
+        fetch(`/api/nodes/${nodeId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ content: pendingSaveRef.current }),
+          keepalive: true,
+        }).catch(() => {});
+      }
+    };
+  }, [nodeId]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -264,20 +232,14 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
           setContent('');
           lastSavedRef.current = '';
         }
-      } catch (e) {
-        console.error('Failed to load note', e);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      } catch (e) { console.error('Failed to load note', e); }
+      finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
   }, [documentId]);
 
-  useEffect(() => {
-    getMemoTags().then(setAllTags).catch(() => {});
-  }, []);
+  useEffect(() => { getMemoTags().then(setAllTags).catch(() => {}); }, []);
 
-  // 自动保存
   const scheduleSave = useCallback((newContent: string) => {
     if (newContent === lastSavedRef.current) { pendingSaveRef.current = null; return; }
     pendingSaveRef.current = newContent;
@@ -285,254 +247,87 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
     saveTimerRef.current = setTimeout(async () => {
       if (!nodeId) return;
       setSaving(true);
-      try {
-        await updateNode(nodeId, { content: newContent });
-        lastSavedRef.current = newContent;
-        pendingSaveRef.current = null;
-      } catch (e) {
-        console.error('Failed to save note', e);
-      } finally {
-        setSaving(false);
-      }
+      try { await updateNode(nodeId, { content: newContent }); lastSavedRef.current = newContent; pendingSaveRef.current = null; }
+      catch (e) { console.error('Failed to save note', e); }
+      finally { setSaving(false); }
     }, 500);
   }, [nodeId]);
 
-  // 保存标题
   const saveTitle = useCallback(async (newTitle: string) => {
-    try {
-      updateDocumentTitle(documentId, newTitle);
-      await updateDocument(documentId, { title: newTitle });
-    } catch (e) {
-      console.error('Failed to save title', e);
-    }
+    try { updateDocumentTitle(documentId, newTitle); await updateDocument(documentId, { title: newTitle }); }
+    catch (e) { console.error('Failed to save title', e); }
   }, [documentId, updateDocumentTitle]);
 
-  // 光标位置计算（缓存镜像 DOM）
-  const mirrorRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    return () => {
-      if (mirrorRef.current && mirrorRef.current.parentNode) {
-        mirrorRef.current.parentNode.removeChild(mirrorRef.current);
-      }
-    };
-  }, []);
-
-  // 标准 span 标记法
-  const getCursorPos = useCallback((textarea: HTMLTextAreaElement, pos: number): { top: number; left: number } => {
-    const rect = textarea.getBoundingClientRect();
-    const style = window.getComputedStyle(textarea);
-    const padTop = parseFloat(style.paddingTop) || 0;
-    const padLeft = parseFloat(style.paddingLeft) || 0;
-    const borderTop = parseFloat(style.borderTopWidth) || 0;
-    const borderLeft = parseFloat(style.borderLeftWidth) || 0;
-
-    let mirror = mirrorRef.current;
-    if (!mirror) {
-      mirror = document.createElement('div');
-      mirror.style.cssText = 'position:absolute;visibility:hidden;top:-9999px;left:-9999px;white-space:pre-wrap;overflow-wrap:break-word';
-      document.body.appendChild(mirror);
-      mirrorRef.current = mirror;
-    }
-    mirror.style.width = (textarea.clientWidth - padLeft - parseFloat(style.paddingRight || '0')) + 'px';
-    mirror.style.fontFamily = style.fontFamily;
-    mirror.style.fontSize = style.fontSize;
-    mirror.style.fontWeight = style.fontWeight;
-    mirror.style.fontStyle = style.fontStyle;
-    mirror.style.letterSpacing = style.letterSpacing;
-    mirror.style.lineHeight = style.lineHeight;
-    mirror.style.tabSize = style.tabSize;
-    mirror.style.wordBreak = style.wordBreak || 'break-word';
-
-    const before = textarea.value.substring(0, pos);
-    const after = textarea.value.substring(pos);
-    mirror.textContent = before;
-    const marker = document.createElement('span');
-    marker.textContent = '​'; // 零宽空格
-    mirror.appendChild(marker);
-    if (after) mirror.appendChild(document.createTextNode(after));
-
-    const top = rect.top + borderTop + padTop + marker.offsetTop - textarea.scrollTop + 4;
-    const left = rect.left + borderLeft + padLeft + marker.offsetLeft;
-
-    while (mirror.childNodes.length > 1) mirror.removeChild(mirror.lastChild!);
-    return { top, left };
-  }, []);
-
-  // @提及
-  const detectMentionSearch = useCallback((text: string, cursorPos: number) => {
-    const before = text.slice(0, cursorPos);
-    const match = before.match(/(?:^|\s)@([a-zA-Z0-9_一-龥]*)$/);
-    if (match) {
-      const start = cursorPos - match[0].length + (match[0][0] === '@' ? 0 : 1);
-      setMentionSearchText(text.substring(start + 1, cursorPos));
-      setMentionStartOffset(start);
-      const el = textareaRef.current;
-      if (el) setMentionPosition(getCursorPos(el, cursorPos));
-    } else {
-      setShowMention(false);
-      setMentionStartOffset(null);
-    }
-  }, [getCursorPos]);
-
-  const insertMention = useCallback((doc: Document) => {
-    const el = textareaRef.current;
-    if (!el || mentionStartOffset === null) return;
-    const end = mentionStartOffset + 1 + mentionSearchText.length;
-    const before = el.value.slice(0, mentionStartOffset);
-    const after = el.value.slice(end);
-    const linkText = `[@${doc.title || '无标题'}](/d/${doc.id})`;
-    const newContent = before + linkText + ' ' + after;
-    el.value = newContent;
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    setContent(newContent);
-    scheduleSave(newContent);
-    setShowMention(false);
-    setMentionSearchText('');
-    setMentionStartOffset(null);
-    requestAnimationFrame(() => { el.focus(); el.selectionStart = el.selectionEnd = before.length + linkText.length + 1; });
-  }, [mentionStartOffset, mentionSearchText, scheduleSave]);
-
-  // 标签
-  const detectTagSearch = useCallback((text: string, cursorPos: number) => {
-    const before = text.slice(0, cursorPos);
-    const match = before.match(/(?:^|\s)#([a-zA-Z0-9_一-龥]*)$/);
-    if (match) {
-      const start = cursorPos - match[0].length + (match[0][0] === '#' ? 0 : 1);
-      setTagSearch({ keyword: match[1], start });
-      setTagDropdownIndex(0);
-    } else {
-      setTagSearch(null);
-    }
-  }, []);
-
-  const insertTag = useCallback((tagName: string) => {
-    const el = textareaRef.current;
-    if (!el || !tagSearch) return;
-    const cursorPos = el.selectionStart;
-    const before = el.value.slice(0, tagSearch.start);
-    const after = el.value.slice(cursorPos);
-    const newContent = before + tagName + ' ' + after;
-    el.value = newContent;
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    setContent(newContent);
-    scheduleSave(newContent);
-    setTagSearch(null);
-    requestAnimationFrame(() => { el.focus(); el.selectionStart = el.selectionEnd = tagSearch.start + tagName.length + 1; });
-  }, [tagSearch, scheduleSave]);
-
-  // 插入 Markdown 格式
-  const insertFormat = useCallback((before: string, after: string = '', placeholder: string = '') => {
-    const el = textareaRef.current;
-    if (!el) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    const selected = el.value.slice(start, end);
-    const insertText = selected || placeholder;
-    const newContent = el.value.slice(0, start) + before + insertText + after + el.value.slice(end);
-    el.value = newContent;
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    setContent(newContent);
-    scheduleSave(newContent);
-    requestAnimationFrame(() => {
-      el.focus();
-      if (selected) {
-        el.selectionStart = start + before.length;
-        el.selectionEnd = start + before.length + insertText.length;
-      } else {
-        el.selectionStart = el.selectionEnd = start + before.length + placeholder.length;
-      }
-    });
-  }, [scheduleSave]);
-
-  const insertLinePrefix = useCallback((prefix: string) => {
-    const el = textareaRef.current;
-    if (!el) return;
-    const start = el.selectionStart;
-    const value = el.value;
-    const lineStart = value.lastIndexOf('\n', start - 1) + 1;
-    const newContent = value.slice(0, lineStart) + prefix + value.slice(lineStart);
-    el.value = newContent;
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    setContent(newContent);
-    scheduleSave(newContent);
-    requestAnimationFrame(() => { el.focus(); el.selectionStart = el.selectionEnd = start + prefix.length; });
-  }, [scheduleSave]);
-
-  // 文件上传
   const handleFileUpload = useCallback(async (file: File, isImage: boolean) => {
     if (file.size > 50 * 1024 * 1024) { alert('文件大小不能超过 50MB'); return; }
     setUploading(true);
     try {
       const res = await uploadFile(file);
       const url = res.file_path.replace(/^\/api/, '');
-      const el = textareaRef.current;
-      if (!el) return;
-      const start = el.selectionStart;
       const text = isImage ? `![${res.file_name}](${url})` : `[${res.file_name}](${url})`;
-      const newContent = el.value.slice(0, start) + text + el.value.slice(start);
-      // textarea 是非受控组件，需要直接修改 DOM 值
-      el.value = newContent;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      setContent(newContent);
-      scheduleSave(newContent);
-      requestAnimationFrame(() => { el.focus(); el.selectionStart = el.selectionEnd = start + text.length; });
-    } catch (e) {
-      console.error('Upload failed', e);
-      alert('上传失败');
-    } finally {
-      setUploading(false);
-    }
-  }, [scheduleSave]);
+      editorRef.current?.insertText(text);
+      scheduleSave(editorRef.current?.getValue() ?? content);
+    } catch (e) { console.error('Upload failed', e); alert('上传失败'); }
+    finally { setUploading(false); }
+  }, [scheduleSave, content]);
 
-  // 键盘处理
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (showMention) {
-      if (e.key === 'Escape') { e.preventDefault(); setShowMention(false); setMentionSearchText(''); setMentionStartOffset(null); return; }
+  const handleTagSelect = useCallback((tag: string) => {
+    const view = editorRef.current?.view;
+    if (!view) return;
+    view.dispatch({ changes: { from: tagState.from, to: tagState.to, insert: `${tag} ` }, selection: { anchor: tagState.from + tag.length + 1 } });
+    setTagState({ type: null, query: '', coords: null, from: 0, to: 0 });
+    setTagDropdownIndex(0);
+    scheduleSave(view.state.doc.toString());
+    view.focus();
+  }, [tagState, scheduleSave]);
+
+  const handleMentionSelect = useCallback((doc: Document) => {
+    const view = editorRef.current?.view;
+    if (!view) return;
+    const insert = `[@${doc.title || '无标题'}](/d/${doc.id}) `;
+    view.dispatch({ changes: { from: mentionState.from, to: mentionState.to, insert }, selection: { anchor: mentionState.from + insert.length } });
+    setMentionState({ type: null, query: '', coords: null, from: 0, to: 0 });
+    setMentionDropdownIndex(0);
+    scheduleSave(view.state.doc.toString());
+    view.focus();
+  }, [mentionState, scheduleSave]);
+
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === 'file') { e.preventDefault(); const file = item.getAsFile(); if (file) handleFileUpload(file, item.type.startsWith('image/')); return; }
     }
-    if (tagSearch && filteredTags.length > 0) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setTagDropdownIndex(prev => (prev + 1) % filteredTags.length); return; }
-      if (e.key === 'ArrowUp') { e.preventDefault(); setTagDropdownIndex(prev => (prev - 1 + filteredTags.length) % filteredTags.length); return; }
-      if ((e.key === 'Enter' && !e.nativeEvent.isComposing) || e.key === 'Tab') { e.preventDefault(); insertTag(filteredTags[tagDropdownIndex]); return; }
-      if (e.key === 'Escape') { e.preventDefault(); setTagSearch(null); return; }
-    }
-    // Tab 插入缩进
-    if (e.key === 'Tab') {
+    const md = getPasteMarkdown(e.clipboardData);
+    if (md) {
       e.preventDefault();
-      const el = textareaRef.current;
-      if (!el) return;
-      // 使用 execCommand 插入文本，保留撤销历史
-      document.execCommand('insertText', false, '  ');
-      return;
+      editorRef.current?.insertText(md);
+      const newContent = editorRef.current?.getValue() ?? content;
+      scheduleSave(newContent);
+      const externalUrls = extractExternalImageUrls(md);
+      if (externalUrls.length > 0) {
+        setUploading(true);
+        Promise.allSettled(externalUrls.map(async (url) => {
+          try { const res = await uploadFromUrl(url); return { originalUrl: url, localUrl: res.file_path.replace(/^\/api/, '') }; }
+          catch { return null; }
+        })).then((results) => {
+          const view = editorRef.current?.view;
+          if (!view) { setUploading(false); return; }
+          let updated = view.state.doc.toString();
+          for (const r of results) { if (r && r.status === 'fulfilled' && r.value) updated = updated.split(r.value.originalUrl).join(r.value.localUrl); }
+          if (updated !== view.state.doc.toString()) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: updated } });
+          scheduleSave(updated);
+          setUploading(false);
+        });
+      }
     }
-    // 传入 textarea 实时值而非 stale state
-    handleListContinuation(e, textareaRef.current?.value ?? content, setContent, textareaRef);
-  };
+  }, [handleFileUpload, scheduleSave, content]);
 
-  // 内容变化
-  const handleContentChange = (newValue: string) => {
-    const el = textareaRef.current;
-    const cursorPos = el?.selectionStart || newValue.length;
-    // 同步 content 状态，避免 stale state
-    setContent(newValue);
-    scheduleSave(newValue);
-    detectTagSearch(newValue, cursorPos);
-    if (newValue.length > content.length && newValue.charAt(cursorPos - 1) === '@') {
-      if (el) setMentionPosition(getCursorPos(el, cursorPos - 1));
-      setMentionSearchText('');
-      setMentionStartOffset(cursorPos - 1);
-      setShowMention(true);
-    }
-    if (showMention) detectMentionSearch(newValue, cursorPos);
-  };
-
-  // Markdown 组件
   const navigate_fn = useNavigate();
   const mdComponents = useMemo((): Components => ({
     code: (props: any) => {
       const match = /language-(\w+)/.exec(props.className || '');
-      if (match && match[1] === 'mermaid') {
-        return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
-      }
+      if (match && match[1] === 'mermaid') return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
       return <CodeBlock {...props} />;
     },
     img: ({ src, alt }) => <NoteImage src={src} alt={alt} />,
@@ -548,205 +343,77 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
 
   const processedContent = useMemo(() => preprocess(content), [content]);
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-64"><div className="text-gray-400 dark:text-gray-500 text-sm">加载中...</div></div>;
-  }
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="text-gray-400 dark:text-gray-500 text-sm">加载中...</div></div>;
+
+  const showTagPopup = tagState.type === 'tag' && filteredTags.length > 0 && tagState.coords;
+  const showMentionPopup = mentionState.type === 'mention' && filteredDocs.length > 0 && mentionState.coords;
 
   return (
     <div className="flex flex-col h-full bg-[#FBF8F3] dark:bg-transparent">
-      {/* 顶部工具栏 */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 dark:border-gray-800 shrink-0">
-        {/* 左侧：标题 + 编辑模式工具 */}
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
             onBlur={() => { if (title.trim()) saveTitle(title.trim()); }}
             className="text-lg font-semibold text-gray-900 dark:text-gray-100 bg-transparent border-none outline-none placeholder-gray-400 dark:placeholder-gray-500 flex-1 min-w-0 truncate"
-            placeholder="笔记标题"
-          />
+            placeholder="笔记标题" />
           {saving && <span className="text-xs text-gray-400 shrink-0"><Save className="w-3 h-3 inline mr-0.5" />保存中</span>}
           {uploading && <span className="text-xs text-blue-500 shrink-0">上传中...</span>}
         </div>
-
-        {/* 右侧：模式切换 */}
-        <button
-          onClick={() => {
-            // 切换前同步 textarea 最新内容到 state，确保编辑/预览一致
-            if (isEditing && textareaRef.current) {
-              setContent(textareaRef.current.value);
-            }
-            setIsEditing(!isEditing);
-          }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors shrink-0 ml-4"
-        >
-          {isEditing ? <><Eye className="w-4 h-4" />阅读</> : <><Pencil className="w-4 h-4" />编辑</>}
-        </button>
+        <div className="flex items-center gap-1 shrink-0 ml-4">
+          <button onClick={() => setViewMode(viewMode === 'preview' ? 'edit' : 'preview')}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            {viewMode === 'preview' ? <><Pencil className="w-4 h-4" />编辑</> : <><Eye className="w-4 h-4" />阅读</>}
+          </button>
+          <button onClick={() => setViewMode(viewMode === 'split' ? 'edit' : 'split')}
+            className={`p-1.5 rounded-lg transition-colors ${viewMode === 'split' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+            title="分屏模式"><Columns2 className="w-4 h-4" /></button>
+        </div>
       </div>
 
-      {/* Markdown 快捷工具栏（仅编辑模式） */}
-      {isEditing && (
-        <div className="flex items-center gap-0.5 px-4 py-1.5 border-b border-gray-100 dark:border-gray-800 shrink-0 overflow-x-auto">
-          <ToolbarBtn onClick={() => insertLinePrefix('# ')} title="一级标题"><Heading1 className="w-4 h-4" /></ToolbarBtn>
-          <ToolbarBtn onClick={() => insertLinePrefix('## ')} title="二级标题"><Heading2 className="w-4 h-4" /></ToolbarBtn>
-          <ToolbarBtn onClick={() => insertLinePrefix('### ')} title="三级标题"><Heading3 className="w-4 h-4" /></ToolbarBtn>
-          <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
-          <ToolbarBtn onClick={() => insertFormat('**', '**', '粗体')} title="粗体"><Bold className="w-4 h-4" /></ToolbarBtn>
-          <ToolbarBtn onClick={() => insertFormat('*', '*', '斜体')} title="斜体"><Italic className="w-4 h-4" /></ToolbarBtn>
-          <ToolbarBtn onClick={() => insertFormat('`', '`', '代码')} title="行内代码"><Code className="w-4 h-4" /></ToolbarBtn>
-          <ToolbarBtn onClick={() => insertFormat('\n```\n', '\n```\n', '代码块')} title="代码块"><span className="text-xs font-mono font-bold">B</span></ToolbarBtn>
-          <ToolbarBtn onClick={() => insertFormat('~~', '~~', '删除线')} title="删除线"><span className="text-xs line-through">S</span></ToolbarBtn>
-          <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
-          <ToolbarBtn onClick={() => insertLinePrefix('- ')} title="无序列表"><List className="w-4 h-4" /></ToolbarBtn>
-          <ToolbarBtn onClick={() => insertLinePrefix('1. ')} title="有序列表"><ListOrdered className="w-4 h-4" /></ToolbarBtn>
-          <ToolbarBtn onClick={() => insertLinePrefix('> ')} title="引用"><Quote className="w-4 h-4" /></ToolbarBtn>
-          <ToolbarBtn onClick={() => insertLinePrefix('- [ ] ')} title="任务列表"><span className="text-xs">☑</span></ToolbarBtn>
-          <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
-          <ToolbarBtn onClick={() => insertFormat('[', '](url)', '链接文字')} title="链接"><Link className="w-4 h-4" /></ToolbarBtn>
-          <ToolbarBtn onClick={() => insertFormat('\n---\n')} title="分割线"><Minus className="w-4 h-4" /></ToolbarBtn>
-          <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
-          <ToolbarBtn onClick={() => imageInputRef.current?.click()} title="上传图片"><Image className="w-4 h-4" /></ToolbarBtn>
-          <ToolbarBtn onClick={() => fileInputRef.current?.click()} title="上传附件"><Paperclip className="w-4 h-4" /></ToolbarBtn>
-          <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
-          <ToolbarBtn onClick={() => setShowAIPanel(true)} title="AI 整理"><Sparkles className="w-4 h-4" /></ToolbarBtn>
-        </div>
-      )}
-
-      {/* 编辑/预览区域 */}
-      <div className="flex-1 overflow-y-auto scrollbar-none relative flex flex-col items-center">
-        {isEditing ? (
-          <>
-            <div className="w-full max-w-[768px] h-full scrollbar-none">
-            <textarea
-              ref={textareaRef}
-              defaultValue={content}
-              onChange={(e) => {
-                const newValue = e.target.value;
-                handleContentChange(newValue);
-              }}
-              onKeyDown={handleKeyDown}
-              onPaste={(e) => {
-                // 优先处理文件粘贴（图片/附件）
-                const items = e.clipboardData.items;
-                for (let i = 0; i < items.length; i++) {
-                  const item = items[i];
-                  if (item.kind === 'file') {
-                    e.preventDefault();
-                    const file = item.getAsFile();
-                    if (file) handleFileUpload(file, item.type.startsWith('image/'));
-                    return;
-                  }
-                }
-                // 网页富文本粘贴 → 转为 Markdown
-                const md = getPasteMarkdown(e.clipboardData);
-                if (md) {
-                  e.preventDefault();
-                  const el = e.currentTarget;
-                  const start = el.selectionStart;
-                  const end = el.selectionEnd;
-                  const before = el.value.slice(0, start);
-                  const after = el.value.slice(end);
-                  let newContent = before + md + after;
-                  el.value = newContent;
-                  el.dispatchEvent(new Event('input', { bubbles: true }));
-                  setContent(newContent);
-                  scheduleSave(newContent);
-                  const cursorPos = start + md.length;
-                  requestAnimationFrame(() => {
-                    el.selectionStart = el.selectionEnd = cursorPos;
-                  });
-                  // 异步通过后端代理下载外部图片并上传到本地
-                  const externalUrls = extractExternalImageUrls(md);
-                  if (externalUrls.length > 0) {
-                    setUploading(true);
-                    Promise.allSettled(
-                      externalUrls.map(async (url) => {
-                        try {
-                          const res = await uploadFromUrl(url);
-                          const localUrl = res.file_path.replace(/^\/api/, '');
-                          return { originalUrl: url, localUrl };
-                        } catch {
-                          return null;
-                        }
-                      })
-                    ).then((results) => {
-                      const el = textareaRef.current;
-                      if (!el) { setUploading(false); return; }
-                      let updated = el.value;
-                      for (const r of results) {
-                        if (r && r.status === 'fulfilled' && r.value) {
-                          updated = updated.split(r.value.originalUrl).join(r.value.localUrl);
-                        }
-                      }
-                      if (updated !== el.value) {
-                        el.value = updated;
-                        el.dispatchEvent(new Event('input', { bubbles: true }));
-                        setContent(updated);
-                        scheduleSave(updated);
-                      }
-                      setUploading(false);
-                    });
-                  }
-                }
-              }}
-              onClick={(e) => detectTagSearch((e.target as HTMLTextAreaElement).value, (e.target as HTMLTextAreaElement).selectionStart)}
-              onSelect={(e) => detectTagSearch((e.target as HTMLTextAreaElement).value, (e.target as HTMLTextAreaElement).selectionStart)}
-              onBlur={() => setTimeout(() => setTagSearch(null), 200)}
-              placeholder="开始书写... (支持 Markdown，输入 # 添加标签，@ 链接笔记)"
-              className="w-full h-full min-h-full bg-transparent text-gray-800 dark:text-gray-200 text-base p-6 resize-none focus:outline-none scrollbar-none"
-              style={{ fontFamily: 'inherit', lineHeight: '1.75' }}
-            />
-            </div>
-
-            {/* 标签下拉 */}
-            {tagSearch && filteredTags.length > 0 && (
-              <div className="absolute left-6 w-40 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                {filteredTags.map((tag, i) => (
-                  <button key={tag} onMouseDown={(e) => { e.preventDefault(); insertTag(tag); }}
-                    className={`w-full text-left px-4 py-2 text-base transition-colors ${i === tagDropdownIndex ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
-                    {tag}
-                  </button>
-                ))}
+      <div className={`flex-1 overflow-hidden ${viewMode === 'split' ? 'flex' : ''}`}>
+        {(viewMode === 'edit' || viewMode === 'split') && (
+          <div className={`${viewMode === 'split' ? 'w-1/2 border-r border-gray-200 dark:border-gray-700' : 'w-full'} flex flex-col overflow-hidden relative`}>
+            <div className="flex-1 overflow-y-auto scrollbar-none flex justify-center">
+              <div className="w-full max-w-[768px]" onPaste={handlePaste}>
+                <MarkdownEditor ref={editorRef} value={content} onChange={(val) => { setContent(val); scheduleSave(val); }}
+                  compact={false} placeholder="开始书写... (支持 Markdown，输入 # 添加标签，@ 链接笔记)" className="h-full p-6"
+                  extensions={[tmExtension]}
+                  toolbar={<EditorToolbar editorRef={editorRef} onUploadImage={() => imageInputRef.current?.click()} onUploadFile={() => fileInputRef.current?.click()} onOpenAI={() => setShowAIPanel(true)} />}
+                />
               </div>
+            </div>
+            {showTagPopup && createPortal(
+              <TagMentionPopup items={filteredTags.map((t): PopupItem => ({ label: t, value: t }))} selectedIndex={tagDropdownIndex}
+                onSelect={(item) => handleTagSelect(item.value)} onClose={() => setTagState({ type: null, query: '', coords: null, from: 0, to: 0 })}
+                position={tagState.coords!} type="tag" />, document.body
             )}
-
-            {/* @提及下拉 */}
-            {showMention && createPortal(
-              <MentionDropdown documents={documents} onSelect={insertMention}
-                onClose={() => { setShowMention(false); setMentionSearchText(''); setMentionStartOffset(null); textareaRef.current?.focus(); }}
-                position={mentionPosition} searchText={mentionSearchText} />,
-              document.body
+            {showMentionPopup && createPortal(
+              <TagMentionPopup items={filteredDocs.map((d): PopupItem => ({ label: d.title || '无标题', value: d.id, detail: d.type }))} selectedIndex={mentionDropdownIndex}
+                onSelect={(item) => handleMentionSelect(filteredDocs.find(d => d.id === item.value)!)} onClose={() => setMentionState({ type: null, query: '', coords: null, from: 0, to: 0 })}
+                position={mentionState.coords!} type="mention" />, document.body
             )}
-          </>
-        ) : (
-          <div className="memo-content prose prose-gray dark:prose-invert max-w-[768px] w-full text-base text-gray-700 dark:text-gray-300 p-6" style={{ lineHeight: '1.75' }}>
-            {content.trim() ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]} components={mdComponents}>{processedContent}</ReactMarkdown>
-            ) : (
-              <p className="text-gray-400 dark:text-gray-500 italic">空笔记</p>
-            )}
+          </div>
+        )}
+        {(viewMode === 'preview' || viewMode === 'split') && (
+          <div className={`${viewMode === 'split' ? 'w-1/2' : 'w-full'} overflow-y-auto scrollbar-none flex flex-col items-center`}>
+            <div className="memo-content prose prose-gray dark:prose-invert max-w-[768px] w-full text-base text-gray-700 dark:text-gray-300 p-6" style={{ lineHeight: '1.75' }}>
+              {content.trim() ? (
+                <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]} components={mdComponents}>{processedContent}</ReactMarkdown>
+              ) : <p className="text-gray-400 dark:text-gray-500 italic">空笔记</p>}
+            </div>
           </div>
         )}
       </div>
 
-      {/* 隐藏文件选择器 */}
       <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden"
         onChange={(e) => { const files = e.target.files; if (files) { for (let i = 0; i < files.length; i++) { handleFileUpload(files[i], true); } } e.target.value = ''; }} />
       <input ref={fileInputRef} type="file" multiple className="hidden"
         onChange={(e) => { const files = e.target.files; if (files) { for (let i = 0; i < files.length; i++) { handleFileUpload(files[i], false); } } e.target.value = ''; }} />
 
-      {/* AI 对话面板 */}
       {showAIPanel && (
-        <AIChatPanel
-          context={content}
-          onWriteBack={(newContent) => {
-            setContent(newContent);
-            if (textareaRef.current) textareaRef.current.value = newContent;
-            scheduleSave(newContent);
-          }}
-          onClose={() => setShowAIPanel(false)}
-        />
+        <AIChatPanel context={content}
+          onWriteBack={(newContent) => { setContent(newContent); editorRef.current?.view?.dispatch({ changes: { from: 0, to: editorRef.current.view.state.doc.length, insert: newContent } }); scheduleSave(newContent); }}
+          onClose={() => setShowAIPanel(false)} />
       )}
     </div>
   );

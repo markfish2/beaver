@@ -12,6 +12,7 @@ export default defineConfig({
           'vendor-lucide': ['lucide-react'],
           'vendor-axios': ['axios'],
           'vendor-excalidraw': ['@excalidraw/excalidraw'],
+          'vendor-codemirror': ['codemirror', '@codemirror/lang-markdown', '@codemirror/language', '@codemirror/state', '@codemirror/view', '@codemirror/commands', '@codemirror/search', '@lezer/highlight'],
         }
       }
     }

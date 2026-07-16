@@ -52,8 +52,14 @@ import type { Memo, Document, LinkPreview } from '../api/data';
 import { uploadFile, getMemoTags, updateMemoColor, getThumbnailUrl, fetchLinkPreview, retryLinkPreview } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import LinkPreviewCard from './LinkPreviewCard';
-import { handleListContinuation } from '../utils/listContinuation';
 import { getPasteMarkdown } from '../utils/htmlToMarkdown';
+import MarkdownEditor from './MarkdownEditor';
+import type { MarkdownEditorHandle } from './MarkdownEditor';
+import EditorToolbar from './EditorToolbar';
+import TagMentionPopup from './TagMentionPopup';
+import type { PopupItem } from './TagMentionPopup';
+import { tagMentionExtension } from '../extensions/tagMentionExtension';
+import type { TagMentionState } from '../extensions/tagMentionExtension';
 import { stripTags, stripAttachments, normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts, escapeCodeBlockHtml } from '../utils/markdownPreprocess';
 import MemoToDocDialog from './MemoToDocDialog';
 import AudioPlayer from './AudioPlayer';
@@ -757,14 +763,13 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showExpandEditor, setShowExpandEditor] = useState(false);
   const [showAIPanel, setShowAIPanel] = useState(false);
-  const activeTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [showConvertDialog, setShowConvertDialog] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { isUserResized, resetUserHeight, onResizeStart } = useResizableTextarea({ minHeight: 80, maxHeight: 500 });
+  const editorRef = useRef<MarkdownEditorHandle>(null);
+  const expandEditorRef = useRef<MarkdownEditorHandle>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -774,16 +779,12 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const contentRef = useRef<HTMLDivElement>(null);
   const bgColor = getMemoBg(isDark, memo.color, memo.is_pinned);
 
-  // 标签搜索状态
+  // Tag/mention state
   const [allTags, setAllTags] = useState<string[]>([]);
-  const [tagSearch, setTagSearch] = useState<{ keyword: string; start: number } | null>(null);
+  const [tagState, setTagState] = useState<TagMentionState>({ type: null, query: '', coords: null, from: 0, to: 0 });
+  const [mentionState, setMentionState] = useState<TagMentionState>({ type: null, query: '', coords: null, from: 0, to: 0 });
   const [tagDropdownIndex, setTagDropdownIndex] = useState(0);
-  const [tagDropdownPos, setTagDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-
-  // @提及文档搜索状态（与 # 标签一致的模式）
-  const [mentionSearch, setMentionSearch] = useState<{ keyword: string; start: number } | null>(null);
   const [mentionDropdownIndex, setMentionDropdownIndex] = useState(0);
-  const [mentionDropdownPos, setMentionDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   useEffect(() => {
     if (isEditing) {
@@ -792,8 +793,8 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   }, [isEditing]);
 
   const filteredTags = useMemo(() => {
-    if (!tagSearch) return [];
-    const kw = tagSearch.keyword.toLowerCase();
+    if (!tagState.type || tagState.type !== 'tag') return [];
+    const kw = tagState.query.toLowerCase();
     if (!kw) return allTags.slice(0, 8);
     const prefixMatches: string[] = [];
     const containsMatches: string[] = [];
@@ -803,157 +804,71 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       else if (name.includes(kw)) containsMatches.push(tag);
     }
     return [...prefixMatches, ...containsMatches].slice(0, 8);
-  }, [tagSearch, allTags]);
+  }, [tagState, allTags]);
 
-  // 计算 textarea 中光标的像素位置（缓存镜像 DOM，避免每次创建/销毁）
-  const mirrorRef = useRef<HTMLDivElement | null>(null);
-
-  // 组件卸载时清理镜像元素
-  useEffect(() => {
-    return () => {
-      if (mirrorRef.current && mirrorRef.current.parentNode) {
-        mirrorRef.current.parentNode.removeChild(mirrorRef.current);
-      }
-    };
-  }, []);
-
-  // 标准 span 标记法：在光标位置插入零宽 span，同时保留后面的文字（保证换行一致）
-  const getCursorPos = useCallback((textarea: HTMLTextAreaElement, pos: number): { top: number; left: number } => {
-    const rect = textarea.getBoundingClientRect();
-    const style = window.getComputedStyle(textarea);
-    const padTop = parseFloat(style.paddingTop) || 0;
-    const padLeft = parseFloat(style.paddingLeft) || 0;
-    const borderTop = parseFloat(style.borderTopWidth) || 0;
-    const borderLeft = parseFloat(style.borderLeftWidth) || 0;
-
-    let mirror = mirrorRef.current;
-    if (!mirror) {
-      mirror = document.createElement('div');
-      mirror.style.position = 'absolute';
-      mirror.style.visibility = 'hidden';
-      mirror.style.top = '-9999px';
-      mirror.style.left = '-9999px';
-      mirror.style.whiteSpace = 'pre-wrap';
-      mirror.style.overflowWrap = 'break-word';
-      document.body.appendChild(mirror);
-      mirrorRef.current = mirror;
-    }
-    mirror.style.width = (textarea.clientWidth - padLeft - parseFloat(style.paddingRight || '0')) + 'px';
-    mirror.style.fontFamily = style.fontFamily;
-    mirror.style.fontSize = style.fontSize;
-    mirror.style.fontWeight = style.fontWeight;
-    mirror.style.fontStyle = style.fontStyle;
-    mirror.style.letterSpacing = style.letterSpacing;
-    mirror.style.lineHeight = style.lineHeight;
-    mirror.style.tabSize = style.tabSize;
-    mirror.style.wordBreak = style.wordBreak || 'break-word';
-
-    const before = textarea.value.substring(0, pos);
-    const after = textarea.value.substring(pos);
-    mirror.textContent = before;
-    const marker = document.createElement('span');
-    marker.textContent = '​'; // 零宽空格
-    mirror.appendChild(marker);
-    if (after) {
-      mirror.appendChild(document.createTextNode(after));
-    }
-
-    const top = rect.top + borderTop + padTop + marker.offsetTop - textarea.scrollTop + 4;
-    const left = rect.left + borderLeft + padLeft + marker.offsetLeft;
-
-    // 清理 afterNode
-    while (mirror.childNodes.length > 1) {
-      mirror.removeChild(mirror.lastChild!);
-    }
-
-    return { top, left };
-  }, []);
-
-  const detectTagSearch = useCallback((text: string, cursorPos: number, externalEl?: HTMLTextAreaElement) => {
-    const before = text.slice(0, cursorPos);
-    const match = before.match(/(?:^|\s)#([a-zA-Z0-9_一-龥]*)$/);
-    if (match) {
-      const start = cursorPos - match[0].length + (match[0][0] === '#' ? 0 : 1);
-      setTagSearch({ keyword: match[1], start });
-      setTagDropdownIndex(0);
-      const el = externalEl || activeTextareaRef.current || textareaRef.current;
-      if (el) {
-        setTagDropdownPos(getCursorPos(el, cursorPos));
-      }
-    } else {
-      setTagSearch(null);
-    }
-  }, [getCursorPos]);
-
-  const detectMentionSearch = useCallback((text: string, cursorPos: number, externalEl?: HTMLTextAreaElement) => {
-    const before = text.slice(0, cursorPos);
-    const match = before.match(/(?:^|\s)@([a-zA-Z0-9_一-龥]*)$/);
-    if (match) {
-      const start = cursorPos - match[0].length + (match[0][0] === '@' ? 0 : 1);
-      setMentionSearch({ keyword: match[1], start });
-      setMentionDropdownIndex(0);
-      const el = externalEl || activeTextareaRef.current || textareaRef.current;
-      if (el) {
-        setMentionDropdownPos(getCursorPos(el, cursorPos));
-      }
-    } else {
-      setMentionSearch(null);
-    }
-  }, [getCursorPos]);
-
-  const filteredMentionDocs = useMemo(() => {
-    if (!mentionSearch || !documents) return [];
-    const kw = mentionSearch.keyword.toLowerCase();
+  const filteredDocs = useMemo(() => {
+    if (!mentionState.type || mentionState.type !== 'mention' || !documents) return [];
+    const kw = mentionState.query.toLowerCase();
     if (!kw) return documents.slice(0, 8);
     const prefixMatches: Document[] = [];
     const containsMatches: Document[] = [];
     for (const doc of documents) {
-      const title = (doc.title || '无标题').toLowerCase();
-      if (title.startsWith(kw)) prefixMatches.push(doc);
-      else if (title.includes(kw)) containsMatches.push(doc);
+      const name = (doc.title || '').toLowerCase();
+      if (name.startsWith(kw)) prefixMatches.push(doc);
+      else if (name.includes(kw)) containsMatches.push(doc);
     }
     return [...prefixMatches, ...containsMatches].slice(0, 8);
-  }, [mentionSearch, documents]);
+  }, [mentionState, documents]);
 
-  const insertTag = useCallback((tagName: string) => {
-    const el = activeTextareaRef.current || textareaRef.current;
-    if (!el || !tagSearch) return;
-    const cursorPos = el.selectionStart;
-    const before = el.value.slice(0, tagSearch.start);
-    const after = el.value.slice(cursorPos);
-    const newContent = before + tagName + ' ' + after;
-    el.value = newContent;
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    setEditContent(newContent);
-    if (textareaRef.current && textareaRef.current !== el) textareaRef.current.value = newContent;
-    setTagSearch(null);
-    requestAnimationFrame(() => {
-      el.focus();
-      const newPos = tagSearch.start + tagName.length + 1;
-      el.selectionStart = el.selectionEnd = newPos;
-    });
-  }, [tagSearch]);
+  const isTagPopupActive = useCallback(() => tagState.type === 'tag' && filteredTags.length > 0, [tagState, filteredTags]);
+  const isMentionPopupActive = useCallback(() => mentionState.type === 'mention' && filteredDocs.length > 0, [mentionState, filteredDocs]);
 
-  // @提及：插入文档链接
-  const insertMention = useCallback((doc: Document) => {
-    const el = activeTextareaRef.current || textareaRef.current;
-    if (!el || !mentionSearch) return;
-    const cursorPos = el.selectionStart;
-    const before = el.value.slice(0, mentionSearch.start);
-    const after = el.value.slice(cursorPos);
-    const linkText = `[@${doc.title || '无标题'}](/d/${doc.id})`;
-    const newContent = before + linkText + ' ' + after;
-    el.value = newContent;
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    setEditContent(newContent);
-    if (textareaRef.current && textareaRef.current !== el) textareaRef.current.value = newContent;
-    setMentionSearch(null);
-    requestAnimationFrame(() => {
-      el.focus();
-      const newPos = mentionSearch.start + linkText.length + 1;
-      el.selectionStart = el.selectionEnd = newPos;
-    });
-  }, [mentionSearch]);
+  const tmExtension = useMemo(() => tagMentionExtension({
+    onTagSearch: (s) => { setTagState(s); setTagDropdownIndex(0); },
+    onMentionSearch: (s) => { setMentionState(s); setMentionDropdownIndex(0); },
+    onNavigateUp: () => {
+      if (isTagPopupActive()) setTagDropdownIndex(i => Math.max(0, i - 1));
+      else if (isMentionPopupActive()) setMentionDropdownIndex(i => Math.max(0, i - 1));
+    },
+    onNavigateDown: () => {
+      if (isTagPopupActive()) setTagDropdownIndex(i => Math.min(filteredTags.length - 1, i + 1));
+      else if (isMentionPopupActive()) setMentionDropdownIndex(i => Math.min(filteredDocs.length - 1, i + 1));
+    },
+    onPopupSelect: () => {
+      if (isTagPopupActive() && filteredTags[tagDropdownIndex]) handleTagSelect(filteredTags[tagDropdownIndex]);
+      else if (isMentionPopupActive() && filteredDocs[mentionDropdownIndex]) handleMentionSelect(filteredDocs[mentionDropdownIndex]);
+    },
+    onPopupClose: () => {
+      setTagState({ type: null, query: '', coords: null, from: 0, to: 0 });
+      setMentionState({ type: null, query: '', coords: null, from: 0, to: 0 });
+      const active = showExpandEditor ? expandEditorRef.current : editorRef.current;
+      active?.focus();
+    },
+    isPopupActive: () => isTagPopupActive() || isMentionPopupActive(),
+  }), [allTags.length, documents?.length, filteredTags, filteredDocs, tagDropdownIndex, mentionDropdownIndex, isTagPopupActive, isMentionPopupActive, showExpandEditor]);
+
+  const handleTagSelect = useCallback((tag: string) => {
+    const active = showExpandEditor ? expandEditorRef.current : editorRef.current;
+    const view = active?.view;
+    if (!view) return;
+    view.dispatch({ changes: { from: tagState.from, to: tagState.to, insert: `${tag} ` }, selection: { anchor: tagState.from + tag.length + 1 } });
+    setTagState({ type: null, query: '', coords: null, from: 0, to: 0 });
+    setTagDropdownIndex(0);
+    setEditContent(view.state.doc.toString());
+    view.focus();
+  }, [tagState, showExpandEditor]);
+
+  const handleMentionSelect = useCallback((doc: Document) => {
+    const active = showExpandEditor ? expandEditorRef.current : editorRef.current;
+    const view = active?.view;
+    if (!view) return;
+    const insert = `[@${doc.title || '无标题'}](/d/${doc.id}) `;
+    view.dispatch({ changes: { from: mentionState.from, to: mentionState.to, insert }, selection: { anchor: mentionState.from + insert.length } });
+    setMentionState({ type: null, query: '', coords: null, from: 0, to: 0 });
+    setMentionDropdownIndex(0);
+    setEditContent(view.state.doc.toString());
+    view.focus();
+  }, [mentionState, showExpandEditor]);
 
   const tags = useMemo(() => extractTags(memo.content), [memo.content]);
   const images = useMemo(() => extractImages(memo.content), [memo.content]);
@@ -1029,20 +944,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   checkboxIndexRef.current = 0;
   const mdComponents = useMemo(() => markdownComponents(setPreviewImage, toggleCheckboxRef, checkboxIndexRef, (...args) => navigateRef.current(...args), memo.color), [memo.color]);
 
-  // 编辑模式下自动调整 textarea 高度
-  // 用 useEffect + 双重 rAF 替代 useLayoutEffect，确保浏览器完成布局后再测量
-  useEffect(() => {
-    if (!isEditing || isUserResized()) return;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (textareaRef.current) {
-          const el = textareaRef.current;
-          el.style.height = 'auto';
-          el.style.height = Math.min(Math.max(el.scrollHeight, 80), 400) + 'px';
-        }
-      });
-    });
-  }, [isEditing, editContent]);
+  // CodeMirror 编辑器自动管理高度，无需手动调整
 
   // 测量内容高度，判断是否需要折叠
   useEffect(() => {
@@ -1087,22 +989,11 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   }, [showMenu]);
 
   const insertAtCursor = useCallback((text: string) => {
-    const el = textareaRef.current;
-    if (!el) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    const before = el.value.slice(0, start);
-    const after = el.value.slice(end);
-    const newContent = before + text + after;
-    // textarea 是非受控组件（defaultValue），需要直接修改 DOM 值
-    el.value = newContent;
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    setEditContent(newContent);
-    requestAnimationFrame(() => {
-      el.focus();
-      el.selectionStart = el.selectionEnd = start + text.length;
-    });
-  }, []);
+    const active = showExpandEditor ? expandEditorRef.current : editorRef.current;
+    if (!active) return;
+    active.insertText(text);
+    setEditContent(active.getValue());
+  }, [showExpandEditor]);
 
   const handleFileUpload = useCallback(async (file: File, isImage: boolean) => {
     if (file.size > 50 * 1024 * 1024) {
@@ -1127,7 +1018,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   }, [insertAtCursor]);
 
   const handleSave = useCallback(async () => {
-    const currentContent = textareaRef.current?.value || editContent;
+    const currentContent = editorRef.current?.getValue() || editContent;
     if (currentContent.trim() === memo.content) {
       setIsEditing(false);
       resetUserHeight();
@@ -1161,34 +1052,22 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
     setEditContent(memo.content);
   }, [memo.content]);
 
-  // 展开编辑器 portal（编辑/显示模式都需要渲染）
+  // 展开编辑器 portal
   const expandEditorPortal = showExpandEditor && createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => {
-      const expandEl = document.querySelector('[data-expand-textarea]') as HTMLTextAreaElement;
-      if (expandEl) {
-        setEditContent(expandEl.value);
-        if (textareaRef.current) textareaRef.current.value = expandEl.value;
-      }
-      activeTextareaRef.current = textareaRef.current;
+      const newContent = expandEditorRef.current?.getValue() ?? editContent;
+      setEditContent(newContent);
       setShowExpandEditor(false);
     }}>
       <div className="flex flex-col w-[90vw] max-w-[680px] h-[75vh] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 shrink-0">
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => imageInputRef.current?.click()}
-              disabled={uploading}
-              className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40"
-              title="添加图片"
-            >
+            <button onClick={() => imageInputRef.current?.click()} disabled={uploading}
+              className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40" title="添加图片">
               <Image className="w-4 h-4" />
             </button>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40"
-              title="添加附件"
-            >
+            <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+              className="p-1.5 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40" title="添加附件">
               <Paperclip className="w-4 h-4" />
             </button>
             {uploading && <span className="text-xs text-blue-500">上传中...</span>}
@@ -1196,12 +1075,8 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
-                const expandEl = document.querySelector('[data-expand-textarea]') as HTMLTextAreaElement;
-                if (expandEl) {
-                  setEditContent(expandEl.value);
-                  if (textareaRef.current) textareaRef.current.value = expandEl.value;
-                }
-                activeTextareaRef.current = textareaRef.current;
+                const newContent = expandEditorRef.current?.getValue() ?? editContent;
+                setEditContent(newContent);
                 setShowExpandEditor(false);
                 setTimeout(() => handleSave(), 0);
               }}
@@ -1213,12 +1088,8 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
             </button>
             <button
               onClick={() => {
-                const expandEl = document.querySelector('[data-expand-textarea]') as HTMLTextAreaElement;
-                if (expandEl) {
-                  setEditContent(expandEl.value);
-                  if (textareaRef.current) textareaRef.current.value = expandEl.value;
-                }
-                activeTextareaRef.current = textareaRef.current;
+                const newContent = expandEditorRef.current?.getValue() ?? editContent;
+                setEditContent(newContent);
                 setShowExpandEditor(false);
               }}
               className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -1227,106 +1098,50 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
             </button>
           </div>
         </div>
-        <textarea
-          data-expand-textarea
-          defaultValue={textareaRef.current?.value ?? editContent}
-          onFocus={(e) => { activeTextareaRef.current = e.target as HTMLTextAreaElement; }}
-          onChange={(e) => {
-            const expandEl = e.target as HTMLTextAreaElement;
-            const newVal = expandEl.value;
-            const cursorPos = expandEl.selectionStart;
-            setEditContent(newVal);
-            if (textareaRef.current) textareaRef.current.value = newVal;
-            detectTagSearch(newVal, cursorPos, expandEl);
-            if (mentionSearch) detectMentionSearch(newVal, cursorPos, expandEl);
-            if (newVal.length > editContent.length && newVal.charAt(cursorPos - 1) === '@') {
-              detectMentionSearch(newVal, cursorPos, expandEl);
-            }
-          }}
-          onKeyDown={(e) => {
-            const expandEl = e.currentTarget as HTMLTextAreaElement;
-            // 提及下拉导航
-            if (mentionSearch && filteredMentionDocs.length > 0) {
-              if (e.key === 'ArrowDown') { e.preventDefault(); setMentionDropdownIndex(prev => (prev + 1) % filteredMentionDocs.length); return; }
-              if (e.key === 'ArrowUp') { e.preventDefault(); setMentionDropdownIndex(prev => (prev - 1 + filteredMentionDocs.length) % filteredMentionDocs.length); return; }
-              if ((e.key === 'Enter' && !e.nativeEvent.isComposing) || e.key === 'Tab') { e.preventDefault(); insertMention(filteredMentionDocs[mentionDropdownIndex]); return; }
-              if (e.key === 'Escape') { e.preventDefault(); setMentionSearch(null); return; }
-            }
-            // 标签下拉导航
-            if (tagSearch && filteredTags.length > 0) {
-              if (e.key === 'ArrowDown') { e.preventDefault(); setTagDropdownIndex(prev => (prev + 1) % filteredTags.length); return; }
-              if (e.key === 'ArrowUp') { e.preventDefault(); setTagDropdownIndex(prev => (prev - 1 + filteredTags.length) % filteredTags.length); return; }
-              if ((e.key === 'Enter' && !e.nativeEvent.isComposing) || e.key === 'Tab') { e.preventDefault(); insertTag(filteredTags[tagDropdownIndex]); return; }
-              if (e.key === 'Escape') { e.preventDefault(); setTagSearch(null); return; }
-            }
-            // 列表续行
-            if (handleListContinuation(e, expandEl.value, setEditContent, { current: expandEl })) return;
-            // Esc 关闭
-            if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              setEditContent(expandEl.value);
-              if (textareaRef.current) textareaRef.current.value = expandEl.value;
-              activeTextareaRef.current = textareaRef.current;
-              setShowExpandEditor(false);
-            }
-          }}
-          className="flex-1 w-full bg-transparent text-gray-800 dark:text-gray-200 text-base p-4 resize-none focus:outline-none scrollbar-none"
-          style={{ fontFamily: 'inherit', lineHeight: '1.75' }}
-          autoFocus
-        />
-        {/* 标签下拉 */}
-        {tagSearch && filteredTags.length > 0 && (
-          <div className="fixed w-40 z-[10000] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg max-h-48 overflow-y-auto" style={{ top: tagDropdownPos.top, left: tagDropdownPos.left }}>
-            {filteredTags.map((tag, i) => (
-              <button
-                key={tag}
-                onMouseDown={(e) => { e.preventDefault(); insertTag(tag); }}
-                className={`w-full text-left px-4 py-2 text-base transition-colors ${
-                  i === tagDropdownIndex
-                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                }`}
-              >
-                {tag}
-              </button>
-            ))}
+          <div className="flex-1 overflow-hidden">
+            <MarkdownEditor
+              ref={expandEditorRef}
+              value={editContent}
+              onChange={setEditContent}
+              compact={false}
+              autoFocus
+              placeholder="编辑笔记..."
+              className="h-full"
+              extensions={[tmExtension]}
+              toolbar={<EditorToolbar editorRef={expandEditorRef} onUploadImage={() => imageInputRef.current?.click()} onUploadFile={() => fileInputRef.current?.click()} />}
+            />
           </div>
-        )}
-        {/* 提及下拉 */}
-        {mentionSearch && filteredMentionDocs.length > 0 && (
-          <div className="fixed w-52 z-[10000] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg max-h-48 overflow-y-auto" style={{ top: mentionDropdownPos.top, left: mentionDropdownPos.left }}>
-            {filteredMentionDocs.map((doc, i) => (
-              <button
-                key={doc.id}
-                onMouseDown={(e) => { e.preventDefault(); insertMention(doc); }}
-                className={`w-full text-left px-4 py-2 text-base transition-colors ${
-                  i === mentionDropdownIndex
-                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                }`}
-              >
-                {doc.title || '无标题'}
-              </button>
-            ))}
-          </div>
-        )}
+          {showTagPopup && createPortal(
+            <TagMentionPopup items={filteredTags.map((t): PopupItem => ({ label: t, value: t }))} selectedIndex={tagDropdownIndex}
+              onSelect={(item) => handleTagSelect(item.value)} onClose={() => setTagState({ type: null, query: '', coords: null, from: 0, to: 0 })}
+              position={tagState.coords!} type="tag" />, document.body
+          )}
+          {showMentionPopup && createPortal(
+            <TagMentionPopup items={filteredDocs.map((d): PopupItem => ({ label: d.title || '无标题', value: d.id, detail: d.type }))} selectedIndex={mentionDropdownIndex}
+              onSelect={(item) => handleMentionSelect(filteredDocs.find(d => d.id === item.value)!)} onClose={() => setMentionState({ type: null, query: '', coords: null, from: 0, to: 0 })}
+              position={mentionState.coords!} type="mention" />, document.body
+          )}
       </div>
     </div>,
     document.body
   );
 
-  // AI 对话 portal（编辑/显示模式都需要渲染）
+  // AI 对话 portal
   const aiChatPanel = showAIPanel && createPortal(
     <AIChatPanel
       context={editContent}
       onWriteBack={(newContent) => {
         setEditContent(newContent);
-        if (textareaRef.current) textareaRef.current.value = newContent;
+        const active = showExpandEditor ? expandEditorRef.current : editorRef.current;
+        active?.view?.dispatch({ changes: { from: 0, to: active.view.state.doc.length, insert: newContent } });
       }}
       onClose={() => setShowAIPanel(false)}
     />,
     document.body
   );
+
+  const showTagPopup = tagState.type === 'tag' && filteredTags.length > 0 && tagState.coords;
+  const showMentionPopup = mentionState.type === 'mention' && filteredDocs.length > 0 && mentionState.coords;
 
   if (isEditing) {
     return (
@@ -1337,113 +1152,28 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       }`}
       style={{ backgroundColor: bgColor }}
       >
-        <div className="relative" data-resizable-container>
-          <textarea
-            ref={textareaRef}
-            data-resizable-textarea
-            defaultValue={editContent}
-            onFocus={(e) => { activeTextareaRef.current = e.target as HTMLTextAreaElement; }}
-            onChange={(e) => {
-              const newValue = e.target.value;
-              const cursorPos = e.target.selectionStart;
-              detectTagSearch(newValue, cursorPos);
-              detectMentionSearch(newValue, cursorPos);
-            }}
-            onKeyDown={(e) => {
-              if (mentionSearch && filteredMentionDocs.length > 0) {
-                if (e.key === 'ArrowDown') { e.preventDefault(); setMentionDropdownIndex(prev => (prev + 1) % filteredMentionDocs.length); return; }
-                if (e.key === 'ArrowUp') { e.preventDefault(); setMentionDropdownIndex(prev => (prev - 1 + filteredMentionDocs.length) % filteredMentionDocs.length); return; }
-                if ((e.key === 'Enter' && !e.nativeEvent.isComposing) || e.key === 'Tab') { e.preventDefault(); insertMention(filteredMentionDocs[mentionDropdownIndex]); return; }
-                if (e.key === 'Escape') { e.preventDefault(); setMentionSearch(null); return; }
-              }
-              if (tagSearch && filteredTags.length > 0) {
-                if (e.key === 'ArrowDown') { e.preventDefault(); setTagDropdownIndex(prev => (prev + 1) % filteredTags.length); return; }
-                if (e.key === 'ArrowUp') { e.preventDefault(); setTagDropdownIndex(prev => (prev - 1 + filteredTags.length) % filteredTags.length); return; }
-                if ((e.key === 'Enter' && !e.nativeEvent.isComposing) || e.key === 'Tab') { e.preventDefault(); insertTag(filteredTags[tagDropdownIndex]); return; }
-                if (e.key === 'Escape') { e.preventDefault(); setTagSearch(null); return; }
-              }
-              handleListContinuation(e, editContent, setEditContent, textareaRef);
-            }}
-            onPaste={(e) => {
-              // 优先处理文件粘贴
-              const items = e.clipboardData.items;
-              for (let i = 0; i < items.length; i++) {
-                const item = items[i];
-                if (item.kind === 'file') {
-                  e.preventDefault();
-                  const file = item.getAsFile();
-                  if (file) handleFileUpload(file, item.type.startsWith('image/'));
-                  return;
-                }
-              }
-              // 网页富文本粘贴 → 转为 Markdown
-              const md = getPasteMarkdown(e.clipboardData);
-              if (md) {
-                e.preventDefault();
-                const el = e.currentTarget;
-                const start = el.selectionStart;
-                const end = el.selectionEnd;
-                const before = el.value.slice(0, start);
-                const after = el.value.slice(end);
-                const newContent = before + md + after;
-                el.value = newContent;
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-                setEditContent(newContent);
-                requestAnimationFrame(() => {
-                  el.selectionStart = el.selectionEnd = start + md.length;
-                });
-              }
-            }}
-            onClick={(e) => { const t = e.target as HTMLTextAreaElement; detectTagSearch(t.value, t.selectionStart); detectMentionSearch(t.value, t.selectionStart); }}
-            onSelect={(e) => { const t = e.target as HTMLTextAreaElement; detectTagSearch(t.value, t.selectionStart); detectMentionSearch(t.value, t.selectionStart); }}
-            onBlur={() => setTimeout(() => { setTagSearch(null); setMentionSearch(null); }, 200)}
-            className="w-full bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 text-base rounded-lg p-3 border border-gray-200 dark:border-gray-700 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+        <div className="relative">
+          <MarkdownEditor
+            ref={editorRef}
+            value={editContent}
+            onChange={setEditContent}
+            compact={true}
+            minHeight={80}
+            maxHeight={500}
             autoFocus
+            placeholder="编辑笔记..."
+            className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700"
+            extensions={[tmExtension]}
           />
-          {/* 右下角拖拽手柄 */}
-          <div
-            onMouseDown={onResizeStart}
-            onTouchStart={onResizeStart}
-            className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize opacity-0 hover:opacity-60 transition-opacity"
-            style={{
-              background: 'linear-gradient(135deg, transparent 50%, #9ca3af 50%, #9ca3af 60%, transparent 60%, transparent 70%, #9ca3af 70%, #9ca3af 80%, transparent 80%)',
-            }}
-          />
-          {tagSearch && filteredTags.length > 0 && createPortal(
-            <div className="fixed w-40 z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg max-h-48 overflow-y-auto" style={{ top: tagDropdownPos.top, left: tagDropdownPos.left }}>
-              {filteredTags.map((tag, i) => (
-                <button
-                  key={tag}
-                  onMouseDown={(e) => { e.preventDefault(); insertTag(tag); }}
-                  className={`w-full text-left px-4 py-2 text-base transition-colors ${
-                    i === tagDropdownIndex
-                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>,
-            document.body
+          {showTagPopup && createPortal(
+            <TagMentionPopup items={filteredTags.map((t): PopupItem => ({ label: t, value: t }))} selectedIndex={tagDropdownIndex}
+              onSelect={(item) => handleTagSelect(item.value)} onClose={() => setTagState({ type: null, query: '', coords: null, from: 0, to: 0 })}
+              position={tagState.coords!} type="tag" />, document.body
           )}
-          {mentionSearch && filteredMentionDocs.length > 0 && createPortal(
-            <div className="fixed w-52 z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg max-h-48 overflow-y-auto" style={{ top: mentionDropdownPos.top, left: mentionDropdownPos.left }}>
-              {filteredMentionDocs.map((doc, i) => (
-                <button
-                  key={doc.id}
-                  onMouseDown={(e) => { e.preventDefault(); insertMention(doc); }}
-                  className={`w-full text-left px-4 py-2 text-base transition-colors ${
-                    i === mentionDropdownIndex
-                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  {doc.title || '无标题'}
-                </button>
-              ))}
-            </div>,
-            document.body
+          {showMentionPopup && createPortal(
+            <TagMentionPopup items={filteredDocs.map((d): PopupItem => ({ label: d.title || '无标题', value: d.id, detail: d.type }))} selectedIndex={mentionDropdownIndex}
+              onSelect={(item) => handleMentionSelect(filteredDocs.find(d => d.id === item.value)!)} onClose={() => setMentionState({ type: null, query: '', coords: null, from: 0, to: 0 })}
+              position={mentionState.coords!} type="mention" />, document.body
           )}
         </div>
         {uploading && (
