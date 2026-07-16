@@ -669,8 +669,12 @@ const markdownComponents = (
     li: ({ children, ordered, index, node, ...props }) => {
       const liClassName = typeof props.className === 'string' ? props.className : '';
       const isTaskItem = liClassName.includes('task-list-item');
-      // ReactMarkdown v10 may pass ordered via node or directly
-      const isOrdered = ordered ?? (node as any)?.properties?.ordered ?? false;
+      // ReactMarkdown v10: check multiple sources for ordered state
+      const isOrdered = ordered ?? (node as any)?.properties?.ordered ?? (node as any)?.tagName === 'ol' ?? false;
+      // Debug: log props to see what's being passed
+      if (typeof window !== 'undefined') {
+        console.log('[MemoCard li] ordered:', ordered, 'node:', node, 'isOrdered:', isOrdered, 'index:', index);
+      }
       const hasCheckboxDeep = (nodes: React.ReactNode[]): boolean =>
         nodes.some(child => {
           if (!isValidElement(child)) return false;
