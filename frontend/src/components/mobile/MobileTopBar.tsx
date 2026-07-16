@@ -69,9 +69,11 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
         localStorage.setItem('outline-restored-theme', saved.theme === 'dark' ? 'minimal' : 'minimal');
       }
     } catch { /* ignore */ }
-    // 更新 theme-color meta
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', newDark ? '#111827' : '#ffffff');
+    // 更新 theme-color meta，移除 media 查询
+    document.querySelectorAll('meta[name="theme-color"], meta[name="hw-theme-color"]').forEach(meta => {
+      meta.setAttribute('content', newDark ? '#111827' : '#ffffff');
+      meta.removeAttribute('media');
+    });
     // 派发事件通知其他组件
     window.dispatchEvent(new CustomEvent('theme-change'));
   }, [isDark]);
