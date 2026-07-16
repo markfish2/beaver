@@ -395,11 +395,11 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
         </div>
       </div>
 
-      <div className={`flex-1 overflow-hidden ${viewMode === 'split' ? 'flex' : ''}`}>
+      <div className={`flex-1 min-h-0 ${viewMode === 'split' ? 'flex' : ''}`}>
         {(viewMode === 'edit' || viewMode === 'split') && (
-          <div className={`${viewMode === 'split' ? 'w-1/2 border-r border-gray-200 dark:border-gray-700' : 'w-full'} flex flex-col overflow-hidden relative`}>
-            <div className="flex-1 overflow-hidden flex justify-center">
-              <div className="w-full max-w-[768px] flex flex-col overflow-hidden" onPaste={handlePaste}>
+          <div className={`${viewMode === 'split' ? 'w-1/2 border-r border-gray-200 dark:border-gray-700' : 'w-full h-full'} flex flex-col`}>
+            <div className="flex-1 min-h-0 flex justify-center overflow-y-auto scrollbar-none">
+              <div className="w-full max-w-[768px] flex flex-col" onPaste={handlePaste}>
                 <MarkdownEditor ref={editorRef} value={content} onChange={(val) => { setContent(val); scheduleSave(val); }}
                   compact={false} placeholder="开始书写... (支持 Markdown，输入 # 添加标签，@ 链接笔记)" className="flex-1 min-h-0 px-6 pt-6"
                   extensions={[tmExtension]}
@@ -420,7 +420,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
           </div>
         )}
         {(viewMode === 'preview' || viewMode === 'split') && (
-          <div ref={previewRef} className={`${viewMode === 'split' ? 'w-1/2' : 'w-full'} overflow-y-auto scrollbar-none flex flex-col items-center`}>
+          <div ref={previewRef} className={`${viewMode === 'split' ? 'w-1/2' : 'w-full h-full'} overflow-y-auto scrollbar-none flex flex-col items-center`}>
             <div className="memo-content max-w-[768px] w-full text-base text-gray-700 dark:text-gray-300 p-6" style={{ lineHeight: '1.75' }}>
               {content.trim() ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]} components={mdComponents}>{processedContent}</ReactMarkdown>
