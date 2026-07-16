@@ -127,6 +127,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   const [documents, setDocuments] = useState<Document[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
   const editorRef = useRef<MarkdownEditorHandle>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -343,6 +344,30 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
 
   const processedContent = useMemo(() => preprocess(content), [content]);
 
+  // Scroll sync: editor → preview in split mode
+  useEffect(() => {
+    if (viewMode !== 'split') return;
+    const editorView = editorRef.current?.view;
+    if (!editorView || !previewRef.current) return;
+
+    const scroller = editorView.scrollDOM;
+    const preview = previewRef.current;
+    let ticking = false;
+
+    const handleScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const scrollRatio = scroller.scrollTop / (scroller.scrollHeight - scroller.clientHeight || 1);
+        preview.scrollTop = scrollRatio * (preview.scrollHeight - preview.clientHeight);
+        ticking = false;
+      });
+    };
+
+    scroller.addEventListener('scroll', handleScroll, { passive: true });
+    return () => scroller.removeEventListener('scroll', handleScroll);
+  }, [viewMode]);
+
   if (loading) return <div className="flex items-center justify-center h-64"><div className="text-gray-400 dark:text-gray-500 text-sm">加载中...</div></div>;
 
   const showTagPopup = tagState.type === 'tag' && filteredTags.length > 0 && tagState.coords;
@@ -373,10 +398,10 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
       <div className={`flex-1 overflow-hidden ${viewMode === 'split' ? 'flex' : ''}`}>
         {(viewMode === 'edit' || viewMode === 'split') && (
           <div className={`${viewMode === 'split' ? 'w-1/2 border-r border-gray-200 dark:border-gray-700' : 'w-full'} flex flex-col overflow-hidden relative`}>
-            <div className="flex-1 overflow-y-auto scrollbar-none flex justify-center">
-              <div className="w-full max-w-[768px]" onPaste={handlePaste}>
+            <div className="flex-1 overflow-hidden flex justify-center">
+              <div className="w-full max-w-[768px] flex flex-col" onPaste={handlePaste}>
                 <MarkdownEditor ref={editorRef} value={content} onChange={(val) => { setContent(val); scheduleSave(val); }}
-                  compact={false} placeholder="开始书写... (支持 Markdown，输入 # 添加标签，@ 链接笔记)" className="h-full p-6"
+                  compact={false} placeholder="开始书写... (支持 Markdown，输入 # 添加标签，@ 链接笔记)" className="flex-1 min-h-0 px-6 pt-6"
                   extensions={[tmExtension]}
                   toolbar={<EditorToolbar editorRef={editorRef} onUploadImage={() => imageInputRef.current?.click()} onUploadFile={() => fileInputRef.current?.click()} onOpenAI={() => setShowAIPanel(true)} />}
                 />
@@ -395,7 +420,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
           </div>
         )}
         {(viewMode === 'preview' || viewMode === 'split') && (
-          <div className={`${viewMode === 'split' ? 'w-1/2' : 'w-full'} overflow-y-auto scrollbar-none flex flex-col items-center`}>
+          <div ref={previewRef} className={`${viewMode === 'split' ? 'w-1/2' : 'w-full'} overflow-y-auto scrollbar-none flex flex-col items-center`}>
             <div className="memo-content max-w-[768px] w-full text-base text-gray-700 dark:text-gray-300 p-6" style={{ lineHeight: '1.75' }}>
               {content.trim() ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]} components={mdComponents}>{processedContent}</ReactMarkdown>

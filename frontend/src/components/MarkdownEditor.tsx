@@ -309,19 +309,18 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   const containerStyle: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
-    ...(compact ? {} : { flex: 1, minHeight: 0, overflow: 'hidden' }),
+    ...(compact ? {} : { flex: 1, minHeight: 0 }),
     ...style,
   };
 
   const editorStyle: React.CSSProperties = {
     flex: 1,
     minHeight: 0,
-    overflow: 'hidden',
+    position: 'relative',
   };
   if (minHeight !== undefined) editorStyle.minHeight = typeof minHeight === 'number' ? `${minHeight}px` : minHeight;
   if (maxHeight !== undefined) editorStyle.maxHeight = typeof maxHeight === 'number' ? `${maxHeight}px` : maxHeight;
   if (compact) {
-    editorStyle.overflow = 'auto';
     editorStyle.flex = 'none';
   }
 
