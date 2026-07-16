@@ -265,8 +265,14 @@
 .memo-content p { margin-bottom: 1em; }
 .memo-content p:last-child { margin-bottom: 0; }
 /* 列表 - 覆盖 Tailwind preflight 的 list-style: none */
-.memo-content ul { list-style-type: disc !important; padding-left: 1.4em; margin-bottom: 1em; }
-.memo-content ol { list-style-type: decimal !important; padding-left: 1.4em; margin-bottom: 1em; }
+.memo-content ul,
+.memo-content ol {
+  list-style-type: revert !important;
+  padding-left: 1.4em;
+  margin-bottom: 1em;
+}
+.memo-content ul { list-style-type: disc !important; }
+.memo-content ol { list-style-type: decimal !important; }
 .memo-content li { line-height: var(--prose-line-height); }
 .memo-content li + li { margin-top: 0.25em; }
 .memo-content li > ul, .memo-content li > ol { margin-bottom: 0; padding-left: 1.4em; }
