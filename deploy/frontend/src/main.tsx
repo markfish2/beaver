@@ -19,6 +19,7 @@ import App from './App.tsx'
       document.documentElement.classList.toggle('dark', dark);
       document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
         meta.setAttribute('content', dark ? '#111827' : '#ffffff');
+        meta.removeAttribute('media');
       });
       return;
     }

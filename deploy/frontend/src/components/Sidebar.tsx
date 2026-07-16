@@ -212,8 +212,10 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       }
     } catch { /* ignore */ }
     const color = newDark ? '#111827' : '#ffffff';
+    // 更新 theme-color：移除 media 查询，让浏览器使用手动设置的颜色
     document.querySelectorAll('meta[name="theme-color"], meta[name="hw-theme-color"]').forEach(meta => {
       meta.setAttribute('content', color);
+      meta.removeAttribute('media');
     });
     window.dispatchEvent(new CustomEvent('theme-change'));
   }, [isDark]);

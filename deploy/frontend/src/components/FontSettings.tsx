@@ -151,10 +151,11 @@ export const useFontSettings = () => {
       document.documentElement.classList.remove('dark');
     }
 
-    // 更新所有 theme-color meta 标签（包括 media query 的亮/暗版本和鸿蒙版本）
+    // 更新所有 theme-color meta 标签，移除 media 查询让浏览器使用手动设置的颜色
     const color = theme.isDark ? '#111827' : '#ffffff';
     document.querySelectorAll('meta[name="theme-color"], meta[name="hw-theme-color"]').forEach(meta => {
       meta.setAttribute('content', color);
+      meta.removeAttribute('media');
     });
 
     window.dispatchEvent(new CustomEvent('theme-change'));

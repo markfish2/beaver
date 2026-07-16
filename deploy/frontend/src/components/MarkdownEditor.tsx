@@ -35,7 +35,7 @@ const mdHighlight = HighlightStyle.define([
 ]);
 
 // ── CodeMirror 主题（使用 Tailwind 变量 + dark mode class 检测） ──
-function buildTheme(isDark: boolean, scrollable: boolean) {
+function buildTheme(isDark: boolean, scrollable: boolean, compact: boolean) {
   const fg = isDark ? '#e5e7eb' : '#1f2937';
   const muted = isDark ? '#6b7280' : '#9ca3af';
   const accent = isDark ? '#60a5fa' : '#2563eb';
@@ -45,9 +45,23 @@ function buildTheme(isDark: boolean, scrollable: boolean) {
   const selectionBg = isDark ? 'rgba(96,165,250,0.2)' : 'rgba(37,99,235,0.15)';
   const activeLineBg = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)';
 
+  // compact 模式：mount 由父级 maxHeight 约束，.cm-scroller 负责内部滚动。
+  // 关键：root 不能用 height:100%/maxHeight:100%，否则 CM 视口测量基于容器高度而非内容高度，
+  // 导致超出视口的行不渲染（滚动后显示空白，需点击才重绘）。
+  const rootStyle = scrollable
+    ? { height: '100%', overflow: 'hidden' as const }
+    : compact
+      ? { display: 'flex', flexDirection: 'column' as const, height: 'auto', minHeight: '100%' }
+      : { height: 'auto', minHeight: '100%' };
+  const scrollerStyle = scrollable
+    ? { overflow: 'auto' as const, height: '100%' }
+    : compact
+      ? { flex: '1 1 auto', minHeight: '0', overflowY: 'auto' as const }
+      : { overflow: 'auto' as const, height: 'auto' };
+
   return EditorView.theme({
-    '&': { backgroundColor: bg, color: fg, ...(scrollable ? { height: '100%', overflow: 'hidden' } : { height: 'auto', minHeight: '100%' }) },
-    '.cm-scroller': { fontFamily: 'inherit', lineHeight: '1.75', ...(scrollable ? { overflow: 'auto', height: '100%' } : { overflow: 'visible', height: 'auto' }) },
+    '&': { backgroundColor: bg, color: fg, ...rootStyle },
+    '.cm-scroller': { fontFamily: 'inherit', lineHeight: '1.75', ...scrollerStyle },
     '.cm-content': { caretColor: accent, fontFamily: 'inherit', fontSize: 'inherit', paddingLeft: '10px' },
     '.cm-cursor, .cm-dropCursor': { borderLeftColor: accent, borderLeftWidth: '2px' },
     '.cm-activeLine': { backgroundColor: activeLineBg },
@@ -219,7 +233,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       syntaxHighlighting(mdHighlight, { fallback: true }),
       search({ top: true }),
       keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
-      buildTheme(isDark, scrollable),
+      buildTheme(isDark, scrollable, compact),
       enterKeymap,
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
@@ -317,15 +331,20 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   };
 
   const editorStyle: React.CSSProperties = {
-    flex: 1,
-    minHeight: 0,
     position: 'relative',
   };
+  if (!compact) {
+    editorStyle.flex = 1;
+    editorStyle.minHeight = 0;
+  } else {
+    // compact 模式：作为 flex 列容器，配合 .cm-scroller 的 flex:1 + minHeight:0 实现 maxHeight 内部滚动
+    editorStyle.display = 'flex';
+    editorStyle.flexDirection = 'column';
+    editorStyle.minHeight = 0;
+    editorStyle.flex = '1 1 auto';
+  }
   if (minHeight !== undefined) editorStyle.minHeight = typeof minHeight === 'number' ? `${minHeight}px` : minHeight;
   if (maxHeight !== undefined) editorStyle.maxHeight = typeof maxHeight === 'number' ? `${maxHeight}px` : maxHeight;
-  if (compact) {
-    editorStyle.flex = 'none';
-  }
 
   return (
     <div className={className} style={containerStyle}>
