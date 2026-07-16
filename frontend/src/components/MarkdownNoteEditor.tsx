@@ -399,7 +399,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
         {(viewMode === 'edit' || viewMode === 'split') && (
           <div className={`${viewMode === 'split' ? 'w-1/2 border-r border-gray-200 dark:border-gray-700' : 'w-full'} flex flex-col overflow-hidden relative`}>
             <div className="flex-1 overflow-hidden flex justify-center">
-              <div className="w-full max-w-[768px] flex flex-col" onPaste={handlePaste}>
+              <div className="w-full max-w-[768px] flex flex-col overflow-hidden" onPaste={handlePaste}>
                 <MarkdownEditor ref={editorRef} value={content} onChange={(val) => { setContent(val); scheduleSave(val); }}
                   compact={false} placeholder="开始书写... (支持 Markdown，输入 # 添加标签，@ 链接笔记)" className="flex-1 min-h-0 px-6 pt-6"
                   extensions={[tmExtension]}

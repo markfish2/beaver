@@ -46,8 +46,8 @@ function buildTheme(isDark: boolean) {
   const activeLineBg = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)';
 
   return EditorView.theme({
-    '&': { backgroundColor: bg, color: fg, height: '100%' },
-    '.cm-scroller': { fontFamily: 'inherit', lineHeight: '1.75', overflow: 'auto' },
+    '&': { backgroundColor: bg, color: fg, height: '100%', overflow: 'hidden' },
+    '.cm-scroller': { fontFamily: 'inherit', lineHeight: '1.75', overflow: 'auto', height: '100%' },
     '.cm-content': { caretColor: accent, fontFamily: 'inherit', fontSize: 'inherit', paddingLeft: '10px' },
     '.cm-cursor, .cm-dropCursor': { borderLeftColor: accent, borderLeftWidth: '2px' },
     '.cm-activeLine': { backgroundColor: activeLineBg },
@@ -317,6 +317,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
     flex: 1,
     minHeight: 0,
     position: 'relative',
+    overflow: 'hidden',
   };
   if (minHeight !== undefined) editorStyle.minHeight = typeof minHeight === 'number' ? `${minHeight}px` : minHeight;
   if (maxHeight !== undefined) editorStyle.maxHeight = typeof maxHeight === 'number' ? `${maxHeight}px` : maxHeight;
