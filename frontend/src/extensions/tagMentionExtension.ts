@@ -37,6 +37,48 @@ export interface TagMentionConfig {
 const TAG_REGEX = /(?:^|\s)#([a-zA-Z0-9_一-鿿]*)$/;
 const MENTION_REGEX = /(?:^|\s)@([^\s@]*)$/;
 
+/**
+ * 计算光标处屏幕坐标，用于定位候选弹窗。
+ * coordsAtPos 仅在位置处于 CodeMirror 已布局的可视区域时返回有效值；
+ * 在 compact 模式（flex + minHeight:100% + 内部滚动）下常返回 null，
+ * 导致 # / @ 候选框完全不显示。此处增加回退：用光标所在 .cm-line 的
+ * getBoundingClientRect + contentDOM 偏移估算坐标，保证任何布局下都能定位。
+ */
+function getCoords(view: EditorView, pos: number): { top: number; left: number } | null {
+  let direct: { top: number; left: number; bottom: number; right: number } | null = null;
+  try {
+    // coordsAtPos 在位置超出可视文档时会抛出异常（而非返回 null），
+    // 必须用 try 捕获，否则会中断整个 plugin update，导致候选框永不触发。
+    direct = view.coordsAtPos(pos);
+  } catch {
+    direct = null;
+  }
+  if (direct) return { top: direct.bottom, left: direct.left };
+
+  try {
+    const content = view.contentDOM;
+    const contentRect = content.getBoundingClientRect();
+    const lineEls = content.querySelectorAll('.cm-line');
+    // 找到包含目标位置的那一行
+    let targetLine: Element | null = null;
+    let bestDist = Infinity;
+    for (const el of Array.from(lineEls)) {
+      const rect = el.getBoundingClientRect();
+      const dist = Math.abs(rect.top - contentRect.top);
+      if (dist < bestDist) {
+        bestDist = dist;
+        targetLine = el;
+      }
+    }
+    const ref = targetLine ?? content;
+    const rect = ref.getBoundingClientRect();
+    // 粗略估算：在目标行底部、content 左偏移处定位
+    return { top: rect.bottom, left: contentRect.left + 10 };
+  } catch {
+    return null;
+  }
+}
+
 function getTriggerState(view: EditorView): { type: 'tag' | 'mention'; query: string; from: number; to: number } | null {
   const { from } = view.state.selection.main;
   const line = view.state.doc.lineAt(from);
@@ -105,11 +147,11 @@ export function tagMentionExtension(config: TagMentionConfig) {
           return;
         }
 
-        const coords = update.view.coordsAtPos(trigger.to);
+        const rawCoords = getCoords(update.view, trigger.to);
         const pos: TagMentionState = {
           type: trigger.type,
           query: trigger.query,
-          coords: coords ? { top: coords.bottom + 4, left: coords.left } : null,
+          coords: rawCoords ? { top: rawCoords.top + 4, left: rawCoords.left } : null,
           from: trigger.from,
           to: trigger.to,
         };
