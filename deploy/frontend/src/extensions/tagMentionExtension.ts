@@ -159,7 +159,15 @@ export function tagMentionExtension(config: TagMentionConfig) {
       update(update: ViewUpdate) {
         if (!update.docChanged && !update.selectionSet) return;
 
-        const trigger = getTriggerState(update.view);
+        // 仅处理获得焦点的编辑器。MemoInput / MemoCard 同时挂载了紧凑编辑器与
+        // 展开编辑器（同一 tmExtension 实例、共享同一 tagState），未聚焦的那个会因
+        // value 同步而触发 update 并把 tagState 重置为 null，导致展开编辑器的候选框
+        // 一闪而逝。聚焦校验可避免非活跃编辑器误清空状态。
+        const view = update.view;
+        const focused = view.dom === document.activeElement || view.dom.contains(document.activeElement);
+        if (!focused) return;
+
+        const trigger = getTriggerState(view);
         if (!trigger) {
           config.onTagSearch?.({ type: null, query: '', coords: null, from: 0, to: 0 });
           config.onMentionSearch?.({ type: null, query: '', coords: null, from: 0, to: 0 });
