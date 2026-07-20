@@ -38,11 +38,11 @@ const TAG_REGEX = /(?:^|\s)#([a-zA-Z0-9_一-鿿]*)$/;
 const MENTION_REGEX = /(?:^|\s)@([^\s@]*)$/;
 
 /**
- * 计算光标处屏幕坐标，用于定位候选弹窗。
- * coordsAtPos 仅在位置处于 CodeMirror 已布局的可视区域时返回有效值；
- * 在 compact 模式（flex + minHeight:100% + 内部滚动）下常返回 null，
- * 导致 # / @ 候选框完全不显示。此处增加回退：用光标所在 .cm-line 的
- * getBoundingClientRect + contentDOM 偏移估算坐标，保证任何布局下都能定位。
+ * 计算光标处屏幕坐标，用于定位候选弹窗，使其跟随光标移动。
+ * coordsAtPos 在位置处于 CodeMirror 已布局的可视区域时返回精确值；
+ * 在 compact 模式（flex + minHeight:100% + 内部滚动）下可能抛异常，
+ * 此时回退到真实的光标 DOM 元素（.cm-cursor / .cm-dropCursor）的
+ * getBoundingClientRect —— 它能精确反映光标当前屏幕位置，弹窗即可跟随。
  */
 function getCoords(view: EditorView, pos: number): { top: number; left: number } | null {
   let direct: { top: number; left: number; bottom: number; right: number } | null = null;
@@ -57,9 +57,29 @@ function getCoords(view: EditorView, pos: number): { top: number; left: number }
 
   try {
     const content = view.contentDOM;
+    // 优先用原生 Selection 的光标矩形：精确跟随当前光标（含水平偏移）。
+    // CodeMirror 在 compact 模式下不一定渲染 .cm-cursor 元素，故用 contentEditable 的原生选区。
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      let rect = range.getBoundingClientRect();
+      if ((!rect || (rect.left === 0 && rect.top === 0 && rect.width === 0 && rect.height === 0))) {
+        // 折叠选区（光标）的 rect 可能为空，用临时插入 span 测量
+        const span = document.createElement('span');
+        span.textContent = '\u200b';
+        range.insertNode(span);
+        rect = span.getBoundingClientRect();
+        const parent = span.parentNode;
+        parent?.removeChild(span);
+        parent?.normalize();
+      }
+      if (rect && (rect.left || rect.top || rect.width || rect.height)) {
+        return { top: rect.bottom, left: rect.left };
+      }
+    }
+    // 回退：用光标所在 .cm-line 的位置估算（水平用 content 左偏移）
     const contentRect = content.getBoundingClientRect();
     const lineEls = content.querySelectorAll('.cm-line');
-    // 找到包含目标位置的那一行
     let targetLine: Element | null = null;
     let bestDist = Infinity;
     for (const el of Array.from(lineEls)) {
@@ -72,7 +92,6 @@ function getCoords(view: EditorView, pos: number): { top: number; left: number }
     }
     const ref = targetLine ?? content;
     const rect = ref.getBoundingClientRect();
-    // 粗略估算：在目标行底部、content 左偏移处定位
     return { top: rect.bottom, left: contentRect.left + 10 };
   } catch {
     return null;
