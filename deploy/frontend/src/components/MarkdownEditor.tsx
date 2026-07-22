@@ -26,7 +26,7 @@ const mdHighlight = HighlightStyle.define([
   { tag: t.strikethrough, textDecoration: 'line-through', opacity: '0.7' },
   { tag: t.link, color: '#2563eb', textDecoration: 'none' },
   { tag: t.url, color: '#2563eb' },
-  { tag: t.quote, color: '#6b7280', fontStyle: 'italic', borderLeft: '3px solid #d1d5db', paddingLeft: '8px' },
+  { tag: t.quote, color: '#6b7280', fontStyle: 'italic' },
   { tag: t.monospace, color: '#059669', fontFamily: 'monospace' },
   { tag: t.list, color: '#6366f1' },
   { tag: t.contentSeparator, color: '#9ca3af' },
