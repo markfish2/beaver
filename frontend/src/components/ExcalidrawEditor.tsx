@@ -108,6 +108,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   }, [documentId]);
   // saveData ref（用于在 effect 中访问最新的 debounce 函数）
   const saveDataRef = useRef<any>(null);
+  const reloadCanvasRef = useRef<() => Promise<void>>(async () => {});
 
   // renderEmbeddable: 渲染笔记引用
   const renderEmbeddable = useCallback((element: any) => {
@@ -420,7 +421,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     } catch (error) {
       if (error instanceof VersionConflictError) {
         // 版本冲突：静默重新加载
-        await reloadCanvas();
+        await reloadCanvasRef.current();
       } else {
         console.error('Flush save failed:', error);
       }
@@ -432,7 +433,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         saveCompleteRef.current = null;
       }
     }
-  }, [documentId]);
+  }, []);
 
   // 重新加载画布数据（版本冲突时使用）
   const reloadCanvas = useCallback(async () => {
@@ -466,6 +467,10 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
       console.error('Reload canvas failed:', e);
     }
   }, [documentId]);
+
+  useEffect(() => {
+    reloadCanvasRef.current = reloadCanvas;
+  }, [reloadCanvas]);
 
   // 未保存数据标记（用于离开拦截）
   const hasUnsavedChangesRef = useRef(false);
@@ -803,6 +808,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
       </div>
 
       <NotePickerDialog
+        key={`${documentId}-${showNotePicker}`}
         isOpen={showNotePicker}
         onSelect={handleInsertNote}
         onClose={() => setShowNotePicker(false)}

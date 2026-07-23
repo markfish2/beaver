@@ -51,12 +51,9 @@ export default function NotePickerDialog({ isOpen, onSelect, onClose }: NotePick
 
   useEffect(() => {
     if (isOpen) {
-      setQuery('');
-      setSelectedIndex(0);
-      void loadDocs('');
       setTimeout(() => inputRef.current?.focus(), 100);
     }
-  }, [isOpen, loadDocs]);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;

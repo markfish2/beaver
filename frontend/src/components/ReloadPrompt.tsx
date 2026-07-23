@@ -1,5 +1,5 @@
 import { RefreshCw, X } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { registerSW } from 'virtual:pwa-register';
 
 const DISMISS_KEY = 'sw-update-dismissed-at';
@@ -17,7 +17,7 @@ function isDismissed(): boolean {
 export default function ReloadPrompt() {
   const [needRefresh, setNeedRefresh] = useState(false);
   const [visible, setVisible] = useState(false);
-  const [updateSW, setUpdateSW] = useState<((reloadPage?: boolean) => Promise<void>) | null>(null);
+  const updateSWRef = useRef<((reloadPage?: boolean) => Promise<void>) | null>(null);
 
   useEffect(() => {
     const update = registerSW({
@@ -42,7 +42,7 @@ export default function ReloadPrompt() {
         console.error('SW registration error', error);
       },
     });
-    setUpdateSW(() => update);
+    updateSWRef.current = update;
   }, []);
 
   const close = () => {
@@ -63,7 +63,7 @@ export default function ReloadPrompt() {
         <div className="flex-1 text-sm">
           新版本可用，点击刷新更新
         </div>
-        {updateSW && (
+        {needRefresh && (
           <button
             onClick={async () => {
               setVisible(false);
@@ -71,7 +71,7 @@ export default function ReloadPrompt() {
                 window.location.reload();
               }, 2000);
               try {
-                await updateSW(true);
+                await updateSWRef.current?.(true);
               } catch {
                 // ignore
               }

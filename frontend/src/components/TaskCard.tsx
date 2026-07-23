@@ -173,10 +173,6 @@ export default function TaskCard({
     }
   }, [isEditing]);
 
-  useEffect(() => {
-    if (!isEditing) setEditTitle(task.title);
-  }, [task.title, isEditing]);
-
   const handleTitleClick = useCallback(() => {
     setIsEditing(true);
     setEditTitle(task.title);
@@ -238,14 +234,14 @@ export default function TaskCard({
     onDragOver(task.id, position);
   }, [task.id, onDragOver]);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const draggedId = e.dataTransfer.getData('text/plain');
     if (draggedId && draggedId !== task.id && onMove && dragState?.dropPosition) {
       onMove(draggedId, task.id, dragState.dropPosition);
     }
     onDragEnd?.();
-  }, [task.id, onMove, onDragEnd, dragState?.dropPosition]);
+  };
 
   const handleDragEnd = useCallback(() => {
     onDragEnd?.();

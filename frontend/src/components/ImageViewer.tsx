@@ -22,7 +22,6 @@ const ImageViewer = ({ src, alt = '图片', isOpen, onClose }: ImageViewerProps)
 
   useEffect(() => {
     if (isOpen) {
-      resetState();
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -30,7 +29,7 @@ const ImageViewer = ({ src, alt = '图片', isOpen, onClose }: ImageViewerProps)
     return () => {
       document.body.style.overflow = '';
     };
-  }, [isOpen, resetState]);
+  }, [isOpen]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

@@ -1062,6 +1062,7 @@ const NodeItem = memo(({
 
       {/* Image Viewer */}
       <ImageViewer
+        key={`${imageViewer.src}-${imageViewer.isOpen}`}
         src={imageViewer.src}
         alt={imageViewer.alt}
         isOpen={imageViewer.isOpen}

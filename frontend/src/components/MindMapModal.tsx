@@ -396,7 +396,7 @@ const MindMapModal = ({
           children: buildChildren(node.id)
         }))
     };
-  }, [documentTitle, nodes]);
+  }, [documentTitle]);
 
   const applyLineStyle = useCallback((styleKey: LineStyleKey) => {
     if (!mindMapRef.current) return;

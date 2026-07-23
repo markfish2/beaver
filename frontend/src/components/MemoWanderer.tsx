@@ -63,7 +63,10 @@ export default function MemoWanderer({ onExit, initialMemoId }: { onExit: () => 
     }
   }, [initialMemoId]);
 
-  useEffect(() => { loadMemos(); }, [loadMemos]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadMemos(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadMemos]);
 
   const current = memos[index];
 

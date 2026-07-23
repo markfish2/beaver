@@ -32,7 +32,8 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   const memosRef = useRef(memos);
   const [memoPage, setMemoPage] = useState(1);
   const [memoTotal, setMemoTotal] = useState(0);
-  const [memoColumns, setMemoColumns] = useState<1 | 2>(1);
+  const [memoColumnsOverride, setMemoColumnsOverride] = useState<1 | 2 | null>(null);
+  const memoColumns: 1 | 2 = memoColumnsOverride ?? (user?.memo_columns === 2 ? 2 : 1);
   const [memoView, setMemoView] = useState<'active' | 'archived' | 'public' | 'wanderer' | 'media'>(() => {
     const saved = loadViewState();
     return saved.memoView || 'active';
@@ -86,17 +87,10 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
     window.dispatchEvent(new CustomEvent('memo-view-change', { detail: { view: memoView, tag: tagFilter, source: 'memoHome' } }));
   }, [memoView, tagFilter]);
 
-  // 从用户设置初始化 memoColumns
-  useEffect(() => {
-    if (user?.memo_columns === 2) {
-      setMemoColumns(2);
-    }
-  }, [user]);
-
   // 切换单双栏并同步到后端
   const toggleMemoColumns = useCallback(async () => {
     const next: 1 | 2 = memoColumns === 1 ? 2 : 1;
-    setMemoColumns(next);
+    setMemoColumnsOverride(next);
     try {
       await updateSettings({ memo_columns: next });
     } catch (e) {
@@ -154,23 +148,24 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   // 从搜索结果页或知识图谱跳转过来时，同步 URL 参数到状态并清理
   useEffect(() => {
     if (searchFromUrl || highlightFromUrl || viewFromUrl || memoIdFromUrl) {
-      if (searchFromUrl) {
-        setSearchFilter(searchFromUrl);
-        setTagFilter(null);
-      }
-      if (highlightFromUrl) setHighlightMemoId(highlightFromUrl);
-      if (memoIdFromUrl) {
-        setHighlightMemoId(memoIdFromUrl);
-        if (viewFromUrl === 'wanderer') {
-          setMemoView('wanderer');
+      const timer = window.setTimeout(() => {
+        if (searchFromUrl) {
+          setSearchFilter(searchFromUrl);
+          setTagFilter(null);
         }
-      }
-      const params = new URLSearchParams(searchParams);
-      params.delete('search');
-      params.delete('highlight');
-      params.delete('view');
-      params.delete('memoId');
-      setSearchParams(params, { replace: true });
+        if (highlightFromUrl) setHighlightMemoId(highlightFromUrl);
+        if (memoIdFromUrl) {
+          setHighlightMemoId(memoIdFromUrl);
+          if (viewFromUrl === 'wanderer') setMemoView('wanderer');
+        }
+        const params = new URLSearchParams(searchParams);
+        params.delete('search');
+        params.delete('highlight');
+        params.delete('view');
+        params.delete('memoId');
+        setSearchParams(params, { replace: true });
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
   }, [searchFromUrl, highlightFromUrl, viewFromUrl, memoIdFromUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 

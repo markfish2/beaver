@@ -19,32 +19,31 @@ const SearchResultsPage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const query = searchParams.get('q') || '';
-  const [inputValue, setInputValue] = useState(query);
-  const [results, setResults] = useState<SearchResultItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    setInputValue(query);
-  }, [query]);
+  const [inputState, setInputState] = useState({ query, value: query });
+  const inputValue = inputState.query === query ? inputState.value : query;
+  const setInputValue = (value: string) => setInputState({ query, value });
+  const [searchState, setSearchState] = useState<{ query: string; results: SearchResultItem[]; loading: boolean }>({
+    query,
+    results: [],
+    loading: Boolean(query.trim()),
+  });
+  const results = searchState.query === query ? searchState.results : [];
+  const isLoading = Boolean(query.trim()) && (searchState.query !== query || searchState.loading);
 
   useEffect(() => {
     if (!query.trim()) {
-      setResults([]);
       return;
     }
-    const fetchResults = async () => {
-      setIsLoading(true);
-      try {
-        const response = await search(query);
-        setResults(response.results);
-      } catch (error) {
+    let active = true;
+    search(query)
+      .then(response => {
+        if (active) setSearchState({ query, results: response.results, loading: false });
+      })
+      .catch(error => {
         console.error('Search failed', error);
-        setResults([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchResults();
+        if (active) setSearchState({ query, results: [], loading: false });
+      });
+    return () => { active = false; };
   }, [query]);
 
   const handleResultClick = (result: SearchResultItem) => {

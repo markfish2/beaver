@@ -18,6 +18,10 @@ let cachedTasks: WeekTask[] | null = null;
 let cacheTime = 0;
 const CACHE_TTL = 30_000; // 30s
 
+function getFreshCachedTasks(): WeekTask[] | null {
+  return cachedTasks && Date.now() - cacheTime <= CACHE_TTL ? cachedTasks : null;
+}
+
 const BAR_COLOR = 'bg-[#6b8ab5] dark:bg-[#3f587f]';
 
 const DAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
@@ -33,21 +37,16 @@ function formatDay(d: Date): string {
 
 export default function ProjectWeekView({ embedded = false }: ProjectWeekViewProps) {
   const { setSelectedProjectId } = useUserView();
-  const [weekTasks, setWeekTasks] = useState<WeekTask[]>([]);
-  const [loading, setLoading] = useState(!cachedTasks || Date.now() - cacheTime > CACHE_TTL);
+  const [initialTasks] = useState(getFreshCachedTasks);
+  const [weekTasks, setWeekTasks] = useState<WeekTask[]>(initialTasks ?? []);
+  const [loading, setLoading] = useState(initialTasks === null);
 
   useEffect(() => {
-    // 缓存命中直接用
-    if (cachedTasks && Date.now() - cacheTime <= CACHE_TTL) {
-      setWeekTasks(cachedTasks);
-      setLoading(false);
-      return;
-    }
+    if (initialTasks) return;
 
     let cancelled = false;
     const load = async () => {
       try {
-        setLoading(true);
         const projects = await getProjects();
         const active = projects.filter(p => !p.is_archived);
         if (active.length === 0) {
@@ -92,9 +91,9 @@ export default function ProjectWeekView({ embedded = false }: ProjectWeekViewPro
         if (!cancelled) setLoading(false);
       }
     };
-    load();
+    void load();
     return () => { cancelled = true; };
-  }, []);
+  }, [initialTasks]);
 
   const handleClick = useCallback((projectId: string) => {
     setSelectedProjectId(projectId);

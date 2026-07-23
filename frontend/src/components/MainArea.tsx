@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, Fragment, useRef, useCallback } from 'react';
+import type { SetStateAction } from 'react';
 import { Menu, ChevronUp, ChevronDown } from 'lucide-react';
 import Breadcrumbs from './Breadcrumbs';
 import NodeItem from './NodeItem';
@@ -272,6 +273,8 @@ interface MainAreaProps {
   activeConvId?: string | null;
 }
 
+const createSortOrder = () => Date.now();
+
 const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, activeConvId = null }: MainAreaProps = {}) => {
   const { setActiveConvId, refreshConvList, selectedProjectId, setSelectedProjectId } = useUserView();
   const [showArchivedProjects, setShowArchivedProjects] = useState(false);
@@ -286,16 +289,58 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const [nodes, setNodes] = useState<Node[]>([]);
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
-  const [currentDoc, setCurrentDoc] = useState<Document | null>(null);
+  const [loadedDoc, setCurrentDoc] = useState<Document | null>(null);
+  const currentDoc = useMemo(() => {
+    if (!documentId) return null;
+    const normalizedId = documentId.replace(/-/g, '');
+    const contextDoc = documents.find(doc => doc.id.replace(/-/g, '') === normalizedId);
+    const loadedMatches = loadedDoc?.id.replace(/-/g, '') === normalizedId;
+    const baseDoc = loadedMatches ? loadedDoc : contextDoc;
+    if (!baseDoc) return null;
+    return contextDoc && contextDoc.title !== baseDoc.title
+      ? { ...baseDoc, title: contextDoc.title }
+      : baseDoc;
+  }, [documentId, documents, loadedDoc]);
   const [isLoading, setIsLoading] = useState(false);
   const { saveStatus, pendingCount, isOnline, offlineQueueCount } = useSaveManager();
   // Mobile state
   const [isMobile, setIsMobile] = useState(false);
   const { scrollToElement } = useKeyboardScroll({ enabled: isMobile });
+  const focusNode = useCallback((nodeId: string, field: 'content' | 'note' = 'content') => {
+    const applyFocus = () => {
+      const el = document.getElementById(`${field}-${nodeId}`);
+      if (!el) {
+        window.setTimeout(applyFocus, 50);
+        return;
+      }
+
+      el.focus({ preventScroll: true });
+      if (field === 'content') {
+        const selection = window.getSelection();
+        if (selection) {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          range.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      }
+      scrollToElement(nodeId, field);
+    };
+    applyFocus();
+  }, [scrollToElement]);
   const [focusedNodeId, setFocusedNodeId] = useState<{ id: string, field: 'content' | 'note' } | null>(null);
 
   const [zoomedNodeId, setZoomedNodeId] = useState<string | null>(null);
-  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [tagFilterState, setTagFilterState] = useState<{ documentId: string | null; value: string | null }>({ documentId, value: null });
+  const tagFilter = tagFilterState.documentId === documentId ? tagFilterState.value : null;
+  const setTagFilter = useCallback((action: SetStateAction<string | null>) => {
+    setTagFilterState(previous => {
+      const current = previous.documentId === documentId ? previous.value : null;
+      const value = typeof action === 'function' ? action(current) : action;
+      return { documentId: documentId ?? null, value };
+    });
+  }, [documentId]);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const selectedNodeIdsRef = useRef(selectedNodeIds);
   useEffect(() => { selectedNodeIdsRef.current = selectedNodeIds; }, [selectedNodeIds]);
@@ -325,8 +370,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   }, [currentDoc?.diary_date]);
   const diaryMonthMatch = diaryYear !== null && diaryMonth !== null;
   
-  const [showRecoveryDialog, setShowRecoveryDialog] = useState(false);
-  const [recoveryOperations, setRecoveryOperations] = useState<PendingOperation[]>([]);
+  const [recoveryOperations, setRecoveryOperations] = useState<PendingOperation[]>(() => saveStateManager.getPendingOperations());
+  const [showRecoveryDialog, setShowRecoveryDialog] = useState(() => recoveryOperations.length > 0);
   const [isRecovering, setIsRecovering] = useState(false);
   const [editingNodes, setEditingNodes] = useState<Set<string>>(new Set());
   const editingNodesRef = useRef(editingNodes);
@@ -382,7 +427,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       window.removeEventListener('click', handleClickCapture, true);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, []);
+  }, [selectedNodeIds.length]);
 
   // 拦截页面关闭/刷新，提示未保存的数据
   useEffect(() => {
@@ -493,14 +538,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  useEffect(() => {
-    const pendingOps = saveStateManager.getPendingOperations();
-    if (pendingOps && pendingOps.length > 0) {
-      setShowRecoveryDialog(true);
-      setRecoveryOperations(pendingOps);
-    }
   }, []);
 
   const handleRecover = async () => {
@@ -655,7 +692,11 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const fontSettings = useFontSettings();
 
   // View Mode State - 'outline' or 'mindmap'
-  const [viewMode, setViewMode] = useState<'outline' | 'mindmap'>('outline');
+  const [viewModeState, setViewModeState] = useState<{ documentId: string | null; value: 'outline' | 'mindmap' }>({ documentId, value: 'outline' });
+  const viewMode = viewModeState.documentId === documentId ? viewModeState.value : 'outline';
+  const setViewMode = useCallback((value: 'outline' | 'mindmap') => {
+    setViewModeState({ documentId: documentId ?? null, value });
+  }, [documentId]);
 
   const handleMindMapNodeUpdate = async (nodeId: string, content: string) => {
     const node = nodes.find(n => n.id === nodeId);
@@ -775,35 +816,12 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     };
     window.addEventListener('tag-click', handleTagClick);
     return () => window.removeEventListener('tag-click', handleTagClick);
-  }, []);
-
-  // 当 documents 加载完成后，如果 currentDoc 为 null 但有匹配的文档，更新 currentDoc
-  useEffect(() => {
-    if (documentId && !currentDoc && documents.length > 0) {
-      // Normalize: compare without hyphens
-      const normalizedId = documentId.replace(/-/g, '');
-      const foundDoc = documents.find(d => d.id.replace(/-/g, '') === normalizedId);
-      if (foundDoc) {
-        setCurrentDoc(foundDoc);
-      }
-    }
-  }, [documents, documentId, currentDoc]);
-
-  // 侧边栏重命名 → 同步标题到 currentDoc（只更新 title，不覆盖其他本地状态）
-  useEffect(() => {
-    if (!currentDoc || !documentId) return;
-    // Normalize: compare without hyphens
-    const normalizedId = documentId.replace(/-/g, '');
-    const ctxDoc = documents.find(d => d.id.replace(/-/g, '') === normalizedId);
-    if (ctxDoc && ctxDoc.title !== currentDoc.title) {
-      setCurrentDoc(prev => prev ? { ...prev, title: ctxDoc.title } : prev);
-    }
-  }, [documents, documentId]);
+  }, [setTagFilter]);
 
   // 注意：不再在 sidebarClose 时重新 fetchData，
   // documentId 变化时 useEffect 已自动加载数据
 
-  const fetchData = async (id: string, fetchId?: number) => {
+  const fetchData = useCallback(async (id: string, fetchId?: number) => {
     setIsLoading(true);
     try {
       const nodesData = await getNodes(id);
@@ -891,30 +909,26 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         setIsLoading(false);
       }
     }
-  };
+  }, [commands, documents, execute, nodeIdFromUrl, setSearchParams]);
 
   useEffect(() => {
-    setTagFilter(null);
-    setViewMode('outline');
     if (documentId) {
       const id = ++fetchIdRef.current;
       void fetchData(documentId, id);
     } else {
       fetchIdRef.current++;
-      setNodes([]);
-      setCurrentDoc(null);
-      setIsLoading(false);
     }
-  }, [documentId]); // fetchData intentionally follows the selected document snapshot
+  }, [documentId, fetchData]);
 
   // Fetch diary days when document changes
   useEffect(() => {
     if (isDiaryDoc && diaryYear !== null && diaryMonth !== null) {
       getDiaryDayDates(diaryYear, diaryMonth).then(days => setDiaryDays(new Set(days))).catch(() => setDiaryDays(new Set()));
-    } else {
-      setDiaryDays(new Set());
+      return;
     }
-  }, [currentDoc?.diary_date]);
+    const timer = window.setTimeout(() => setDiaryDays(new Set()), 0);
+    return () => window.clearTimeout(timer);
+  }, [currentDoc?.diary_date, diaryMonth, diaryYear, isDiaryDoc, setDiaryDays]);
 
   // Handle clicking a day in the diary date bar (returns true if handled)
   const handleDiaryDayClick = useCallback(async (day: number): Promise<boolean> => {
@@ -969,7 +983,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       console.error('Failed to handle day click', e);
       return false;
     }
-  }, [diaryYear, diaryMonth, documentId]);
+  }, [diaryYear, diaryMonth, documentId, setDiaryDays]);
 
   // Register/unregister diary handler with context
   useEffect(() => {
@@ -1009,7 +1023,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     if (!node || node.content === content) return;
 
     // Undo 合并逻辑：同一节点在 500ms 内的连续编辑合并为一条命令
-    const now = Date.now();
+    const now = createSortOrder();
     if (lastEditRef.current?.nodeId === id && now - lastEditRef.current.timestamp < 500) {
       lastEditRef.current = { nodeId: id, timestamp: now, oldContent: lastEditRef.current.oldContent };
       // 不创建新命令，让 saveTimeout 处理最终保存
@@ -1317,7 +1331,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     if (hasChildren && !targetNode.is_collapsed) {
        newParentId = targetNode.id;
        const children = nodes.filter(n => n.parent_node_id === id).sort((a, b) => a.sort_order - b.sort_order);
-       startOrder = children.length > 0 ? children[0].sort_order - 10000 : Date.now();
+       startOrder = children.length > 0 ? children[0].sort_order - 10000 : createSortOrder();
     } else {
        const siblings = nodes.filter(n => n.parent_node_id === targetNode.parent_node_id).sort((a, b) => a.sort_order - b.sort_order);
        const targetIdx = siblings.findIndex(n => n.id === id);
@@ -1361,28 +1375,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   };
 
   const lastEditRef = useRef<{ nodeId: string; timestamp: number; oldContent: string } | null>(null);
-
-  const focusNode = (nodeId: string, field: 'content' | 'note' = 'content') => {
-    const el = document.getElementById(`${field}-${nodeId}`);
-    if (!el) {
-      setTimeout(() => focusNode(nodeId, field), 50);
-      return;
-    }
-
-    el.focus({ preventScroll: true });
-    if (field === 'content') {
-      const sel = window.getSelection();
-      if (sel) {
-        const range = document.createRange();
-        range.selectNodeContents(el);
-        range.collapse(false);
-        sel.removeAllRanges();
-        sel.addRange(range);
-      }
-    }
-
-    scrollToElement(nodeId, field);
-  };
 
   const handleKeyDown = async (e: React.KeyboardEvent, currentNode: Node, type: 'content' | 'note') => { 
     // 拦截输入法组合状态
@@ -1434,7 +1426,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                 e.stopPropagation();
                 if (currentDoc) {
                   const cmd = commands.createCreateNodeCommand({
-                    document_id: currentDoc.id, content: '', parent_node_id: null, sort_order: Date.now()
+                    document_id: currentDoc.id, content: '', parent_node_id: null, sort_order: createSortOrder()
                   });
                   execute(cmd);
                   if (cmd.nodeId) setFocusedNodeId({ id: cmd.nodeId, field: 'content' });
@@ -1567,7 +1559,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           const children = nodes.filter(n => n.parent_node_id === currentNode.id)
                                 .sort((a, b) => a.sort_order - b.sort_order);
           const firstChild = children[0];
-          newSortOrder = firstChild ? firstChild.sort_order - 1000 : Date.now();
+          newSortOrder = firstChild ? firstChild.sort_order - 1000 : createSortOrder();
         } else {
           const siblings = nodes.filter(n => n.parent_node_id === newParentId)
                                 .sort((a, b) => a.sort_order - b.sort_order);
@@ -1640,7 +1632,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           const children = nodes.filter(n => n.parent_node_id === currentNode.id)
                                 .sort((a, b) => a.sort_order - b.sort_order);
           const firstChild = children[0];
-          newSortOrder = firstChild ? firstChild.sort_order - 1000 : Date.now();
+          newSortOrder = firstChild ? firstChild.sort_order - 1000 : createSortOrder();
       } 
       else {
           newParentId = currentNode.parent_node_id;
@@ -1725,7 +1717,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           const existingChildren = nodes.filter(n => n.parent_node_id === newParentId)
                                         .sort((a, b) => a.sort_order - b.sort_order);
           const lastChild = existingChildren.length > 0 ? existingChildren[existingChildren.length - 1] : null;
-          const newSortOrder = lastChild ? lastChild.sort_order + 1000 : Date.now();
+          const newSortOrder = lastChild ? lastChild.sort_order + 1000 : createSortOrder();
 
           execute(commands.createBatchMoveCommand([{
               id: currentNode.id,
@@ -1755,7 +1747,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     execute(commands.createTogglePropertyCommand(id, 'is_collapsed', is_collapsed));
   };
 
-  const handleStyleChange = (id: string, styles: Partial<Node>) => {
+  const handleStyleChange = useCallback((id: string, styles: Partial<Node>) => {
     setNodes(prev => {
       const node = prev.find(n => n.id === id);
       if (!node) return prev;
@@ -1765,7 +1757,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     updateNode(id, styles).catch((error) => {
       console.error('Failed to update node styles', error);
     });
-  };
+  }, []);
 
   const getSortedNodes = (allNodes: Node[]) => {
     // 预建索引：parentId → children (O(n) 构建，避免每次 filter 扫描全量)
@@ -1961,8 +1953,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     return rootNodes.map(r => serialize(r, 0)).join('\n');
   };
 
-  const sortedNodes = useMemo(() => getSortedNodes(nodes), [nodes, zoomedNodeId, searchQuery, tagFilter, currentDoc?.title]);
-  const treeNodes = useMemo(() => buildTree(sortedNodes), [sortedNodes]);
+  const sortedNodes = getSortedNodes(nodes);
+  const treeNodes = buildTree(sortedNodes);
 
   // 幽灵锚点：用于保持移动端键盘打开
   const focusToGhostAnchor = useCallback(() => {
@@ -1972,7 +1964,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   }, []);
 
   // Mobile toolbar handlers - useCallback with refs to avoid re-creating on every render
-  const handleMobileMoveUp = useCallback(async () => {
+  const handleMobileMoveUp = async () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
     if (!nodeId) return;
     const allNodes = nodesRef.current;
@@ -1990,9 +1982,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       }]));
       setTimeout(() => focusNode(nodeId), 100);
     }
-  }, [execute, commands]);
+  };
 
-  const handleMobileMoveDown = useCallback(async () => {
+  const handleMobileMoveDown = async () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
     if (!nodeId) return;
     const allNodes = nodesRef.current;
@@ -2010,21 +2002,21 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       }]));
       setTimeout(() => focusNode(nodeId), 100);
     }
-  }, [execute, commands]);
+  };
 
-  const handleMobileToggleComplete = useCallback(() => {
+  const handleMobileToggleComplete = () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
     if (!nodeId) return;
     const node = nodesRef.current.find(n => n.id === nodeId);
     if (node) handleStyleChange(nodeId, { is_todo: !node.is_todo });
-  }, [handleStyleChange]);
+  };
 
-  const handleMobileAddNote = useCallback(() => {
+  const handleMobileAddNote = () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
     if (nodeId) setFocusedNodeId({ id: nodeId, field: 'note' });
-  }, []);
+  };
 
-  const handleMobileDelete = useCallback(async () => {
+  const handleMobileDelete = async () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
     if (!nodeId) return;
     const allNodes = nodesRef.current;
@@ -2053,9 +2045,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     } else {
       setFocusedNodeIdForToolbar(null);
     }
-  }, [execute, commands, getSortedNodes]);
+  };
 
-  const handleMobileIndent = useCallback(async () => {
+  const handleMobileIndent = async () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
     if (!nodeId) return;
     const allNodes = nodesRef.current;
@@ -2069,7 +2061,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       const children = allNodes.filter(n => n.parent_node_id === prevSibling.id)
                            .sort((a, b) => a.sort_order - b.sort_order);
       const lastChild = children[children.length - 1];
-      const newSortOrder = lastChild ? lastChild.sort_order + 1000 : Date.now();
+      const newSortOrder = lastChild ? lastChild.sort_order + 1000 : createSortOrder();
       focusToGhostAnchor();
       execute(commands.createBatchMoveCommand([{
         id: currentNode.id, oldParent: currentNode.parent_node_id, oldOrder: currentNode.sort_order,
@@ -2077,9 +2069,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       }]));
       setTimeout(() => focusNode(nodeId), 100);
     }
-  }, [execute, commands]);
+  };
 
-  const handleMobileOutdent = useCallback(async () => {
+  const handleMobileOutdent = async () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
     if (!nodeId) return;
     const allNodes = nodesRef.current;
@@ -2103,34 +2095,54 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       newParent: parentNode.parent_node_id, newOrder: newSortOrder
     }]));
     setTimeout(() => focusNode(nodeId), 100);
-  }, [execute, commands]);
+  };
 
-  const handleMobileZoom = useCallback(() => {
+  const handleMobileZoom = () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
     if (nodeId) setZoomedNodeId(nodeId);
-  }, []);
+  };
 
-  const handleMobileUndo = useCallback(async () => {
+  const handleMobileUndo = async () => {
     focusToGhostAnchor();
     await undo();
-  }, [undo]);
+  };
 
-  // Publish toolbar handlers to MobileToolbarContext for MobileLayout to render
+  // 用 effect 同步实现，向 Context 暴露的包装函数保持稳定，避免发布状态造成渲染循环。
+  const mobileActionsRef = useRef({
+    indent: handleMobileIndent,
+    outdent: handleMobileOutdent,
+    toggleTodo: handleMobileToggleComplete,
+    addNote: handleMobileAddNote,
+    moveUp: handleMobileMoveUp,
+    moveDown: handleMobileMoveDown,
+    zoom: handleMobileZoom,
+    undo: handleMobileUndo,
+    deleteNode: handleMobileDelete,
+  });
+  useEffect(() => {
+    mobileActionsRef.current = {
+      indent: handleMobileIndent,
+      outdent: handleMobileOutdent,
+      toggleTodo: handleMobileToggleComplete,
+      addNote: handleMobileAddNote,
+      moveUp: handleMobileMoveUp,
+      moveDown: handleMobileMoveDown,
+      zoom: handleMobileZoom,
+      undo: handleMobileUndo,
+      deleteNode: handleMobileDelete,
+    };
+  });
   const toolbarHandlers = useMemo(() => ({
-    onIndent: handleMobileIndent,
-    onOutdent: handleMobileOutdent,
-    onToggleTodo: handleMobileToggleComplete,
-    onAddNote: handleMobileAddNote,
-    onMoveUp: handleMobileMoveUp,
-    onMoveDown: handleMobileMoveDown,
-    onZoom: handleMobileZoom,
-    onUndo: handleMobileUndo,
-    onDelete: handleMobileDelete,
-  }), [
-    handleMobileIndent, handleMobileOutdent, handleMobileToggleComplete,
-    handleMobileAddNote, handleMobileMoveUp, handleMobileMoveDown,
-    handleMobileZoom, handleMobileUndo, handleMobileDelete,
-  ]);
+    onIndent: () => mobileActionsRef.current.indent(),
+    onOutdent: () => mobileActionsRef.current.outdent(),
+    onToggleTodo: () => mobileActionsRef.current.toggleTodo(),
+    onAddNote: () => mobileActionsRef.current.addNote(),
+    onMoveUp: () => mobileActionsRef.current.moveUp(),
+    onMoveDown: () => mobileActionsRef.current.moveDown(),
+    onZoom: () => mobileActionsRef.current.zoom(),
+    onUndo: () => mobileActionsRef.current.undo(),
+    onDelete: () => mobileActionsRef.current.deleteNode(),
+  }), []);
 
   useEffect(() => {
     if (!isMobile) return;
@@ -2322,7 +2334,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                     const existingChildren = nodes.filter(n => n.parent_node_id === newParentId)
                                                   .sort((a, b) => a.sort_order - b.sort_order);
                     const lastChild = existingChildren.length > 0 ? existingChildren[existingChildren.length - 1] : null;
-                    newSortOrder = lastChild ? lastChild.sort_order + 1000 : Date.now();
+                    newSortOrder = lastChild ? lastChild.sort_order + 1000 : createSortOrder();
                 }
                 
                 parentNextOrderMap.set(newParentId, newSortOrder);
@@ -2892,7 +2904,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                         document_id: currentDoc.id,
                         content: '',
                         parent_node_id: null,
-                        sort_order: Date.now()
+                        sort_order: createSortOrder()
                       });
                       execute(command);
                       if (command.nodeId) setFocusedNodeId({ id: command.nodeId, field: 'content' });

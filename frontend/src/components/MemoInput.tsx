@@ -76,6 +76,8 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
   const isTagPopupActive = useCallback(() => tagState.type === 'tag' && filteredTags.length > 0, [tagState, filteredTags]);
   const isMentionPopupActive = useCallback(() => mentionState.type === 'mention' && filteredDocs.length > 0, [mentionState, filteredDocs]);
 
+  // CodeMirror stores these callbacks and invokes them only for editor events, never during React render.
+  // eslint-disable-next-line react-hooks/refs
   const tmExtension = useMemo(() => tagMentionExtension({
     onTagSearch: (s) => { setTagState(s); setTagDropdownIndex(0); },
     onMentionSearch: (s) => { setMentionState(s); setMentionDropdownIndex(0); },
@@ -98,7 +100,7 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
       active?.focus();
     },
     isPopupActive: () => isTagPopupActive() || isMentionPopupActive(),
-  }), [allTags.length, documents?.length, filteredTags, filteredDocs, tagDropdownIndex, mentionDropdownIndex, isTagPopupActive, isMentionPopupActive, showExpandEditor]);
+  }), [allTags.length, documents?.length, filteredTags, filteredDocs, tagDropdownIndex, mentionDropdownIndex, isTagPopupActive, isMentionPopupActive, showExpandEditor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 文件上传
   const handleFileUpload = useCallback(async (file: File, isImage: boolean) => {

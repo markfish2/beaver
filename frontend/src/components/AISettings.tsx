@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Check, Loader2 } from 'lucide-react';
+import { Plus, Check, Loader2 } from 'lucide-react';
 import { getAIConfigs, createAIConfig, updateAIConfig, deleteAIConfig, testAIConfig, type AIConfig, type AIConfigCreate } from '../api/data';
 
 // 预设配置
@@ -43,7 +43,14 @@ export default function AISettings({ onClose }: AISettingsProps) {
     }
   }, []);
 
-  useEffect(() => { fetchConfigs(); }, [fetchConfigs]);
+  useEffect(() => {
+    let active = true;
+    getAIConfigs()
+      .then(data => { if (active) setConfigs(data); })
+      .catch(error => console.error('获取 AI 配置失败', error))
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
 
   const applyPreset = (key: string) => {
     const preset = PRESETS[key];

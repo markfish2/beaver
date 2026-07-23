@@ -169,6 +169,8 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   const isTagPopupActive = useCallback(() => tagState.type === 'tag' && filteredTags.length > 0, [tagState, filteredTags]);
   const isMentionPopupActive = useCallback(() => mentionState.type === 'mention' && filteredDocs.length > 0, [mentionState, filteredDocs]);
 
+  // CodeMirror stores these callbacks and invokes them only for editor events, never during React render.
+  // eslint-disable-next-line react-hooks/refs
   const tmExtension = useMemo(() => tagMentionExtension({
     onTagSearch: (s) => { setTagState(s); setTagDropdownIndex(0); },
     onMentionSearch: (s) => { setMentionState(s); setMentionDropdownIndex(0); },
@@ -193,7 +195,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
       editorRef.current?.focus();
     },
     isPopupActive: () => isTagPopupActive() || isMentionPopupActive(),
-  }), [allTags.length, documents.length, filteredTags, filteredDocs, tagDropdownIndex, mentionDropdownIndex, isTagPopupActive, isMentionPopupActive]);
+  }), [allTags.length, documents.length, filteredTags, filteredDocs, tagDropdownIndex, mentionDropdownIndex, isTagPopupActive, isMentionPopupActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     return () => {

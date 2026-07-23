@@ -63,6 +63,7 @@ function formatRelativeTime(dateStr: string | number): string {
 const DEFAULT_PANEL_WIDTH = 212;  // 260 - 48 = 212 (total visual width stays 260)
 const MIN_PANEL_WIDTH = 160;
 const MAX_PANEL_WIDTH = 460;
+const navigationNonce = () => Date.now();
 
 type ViewMode = 'diary' | 'all' | 'starred' | 'recent' | 'memo' | 'user' | 'ai' | 'projects';
 type UserSubView = 'profile' | 'token' | 'ai' | 'trash' | 'password';
@@ -138,13 +139,13 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   const [isSearchMode, setIsSearchMode] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
+  const visibleSearchResults = isSearchMode && searchQuery.trim() ? searchResults : [];
   const [searchLoading, setSearchLoading] = useState(false);
   const [recentDocuments, setRecentDocuments] = useState<DocType[]>([]);
 
   // 防抖搜索 - 调用后端全文搜索 API
   useEffect(() => {
     if (!isSearchMode || !searchQuery.trim()) {
-      setSearchResults([]);
       return;
     }
     const timer = setTimeout(async () => {
@@ -301,7 +302,8 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
 
   useEffect(() => {
     if (viewMode === 'diary' && contentExpanded) {
-      fetchPendingTasks();
+      const timer = window.setTimeout(() => void fetchPendingTasks(), 0);
+      return () => window.clearTimeout(timer);
     }
   }, [viewMode, contentExpanded, fetchPendingTasks]);
 
@@ -316,9 +318,10 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       getProjects().then(setProjects).catch(console.error);
     } else if (viewMode !== 'projects') {
       // 切换到非项目视图时，清除选中的项目，让 MainArea 显示正常内容
-      setSelectedProjectId(null);
+      const timer = window.setTimeout(() => setSelectedProjectId(null), 0);
+      return () => window.clearTimeout(timer);
     }
-  }, [viewMode, setSelectedProjectId]);
+  }, [viewMode, projects.length, setSelectedProjectId]);
 
   // 监听从其他组件（如近7天计划）切换到项目视图的事件
   useEffect(() => {
@@ -561,25 +564,6 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     );
   }, [documents, searchQuery]);
 
-  useEffect(() => {
-    if (searchQuery.trim() && localSearchResults && localSearchResults.length > 0) {
-      const parentIds = new Set<string>();
-      localSearchResults.forEach(doc => {
-        if (doc.parent_id) {
-          parentIds.add(doc.parent_id);
-        }
-      });
-      
-      setIsExpanded(prev => {
-        const newState = { ...prev };
-        parentIds.forEach(id => {
-          newState[id] = true;
-        });
-        return newState;
-      });
-    }
-  }, [searchQuery, localSearchResults]);
-
   const handleCreateDocument = async (parentId?: string | null) => {
     try {
       const pid = parentId !== undefined ? parentId : newMenuTarget;
@@ -724,14 +708,14 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       case 'document':
       case 'document_title':
         navigate(result.node_id
-          ? `/d/${result.entity_id}?nodeId=${result.node_id}&_t=${Date.now()}`
-          : `/d/${result.entity_id}?_t=${Date.now()}`);
+          ? `/d/${result.entity_id}?nodeId=${result.node_id}&_t=${navigationNonce()}`
+          : `/d/${result.entity_id}?_t=${navigationNonce()}`);
         break;
       case 'diary':
-        navigate(`/d/${result.entity_id}?_t=${Date.now()}`);
+        navigate(`/d/${result.entity_id}?_t=${navigationNonce()}`);
         break;
       case 'memo':
-        navigate(`/?search=${encodeURIComponent(searchQuery)}&highlight=${result.entity_id}&_t=${Date.now()}`);
+        navigate(`/?search=${encodeURIComponent(searchQuery)}&highlight=${result.entity_id}&_t=${navigationNonce()}`);
         break;
     }
     onDocumentSelect?.();
@@ -749,9 +733,9 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     setContentExpanded(true);
   };
 
-  const docResults = searchResults.filter(r => r.result_type === 'document' || r.result_type === 'document_title');
-  const diaryResults = searchResults.filter(r => r.result_type === 'diary');
-  const memoResults = searchResults.filter(r => r.result_type === 'memo');
+  const docResults = visibleSearchResults.filter(r => r.result_type === 'document' || r.result_type === 'document_title');
+  const diaryResults = visibleSearchResults.filter(r => r.result_type === 'diary');
+  const memoResults = visibleSearchResults.filter(r => r.result_type === 'memo');
 
   const handleSelect = (id: string, type: 'document' | 'folder' | 'note' | 'excalidraw') => {
     setContextMenu(null);
@@ -1336,10 +1320,10 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                       </div>
                     </div>
                     <div className="flex-1 overflow-y-auto px-2 pb-2 custom-scrollbar">
-                      {searchResults.length > 0 ? (
+                      {visibleSearchResults.length > 0 ? (
                         (() => {
-                          const grouped: Record<string, typeof searchResults> = {};
-                          searchResults.forEach(r => {
+                          const grouped: Record<string, typeof visibleSearchResults> = {};
+                          visibleSearchResults.forEach(r => {
                             const key = r.result_type === 'document' || r.result_type === 'document_title' ? '文档'
                               : r.result_type === 'diary' ? '日记'
                               : '随想';
@@ -1565,7 +1549,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                         <div className="p-4 text-xs text-gray-400 text-center">搜索中...</div>
                       ) : !searchQuery.trim() ? (
                         <div className="p-4 text-xs text-gray-400 text-center">输入关键词搜索</div>
-                      ) : searchResults.length === 0 ? (
+                      ) : visibleSearchResults.length === 0 ? (
                         <div className="p-4 text-xs text-gray-400 text-center">未找到匹配内容</div>
                       ) : (
                         <div className="pt-1">
@@ -1613,7 +1597,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                               ))}
                             </div>
                           )}
-                          <div className="px-2 py-2 text-[10px] text-gray-400 text-center">共找到 {searchResults.length} 条结果</div>
+                          <div className="px-2 py-2 text-[10px] text-gray-400 text-center">共找到 {visibleSearchResults.length} 条结果</div>
                         </div>
                       )}
                     </div>
@@ -1865,6 +1849,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
 
 
       <NewFolderDialog
+        key={`folder-dialog-${showNewFolderDialog}`}
         isOpen={showNewFolderDialog}
         onConfirm={handleCreateFolder}
         onCancel={() => setShowNewFolderDialog(false)}
@@ -1872,6 +1857,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       />
 
       <NewFolderDialog
+        key={`project-dialog-${showNewProjectDialog}`}
         isOpen={showNewProjectDialog}
         dialogTitle="新建项目计划"
         label="项目名称"
@@ -1916,6 +1902,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       )}
 
       <EditFolderDialog
+        key={`${editFolderDialog.id}-${editFolderDialog.show}`}
         isOpen={editFolderDialog.show}
         folderId={editFolderDialog.id}
         initialTitle={editFolderDialog.title}

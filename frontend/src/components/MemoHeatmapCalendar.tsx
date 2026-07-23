@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { getMemoHeatmap } from '../api/data';
 
@@ -26,19 +26,16 @@ export default function MemoHeatmapCalendar({ embedded = false }: { embedded?: b
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [dayCounts, setDayCounts] = useState<Record<string, number>>({});
 
-  const fetchHeatmap = useCallback(async (y: number, m: number) => {
-    try {
-      const data = await getMemoHeatmap(y, m);
-      setDayCounts(data.days);
-    } catch (e) {
-      console.error('Failed to fetch heatmap', e);
-      setDayCounts({});
-    }
-  }, []);
-
   useEffect(() => {
-    fetchHeatmap(year, month);
-  }, [year, month, fetchHeatmap]);
+    let active = true;
+    getMemoHeatmap(year, month)
+      .then(data => { if (active) setDayCounts(data.days); })
+      .catch(error => {
+        console.error('Failed to fetch heatmap', error);
+        if (active) setDayCounts({});
+      });
+    return () => { active = false; };
+  }, [year, month]);
 
   const prevMonth = () => {
     if (month === 1) { setYear(year - 1); setMonth(12); }

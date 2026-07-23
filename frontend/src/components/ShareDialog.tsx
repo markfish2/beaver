@@ -10,13 +10,12 @@ interface ShareDialogProps {
 
 const ShareDialog = ({ isOpen, documentId, onCancel }: ShareDialogProps) => {
   const [shareToken, setShareToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(isOpen);
   const [copied, setCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen && documentId) {
-      setIsLoading(true);
       getShare(documentId)
         .then(share => {
           setShareToken(share?.token || null);

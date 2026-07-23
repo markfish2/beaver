@@ -68,23 +68,15 @@ export default function ProjectView({ projectId, showArchived = false, onToggleA
   const [newEnd, setNewEnd] = useState('');
   const newTitleRef = useRef<HTMLInputElement>(null);
 
-  const loadTasks = useCallback(async () => {
-    if (!projectId) return;
-    try {
-      setIsLoading(true);
-      const data = await getTasks(projectId);
-      setTasks(data);
-    } catch (err) {
-      console.error('Failed to load tasks:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [projectId]);
-
   useEffect(() => {
-    if (projectId) loadTasks();
-    else setTasks([]);
-  }, [projectId, loadTasks]);
+    if (!projectId) return;
+    let active = true;
+    getTasks(projectId)
+      .then(data => { if (active) setTasks(data); })
+      .catch(error => console.error('Failed to load tasks:', error))
+      .finally(() => { if (active) setIsLoading(false); });
+    return () => { active = false; };
+  }, [projectId]);
 
   // Fetch archived projects when toggled on
   useEffect(() => {

@@ -61,7 +61,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [location.pathname, navigate]);
 
   useEffect(() => {
-    void checkStatus();
+    const timer = window.setTimeout(() => void checkStatus(), 0);
+    return () => window.clearTimeout(timer);
   }, [checkStatus]);
 
   const login = useCallback(async (username: string, password: string) => {

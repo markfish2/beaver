@@ -145,6 +145,7 @@ export default function DocumentSettingsMenu({
       {/* Share Dialog */}
       {currentDoc && (
         <ShareDialog
+          key={`${currentDoc.id}-${showShareDialog}`}
           isOpen={showShareDialog}
           documentId={currentDoc.id}
           onCancel={() => setShowShareDialog(false)}

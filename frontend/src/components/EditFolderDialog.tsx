@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { X } from 'lucide-react';
 
 interface EditFolderDialogProps {
@@ -17,12 +17,6 @@ const EditFolderDialog = ({
   onCancel
 }: EditFolderDialogProps) => {
   const [title, setTitle] = useState(initialTitle);
-
-  useEffect(() => {
-    if (isOpen) {
-      setTitle(initialTitle);
-    }
-  }, [isOpen, initialTitle]);
 
   if (!isOpen) return null;
 

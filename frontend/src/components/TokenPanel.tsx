@@ -24,7 +24,12 @@ export default function TokenPanel() {
   };
 
   useEffect(() => {
-    fetchTokens();
+    let active = true;
+    getApiTokens()
+      .then(data => { if (active) setTokens(data); })
+      .catch(error => console.error('Failed to fetch tokens:', error))
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
   const handleCreate = async () => {

@@ -528,7 +528,7 @@ function MindMapView({
           };
         })
     };
-  }, [documentTitle, nodes, currentColorTheme]);
+  }, [documentTitle, currentColorTheme]);
 
   const buildMergedTheme = useCallback((lineKey: LineStyleKey, colorKey: ColorThemeKey) => {
     const lineConfig = LINE_STYLES[lineKey];
@@ -739,7 +739,8 @@ function MindMapView({
         mindMapRef.current = null;
       }
     };
-  }, []);
+  // 引擎实例只创建一次；后续数据和主题由下方增量更新 effect 负责。
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 更新数据
   useEffect(() => {

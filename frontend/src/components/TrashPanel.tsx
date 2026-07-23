@@ -51,8 +51,13 @@ export default function TrashPanel() {
   }, []);
 
   useEffect(() => {
-    fetchTrash();
-  }, [fetchTrash]);
+    let active = true;
+    getTrash()
+      .then(data => { if (active) setTrash(data); })
+      .catch(error => console.error('Failed to fetch trash:', error))
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
 
   const handleRestore = async (type: 'document' | 'memo', id: string) => {
     try {

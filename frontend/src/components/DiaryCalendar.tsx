@@ -178,8 +178,11 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
   }, []);
 
   useEffect(() => {
-    fetchDays(year, month);
-    fetchMonths();
+    const timer = window.setTimeout(() => {
+      void fetchDays(year, month);
+      void fetchMonths();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [year, month, fetchDays, fetchMonths]);
 
   const prevMonth = () => {

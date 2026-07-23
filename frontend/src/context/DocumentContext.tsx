@@ -35,11 +35,11 @@ export const DocumentProvider = ({ children }: { children: ReactNode }) => {
 
   // Re-fetch documents when authenticated
   useEffect(() => {
-    if (isAuthenticated) {
-      void refreshDocuments();
-    } else {
-      setDocuments([]);
-    }
+    const timer = window.setTimeout(() => {
+      if (isAuthenticated) void refreshDocuments();
+      else setDocuments([]);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [isAuthenticated, refreshDocuments]);
 
   const updateDocumentTitle = useCallback((id: string, newTitle: string) => {
