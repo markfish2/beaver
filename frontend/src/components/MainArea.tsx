@@ -2335,6 +2335,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       {!document.documentElement.dataset.mobileLayout
         && currentDoc?.type !== 'note'
         && currentDoc?.type !== 'excalidraw'
+        && !isDiaryDoc
         && (
           <div className="flex items-center justify-between px-6 bg-gray-50/80 dark:bg-gray-800/50" style={{ minHeight: '3rem', paddingTop: isMobile ? 'env(safe-area-inset-top)' : undefined, boxShadow: '0 2px 8px -3px rgba(0,0,0,0.08)' }}>
             <div className="flex items-center flex-wrap gap-1">
@@ -2495,7 +2496,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           onClick={() => setSelectedNodeIds([])}
         >
           <div className="max-w-[900px] ml-auto mr-auto md:ml-16 md:mr-auto">
-            {currentDoc && !diaryDocId && (
+            {currentDoc && !isDiaryDoc && (
               <h1
                 className="text-4xl font-semibold mb-8 text-gray-800 dark:text-gray-100 outline-none leading-tight"
                 contentEditable
