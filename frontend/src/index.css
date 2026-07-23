@@ -181,11 +181,6 @@ body,
   color: var(--app-code-text);
 }
 
-.memo-content pre,
-.main-content-area pre {
-  background: var(--app-code-bg);
-}
-
 .dark {
   /* 高亮颜色 - 暗色模式 (WCAG AA 级对比度 >= 4.5:1) */
   /* 红色高亮：深红背景 + 亮红文字 */
