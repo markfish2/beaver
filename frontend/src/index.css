@@ -60,26 +60,26 @@
  */
 :root,
 :root[data-theme="minimal"] {
-  --color-gray-50: #faf9f6;
-  --color-gray-100: #f1efea;
-  --color-gray-200: #e3dfd7;
-  --color-gray-300: #cec8bd;
-  --color-gray-400: #99938a;
-  --color-gray-500: #77716a;
-  --color-gray-600: #5f5a54;
-  --color-gray-700: #494540;
-  --color-gray-800: #35322f;
-  --color-gray-900: #262421;
-  --color-gray-950: #1c1a18;
-  --app-canvas: #f7f6f2;
-  --app-surface: #fffdfa;
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+  --color-gray-950: #030712;
+  --app-canvas: #fdfdfc;
+  --app-surface: #fdfdfc;
   --app-surface-raised: #ffffff;
-  --app-code-bg: #eeeae2;
-  --app-code-text: #453f38;
-  --app-quote-bg: #f1ede5;
-  --app-quote-border: #c15f3c;
-  --app-link: #a64f34;
-  --app-selection: #ead7ca;
+  --app-code-bg: #fff8c5;
+  --app-code-text: #333333;
+  --app-quote-bg: #f9fafb;
+  --app-quote-border: #e5e7eb;
+  --app-link: #1a73e8;
+  --app-selection: #dbeafe;
 }
 
 :root[data-theme="warm"] {

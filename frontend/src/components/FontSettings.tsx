@@ -60,24 +60,24 @@ const THEMES: Record<Theme, {
 }> = {
   system: {
     name: '跟随系统',
-    bg: '#F7F6F2',
-    text: '#2F2D2A',
-    secondaryText: '#77736D',
-    accent: '#C15F3C',
-    guideColor: '#DEDAD2',
-    headingColor: '#25231F',
-    preview: 'bg-gradient-to-r from-[#F7F6F2] to-[#262624]',
+    bg: '#FDFDFC',
+    text: '#333333',
+    secondaryText: '#888888',
+    accent: '#1A73E8',
+    guideColor: '#e5e7eb',
+    headingColor: '#111111',
+    preview: 'bg-gradient-to-r from-[#FDFDFC] to-[#262624]',
     isDark: false
   },
   minimal: {
-    name: '亚麻纸',
-    bg: '#F7F6F2',
-    text: '#2F2D2A',
-    secondaryText: '#77736D',
-    accent: '#C15F3C',
-    guideColor: '#DEDAD2',
-    headingColor: '#25231F',
-    preview: 'bg-[#F7F6F2]',
+    name: '极简纯粹',
+    bg: '#FDFDFC',
+    text: '#333333',
+    secondaryText: '#888888',
+    accent: '#1A73E8',
+    guideColor: '#e5e7eb',
+    headingColor: '#111111',
+    preview: 'bg-[#FDFDFC]',
     isDark: false
   },
   warm: {
@@ -325,7 +325,7 @@ export const FontSettingsPanel = ({
                   <div className="text-xs font-medium text-gray-800 dark:text-gray-200">{THEMES[theme].name}</div>
                   <div className="text-[10px] text-gray-500 mt-0.5">
                     {theme === 'system' && '随设备自动切换'}
-                    {theme === 'minimal' && '温和、克制的纸张感'}
+                    {theme === 'minimal' && 'Workflowy 风格'}
                     {theme === 'warm' && '低刺激的暖色阅读'}
                     {theme === 'geek' && '清晰冷静的雾蓝层次'}
                   </div>
