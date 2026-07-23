@@ -42,68 +42,6 @@ const navigationNonce = () => Date.now();
 type ViewMode = 'diary' | 'all' | 'starred' | 'recent' | 'memo' | 'user' | 'ai' | 'projects';
 type UserSubView = 'profile' | 'token' | 'ai' | 'trash' | 'password';
 
-const TabNav = ({ activeTab, onTabChange }: {
-  activeTab: ViewMode;
-  onTabChange: (tab: ViewMode) => void;
-}) => {
-  return (
-    <div className="px-2 pt-2">
-      <div className="flex items-end gap-0.5">
-        {/* Diary tab */}
-        <button
-          onClick={() => onTabChange('diary')}
-          className={`relative flex items-center justify-center gap-1.5 px-4 text-xs font-medium rounded-t-lg transition-all duration-200 border border-b-0 ${
-            activeTab === 'diary'
-              ? 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 border-gray-200 dark:border-gray-700 z-10 -mb-px py-2.5'
-              : 'bg-blue-50/60 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-transparent hover:bg-blue-100/70 dark:hover:bg-blue-900/30 py-1.5'
-          }`}
-        >
-          <CalendarDays className={`w-3 h-3 ${activeTab === 'diary' ? '' : 'text-blue-500'}`} />
-          <span>日记</span>
-        </button>
-        {/* All tab */}
-        <button
-          onClick={() => onTabChange('all')}
-          className={`relative flex items-center justify-center gap-1.5 px-4 text-xs font-medium rounded-t-lg transition-all duration-200 border border-b-0 ${
-            activeTab === 'all'
-              ? 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 border-gray-200 dark:border-gray-700 z-10 -mb-px py-2.5'
-              : 'bg-emerald-50/60 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-transparent hover:bg-emerald-100/70 dark:hover:bg-emerald-900/30 py-1.5'
-          }`}
-        >
-          <FileText className={`w-3 h-3 ${activeTab === 'all' ? '' : 'text-emerald-500'}`} />
-          <span>文件</span>
-        </button>
-        {/* Recent tab */}
-        <button
-          onClick={() => onTabChange('recent')}
-          className={`relative flex items-center justify-center gap-1.5 px-4 text-xs font-medium rounded-t-lg transition-all duration-200 border border-b-0 ${
-            activeTab === 'recent'
-              ? 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 border-gray-200 dark:border-gray-700 z-10 -mb-px py-2.5'
-              : 'bg-blue-50/60 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-transparent hover:bg-blue-100/70 dark:hover:bg-blue-900/30 py-1.5'
-          }`}
-        >
-          <Clock className={`w-3 h-3 ${activeTab === 'recent' ? 'text-blue-500' : 'text-blue-400'}`} />
-          <span>最近</span>
-        </button>
-        {/* Starred tab */}
-        <button
-          onClick={() => onTabChange('starred')}
-          className={`relative flex items-center justify-center gap-1.5 px-4 text-xs font-medium rounded-t-lg transition-all duration-200 border border-b-0 ${
-            activeTab === 'starred'
-              ? 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 border-gray-200 dark:border-gray-700 z-10 -mb-px py-2.5'
-              : 'bg-amber-50/60 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-transparent hover:bg-amber-100/70 dark:hover:bg-amber-900/30 py-1.5'
-          }`}
-        >
-          <Star className={`w-3 h-3 ${activeTab === 'starred' ? 'fill-current text-yellow-500' : 'text-amber-500'}`} />
-          <span>收藏</span>
-        </button>
-      </div>
-      {/* Divider line that connects tab to content */}
-      <div className="border-b border-gray-200 dark:border-gray-700" />
-    </div>
-  );
-};
-
 const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: SidebarProps) => {
   const { documents, isLoading, refreshDocuments, updateDocumentLocal, moveDocument, addDocument, removeDocument } = useDocuments();
   const { searchQuery, setSearchQuery } = useSearch();

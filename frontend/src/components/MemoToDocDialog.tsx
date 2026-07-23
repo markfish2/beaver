@@ -3,7 +3,6 @@ import { X, ChevronRight, ChevronDown, Folder, FileText } from 'lucide-react';
 import { useDocuments } from '../context/DocumentContext';
 import { createDocument, createNodesBatch } from '../api/data';
 import { parseMemoToNodes } from '../utils/convertMemo';
-import type { Document } from '../api/data';
 
 interface MemoToDocDialogProps {
   content: string;
@@ -72,18 +71,6 @@ export default function MemoToDocDialog({ content, onClose, onConverted }: MemoT
     try {
       const doc = await createDocument(editedTitle || title, 'document', selectedFolderId);
       if (nodes.length > 0) {
-        const batchData = nodes.map(n => ({
-          document_id: doc.id,
-          content: n.content,
-          parent_node_id: null as string | null, // will be resolved by tempId mapping
-          sort_order: n.sort_order,
-          is_todo: n.is_todo,
-          is_completed: n.is_completed,
-          note: n.note,
-          content_type: n.content_type,
-          file_path: n.file_path,
-          file_name: n.file_name,
-        }));
         // Build tempId → index mapping for parent resolution
         const tempIdToIndex = new Map<string, number>();
         nodes.forEach((n, i) => tempIdToIndex.set(n.tempId, i));
@@ -91,7 +78,7 @@ export default function MemoToDocDialog({ content, onClose, onConverted }: MemoT
         // But the batch API expects string IDs. Let's use single creation with temp IDs
         // Actually, let's just create nodes sequentially for simplicity with parent mapping
         await createNodesBatch(
-          nodes.map((n, i) => ({
+          nodes.map((n) => ({
             id: n.tempId,
             document_id: doc.id,
             content: n.content,

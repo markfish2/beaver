@@ -39,7 +39,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setIsLoading(false);
         return;
       }
-    } catch (error) {
+    } catch {
       // checkSetupStatus 失败不阻止登录恢复
       console.warn('checkSetupStatus failed, trying token restore', error);
     }
@@ -52,7 +52,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(userData);
         setIsAuthenticated(true);
       }
-    } catch (error) {
+    } catch {
       localStorage.removeItem('token');
       setIsAuthenticated(false);
     } finally {

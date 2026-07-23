@@ -164,7 +164,7 @@ const RecoveryDialog: React.FC<RecoveryDialogProps> = ({
               <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">操作详情：</p>
                 <div className="space-y-2">
-                  {pendingOperations.map((op, index) => (
+                  {pendingOperations.map((op) => (
                     <div 
                       key={op.id}
                       className="text-xs bg-white dark:bg-gray-800 rounded p-2 border border-gray-200 dark:border-gray-700"

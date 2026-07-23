@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Trash2, RotateCcw, AlertTriangle, FileText, ListTree, StickyNote, Folder, PenTool } from 'lucide-react';
 import { getTrash, restoreFromTrash, permanentDelete, emptyTrash } from '../api/data';
 import type { TrashItem, TrashResponse } from '../api/data';
@@ -43,17 +43,6 @@ export default function TrashDialog({ onClose, onRestore }: TrashDialogProps) {
   const [loading, setLoading] = useState(true);
   const [confirmEmpty, setConfirmEmpty] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  const fetchTrash = useCallback(async () => {
-    try {
-      const data = await getTrash();
-      setTrash(data);
-    } catch (e) {
-      console.error('Failed to fetch trash', e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
     let active = true;

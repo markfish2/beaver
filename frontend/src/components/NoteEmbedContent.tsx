@@ -107,7 +107,7 @@ export default function NoteEmbedContent({ noteId, noteType, title: propTitle }:
           if (cancelled) return;
           setNodes(allNodes);
         }
-      } catch (e) {
+      } catch {
         if (!cancelled) setError('加载失败');
       } finally {
         if (!cancelled) setLoading(false);

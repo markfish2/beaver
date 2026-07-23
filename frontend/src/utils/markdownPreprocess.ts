@@ -114,11 +114,6 @@ export function normalizeCallouts(content: string): string {
   };
 
   const defaultIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>';
-  const labels: Record<string, string> = {
-    note: '注意', tip: '提示', warning: '警告', danger: '危险',
-    info: '信息', question: '问题', quote: '引用',
-  };
-
   return content.replace(
     /^>\s*\[!(\w+)\]\s*(.*?)\n((?:>.*\n?)*)/gm,
     (_match, type: string, title: string, body: string) => {

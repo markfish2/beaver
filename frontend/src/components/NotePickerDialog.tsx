@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, FileText, ListTree, StickyNote, X } from 'lucide-react';
 import { getDocuments, getMemos } from '../api/data';
-import type { Document, Memo } from '../api/data';
 
 interface NoteItem {
   id: string;
@@ -38,7 +37,7 @@ export default function NotePickerDialog({ isOpen, onSelect, onClose }: NotePick
       }
       // 添加 memo
       for (const m of memoRes.memos) {
-        const preview = (m.content || '').replace(/[#*`\[\]>~\-]/g, '').trim().slice(0, 40);
+        const preview = (m.content || '').replace(/[#*`[\]>~-]/g, '').trim().slice(0, 40);
         items.push({ id: m.id, title: preview || '空随想', type: 'memo' });
       }
       setDocuments(items);

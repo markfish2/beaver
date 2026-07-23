@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 
 export interface ToolbarHandlers {
@@ -38,7 +38,6 @@ export function MobileToolbarProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// eslint-disable-next-line react-refresh/only-export-components
 export function useMobileToolbar() {
   const ctx = useContext(MobileToolbarContext);
   if (!ctx) {

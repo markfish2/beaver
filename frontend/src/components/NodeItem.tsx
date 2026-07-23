@@ -287,7 +287,7 @@ const NodeItem = memo(({
     }, 500);
   }, [node.id, onContentChange]);
 
-  const handleNoteInput = useCallback((e: React.FormEvent<HTMLDivElement>) => {
+  const handleNoteInput = useCallback((_e: React.FormEvent<HTMLDivElement>) => {
     // 不在这里调用 onNoteChange，避免触发重新渲染导致光标跳转
     // 只在 blur 时保存
   }, []);

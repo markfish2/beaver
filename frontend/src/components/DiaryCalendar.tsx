@@ -25,7 +25,7 @@ interface DiaryCalendarProps {
   onTaskMoved?: () => void;
 }
 
-export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskToggle, onTaskMoved }: DiaryCalendarProps) {
+export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskToggle: _onTaskToggle, onTaskMoved }: DiaryCalendarProps) {
   const navigate = useNavigate();
   const diaryCtx = useDiary();
   const today = new Date();

@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DocumentProvider } from './context/DocumentContext';
 import { SearchProvider } from './context/SearchContext';
@@ -41,7 +41,7 @@ const ProtectedRoute = ({ children }: { children: ReactNode }) => {
 
 const AppLayout = ({ children }: { children: ReactNode }) => {
   const [isMobile, setIsMobile] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const sidebarOpenRef = useRef(false);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -52,14 +52,11 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const handleToggleSidebar = () => {
-      setSidebarOpen(prev => {
-        const newState = !prev;
-        window.dispatchEvent(new CustomEvent(newState ? 'sidebarOpen' : 'sidebarClose'));
-        return newState;
-      });
+      sidebarOpenRef.current = !sidebarOpenRef.current;
+      window.dispatchEvent(new CustomEvent(sidebarOpenRef.current ? 'sidebarOpen' : 'sidebarClose'));
     };
-    const handleSidebarOpen = () => setSidebarOpen(true);
-    const handleSidebarClose = () => setSidebarOpen(false);
+    const handleSidebarOpen = () => { sidebarOpenRef.current = true; };
+    const handleSidebarClose = () => { sidebarOpenRef.current = false; };
     window.addEventListener('toggleSidebar', handleToggleSidebar);
     window.addEventListener('sidebarOpen', handleSidebarOpen);
     window.addEventListener('sidebarClose', handleSidebarClose);

@@ -31,10 +31,6 @@ function parseDate(s: string): Date {
   return new Date(y, m - 1, d);
 }
 
-function formatDay(d: Date): string {
-  return `${d.getMonth() + 1}/${d.getDate()}`;
-}
-
 export default function ProjectWeekView({ embedded = false }: ProjectWeekViewProps) {
   const { setSelectedProjectId } = useUserView();
   const [initialTasks] = useState(getFreshCachedTasks);
