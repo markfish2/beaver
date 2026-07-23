@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 
 from ..schemas import LinkPreview
 from ..dependencies import get_current_user
-from ..url_safety import is_safe_http_url
+from ..url_safety import is_safe_http_url, is_safe_peer_response
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -103,28 +103,42 @@ async def get_link_preview(url: str = Query(..., description="URL to preview")):
 
     try:
         async with httpx.AsyncClient(
-            follow_redirects=True,
+            follow_redirects=False,
             timeout=httpx.Timeout(connect=5.0, read=10.0, write=5.0, pool=5.0),
             headers={"User-Agent": "Mozilla/5.0 (compatible; LinkPreview/1.0)"},
         ) as client:
-            async with client.stream("GET", url) as resp:
-                resp.raise_for_status()
-                if not is_safe_http_url(str(resp.url)):
+            current_url = url
+            for _ in range(6):
+                if not is_safe_http_url(current_url):
                     return _empty_preview(url)
+                async with client.stream("GET", current_url) as resp:
+                    if not is_safe_peer_response(resp):
+                        return _empty_preview(url)
+                    if resp.is_redirect:
+                        location = resp.headers.get("location")
+                        if not location:
+                            return _empty_preview(url)
+                        current_url = urljoin(current_url, location)
+                        continue
+                    resp.raise_for_status()
 
-                # Only parse HTML and never buffer more than 512 KiB.
-                content_type = resp.headers.get("content-type", "")
-                if "html" not in content_type:
-                    return _empty_preview(url)
-                body = bytearray()
-                async for chunk in resp.aiter_bytes():
-                    body.extend(chunk)
-                    if len(body) >= 512 * 1024:
-                        del body[512 * 1024:]
-                        break
-                encoding = resp.encoding or "utf-8"
-                html = body.decode(encoding, errors="replace")
-                preview = _parse_preview(url, html)
+                    # Only parse HTML and never buffer more than 512 KiB.
+                    content_type = resp.headers.get("content-type", "")
+                    if "html" not in content_type:
+                        return _empty_preview(url)
+                    body = bytearray()
+                    async for chunk in resp.aiter_bytes():
+                        body.extend(chunk)
+                        if len(body) >= 512 * 1024:
+                            del body[512 * 1024:]
+                            break
+                    encoding = resp.encoding or "utf-8"
+                    html = body.decode(encoding, errors="replace")
+                    preview = _parse_preview(current_url, html)
+                    preview.url = url
+                    break
+            else:
+                return _empty_preview(url)
 
     except Exception:
         preview = _empty_preview(url)

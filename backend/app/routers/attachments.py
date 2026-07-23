@@ -14,7 +14,7 @@ from ..models import Attachment
 from ..schemas import UploadResponse
 from ..dependencies import get_current_user_flexible as get_current_user
 from ..schemas import User
-from ..url_safety import is_safe_http_url
+from ..url_safety import is_safe_http_url, is_safe_peer_response
 
 router = APIRouter(
     tags=["attachments"]
@@ -30,6 +30,16 @@ MAX_FILE_SIZE = 50 * 1024 * 1024
 
 # 缩略图最大边长
 THUMB_MAX_SIZE = 1024
+
+
+def validate_raster_image(content: bytes) -> bool:
+    try:
+        from PIL import Image
+        with Image.open(BytesIO(content)) as image:
+            image.verify()
+        return True
+    except Exception:
+        return False
 
 def ensure_upload_dir():
     if not os.path.exists(UPLOAD_DIR):
@@ -80,13 +90,17 @@ async def upload_file(
         
         # 检查文件类型（仅拒绝可执行/脚本类型，其余放行，大小限制兜底）
         content_type = file.content_type or "application/octet-stream"
-        BLOCKED_TYPES = ['application/x-executable', 'application/x-msdos-program', 'application/x-sh', 'application/x-bat']
-        if content_type in BLOCKED_TYPES:
+        BLOCKED_TYPES = ['application/x-executable', 'application/x-msdos-program', 'application/x-sh', 'application/x-bat', 'image/svg+xml']
+        file_ext = os.path.splitext(file.filename or "")[1].lower()
+        looks_like_svg = content.lstrip().lower().startswith((b'<svg', b'<?xml')) and b'<svg' in content[:4096].lower()
+        if content_type in BLOCKED_TYPES or file_ext == '.svg' or looks_like_svg:
             logger.warning(f"不允许的文件类型: {file.filename}, 类型: {content_type}, 用户: {current_user.username}")
             raise HTTPException(
                 status_code=400,
                 detail=f"不允许上传可执行文件"
             )
+        if content_type.startswith('image/') and not validate_raster_image(content):
+            raise HTTPException(status_code=400, detail="图片内容无效或格式不受支持")
         
         # 生成唯一文件名
         file_ext = os.path.splitext(file.filename)[1] if file.filename else ""
@@ -221,34 +235,50 @@ async def upload_from_url(
         raise HTTPException(status_code=400, detail="不允许访问该 URL")
 
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-            async with client.stream('GET', req.url, headers={
-                'User-Agent': 'Mozilla/5.0 (compatible; MiniFlowy/1.0)',
-                'Referer': req.url,
-            }) as resp:
-                if resp.status_code != 200:
-                    raise HTTPException(status_code=400, detail=f"下载失败: HTTP {resp.status_code}")
-                if not is_safe_http_url(str(resp.url)):
+        async with httpx.AsyncClient(timeout=30, follow_redirects=False) as client:
+            current_url = req.url
+            for _ in range(6):
+                if not is_safe_http_url(current_url):
                     raise HTTPException(status_code=400, detail="重定向目标不安全")
-                try:
-                    declared_size = int(resp.headers.get('content-length', '0') or 0)
-                except ValueError:
-                    declared_size = 0
-                if declared_size > MAX_FILE_SIZE:
-                    raise HTTPException(status_code=413, detail=f"文件大小超过限制 ({MAX_FILE_SIZE // 1024 // 1024}MB)")
-                chunks = []
-                received = 0
-                async for chunk in resp.aiter_bytes():
-                    received += len(chunk)
-                    if received > MAX_FILE_SIZE:
+                async with client.stream('GET', current_url, headers={
+                    'User-Agent': 'Mozilla/5.0 (compatible; MiniFlowy/1.0)',
+                    'Referer': current_url,
+                }) as resp:
+                    if not is_safe_peer_response(resp):
+                        raise HTTPException(status_code=400, detail="连接目标不安全")
+                    if resp.is_redirect:
+                        location = resp.headers.get('location')
+                        if not location:
+                            raise HTTPException(status_code=400, detail="无效重定向")
+                        from urllib.parse import urljoin
+                        current_url = urljoin(current_url, location)
+                        continue
+                    if resp.status_code != 200:
+                        raise HTTPException(status_code=400, detail=f"下载失败: HTTP {resp.status_code}")
+                    try:
+                        declared_size = int(resp.headers.get('content-length', '0') or 0)
+                    except ValueError:
+                        declared_size = 0
+                    if declared_size > MAX_FILE_SIZE:
                         raise HTTPException(status_code=413, detail=f"文件大小超过限制 ({MAX_FILE_SIZE // 1024 // 1024}MB)")
-                    chunks.append(chunk)
-                content = b''.join(chunks)
-                content_type = resp.headers.get('content-type', 'image/jpeg').split(';')[0].strip()
+                    chunks = []
+                    received = 0
+                    async for chunk in resp.aiter_bytes():
+                        received += len(chunk)
+                        if received > MAX_FILE_SIZE:
+                            raise HTTPException(status_code=413, detail=f"文件大小超过限制 ({MAX_FILE_SIZE // 1024 // 1024}MB)")
+                        chunks.append(chunk)
+                    content = b''.join(chunks)
+                    content_type = resp.headers.get('content-type', 'image/jpeg').split(';')[0].strip().lower()
+                    break
+            else:
+                raise HTTPException(status_code=400, detail="重定向次数过多")
 
         file_size = len(content)
-        if not content_type.startswith('image/'):
+        if not content_type.startswith('image/') or content_type == 'image/svg+xml':
             raise HTTPException(status_code=400, detail="URL 返回的不是图片")
+        if not validate_raster_image(content):
+            raise HTTPException(status_code=400, detail="URL 返回的图片内容无效")
 
         ext = mimetypes.guess_extension(content_type) or '.jpg'
         if ext == '.jpe':

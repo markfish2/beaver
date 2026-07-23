@@ -39,6 +39,16 @@ if not os.path.exists(THUMB_DIR):
 
 logger = logging.getLogger(__name__)
 
+
+class SafeUploadStaticFiles(StaticFiles):
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        if path.lower().endswith(".svg"):
+            response.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
+            response.headers["Content-Disposition"] = "attachment"
+        return response
+
 @app.on_event("startup")
 def generate_missing_thumbnails():
     """Generate thumbnails for existing images that don't have one yet."""
@@ -315,7 +325,7 @@ app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 
 # Mount static files for uploads (must be after API routes)
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+app.mount("/uploads", SafeUploadStaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 @app.get("/")
 def read_root():

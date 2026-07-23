@@ -117,10 +117,13 @@ async def get_excalidraw_file(
     if not result:
         raise HTTPException(status_code=404, detail="File not found")
     raw, mime = result
+    headers = {"Cache-Control": "public, max-age=604800, immutable", "X-Content-Type-Options": "nosniff"}
+    if mime == "image/svg+xml":
+        headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; img-src data:"
     return Response(
         content=raw,
         media_type=mime,
-        headers={"Cache-Control": "public, max-age=604800, immutable"}
+        headers=headers,
     )
 
 

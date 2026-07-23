@@ -16,7 +16,7 @@ import html2text
 from .. import crud, schemas
 from ..database import get_db
 from ..dependencies import get_current_user_flexible as get_current_user
-from ..url_safety import is_safe_http_url
+from ..url_safety import is_safe_http_url, is_safe_peer_response
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "uploads")
 
@@ -29,13 +29,12 @@ _HEADERS = {
 }
 
 # 允许的图片类型
-_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"}
+_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 _IMAGE_EXTENSIONS = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
     "image/gif": ".gif",
     "image/webp": ".webp",
-    "image/svg+xml": ".svg",
 }
 MAX_ARTICLE_SIZE = 5 * 1024 * 1024
 MAX_IMAGE_SIZE = 50 * 1024 * 1024
@@ -60,6 +59,29 @@ def _read_limited(response: httpx.Response, max_size: int) -> bytes | None:
     return bytes(body)
 
 
+def _fetch_limited(client: httpx.Client, url: str, max_size: int, timeout: int) -> tuple[bytes, httpx.Response] | None:
+    """Fetch with per-hop SSRF and connected-peer checks."""
+    current_url = url
+    for _ in range(6):
+        if not is_safe_http_url(current_url):
+            return None
+        with client.stream("GET", current_url, timeout=timeout, follow_redirects=False) as response:
+            if not is_safe_peer_response(response):
+                return None
+            if response.is_redirect:
+                location = response.headers.get("location")
+                if not location:
+                    return None
+                current_url = urljoin(current_url, location)
+                continue
+            response.raise_for_status()
+            body = _read_limited(response, max_size)
+            if body is None:
+                return None
+            return body, response
+    return None
+
+
 class ShareRequest(BaseModel):
     url: str | None = None
     title: str | None = None
@@ -78,16 +100,13 @@ def _download_image(client: httpx.Client, img_url: str, upload_dir: str) -> str 
     try:
         if not is_safe_http_url(img_url):
             return None
-        with client.stream("GET", img_url, timeout=15, follow_redirects=True) as resp:
-            resp.raise_for_status()
-            if not is_safe_http_url(str(resp.url)):
-                return None
-            content_type = resp.headers.get("content-type", "").split(";")[0].strip().lower()
-            if content_type not in _IMAGE_TYPES:
-                return None
-            content = _read_limited(resp, MAX_IMAGE_SIZE)
-            if content is None:
-                return None
+        result = _fetch_limited(client, img_url, MAX_IMAGE_SIZE, 15)
+        if result is None:
+            return None
+        content, resp = result
+        content_type = resp.headers.get("content-type", "").split(";")[0].strip().lower()
+        if content_type not in _IMAGE_TYPES:
+            return None
         ext = _IMAGE_EXTENSIONS.get(content_type, ".jpg")
         filename = f"{uuid.uuid4().hex}{ext}"
         filepath = f"{upload_dir}/{filename}"
@@ -177,16 +196,13 @@ def share_content(
             raise HTTPException(status_code=400, detail="不允许访问该 URL")
 
         try:
-            with httpx.Client(headers=_HEADERS, follow_redirects=True, timeout=20) as client:
-                with client.stream("GET", req.url) as resp:
-                    resp.raise_for_status()
-                    if not is_safe_http_url(str(resp.url)):
-                        raise HTTPException(status_code=400, detail="重定向目标不安全")
-                    body = _read_limited(resp, MAX_ARTICLE_SIZE)
-                    if body is None:
-                        raise HTTPException(status_code=413, detail="网页内容超过 5MB 限制")
-                    encoding = resp.encoding or "utf-8"
-                    html = body.decode(encoding, errors="replace")
+            with httpx.Client(headers=_HEADERS, follow_redirects=False, timeout=20) as client:
+                result = _fetch_limited(client, req.url, MAX_ARTICLE_SIZE, 20)
+                if result is None:
+                    raise HTTPException(status_code=400, detail="网页请求被安全策略拒绝")
+                body, resp = result
+                encoding = resp.encoding or "utf-8"
+                html = body.decode(encoding, errors="replace")
 
             # 提取正文 + 下载图片
             article_md, images_count = _extract_content_from_html(html, req.url, UPLOAD_DIR)

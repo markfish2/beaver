@@ -27,3 +27,18 @@ def is_safe_http_url(url: str) -> bool:
         if not ip.is_global:
             return False
     return True
+
+
+def is_safe_peer_response(response) -> bool:
+    """Verify the address actually connected by httpx to close the DNS-rebinding gap."""
+    stream = response.extensions.get("network_stream")
+    if stream is None:
+        return False
+    peer = stream.get_extra_info("server_addr") or stream.get_extra_info("peername")
+    if not peer:
+        return False
+    address = peer[0] if isinstance(peer, tuple) else peer
+    try:
+        return ipaddress.ip_address(address).is_global
+    except ValueError:
+        return False
