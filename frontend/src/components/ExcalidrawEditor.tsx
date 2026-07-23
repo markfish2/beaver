@@ -102,7 +102,8 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   type ScenePayload = { elements: SceneElements; appState: Partial<AppState>; files?: BinaryFiles };
 
   const [initialData, setInitialData] = useState<ExcalidrawInitialDataState | null>(null);
-  const [mobilePreview, setMobilePreview] = useState<{ url: string | null; error: boolean }>({ url: null, error: false });
+  const [mobilePreview, setMobilePreview] = useState<'idle' | 'ready' | 'error'>('idle');
+  const mobilePreviewRef = useRef<HTMLDivElement>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error' | 'conflict'>('idle');
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [localTitle, setLocalTitle] = useState(title);
@@ -397,18 +398,73 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   const pendingAppStateRef = useRef<AppState | null>(null);
 
   // 移动端只查看画布时生成隔离 SVG，不挂载完整 Excalidraw React UI。
-  // 这条路径绕开编辑器的菜单、Radix 子依赖和事件系统，仅复用场景导出引擎。
+  // SVG 直接挂载到 DOM，避免 iOS/部分 Android WebView 无法解码 Blob SVG。
+  // Beaver 笔记引用会先转换为普通矢量卡片，防止导出器渲染成黑色 iframe 占位块。
   useEffect(() => {
     if (!mobileViewOnly || !initialData) return;
     let cancelled = false;
-    let objectUrl: string | null = null;
+    const previewRoot = mobilePreviewRef.current;
+    setMobilePreview('idle');
+    previewRoot?.replaceChildren();
 
     const renderPreview = async () => {
       try {
-        const elements = (initialData.elements ?? [])
-          .filter(element => !element.isDeleted) as Parameters<typeof exportToSvg>[0]['elements'];
+        const sourceElements = (initialData.elements ?? []).filter(element => !element.isDeleted);
+        const elements = sourceElements.flatMap(element => {
+          if (element.type !== 'embeddable' || !element.link?.startsWith('beaver://')) {
+            return [element];
+          }
+
+          let noteTitle = '笔记引用';
+          let noteType = '笔记';
+          try {
+            const url = new URL(element.link);
+            noteTitle = url.searchParams.get('title') || element.customData?.title as string || noteTitle;
+            const type = url.searchParams.get('type');
+            noteType = type === 'memo' ? '随想' : type === 'document' ? '大纲' : '笔记';
+          } catch {
+            // 链接损坏时仍显示可识别的引用卡片，不中断整张画布。
+          }
+
+          const fontSize = Math.max(14, Math.min(24, element.height / 7));
+          const card = {
+            ...element,
+            type: 'rectangle',
+            link: null,
+            strokeColor: '#94a3b8',
+            backgroundColor: '#f8fafc',
+            fillStyle: 'solid',
+            roughness: 0,
+          };
+          const label = {
+            ...element,
+            id: `${element.id}-mobile-label`,
+            type: 'text',
+            x: element.x + 16,
+            y: element.y + 16,
+            width: Math.max(1, element.width - 32),
+            height: fontSize * 2.6,
+            angle: 0,
+            link: null,
+            strokeColor: '#334155',
+            backgroundColor: 'transparent',
+            roundness: null,
+            boundElements: null,
+            containerId: null,
+            originalText: `${noteTitle}\n${noteType}`,
+            text: `${noteTitle}\n${noteType}`,
+            fontSize,
+            fontFamily: 5,
+            textAlign: 'left',
+            verticalAlign: 'top',
+            lineHeight: 1.3,
+            autoResize: false,
+          };
+          return [card, label];
+        }) as Parameters<typeof exportToSvg>[0]['elements'];
+
         if (elements.length === 0) {
-          setMobilePreview({ url: null, error: false });
+          setMobilePreview('ready');
           return;
         }
         const svg = await exportToSvg({
@@ -420,21 +476,30 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           files: initialData.files ?? filesRef.current,
           exportPadding: 24,
         });
-        if (cancelled) return;
-        objectUrl = URL.createObjectURL(new Blob([svg.outerHTML], { type: 'image/svg+xml' }));
-        setMobilePreview({ url: objectUrl, error: false });
+        if (cancelled || !previewRoot) return;
+        svg.removeAttribute('width');
+        svg.removeAttribute('height');
+        svg.setAttribute('role', 'img');
+        svg.setAttribute('aria-label', title || '画布预览');
+        svg.style.display = 'block';
+        svg.style.width = '100%';
+        svg.style.height = '100%';
+        svg.style.maxWidth = '100%';
+        svg.style.maxHeight = '100%';
+        previewRoot.replaceChildren(svg);
+        setMobilePreview('ready');
       } catch (error) {
         console.error('Mobile canvas preview failed:', error);
-        if (!cancelled) setMobilePreview({ url: null, error: true });
+        if (!cancelled) setMobilePreview('error');
       }
     };
 
     void renderPreview();
     return () => {
       cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      previewRoot?.replaceChildren();
     };
-  }, [initialData, mobileViewOnly]);
+  }, [initialData, mobileViewOnly, title]);
 
   // 立即保存（绕过 debounce，用于页面关闭/组件卸载）
   const flushSave = useCallback(async () => {
@@ -739,23 +804,21 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   if (mobileViewOnly) {
     return (
       <div className="absolute inset-0 flex items-center justify-center overflow-auto bg-white dark:bg-gray-900 p-3">
-        {mobilePreview.error ? (
+        <div
+          ref={mobilePreviewRef}
+          className="absolute inset-3 flex items-center justify-center"
+          aria-hidden={mobilePreview !== 'ready'}
+        />
+        {mobilePreview === 'error' ? (
           <div className="flex flex-col items-center gap-2 px-6 text-center">
             <p className="text-sm text-gray-600 dark:text-gray-300">画布预览生成失败</p>
             <p className="text-xs text-gray-400 dark:text-gray-500">请稍后重试，或在桌面端打开此画布</p>
           </div>
-        ) : mobilePreview.url ? (
-          <img
-            src={mobilePreview.url}
-            alt={title || '画布预览'}
-            className="block max-w-full max-h-full object-contain select-none"
-            draggable={false}
-          />
-        ) : initialData?.elements?.length ? (
+        ) : mobilePreview === 'idle' && initialData?.elements?.length ? (
           <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-        ) : (
+        ) : mobilePreview === 'ready' && !initialData?.elements?.length ? (
           <p className="text-sm text-gray-400 dark:text-gray-500">这是一个空画布</p>
-        )}
+        ) : null}
       </div>
     );
   }
