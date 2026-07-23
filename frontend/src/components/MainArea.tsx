@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, Fragment, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, Fragment, useRef, useCallback, lazy } from 'react';
 import type { SetStateAction } from 'react';
 import { Menu, ChevronUp, ChevronDown } from 'lucide-react';
 import Breadcrumbs from './Breadcrumbs';
@@ -6,7 +6,6 @@ import NodeItem from './NodeItem';
 import MobileToolbar from './MobileToolbar';
 import { useMobileToolbar } from '../context/MobileToolbarContext';
 import { useFontSettings } from './FontSettings';
-import MindMapView from './MindMapView';
 import LoadingSkeleton from './LoadingSkeleton';
 import { SaveStatusIndicator } from './SaveStatusIndicator';
 import RecoveryDialog from './RecoveryDialog';
@@ -14,16 +13,11 @@ import DropIndicator from './DropIndicator';
 import TableOfContents from './TableOfContents';
 import DocumentSettingsMenu from './DocumentSettingsMenu';
 import DiaryDateBar from './DiaryDateBar';
-import MarkdownNoteEditor from './MarkdownNoteEditor';
-import { ExcalidrawEditor } from './ExcalidrawEditor';
-import MemoHome from './MemoHome';
 import UserProfileEditor from './UserProfileEditor';
 import TokenPanel from './TokenPanel';
 import TrashPanel from './TrashPanel';
 import PasswordPanel from './PasswordPanel';
 import AISettingsPanel from './AISettingsPanel';
-import AIChatMainView from './AIChatMainView';
-import ProjectView from './ProjectView';
 import { useUserView } from '../context/UserViewContext';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { getNodes, getDocument, updateNode, updateDocument, deleteNode, createNode, createNodesBatch, uploadFile, batchUpdateNodes, batchMoveNodes, batchDeleteNodes, moveNode, getDiaryDayDates, getOrCreateDayNode, getMonthlyDiary } from '../api/data';
@@ -41,6 +35,13 @@ import { saveViewState, saveScrollPosition, loadScrollPosition } from '../utils/
 import { getErrorMessage } from '../utils/errors';
 import { flattenParsedNodes, parseMarkdown } from './mainAreaClipboard';
 import type { ParsedNode } from './mainAreaClipboard';
+
+const MindMapView = lazy(() => import('./MindMapView'));
+const MarkdownNoteEditor = lazy(() => import('./MarkdownNoteEditor'));
+const ExcalidrawEditor = lazy(() => import('./ExcalidrawEditor').then(module => ({ default: module.ExcalidrawEditor })));
+const AIChatMainView = lazy(() => import('./AIChatMainView'));
+const ProjectView = lazy(() => import('./ProjectView'));
+const MemoHome = lazy(() => import('./MemoHome'));
 
 interface SerializedNode {
   content: string;

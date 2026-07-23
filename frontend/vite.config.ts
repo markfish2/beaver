@@ -8,11 +8,8 @@ export default defineConfig({
       output: {
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-markdown': ['react-markdown', 'remark-gfm', 'remark-breaks', 'rehype-raw'],
           'vendor-lucide': ['lucide-react'],
           'vendor-axios': ['axios'],
-          'vendor-excalidraw': ['@excalidraw/excalidraw'],
-          'vendor-codemirror': ['codemirror', '@codemirror/lang-markdown', '@codemirror/language', '@codemirror/state', '@codemirror/view', '@codemirror/commands', '@codemirror/search', '@lezer/highlight'],
         }
       }
     }

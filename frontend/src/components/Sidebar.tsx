@@ -3,7 +3,6 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createDocument, deleteDocument, updateDocument, copyDocument, getNodes, createMemo, uploadFile, search as apiSearch, getTodos, createTodo, updateTodo, getMonthlyDiary, getOrCreateDayNode } from '../api/data';
 import type { Document as DocType, SearchResultItem, Todo } from '../api/data';
 import { createExcalidrawDocument, getExcalidrawDataFresh } from '../api/excalidraw';
-import { exportToBlob } from '@excalidraw/excalidraw';
 import { saveStateManager } from '../utils/saveStateManager';
 import { nodesToMemoMarkdown } from '../utils/convertNode';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -2090,6 +2089,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                           (el: { isDeleted?: boolean }) => !el.isDeleted
                         );
                         if (visibleElements.length > 0) {
+                          const { exportToBlob } = await import('@excalidraw/excalidraw');
                           const pngBlob = await exportToBlob({
                             elements: visibleElements,
                             appState: {},
