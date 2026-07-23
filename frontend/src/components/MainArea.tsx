@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, Fragment, useRef, useCallback, lazy } from 'react';
 import type { SetStateAction } from 'react';
 import { Menu } from 'lucide-react';
-import Breadcrumbs from './Breadcrumbs';
 import NodeItem from './NodeItem';
 import MobileToolbar from './MobileToolbar';
 import { useMobileToolbar } from '../context/MobileToolbarContext';
@@ -2331,14 +2330,12 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     return <LoadingSkeleton />;
   }
 
-  const breadcrumbs = [
-    { id: 'root', title: 'memo' },
-    ...(currentDoc ? [{ id: currentDoc.id, title: currentDoc.title }] : [])
-  ];
-
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans h-screen">
-      {!document.documentElement.dataset.mobileLayout && currentDoc?.type !== 'note' && (
+      {!document.documentElement.dataset.mobileLayout
+        && currentDoc?.type !== 'note'
+        && currentDoc?.type !== 'excalidraw'
+        && (
           <div className="flex items-center justify-between px-6 bg-gray-50/80 dark:bg-gray-800/50" style={{ minHeight: '3rem', paddingTop: isMobile ? 'env(safe-area-inset-top)' : undefined, boxShadow: '0 2px 8px -3px rgba(0,0,0,0.08)' }}>
             <div className="flex items-center flex-wrap gap-1">
           {/* 移动端菜单按钮 */}
@@ -2354,19 +2351,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
               <Menu size={16} />
             </button>
           )}
-          
-          <Breadcrumbs items={breadcrumbs} onNavigate={(id) => {
-            if (id === 'root') {
-              setSearchQuery('');
-              setZoomedNodeId(null);
-              setTagFilter(null);
-              navigate('/');
-            } else if (currentDoc && id === currentDoc.id) {
-              setZoomedNodeId(null);
-              setTagFilter(null);
-            }
-          }} />
-          
           {/* 聚焦层级面包屑 */}
           {zoomedNodeId && (() => {
             const getAncestors = (nodeId: string): Node[] => {
@@ -2389,9 +2373,11 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             
             return ancestors.map((ancestor, index) => (
               <Fragment key={ancestor.id}>
-                <span className="text-sm text-gray-400 dark:text-gray-500 mx-1">
-                  {'>'}
-                </span>
+                {index > 0 && (
+                  <span className="text-sm text-gray-400 dark:text-gray-500 mx-1">
+                    {'>'}
+                  </span>
+                )}
                 <span 
                   className={`text-sm cursor-pointer ${
                     index === ancestors.length - 1 
