@@ -48,12 +48,13 @@ SyntaxHighlighter.registerLanguage('go', go);
 SyntaxHighlighter.registerLanguage('rust', rust);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
 import { Pencil, Eye, Save, Columns2, Copy, CheckCheck, Download, Share2 } from 'lucide-react';
-import { getNodes, createNode, updateNode, uploadFile, uploadFromUrl, getMemoTags, getDocuments, updateDocument } from '../api/data';
+import { getNodes, createNode, updateNode, uploadFile, getMemoTags, getDocuments, updateDocument } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
 import type { Document } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts } from '../utils/markdownPreprocess';
-import { getPasteMarkdown, extractExternalImageUrls } from '../utils/htmlToMarkdown';
+import { getPasteMarkdown } from '../utils/htmlToMarkdown';
+import { localizeMarkdownImages } from '../utils/markdownImageUpload';
 import { useIsDark } from '../hooks/useIsDark';
 import MarkdownEditor from './MarkdownEditor';
 import type { MarkdownEditorHandle } from './MarkdownEditor';
@@ -321,21 +322,20 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
       editorRef.current?.insertText(md);
       const newContent = editorRef.current?.getValue() ?? content;
       scheduleSave(newContent);
-      const externalUrls = extractExternalImageUrls(md);
-      if (externalUrls.length > 0) {
+      if (md.includes('![')) {
         setUploading(true);
-        Promise.allSettled(externalUrls.map(async (url) => {
-          try { const res = await uploadFromUrl(url); return { originalUrl: url, localUrl: res.file_path.replace(/^\/api/, '') }; }
-          catch { return null; }
-        })).then((results) => {
+        try {
+          const result = await localizeMarkdownImages(md);
           const view = editorRef.current?.view;
-          if (!view) { setUploading(false); return; }
+          if (!view) return;
           let updated = view.state.doc.toString();
-          for (const r of results) { if (r && r.status === 'fulfilled' && r.value) updated = updated.split(r.value.originalUrl).join(r.value.localUrl); }
+          if (result.markdown !== md) updated = updated.replace(md, result.markdown);
           if (updated !== view.state.doc.toString()) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: updated } });
           scheduleSave(updated);
+          if (result.failedUrls.length > 0) alert(`${result.failedUrls.length} 张图片未能自动上传，已保留原地址`);
+        } finally {
           setUploading(false);
-        });
+        }
       }
     }
   }, [handleFileUpload, scheduleSave, content]);

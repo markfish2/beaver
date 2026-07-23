@@ -298,19 +298,3 @@ export function getPasteMarkdown(clipboardData: DataTransfer): string | null {
   const md = htmlToMarkdown(html);
   return md || null;
 }
-
-/**
- * 从 Markdown 中提取所有外部图片 URL（排除已经是本地 /uploads/ 的）
- */
-export function extractExternalImageUrls(markdown: string): string[] {
-  const urls: string[] = [];
-  const regex = /!\[([^\]]*)\]\(([^)]+)\)/g;
-  let match;
-  while ((match = regex.exec(markdown)) !== null) {
-    const url = match[2];
-    if (url && !url.startsWith('/uploads/') && !url.startsWith('data:')) {
-      urls.push(url);
-    }
-  }
-  return [...new Set(urls)];
-}

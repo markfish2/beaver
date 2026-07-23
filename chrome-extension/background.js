@@ -29,15 +29,26 @@ function notify(title, message) {
   setTimeout(() => { chrome.action.setBadgeText({ text: '' }); }, 3000);
 }
 
-// Upload image from URL to attachment API, returns markdown image string
+function imageExtension(contentType) {
+  const extensions = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+    'image/avif': 'avif'
+  };
+  return extensions[(contentType || '').toLowerCase()] || 'png';
+}
+
+// Upload image from URL to attachment API, returns its local path.
 async function uploadImageFromUrl(imageUrl, base, token) {
-  const resp = await fetch(imageUrl);
+  const resp = await fetch(imageUrl, { credentials: 'include' });
   if (!resp.ok) throw new Error(`下载图片失败 HTTP ${resp.status}`);
   const blob = await resp.blob();
+  if (!blob.type.startsWith('image/')) throw new Error('远程地址返回的不是图片');
 
-  // Derive filename from URL
-  const urlPath = new URL(imageUrl, base).pathname;
-  const ext = urlPath.split('.').pop()?.split('?')[0] || 'jpg';
+  // Use the response MIME type instead of an unreliable URL suffix.
+  const ext = imageExtension(blob.type);
   const filename = `image.${ext}`;
 
   const form = new FormData();
@@ -51,6 +62,43 @@ async function uploadImageFromUrl(imageUrl, base, token) {
   if (!uploadRes.ok) throw new Error(`上传失败 HTTP ${uploadRes.status}`);
   const data = await uploadRes.json();
   return data.file_path || data.url || data.path;
+}
+
+async function localizeMarkdownImages(markdown, pageUrl, base, token) {
+  const imageRegex = /!\[[^\]]*\]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/g;
+  const images = [];
+  const seen = new Set();
+  let match;
+  while ((match = imageRegex.exec(markdown)) !== null) {
+    const originalUrl = match[1].replace(/^<|>$/g, '');
+    if (!originalUrl || originalUrl.startsWith('/uploads/') || seen.has(originalUrl)) continue;
+    let resolvedUrl = originalUrl;
+    if (!/^(https?:|data:|blob:)/i.test(resolvedUrl)) {
+      try {
+        resolvedUrl = new URL(resolvedUrl, pageUrl).href;
+      } catch {
+        continue;
+      }
+    }
+    seen.add(originalUrl);
+    images.push({ originalUrl, resolvedUrl });
+  }
+
+  const results = await Promise.allSettled(
+    images.map(image => uploadImageFromUrl(image.resolvedUrl, base, token))
+  );
+  let localized = markdown;
+  let uploadedCount = 0;
+  const failedUrls = [];
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      localized = localized.split(images[index].originalUrl).join(result.value);
+      uploadedCount += 1;
+    } else {
+      failedUrls.push(images[index].originalUrl);
+    }
+  });
+  return { markdown: localized, uploadedCount, failedUrls };
 }
 
 async function createMemo(content, base, token) {
@@ -276,35 +324,13 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       const title = extracted.title || '未命名笔记';
       let markdown = extracted.markdown || '';
 
-      // Upload images
-      const imgRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
-      let match;
-      const imageUploads = [];
-      while ((match = imgRegex.exec(markdown)) !== null) {
-        let imgUrl = match[2];
-        // Skip already-uploaded or data URIs
-        if (imgUrl.startsWith('/uploads/') || imgUrl.startsWith('data:')) continue;
-        // Resolve relative URLs to absolute
-        if (!imgUrl.startsWith('http')) {
-          try {
-            imgUrl = new URL(imgUrl, tab.url || info.pageUrl || 'https://example.com').href;
-          } catch { continue; }
-        }
-        imageUploads.push({ full: match[0], url: imgUrl });
-      }
-
-      for (let i = 0; i < imageUploads.length; i += 5) {
-        const batch = imageUploads.slice(i, i + 5);
-        const imgResults = await Promise.allSettled(
-          batch.map(img => uploadImageFromUrl(img.url, base, apiToken))
-        );
-        for (let j = 0; j < batch.length; j++) {
-          if (imgResults[j].status === 'fulfilled') {
-            // Only replace the URL part, preserve surrounding markdown/link structure
-            markdown = markdown.split(batch[j].url).join(imgResults[j].value);
-          }
-        }
-      }
+      const imageResult = await localizeMarkdownImages(
+        markdown,
+        tab.url || info.pageUrl || '',
+        base,
+        apiToken
+      );
+      markdown = imageResult.markdown;
 
       const doc = await createDocument(title, base, apiToken);
       // 普通笔记只读取第一个根节点，所有内容放在一个节点里
@@ -314,7 +340,10 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         sort_order: 0,
       }], base, apiToken);
 
-      notify('Beaver', `已保存: ${title} ✓`);
+      const imageMessage = imageResult.failedUrls.length > 0
+        ? `，${imageResult.failedUrls.length} 张图片上传失败`
+        : imageResult.uploadedCount > 0 ? `，${imageResult.uploadedCount} 张图片已本地化` : '';
+      notify('Beaver', `已保存: ${title}${imageMessage} ✓`);
     } catch (err) {
       notify('Beaver', `保存失败: ${err.message}`);
     }
@@ -363,17 +392,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       try {
         let content = msg.text || '';
         // Upload each image and append as markdown
+        let uploadedCount = 0;
+        let failedCount = 0;
         for (const imageUrl of (msg.images || [])) {
           try {
             const filePath = await uploadImageFromUrl(imageUrl, auth.base, auth.apiToken);
             content += (content ? '\n\n' : '') + `![图片](${filePath})`;
+            uploadedCount += 1;
           } catch {
-            // Skip failed images, still save the rest
+            failedCount += 1;
           }
         }
         if (!content.trim()) { sendResponse({ ok: false, error: '没有可保存的内容' }); return; }
         await createMemo(content, auth.base, auth.apiToken);
-        sendResponse({ ok: true });
+        sendResponse({ ok: true, uploadedCount, failedCount });
       } catch (err) {
         sendResponse({ ok: false, error: err.message });
       }
@@ -392,33 +424,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         const title = msg.title || '未命名笔记';
         const pageUrl = msg.pageUrl || '';
 
-        // Extract image URLs from markdown and upload them
-        const imgRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
-        let match;
-        const imageUploads = [];
-        while ((match = imgRegex.exec(markdown)) !== null) {
-          let imgUrl = match[2];
-          if (imgUrl.startsWith('/uploads/') || imgUrl.startsWith('data:')) continue;
-          // Resolve relative URLs
-          if (!imgUrl.startsWith('http') && pageUrl) {
-            try { imgUrl = new URL(imgUrl, pageUrl).href; } catch { continue; }
-          }
-          imageUploads.push({ full: match[0], url: imgUrl });
-        }
-
-        // Upload images in parallel (max 5 concurrent)
-        for (let i = 0; i < imageUploads.length; i += 5) {
-          const batch = imageUploads.slice(i, i + 5);
-          const results = await Promise.allSettled(
-            batch.map(img => uploadImageFromUrl(img.url, base, apiToken))
-          );
-          for (let j = 0; j < batch.length; j++) {
-            if (results[j].status === 'fulfilled') {
-              // Only replace the URL part, preserve surrounding markdown/link structure
-              markdown = markdown.split(batch[j].url).join(results[j].value);
-            }
-          }
-        }
+        const imageResult = await localizeMarkdownImages(markdown, pageUrl, base, apiToken);
+        markdown = imageResult.markdown;
 
         // Create document
         const doc = await createDocument(title, base, apiToken);
@@ -430,7 +437,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           sort_order: 0,
         }], base, apiToken);
 
-        sendResponse({ ok: true, documentId: doc.id });
+        sendResponse({
+          ok: true,
+          documentId: doc.id,
+          uploadedCount: imageResult.uploadedCount,
+          failedCount: imageResult.failedUrls.length
+        });
       } catch (err) {
         sendResponse({ ok: false, error: err.message });
       }

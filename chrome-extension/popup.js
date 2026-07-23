@@ -5,6 +5,7 @@ const $ = (sel) => document.querySelector(sel);
 // State: detected content from the page
 let detectedText = '';
 let detectedImages = []; // array of image URLs
+let detectedPageUrl = '';
 let currentMode = 'memo'; // 'memo' or 'doc'
 
 // Normalize API URL: strip trailing slashes and trailing /api
@@ -95,6 +96,7 @@ async function loadSelection() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) return;
+    detectedPageUrl = tab.url || '';
 
     // Inject script to get selection text + images within selection
     const results = await chrome.scripting.executeScript({
@@ -180,7 +182,7 @@ $('#btn-save').addEventListener('click', () => {
 
   let msg;
   if (detectedImages.length > 0) {
-    msg = { type: 'saveRichMemo', text: detectedText, images: detectedImages };
+    msg = { type: 'saveRichMemo', text: detectedText, images: detectedImages, pageUrl: detectedPageUrl };
   } else {
     msg = { type: 'saveMemo', content: detectedText };
   }
@@ -188,10 +190,11 @@ $('#btn-save').addEventListener('click', () => {
   chrome.runtime.sendMessage(msg, (res) => {
     btn.textContent = '保存到 Memo';
     if (res?.ok) {
-      const count = detectedImages.length;
-      const label = count > 0
-        ? `已保存，${count} 张图片 ✓`
-        : '已保存 ✓';
+      const uploadedCount = res.uploadedCount || 0;
+      const failedCount = res.failedCount || 0;
+      const label = failedCount > 0
+        ? `已保存，${uploadedCount} 张图片成功，${failedCount} 张失败`
+        : uploadedCount > 0 ? `已保存，${uploadedCount} 张图片 ✓` : '已保存 ✓';
       showToast($('#save-toast'), label, 'success');
       setTimeout(() => {
         detectedText = '';
@@ -366,7 +369,14 @@ $('#btn-extract').addEventListener('click', async () => {
       btn.textContent = '提取正文并保存';
       btn.disabled = false;
       if (res?.ok) {
-        showToast(toast, `已保存为普通笔记 ✓`, 'success');
+        const uploadedCount = res.uploadedCount || 0;
+        const failedCount = res.failedCount || 0;
+        const message = failedCount > 0
+          ? `笔记已保存，${uploadedCount} 张图片成功，${failedCount} 张失败`
+          : uploadedCount > 0
+            ? `已保存为普通笔记，${uploadedCount} 张图片已本地化 ✓`
+            : '已保存为普通笔记 ✓';
+        showToast(toast, message, failedCount > 0 ? 'error' : 'success');
       } else {
         showToast(toast, res?.error || '保存失败', 'error');
       }

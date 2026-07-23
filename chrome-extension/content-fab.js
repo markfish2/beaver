@@ -181,7 +181,12 @@
         markdown: markdown,
         pageUrl: location.href,
       }, function(res) {
-        if (res && res.ok) showToast('已保存: ' + (title || '笔记') + ' ✓', '#059669');
+        if (res && res.ok) {
+          var imageStatus = res.failedCount > 0
+            ? '，' + (res.uploadedCount || 0) + ' 张图片成功，' + res.failedCount + ' 张失败'
+            : res.uploadedCount > 0 ? '，' + res.uploadedCount + ' 张图片已本地化' : '';
+          showToast('已保存: ' + (title || '笔记') + imageStatus + ' ✓', res.failedCount > 0 ? '#dc2626' : '#059669');
+        }
         else showToast('保存失败: ' + (res && res.error || '未知错误'), '#dc2626');
       });
     } catch(err) {

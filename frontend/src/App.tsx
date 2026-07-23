@@ -20,26 +20,6 @@ const Sidebar = lazy(() => import('./components/Sidebar'));
 const MainArea = lazy(() => import('./components/MainArea'));
 const MobileLayout = lazy(() => import('./components/mobile/MobileLayout'));
 
-// Protected Route Component
-const ProtectedRoute = ({ children }: { children: ReactNode }) => {
-  const { isAuthenticated, isLoading, isSetupRequired } = useAuth();
-  const location = useLocation();
-
-  if (isLoading) {
-    return <div className="h-screen flex items-center justify-center bg-white dark:bg-gray-900 text-gray-900 dark:text-white">Loading...</div>;
-  }
-
-  if (isSetupRequired) {
-    return <Navigate to="/setup" replace />;
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  return <>{children}</>;
-};
-
 const AppLayout = ({ children }: { children: ReactNode }) => {
   const [isMobile, setIsMobile] = useState(false);
   const sidebarOpenRef = useRef(false);
@@ -89,7 +69,8 @@ function MainAreaWithUserView() {
 
 function AppRoutes() {
   useRetryFailedPreviews();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading, isSetupRequired } = useAuth();
+  const location = useLocation();
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -109,39 +90,46 @@ function AppRoutes() {
     }
   }, [isAuthenticated]);
 
+  const isPublicRoute = location.pathname === '/setup'
+    || location.pathname === '/login'
+    || location.pathname === '/share'
+    || location.pathname.startsWith('/s/');
+
+  if (isPublicRoute) {
+    return (
+      <Suspense fallback={<PageLoading />}>
+        <Routes>
+          <Route path="/setup" element={<SetupPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/s/:shareToken" element={<SharePage />} />
+          <Route path="/share" element={<ShareTargetPage />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
+  if (isLoading) {
+    return <PageLoading />;
+  }
+
+  if (isSetupRequired) {
+    return <Navigate to="/setup" replace />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
   return (
-    <Suspense fallback={<PageLoading />}>
-      <Routes>
-        <Route path="/setup" element={<SetupPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/s/:shareToken" element={<SharePage />} />
-        <Route path="/share" element={<ShareTargetPage />} />
-
-        <Route path="/" element={
-          <ProtectedRoute>
-            <AppLayout>
-              <MainAreaWithUserView />
-            </AppLayout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/d/:documentId" element={
-          <ProtectedRoute>
-            <AppLayout>
-              <MainAreaWithUserView />
-            </AppLayout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/search" element={
-          <ProtectedRoute>
-            <AppLayout>
-              <SearchResultsPage />
-            </AppLayout>
-          </ProtectedRoute>
-        } />
-      </Routes>
-    </Suspense>
+    <AppLayout>
+      <Suspense fallback={<PageLoading />}>
+        <Routes>
+          <Route index element={<MainAreaWithUserView />} />
+          <Route path="/d/:documentId" element={<MainAreaWithUserView />} />
+          <Route path="/search" element={<SearchResultsPage />} />
+        </Routes>
+      </Suspense>
+    </AppLayout>
   );
 }
 

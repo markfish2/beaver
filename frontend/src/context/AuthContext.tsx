@@ -1,7 +1,7 @@
-import { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef, ReactNode } from 'react';
 import { checkSetupStatus, getMe, login as apiLogin, setupAdmin as apiSetupAdmin } from '../api/auth';
 import type { User } from '../api/auth';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 interface AuthContextType {
   user: User | null;
@@ -22,9 +22,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSetupRequired, setIsSetupRequired] = useState<boolean | null>(null);
+  const initialCheckStartedRef = useRef(false);
 
   const navigate = useNavigate();
-  const location = useLocation();
 
   const checkStatus = useCallback(async () => {
     setIsLoading(true);
@@ -33,7 +33,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsSetupRequired(status.setup_required);
 
       if (status.setup_required) {
-        if (location.pathname !== '/setup') {
+        if (window.location.pathname !== '/setup') {
           navigate('/setup');
         }
         setIsLoading(false);
@@ -58,11 +58,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [location.pathname, navigate]);
+  }, [navigate]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void checkStatus(), 0);
-    return () => window.clearTimeout(timer);
+    if (initialCheckStartedRef.current) return;
+    initialCheckStartedRef.current = true;
+    void checkStatus();
   }, [checkStatus]);
 
   const login = useCallback(async (username: string, password: string) => {

@@ -5,7 +5,7 @@ import type { Document as DocType, SearchResultItem, Todo } from '../api/data';
 import { createExcalidrawDocument, getExcalidrawDataFresh } from '../api/excalidraw';
 import { saveStateManager } from '../utils/saveStateManager';
 import { nodesToMemoMarkdown } from '../utils/convertNode';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useDocuments } from '../context/DocumentContext';
 import { useSearch } from '../context/SearchContext';
@@ -32,6 +32,8 @@ interface SidebarProps {
 }
 
 const SIDEBAR_WIDTH_KEY = 'sidebar_width';
+const SIDEBAR_PANEL_STATE_KEY = 'sidebar_panel_state';
+const SIDEBAR_FOLDERS_STATE_KEY = 'sidebar_folders_state';
 const ICON_RAIL_WIDTH = 48;
 
 const DEFAULT_PANEL_WIDTH = 212;  // 260 - 48 = 212 (total visual width stays 260)
@@ -41,13 +43,26 @@ const navigationNonce = () => Date.now();
 
 type ViewMode = 'diary' | 'all' | 'starred' | 'recent' | 'memo' | 'user' | 'ai' | 'projects';
 type UserSubView = 'profile' | 'token' | 'ai' | 'trash' | 'password';
+const VIEW_MODES: ViewMode[] = ['diary', 'all', 'starred', 'recent', 'memo', 'user', 'ai', 'projects'];
 
 const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: SidebarProps) => {
   const { documents, isLoading, refreshDocuments, updateDocumentLocal, moveDocument, addDocument, removeDocument } = useDocuments();
   const { searchQuery, setSearchQuery } = useSearch();
-  const [isExpanded, setIsExpanded] = useState<Record<string, boolean>>({});
+  const [isExpanded, setIsExpanded] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(SIDEBAR_FOLDERS_STATE_KEY) || '{}');
+    } catch {
+      return {};
+    }
+  });
   const [, setShowUserMenu] = useState(false);
-  const [contentExpanded, setContentExpanded] = useState(false); // 默认关闭
+  const [contentExpanded, setContentExpanded] = useState(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(SIDEBAR_PANEL_STATE_KEY) || '{}').expanded === true;
+    } catch {
+      return false;
+    }
+  });
   const [isSearchMode, setIsSearchMode] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
@@ -75,11 +90,36 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   }, [searchQuery, isSearchMode]);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     try {
+      const savedMode: unknown = JSON.parse(sessionStorage.getItem(SIDEBAR_PANEL_STATE_KEY) || '{}').viewMode;
+      if (typeof savedMode === 'string' && VIEW_MODES.includes(savedMode as ViewMode)) {
+        return savedMode as ViewMode;
+      }
       return localStorage.getItem('selectedProjectId') ? 'projects' : 'diary';
-    } catch { return 'diary'; }
+    } catch {
+      return 'diary';
+    }
   });
   const { userSubView, setUserSubView: setUserSubViewContext, activeConvId, setActiveConvId, selectedProjectId, setSelectedProjectId } = useUserView();
   const [showNewMenu, setShowNewMenu] = useState(false);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(SIDEBAR_PANEL_STATE_KEY, JSON.stringify({
+        expanded: contentExpanded,
+        viewMode,
+      }));
+    } catch {
+      // 会话存储不可用时仍保持当前组件内状态
+    }
+  }, [contentExpanded, viewMode]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(SIDEBAR_FOLDERS_STATE_KEY, JSON.stringify(isExpanded));
+    } catch {
+      // 会话存储不可用时仍保持当前组件内状态
+    }
+  }, [isExpanded]);
 
   // 暗色模式状态
   const [isDark, setIsDark] = useState(() => {
@@ -200,7 +240,11 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   const resizingRef = useRef(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { documentId } = useParams();
+  const location = useLocation();
+  const documentId = useMemo(() => {
+    const match = location.pathname.match(/^\/d\/([^/]+)$/);
+    return match ? decodeURIComponent(match[1]) : undefined;
+  }, [location.pathname]);
 
   // Fetch pending tasks when diary view is active
   const fetchPendingTasks = useCallback(async () => {
@@ -930,7 +974,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
               {!searchQuery.trim() && viewMode !== 'starred' && isFolder && isExpanded[doc.id] && (
                 <div
                   className="relative pl-2 border-l border-gray-200 dark:border-gray-600"
-                  style={{ marginLeft: `${level * 12 + 11}px` }}
+                  style={{ marginLeft: `calc(${level * 12 + 4}px + 0.4375rem)` }}
                 >
                   {renderFileTree(doc.id, level + 1)}
                 </div>

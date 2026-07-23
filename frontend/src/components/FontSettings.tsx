@@ -8,6 +8,7 @@ import { showToast } from '../utils/toast';
 type FontSize = 'small' | 'medium' | 'large';
 type FontFamily = 'system' | 'yahei' | 'pingfang' | 'kaiti' | 'fangsong' | 'syst';
 type Theme = 'system' | 'minimal' | 'warm' | 'dark' | 'geek';
+type SelectableTheme = Exclude<Theme, 'dark'>;
 
 interface FontSettings {
   fontSize: FontSize;
@@ -16,9 +17,9 @@ interface FontSettings {
 }
 
 const FONT_SIZE_MAP: Record<FontSize, string> = {
-  small: '14px',
-  medium: '16px',
-  large: '18px'
+  small: '12px',
+  medium: '14px',
+  large: '16px'
 };
 
 const FONT_FAMILY_MAP: Record<FontFamily, string> = {
@@ -113,6 +114,8 @@ const THEMES: Record<Theme, {
     isDark: false
   }
 };
+
+const SELECTABLE_THEMES: SelectableTheme[] = ['system', 'minimal', 'warm', 'geek'];
 
 const STORAGE_KEY = 'outline-font-settings';
 
@@ -307,7 +310,7 @@ export const FontSettingsPanel = ({
             </label>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {(Object.keys(THEMES) as Theme[]).map((theme) => (
+            {SELECTABLE_THEMES.map((theme) => (
               <button
                 key={theme}
                 onClick={() => setTheme(theme)}
@@ -324,7 +327,6 @@ export const FontSettingsPanel = ({
                     {theme === 'system' && '随设备自动切换'}
                     {theme === 'minimal' && '温和、克制的纸张感'}
                     {theme === 'warm' && '低刺激的暖色阅读'}
-                    {theme === 'dark' && '柔和深色、降低眩光'}
                     {theme === 'geek' && '清晰冷静的雾蓝层次'}
                   </div>
                 </div>
@@ -409,7 +411,7 @@ export const FontSettingsPanel = ({
                 </label>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {(Object.keys(THEMES) as Theme[]).map((theme) => (
+                {SELECTABLE_THEMES.map((theme) => (
                   <button
                     key={theme}
                     onClick={() => setTheme(theme)}
@@ -426,7 +428,6 @@ export const FontSettingsPanel = ({
                         {theme === 'system' && '随设备自动切换'}
                         {theme === 'minimal' && '温和、克制的纸张感'}
                         {theme === 'warm' && '低刺激的暖色阅读'}
-                        {theme === 'dark' && '柔和深色、降低眩光'}
                         {theme === 'geek' && '清晰冷静的雾蓝层次'}
                       </div>
                     </div>

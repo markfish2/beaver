@@ -1,11 +1,12 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Send, Image, Paperclip, ChevronDown, Mic, Maximize2, X, Sparkles } from 'lucide-react';
-import { createMemo, uploadFile, uploadAudio, uploadFromUrl, getMemoTags, createTodo, getAIConfigs } from '../api/data';
+import { createMemo, uploadFile, uploadAudio, getMemoTags, createTodo, getAIConfigs } from '../api/data';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import VoiceRecordCard from './VoiceRecordCard';
 import AIChatPanel from './AIChatPanel';
-import { getPasteMarkdown, extractExternalImageUrls } from '../utils/htmlToMarkdown';
+import { getPasteMarkdown } from '../utils/htmlToMarkdown';
+import { localizeMarkdownImages } from '../utils/markdownImageUpload';
 import { showToast } from '../utils/toast';
 import MarkdownEditor from './MarkdownEditor';
 import type { MarkdownEditorHandle } from './MarkdownEditor';
@@ -202,23 +203,25 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
       active?.insertText(md);
       const newContent = active?.getValue() ?? content;
       setContent(newContent);
-      const externalUrls = extractExternalImageUrls(md);
-      if (externalUrls.length > 0) {
+      if (md.includes('![')) {
         setUploading(true);
-        Promise.allSettled(externalUrls.map(async (url) => {
-          try { const res = await uploadFromUrl(url); return { originalUrl: url, localUrl: res.file_path.replace(/^\/api/, '') }; }
-          catch { return null; }
-        })).then((results) => {
+        try {
+          const result = await localizeMarkdownImages(md);
           const view = active?.view;
-          if (!view) { setUploading(false); return; }
+          if (!view) return;
           let updated = view.state.doc.toString();
-          for (const r of results) { if (r && r.status === 'fulfilled' && r.value) updated = updated.split(r.value.originalUrl).join(r.value.localUrl); }
+          const localizedFragment = result.markdown;
+          if (localizedFragment !== md) updated = updated.replace(md, localizedFragment);
           if (updated !== view.state.doc.toString()) {
             view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: updated } });
             setContent(updated);
           }
+          if (result.failedUrls.length > 0) {
+            showToast(`${result.failedUrls.length} 张图片未能本地化`, 'error');
+          }
+        } finally {
           setUploading(false);
-        });
+        }
       }
     }
   }, [handleFileUpload, content, showExpandEditor]);

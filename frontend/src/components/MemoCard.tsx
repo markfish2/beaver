@@ -66,6 +66,8 @@ import AudioPlayer from './AudioPlayer';
 import AIChatPanel from './AIChatPanel';
 import { useIsDark } from '../hooks/useIsDark';
 import { getMemoPalette, getMemoPaletteStyle, MEMO_COLOR_OPTIONS, MEMO_TAG_COLORS, type MemoCardPalette } from './memoCardTheme';
+import { getPasteMarkdown } from '../utils/htmlToMarkdown';
+import { localizeMarkdownImages } from '../utils/markdownImageUpload';
 
 function tagColorIndex(tag: string): number {
   let h = 0;
@@ -776,6 +778,43 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
     }
   }, [insertAtCursor]);
 
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    for (const item of Array.from(e.clipboardData.items)) {
+      if (item.kind !== 'file') continue;
+      e.preventDefault();
+      const file = item.getAsFile();
+      if (file) await handleFileUpload(file, item.type.startsWith('image/'));
+      return;
+    }
+
+    const markdown = getPasteMarkdown(e.clipboardData);
+    if (!markdown) return;
+
+    e.preventDefault();
+    const active = showExpandEditor ? expandEditorRef.current : editorRef.current;
+    active?.insertText(markdown);
+    setEditContent(active?.getValue() ?? editContent);
+
+    if (!markdown.includes('![')) return;
+    setUploading(true);
+    try {
+      const result = await localizeMarkdownImages(markdown);
+      const view = active?.view;
+      if (!view) return;
+      let updated = view.state.doc.toString();
+      if (result.markdown !== markdown) updated = updated.replace(markdown, result.markdown);
+      if (updated !== view.state.doc.toString()) {
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: updated } });
+      }
+      setEditContent(updated);
+      if (result.failedUrls.length > 0) {
+        alert(`${result.failedUrls.length} 张图片未能自动上传，已保留原地址`);
+      }
+    } finally {
+      setUploading(false);
+    }
+  }, [editContent, handleFileUpload, showExpandEditor]);
+
   const handleSave = useCallback(async () => {
     const currentContent = editorRef.current?.getValue() || editContent;
     if (currentContent.trim() === memo.content) {
@@ -848,7 +887,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
               <X className="w-4 h-4" />
             </button>
         </div>
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden" onPaste={handlePaste}>
             {(() => {
               try {
                 return (
@@ -909,7 +948,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       }`}
       style={{ ...getMemoPaletteStyle(palette), backgroundColor: bgColor, color: palette.text, borderColor: palette.border }}
       >
-        <div className="relative">
+        <div className="relative" onPaste={handlePaste}>
           <MarkdownEditor
             ref={editorRef}
             value={editContent}
