@@ -96,7 +96,7 @@ const codeBlockCustomStyle = (palette: MemoCardPalette): React.CSSProperties => 
   margin: 0,
   borderRadius: '0 0 0.5rem 0.5rem',
   fontSize: '0.95em',
-  background: palette.surfaceStrong,
+  background: palette.codeBlockBackground ?? palette.surfaceStrong,
   border: 'none',
   padding: '16px',
 });
@@ -119,16 +119,20 @@ const CodeBlock = memo(function CodeBlock({ className, children, palette, compac
   if (isBlock) {
     const useHighlight = language && language !== 'markdown' && language !== 'text';
     return (
-      <div className="relative rounded-lg overflow-hidden border" style={{ borderColor: palette.surfaceBorder }}>
+      <div className="relative rounded-lg overflow-hidden border" style={{ borderColor: palette.codeBorder ?? palette.surfaceBorder }}>
         <div
           className={`flex items-center justify-between border-b ${compact ? 'px-2 py-1' : 'px-3 py-1.5'}`}
-          style={{ background: palette.surface, borderColor: palette.surfaceBorder }}
+          style={{ background: palette.codeHeaderBackground ?? palette.surface, borderColor: palette.codeBorder ?? palette.surfaceBorder }}
         >
-          <span className="text-[11px] font-mono" style={{ color: palette.mutedText }}>{language || 'text'}</span>
+          <span className="text-[11px] font-mono" style={{ color: palette.codeMutedText ?? palette.mutedText }}>{language || 'text'}</span>
           <button
             onClick={handleCopy}
             className="flex items-center p-1 rounded-md border transition-opacity hover:opacity-80"
-            style={{ color: palette.text, background: palette.surfaceStrong, borderColor: palette.surfaceBorder }}
+            style={{
+              color: palette.codeButtonText ?? palette.text,
+              background: palette.codeButtonBackground ?? palette.surfaceStrong,
+              borderColor: palette.codeButtonBorder ?? palette.surfaceBorder,
+            }}
             title={copied ? '已复制' : '复制代码'}
           >
             {copied ? <CheckCheck className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
@@ -144,8 +148,8 @@ const CodeBlock = memo(function CodeBlock({ className, children, palette, compac
             {code}
           </SyntaxHighlighter>
         ) : (
-          <pre className={`${compact ? 'p-2.5 text-xs' : 'p-4 text-sm'} overflow-x-auto font-mono`} style={{ background: palette.surfaceStrong, color: palette.text, margin: 0 }}>
-            <code style={{ color: palette.text }}>{code}</code>
+          <pre className={`${compact ? 'p-2.5 text-xs' : 'p-4 text-sm'} overflow-x-auto font-mono`} style={{ background: palette.plainCodeBlockBackground ?? palette.surfaceStrong, color: palette.codeText ?? palette.text, margin: 0 }}>
+            <code style={{ color: palette.codeText ?? palette.text }}>{code}</code>
           </pre>
         )}
       </div>

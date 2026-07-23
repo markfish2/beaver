@@ -15,6 +15,15 @@ export interface MemoCardPalette {
   inlineCodeBackground: string;
   inlineCodeText: string;
   isDarkSurface: boolean;
+  codeHeaderBackground?: string;
+  codeBlockBackground?: string;
+  plainCodeBlockBackground?: string;
+  codeBorder?: string;
+  codeText?: string;
+  codeMutedText?: string;
+  codeButtonBackground?: string;
+  codeButtonBorder?: string;
+  codeButtonText?: string;
 }
 
 export interface MemoColorOption {
@@ -70,6 +79,15 @@ export const MEMO_COLOR_OPTIONS: MemoColorOption[] = [
       surfaceBorder: '#d6d3cc',
       quoteBorder: '#9ca3af',
       inlineCodeBackground: '#fff3b0',
+      codeHeaderBackground: '#f6f5f0',
+      codeBlockBackground: '#fbfbf8',
+      plainCodeBlockBackground: '#fafafa',
+      codeBorder: '#dad9d4',
+      codeText: '#374151',
+      codeMutedText: '#6b7280',
+      codeButtonBackground: '#ffffff',
+      codeButtonBorder: '#e5e7eb',
+      codeButtonText: '#4b5563',
     },
     dark: {
       ...darkBase,
@@ -80,6 +98,15 @@ export const MEMO_COLOR_OPTIONS: MemoColorOption[] = [
       surfaceBorder: '#4b5563',
       quoteBorder: '#6b7280',
       inlineCodeBackground: '#4a3f1a',
+      codeHeaderBackground: '#282c34',
+      codeBlockBackground: '#282c34',
+      plainCodeBlockBackground: '#1e1e1e',
+      codeBorder: '#374151',
+      codeText: '#d1d5db',
+      codeMutedText: '#9ca3af',
+      codeButtonBackground: '#374151',
+      codeButtonBorder: '#4b5563',
+      codeButtonText: '#d1d5db',
     },
   },
   {
