@@ -49,3 +49,9 @@ test('MemoCard 标签在亮色和暗色模式下均满足小字号对比度', ()
     assert.ok(contrast(color.darkText, color.darkBg) >= 4.5, `第 ${index + 1} 套暗色标签对比度不足`);
   }
 });
+
+test('默认 MemoCard 夜间背景与 Memo 输入框保持一致', () => {
+  const defaultDark = MEMO_COLOR_OPTIONS[0].dark;
+  assert.equal(defaultDark.background, '#2e2e2b');
+  assert.equal(defaultDark.border, '#343431');
+});

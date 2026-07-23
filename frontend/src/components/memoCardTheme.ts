@@ -91,8 +91,8 @@ export const MEMO_COLOR_OPTIONS: MemoColorOption[] = [
     },
     dark: {
       ...darkBase,
-      background: '#1f2937',
-      border: '#4b5563',
+      background: '#2e2e2b',
+      border: '#343431',
       surface: '#172033',
       surfaceStrong: '#111827',
       surfaceBorder: '#4b5563',
