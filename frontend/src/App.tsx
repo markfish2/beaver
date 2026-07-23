@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useState, useEffect, lazy, Suspense, useRef } from 'react';
+import { useEffect, lazy, Suspense, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DocumentProvider } from './context/DocumentContext';
 import { SearchProvider } from './context/SearchContext';
@@ -8,6 +8,7 @@ import { UserViewProvider, useUserView } from './context/UserViewContext';
 import { useRetryFailedPreviews } from './hooks/useRetryFailedPreviews';
 import type { ReactNode } from 'react';
 import { AppearanceProvider } from './components/FontSettings';
+import { usePhoneLayout } from './hooks/usePhoneLayout';
 
 const SetupPage = lazy(() => import('./pages/SetupPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -21,15 +22,8 @@ const MainArea = lazy(() => import('./components/MainArea'));
 const MobileLayout = lazy(() => import('./components/mobile/MobileLayout'));
 
 const AppLayout = ({ children }: { children: ReactNode }) => {
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = usePhoneLayout();
   const sidebarOpenRef = useRef(false);
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   useEffect(() => {
     const handleToggleSidebar = () => {

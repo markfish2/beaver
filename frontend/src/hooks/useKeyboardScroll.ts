@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef } from 'react';
+import { isPhoneLayout } from '../utils/deviceLayout';
 
 interface UseKeyboardScrollOptions {
   enabled?: boolean;
@@ -19,7 +20,7 @@ export const useKeyboardScroll = (options: UseKeyboardScrollOptions = {}) => {
     if (now - lastScrollTimeRef.current < 100) return;
     lastScrollTimeRef.current = now;
 
-    const isMobile = window.innerWidth < 768;
+    const isMobile = isPhoneLayout();
     if (!isMobile) return;
 
     const rect = element.getBoundingClientRect();
@@ -45,7 +46,7 @@ export const useKeyboardScroll = (options: UseKeyboardScrollOptions = {}) => {
   }, [enabled, extraOffset]);
 
   const handleVisualViewportChange = useCallback(() => {
-    const isMobile = window.innerWidth < 768;
+    const isMobile = isPhoneLayout();
     if (!isMobile) return;
 
     const activeElement = document.activeElement;

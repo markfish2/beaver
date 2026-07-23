@@ -7,6 +7,7 @@ import { nodesToMemoMarkdown } from '../utils/convertNode';
 import MentionDropdown from './MentionDropdown';
 import ImageViewer from './ImageViewer';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
+import { isPhoneLayout } from '../utils/deviceLayout';
 
 interface NodeItemProps {
   node: Node;
@@ -221,7 +222,7 @@ const NodeItem = memo(({
   }, [shouldFocus, node.id]);
 
   const scrollIntoViewSafe = (el: HTMLElement) => {
-    const isMobile = window.innerWidth < 768;
+    const isMobile = isPhoneLayout();
     if (!isMobile) return;
     
     const toolbarHeight = 48;

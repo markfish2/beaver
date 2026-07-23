@@ -26,6 +26,7 @@ import { useDiary } from '../context/DiaryContext';
 import { useHistory } from '../hooks/useHistory';
 import { useSaveManager } from '../hooks/useSaveManager';
 import { useKeyboardScroll } from '../hooks/useKeyboardScroll';
+import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { createCommandFactory } from '../commands/implementations';
 
 import { saveStateManager, sendBatchSaveRequest, PendingOperation } from '../utils/saveStateManager';
@@ -193,7 +194,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const [isLoading, setIsLoading] = useState(false);
   const { saveStatus, pendingCount, isOnline, offlineQueueCount } = useSaveManager();
   // Mobile state
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = usePhoneLayout();
   const { scrollToElement } = useKeyboardScroll({ enabled: isMobile });
   const focusNode = useCallback((nodeId: string, field: 'content' | 'note' = 'content') => {
     const applyFocus = () => {
@@ -417,15 +418,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       window.removeEventListener('pageshow', handlePageShow);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   const handleRecover = async () => {

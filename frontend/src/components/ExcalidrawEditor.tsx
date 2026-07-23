@@ -6,6 +6,7 @@ import { Download, Image, FileJson, FileText, Loader2, StickyNote } from 'lucide
 import { getExcalidrawDataFresh, updateExcalidrawData, loadExcalidrawFiles, VersionConflictError } from '../api/excalidraw';
 import NoteEmbedContent from './NoteEmbedContent';
 import NotePickerDialog from './NotePickerDialog';
+import { usePhoneLayout } from '../hooks/usePhoneLayout';
 
 // 模块级变量存储 Excalidraw API
 let _excalidrawApiInstance: ExcalidrawImperativeAPI | null = null;
@@ -107,7 +108,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error' | 'conflict'>('idle');
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [localTitle, setLocalTitle] = useState(title);
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = usePhoneLayout();
   const [showNotePicker, setShowNotePicker] = useState(false);
   // 缓存已渲染的笔记引用，避免拖动时每帧重建 React 组件
   const embedCacheRef = useRef<Map<string, React.ReactNode>>(new Map());
@@ -232,16 +233,6 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   useEffect(() => {
     setLocalTitle(title);
   }, [title]);
-
-  // 检测移动端
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768 || 'ontouchstart' in window);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   // 加载画布数据，设置 initialData 供 Excalidraw 首次渲染
   useEffect(() => {

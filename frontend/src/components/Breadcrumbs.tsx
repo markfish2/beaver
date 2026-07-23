@@ -1,5 +1,5 @@
 import { ChevronRight } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { usePhoneLayout } from '../hooks/usePhoneLayout';
 
 interface BreadcrumbsProps {
   items: { id: string; title: string }[];
@@ -7,16 +7,7 @@ interface BreadcrumbsProps {
 }
 
 const Breadcrumbs = ({ items, onNavigate }: BreadcrumbsProps) => {
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const isMobile = usePhoneLayout();
 
   const truncateTitle = (title: string) => {
     if (isMobile && title.length > 3) {
