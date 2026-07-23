@@ -3,6 +3,8 @@ import { Layers, ChevronDown } from 'lucide-react';
 import type { Node } from '../api/data';
 import { getThumbnailUrl } from '../api/data';
 import type MindMap from 'simple-mind-map';
+import { ColorThemePreview, LineStylePreview } from './MindMapStylePreview';
+import type { ColorThemeKey, LineStyleKey } from './MindMapStylePreview';
 
 interface MindMapViewProps {
   nodes: Node[];
@@ -22,9 +24,6 @@ interface MindMapNodeData {
   };
   children?: MindMapNodeData[];
 }
-
-type LineStyleKey = 'curve' | 'straight' | 'direct' | 'dashed' | 'rounded';
-type ColorThemeKey = 'classic' | 'colorful' | 'dark';
 
 interface LineStyleConfig {
   name: string;
@@ -178,82 +177,6 @@ const setStoredColorTheme = (theme: ColorThemeKey) => {
   try {
     localStorage.setItem('mindmap-color-theme', theme);
   } catch {}
-};
-
-const LineStylePreview = ({ style, isActive }: { style: LineStyleKey; isActive: boolean }) => {
-  const baseClass = "w-10 h-6 border-2 rounded flex items-center justify-center";
-  const activeClass = isActive ? "border-blue-500 bg-blue-50" : "border-gray-300 bg-white";
-  
-  const icons: Record<LineStyleKey, React.ReactNode> = {
-    curve: (
-      <div className={`${baseClass} ${activeClass}`}>
-        <svg width="24" height="14" viewBox="0 0 24 14">
-          <path d="M2,7 Q6,2 12,7 T22,7" fill="none" stroke={isActive ? "#3B82F6" : "#9CA3AF"} strokeWidth="2" />
-        </svg>
-      </div>
-    ),
-    straight: (
-      <div className={`${baseClass} ${activeClass}`}>
-        <svg width="24" height="14" viewBox="0 0 24 14">
-          <polyline points="2,7 10,7 10,3 22,3" fill="none" stroke={isActive ? "#757575" : "#9CA3AF"} strokeWidth="2" />
-        </svg>
-      </div>
-    ),
-    direct: (
-      <div className={`${baseClass} ${activeClass}`}>
-        <svg width="24" height="14" viewBox="0 0 24 14">
-          <line x1="2" y1="7" x2="22" y2="7" stroke={isActive ? "#059669" : "#9CA3AF"} strokeWidth="2" />
-        </svg>
-      </div>
-    ),
-    dashed: (
-      <div className={`${baseClass} ${activeClass}`}>
-        <svg width="24" height="14" viewBox="0 0 24 14">
-          <line x1="2" y1="7" x2="22" y2="7" stroke={isActive ? "#D4A574" : "#9CA3AF"} strokeWidth="2" strokeDasharray="4,2" />
-        </svg>
-      </div>
-    ),
-    rounded: (
-      <div className={`${baseClass} ${activeClass}`}>
-        <svg width="24" height="14" viewBox="0 0 24 14">
-          <path d="M2,7 L8,7 Q11,7 11,4 L11,3 Q11,1 14,1 L22,1" fill="none" stroke={isActive ? "#3182CE" : "#9CA3AF"} strokeWidth="2" />
-        </svg>
-      </div>
-    )
-  };
-  
-  return icons[style] || null;
-};
-
-const ColorThemePreview = ({ theme, isActive }: { theme: ColorThemeKey; isActive: boolean }) => {
-  const baseClass = "w-10 h-6 border-2 rounded flex items-center justify-center gap-0.5 px-1";
-  const activeClass = isActive ? "border-blue-500 bg-blue-50" : "border-gray-300 bg-white";
-
-  const previews: Record<ColorThemeKey, React.ReactNode> = {
-    classic: (
-      <div className={`${baseClass} ${activeClass}`}>
-        <div className="w-2 h-2 rounded-full bg-slate-600" />
-        <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-        <div className="w-1 h-1 rounded-full bg-slate-300" />
-      </div>
-    ),
-    colorful: (
-      <div className={`${baseClass} ${activeClass}`}>
-        <div className="w-2 h-2 rounded-full bg-blue-500" />
-        <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-        <div className="w-1 h-1 rounded-full bg-amber-500" />
-      </div>
-    ),
-    dark: (
-      <div className={`${baseClass} ${isActive ? 'border-blue-500 bg-slate-800' : 'border-gray-300 bg-slate-800'}`}>
-        <div className="w-2 h-2 rounded-full bg-slate-600 border border-slate-500" />
-        <div className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-        <div className="w-1 h-1 rounded-full bg-slate-400" />
-      </div>
-    ),
-  };
-
-  return previews[theme] || null;
 };
 
 function getMaxDepth(nodes: Node[]): number {

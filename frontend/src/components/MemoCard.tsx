@@ -28,6 +28,7 @@ import cpp from 'react-syntax-highlighter/dist/esm/languages/prism/cpp';
 import go from 'react-syntax-highlighter/dist/esm/languages/prism/go';
 import rust from 'react-syntax-highlighter/dist/esm/languages/prism/rust';
 import yaml from 'react-syntax-highlighter/dist/esm/languages/prism/yaml';
+import { extractMemoFileLinks as extractFileLinks, extractMemoImages as extractImages, extractMemoTags as extractTags, extractMemoUrls as extractUrls, formatMemoTime as formatTime } from './memoCardContent';
 
 SyntaxHighlighter.registerLanguage('jsx', jsx);
 SyntaxHighlighter.registerLanguage('python', python);
@@ -107,81 +108,6 @@ interface MemoCardProps {
   isHighlighted?: boolean;
   documents?: Document[];
   readOnly?: boolean;
-}
-
-function formatTime(dateStr: string): string {
-  const d = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
-  const parts = new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai',
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(d);
-  const get = (type: string) => parts.find(p => p.type === type)?.value || '';
-  return `${get('month')}月${get('day')}日 ${get('hour')}:${get('minute')}`;
-}
-
-function extractTags(content: string): string[] {
-  const cleaned = content.replace(/```[\s\S]*?```/g, '').replace(/`[^`]+`/g, '');
-  const matches = cleaned.match(/#[a-zA-Z0-9_一-龥]+/g);
-  if (!matches) return [];
-  return [...new Set(matches.map(m => m.trim()))];
-}
-
-function extractImages(content: string): { alt: string; url: string }[] {
-  const results: { alt: string; url: string }[] = [];
-  const regex = /!\[([^\]]*)\]\(([^)]+)\)/g;
-  let match;
-  while ((match = regex.exec(content)) !== null) {
-    // 排除音频文件
-    if (/\.(mp4|webm|ogg|wav|mp3|m4a)(\?|$)/i.test(match[2])) continue;
-    results.push({ alt: match[1], url: match[2] });
-  }
-  return results;
-}
-
-function extractFileLinks(content: string): { name: string; url: string }[] {
-  const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
-  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-  const results: { name: string; url: string }[] = [];
-  // 先收集所有图片 URL，用于排除 ![...](...) 被 [...]() 匹配
-  const imageUrls = new Set<string>();
-  let m;
-  while ((m = imageRegex.exec(content)) !== null) {
-    imageUrls.add(m[2]);
-  }
-  while ((m = linkRegex.exec(content)) !== null) {
-    if (!imageUrls.has(m[2]) && !m[2].startsWith('/d/')) {
-      results.push({ name: m[1], url: m[2] });
-    }
-  }
-  return results;
-}
-
-function extractUrls(content: string): string[] {
-  const urls = new Set<string>();
-
-  // Match markdown link URLs: [text](url)
-  const mdLinkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
-  let m;
-  while ((m = mdLinkRegex.exec(content)) !== null) {
-    const url = m[2];
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      urls.add(url);
-    }
-  }
-
-  // Match bare URLs (outside markdown links)
-  const stripped = content.replace(/\[([^\]]*)\]\([^)]+\)/g, '');
-  const bareUrlRegex = /(?<!\()(https?:\/\/[^\s<>)\]]+)/g;
-  while ((m = bareUrlRegex.exec(stripped)) !== null) {
-    const url = m[1].replace(/[.,;:!?]+$/, '');
-    urls.add(url);
-  }
-
-  return [...urls];
 }
 
 function useIsDark() {

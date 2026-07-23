@@ -39,6 +39,8 @@ import { createCommandFactory } from '../commands/implementations';
 import { saveStateManager, sendBatchSaveRequest, PendingOperation } from '../utils/saveStateManager';
 import { saveViewState, saveScrollPosition, loadScrollPosition } from '../utils/pwaState';
 import { getErrorMessage } from '../utils/errors';
+import { flattenParsedNodes, parseMarkdown } from './mainAreaClipboard';
+import type { ParsedNode } from './mainAreaClipboard';
 
 interface SerializedNode {
   content: string;
@@ -150,128 +152,6 @@ const serializeNodesToTree = (allNodes: Node[], selectedIds: string[]): Serializ
   return selectedNodes
     .filter(n => !n.parent_node_id || !selectedIds.includes(n.parent_node_id))
     .map(node => processNode(node));
-};
-
-// Helper: 解析 Markdown 文本为树状结构
-interface ParsedNode {
-  content: string;
-  note?: string;
-  is_completed?: boolean;
-  is_todo?: boolean;
-  children: ParsedNode[];
-}
-
-const parseMarkdown = (text: string): ParsedNode[] => {
-  const lines = text.split('\n');
-  const root: ParsedNode[] = [];
-  const stack: { node: ParsedNode; indent: number }[] = [];
-
-  lines.forEach(line => {
-    if (!line.trim()) return;
-
-    // 精确计算物理缩进。将 1 个制表符(\t)视为 4 个空格
-    // 这完美兼容了 Obsidian 的默认复制格式，也兼容内部的 2 空格格式
-    const match = line.match(/^(\s*)/);
-    const whitespace = match ? match[1] : '';
-    const indentLength = whitespace.replace(/\t/g, '    ').length;
-
-    const trimmedLine = line.trim();
-    let content = trimmedLine;
-    let is_completed = false;
-    let is_todo = false;
-
-    // 识别引用的备注块（支持内部多节点复制时带出的备注）
-    if (trimmedLine.startsWith('>')) {
-      const noteContent = trimmedLine.replace(/^>\s*/, '');
-      if (stack.length > 0) {
-         const parent = stack[stack.length - 1].node;
-         parent.note = parent.note ? parent.note + '\n' + noteContent : noteContent;
-      }
-      return; // 备注直接附加到父节点，不作为独立节点压栈
-    }
-
-    // 匹配 checkbox 格式: - [ ] 或 - [x]
-    const checkboxMatch = trimmedLine.match(/^[-*]\s+\[([ xX])\]\s*(.*)$/);
-    if (checkboxMatch) {
-      is_todo = true;
-      is_completed = checkboxMatch[1].toLowerCase() === 'x';
-      content = checkboxMatch[2];
-    } else {
-      // 匹配普通列表格式: - 或 *
-      const listMatch = trimmedLine.match(/^[-*]\s+(.*)$/);
-      if (listMatch) {
-        content = listMatch[1];
-      } else {
-        // 匹配标题格式: # ## ### 等
-        const headingMatch = trimmedLine.match(/^(#{1,6})\s+(.*)$/);
-        if (headingMatch) {
-          content = headingMatch[2];
-        }
-      }
-    }
-
-    const newNode: ParsedNode = {
-      content: content.trim(),
-      is_completed,
-      is_todo,
-      children: []
-    };
-
-    // 基于绝对缩进长度（indentLength）寻找父节点
-    // 只要栈顶节点的缩进"大于或等于"当前行，就一直出栈，直到找到真正包含它的父级
-    while (stack.length > 0 && stack[stack.length - 1].indent >= indentLength) {
-      stack.pop();
-    }
-
-    if (stack.length === 0) {
-      root.push(newNode);
-    } else {
-      stack[stack.length - 1].node.children.push(newNode);
-    }
-
-    stack.push({ node: newNode, indent: indentLength });
-  });
-
-  return root;
-};
-
-// Helper: 将解析后的树展平为节点数组
-const flattenParsedNodes = (
-  parsedNodes: ParsedNode[],
-  documentId: string,
-  parentId: string | null,
-  startOrder: number
-): Partial<Node>[] => {
-  const result: Partial<Node>[] = [];
-  let currentOrder = startOrder;
-
-  const processNode = (node: ParsedNode, parentId: string | null) => {
-    const newNode: Partial<Node> = {
-      id: crypto.randomUUID(),
-      document_id: documentId,
-      content: node.content,
-      note: node.note,
-      parent_node_id: parentId,
-      sort_order: currentOrder,
-      is_completed: node.is_completed || false,
-      is_todo: node.is_todo || false,
-      color: null,
-      is_collapsed: false,
-    };
-    result.push(newNode);
-    currentOrder += 10000;
-
-    // 递归处理子节点
-    node.children.forEach(child => {
-      processNode(child, newNode.id as string);
-    });
-  };
-
-  parsedNodes.forEach(parsedNode => {
-    processNode(parsedNode, parentId);
-  });
-
-  return result;
 };
 
 type UserSubView = 'profile' | 'token' | 'ai' | 'trash' | 'password';

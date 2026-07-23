@@ -24,6 +24,7 @@ import AISettings from './AISettings';
 import AIChatSidebar from './AIChatSidebar';
 import { getProjects, createProject, updateProject, deleteProject, archiveProject } from '../api/projects';
 import type { Project } from '../api/projects';
+import { formatRelativeTime, highlightSidebarText as highlightText } from './sidebarFormatting';
 
 interface SidebarProps {
   onDocumentSelect?: () => void;
@@ -31,35 +32,9 @@ interface SidebarProps {
   onUserSubViewChange?: (subView: UserSubView | null) => void;
 }
 
-const highlightText = (text: string, query: string) => {
-  if (!query.trim()) return text;
-  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(`(${escaped})`, 'gi');
-  const parts = text.split(regex);
-  return parts.map((part, i) =>
-    regex.test(part) ? (
-      <mark key={i} className="bg-yellow-200 dark:bg-yellow-600/50 px-0.5 rounded">{part}</mark>
-    ) : part
-  );
-};
-
 const SIDEBAR_WIDTH_KEY = 'sidebar_width';
 const ICON_RAIL_WIDTH = 48;
 
-// 格式化相对时间
-function formatRelativeTime(dateStr: string | number): string {
-  const date = typeof dateStr === 'number' ? new Date(dateStr) : new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return '刚刚';
-  if (diffMin < 60) return `${diffMin}分钟前`;
-  const diffHour = Math.floor(diffMin / 60);
-  if (diffHour < 24) return `${diffHour}小时前`;
-  const diffDay = Math.floor(diffHour / 24);
-  if (diffDay < 7) return `${diffDay}天前`;
-  return `${date.getMonth() + 1}/${date.getDate()}`;
-}
 const DEFAULT_PANEL_WIDTH = 212;  // 260 - 48 = 212 (total visual width stays 260)
 const MIN_PANEL_WIDTH = 160;
 const MAX_PANEL_WIDTH = 460;
