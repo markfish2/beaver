@@ -82,6 +82,7 @@ import "@excalidraw/excalidraw/index.css";
 interface ExcalidrawEditorProps {
   documentId: string;
   readOnly?: boolean;
+  mobileViewOnly?: boolean;
   title?: string;
   onTitleChange?: (newTitle: string) => void;
 }
@@ -89,6 +90,7 @@ interface ExcalidrawEditorProps {
 export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   documentId,
   readOnly = false,
+  mobileViewOnly = false,
   title = '',
   onTitleChange,
 }) => {
@@ -100,6 +102,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   type ScenePayload = { elements: SceneElements; appState: Partial<AppState>; files?: BinaryFiles };
 
   const [initialData, setInitialData] = useState<ExcalidrawInitialDataState | null>(null);
+  const [mobilePreview, setMobilePreview] = useState<{ url: string | null; error: boolean }>({ url: null, error: false });
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error' | 'conflict'>('idle');
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [localTitle, setLocalTitle] = useState(title);
@@ -392,6 +395,46 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   const filesDirtyRef = useRef(false);
   const pendingElementsRef = useRef<SceneElements | null>(null);
   const pendingAppStateRef = useRef<AppState | null>(null);
+
+  // 移动端只查看画布时生成隔离 SVG，不挂载完整 Excalidraw React UI。
+  // 这条路径绕开编辑器的菜单、Radix 子依赖和事件系统，仅复用场景导出引擎。
+  useEffect(() => {
+    if (!mobileViewOnly || !initialData) return;
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
+    const renderPreview = async () => {
+      try {
+        const elements = (initialData.elements ?? [])
+          .filter(element => !element.isDeleted) as Parameters<typeof exportToSvg>[0]['elements'];
+        if (elements.length === 0) {
+          setMobilePreview({ url: null, error: false });
+          return;
+        }
+        const svg = await exportToSvg({
+          elements,
+          appState: {
+            ...(initialData.appState ?? {}),
+            exportBackground: true,
+          },
+          files: initialData.files ?? filesRef.current,
+          exportPadding: 24,
+        });
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(new Blob([svg.outerHTML], { type: 'image/svg+xml' }));
+        setMobilePreview({ url: objectUrl, error: false });
+      } catch (error) {
+        console.error('Mobile canvas preview failed:', error);
+        if (!cancelled) setMobilePreview({ url: null, error: true });
+      }
+    };
+
+    void renderPreview();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [initialData, mobileViewOnly]);
 
   // 立即保存（绕过 debounce，用于页面关闭/组件卸载）
   const flushSave = useCallback(async () => {
@@ -693,6 +736,30 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     );
   }
 
+  if (mobileViewOnly) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center overflow-auto bg-white dark:bg-gray-900 p-3">
+        {mobilePreview.error ? (
+          <div className="flex flex-col items-center gap-2 px-6 text-center">
+            <p className="text-sm text-gray-600 dark:text-gray-300">画布预览生成失败</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">请稍后重试，或在桌面端打开此画布</p>
+          </div>
+        ) : mobilePreview.url ? (
+          <img
+            src={mobilePreview.url}
+            alt={title || '画布预览'}
+            className="block max-w-full max-h-full object-contain select-none"
+            draggable={false}
+          />
+        ) : initialData?.elements?.length ? (
+          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        ) : (
+          <p className="text-sm text-gray-400 dark:text-gray-500">这是一个空画布</p>
+        )}
+      </div>
+    );
+  }
+
   const handleTitleBlur = () => {
     if (onTitleChange && localTitle !== title) {
       onTitleChange(localTitle);
@@ -771,7 +838,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
             _excalidrawApiInstance = api;
           }}
           initialData={initialData || undefined}
-          onChange={handleChange}
+          onChange={readOnly ? undefined : handleChange}
           viewModeEnabled={readOnly}
           theme="light"
           langCode="zh-CN"

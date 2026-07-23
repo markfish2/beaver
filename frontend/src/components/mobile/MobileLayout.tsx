@@ -11,6 +11,7 @@ import AIChatSidebar from '../AIChatSidebar';
 import { useUserView } from '../../context/UserViewContext';
 import { MessageSquare } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { createMobileDocumentState, getMobileTabFromState, resolveMobileBackTarget } from '../../utils/mobileNavigation';
 
 const FileTreeView = lazy(() => import('./FileTreeView'));
 const MobileTodos = lazy(() => import('./MobileTodos'));
@@ -48,7 +49,9 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { activeConvId, setActiveConvId, refreshConvList } = useUserView();
-  const [activeTab, setActiveTab] = useState<MobileTab>('memos');
+  const [activeTab, setActiveTab] = useState<MobileTab>(
+    () => getMobileTabFromState(location.state) ?? 'memos',
+  );
   const [showNewMenu, setShowNewMenu] = useState(false);
   const [showAIHistory, setShowAIHistory] = useState(false);
   const prevTabRef = useRef<MobileTab>('memos');
@@ -137,15 +140,29 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     }
   }, [isEditing, navigate]);
 
-  // location.key === "default" 表示用户直接通过 URL 打开（历史栈无上一页）
-  // 否则用 navigate(-1) 返回应用内上一页
   const handleBack = useCallback(() => {
-    window.history.back();
-  }, []);
+    const target = resolveMobileBackTarget(location.key, location.state, window.history.length);
+    if (target.kind === 'history') {
+      navigate(-1);
+      return;
+    }
+    if (target.tab) {
+      setActiveTab(target.tab);
+    }
+    navigate(target.to, {
+      replace: true,
+      state: target.tab ? { mobileReturnTab: target.tab } : undefined,
+    });
+  }, [location.key, location.state, navigate]);
 
   const handleSearch = useCallback((query: string) => {
-    navigate(`/search?q=${encodeURIComponent(query)}`);
-  }, [navigate]);
+    navigate(`/search?q=${encodeURIComponent(query)}`, {
+      state: createMobileDocumentState(
+        `${location.pathname}${location.search}`,
+        activeTab,
+      ),
+    });
+  }, [activeTab, location.pathname, location.search, navigate]);
 
   const handleNewMenuClose = useCallback(() => {
     setShowNewMenu(false);
@@ -157,9 +174,10 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       setActiveTab('files');
       return;
     }
-    // React 19 延迟 navigate()，用 window.location.href 立即跳转
-    window.location.href = `/d/${id}`;
-  }, []);
+    navigate(`/d/${id}`, {
+      state: createMobileDocumentState('/', activeTab),
+    });
+  }, [activeTab, navigate]);
 
   // Determine top bar title
   const getTopBarTitle = () => {

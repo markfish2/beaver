@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { search } from '../api/data';
 import type { SearchResultItem } from '../api/data';
 import { FileText, CalendarDays, StickyNote, X, ArrowLeft } from 'lucide-react';
+import { createMobileDocumentState, resolveMobileBackTarget } from '../utils/mobileNavigation';
 
 const highlightText = (text: string, query: string) => {
   if (!query.trim()) return text;
@@ -18,6 +19,7 @@ const highlightText = (text: string, query: string) => {
 const SearchResultsPage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const query = searchParams.get('q') || '';
   const [inputState, setInputState] = useState({ query, value: query });
   const inputValue = inputState.query === query ? inputState.value : query;
@@ -47,21 +49,36 @@ const SearchResultsPage = () => {
   }, [query]);
 
   const handleResultClick = (result: SearchResultItem) => {
+    const documentState = createMobileDocumentState(
+      `${location.pathname}${location.search}`,
+    );
     switch (result.result_type) {
       case 'document':
       case 'document_title':
         if (result.node_id) {
-          navigate(`/d/${result.entity_id}?nodeId=${result.node_id}`);
+          navigate(`/d/${result.entity_id}?nodeId=${result.node_id}`, { state: documentState });
         } else {
-          navigate(`/d/${result.entity_id}`);
+          navigate(`/d/${result.entity_id}`, { state: documentState });
         }
         break;
       case 'diary':
-        navigate(`/d/${result.entity_id}`);
+        navigate(`/d/${result.entity_id}`, { state: documentState });
         break;
       case 'memo':
         navigate(`/?search=${encodeURIComponent(query)}&highlight=${result.entity_id}`);
         break;
+    }
+  };
+
+  const handleBack = () => {
+    const target = resolveMobileBackTarget(location.key, location.state, window.history.length);
+    if (target.kind === 'history') {
+      navigate(-1);
+    } else {
+      navigate(target.to, {
+        replace: true,
+        state: target.tab ? { mobileReturnTab: target.tab } : undefined,
+      });
     }
   };
 
@@ -117,7 +134,7 @@ const SearchResultsPage = () => {
       >
         {/* 左侧：返回按钮 */}
         <button
-          onClick={() => navigate(-1)}
+          onClick={handleBack}
           className="flex items-center justify-center w-[36px] h-[36px] rounded-full
                      bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
                      shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]
@@ -139,7 +156,7 @@ const SearchResultsPage = () => {
 
         {/* 右侧：关闭按钮 */}
         <button
-          onClick={() => navigate(-1)}
+          onClick={handleBack}
           className="flex items-center justify-center w-[36px] h-[36px] rounded-full
                      bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
                      shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]

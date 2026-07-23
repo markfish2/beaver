@@ -5,6 +5,7 @@ import { useDocuments } from '../../context/DocumentContext';
 import { deleteDocument, updateDocument, copyDocument } from '../../api/data';
 import DeleteConfirmDialog from '../DeleteConfirmDialog';
 import type { Document } from '../../api/data';
+import { createMobileDocumentState } from '../../utils/mobileNavigation';
 
 interface FileTreeViewProps {
   starredOnly?: boolean;
@@ -44,7 +45,9 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
     if (doc.type === 'folder') {
       handleToggleFolder(doc.id);
     } else {
-      navigate(`/d/${doc.id}`);
+      navigate(`/d/${doc.id}`, {
+        state: createMobileDocumentState('/', 'files'),
+      });
     }
   };
 
