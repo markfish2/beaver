@@ -117,9 +117,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
 
   const prevEditingRef = useRef(false);
   useEffect(() => {
-    console.log('[Mobile] isEditing effect', { isEditing, activeTab, prevEditing: prevEditingRef.current, path: location.pathname });
     if (prevEditingRef.current && !isEditing) {
-      console.log('[Mobile] exiting editor, restoring tab:', prevTabRef.current);
       setActiveTab(prevTabRef.current);
     }
     if (isEditing) {
@@ -129,17 +127,15 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   }, [isEditing, activeTab]);
 
   const handleTabChange = useCallback((tab: MobileTab) => {
-    console.log('[Mobile] handleTabChange', { tab, isEditing, activeTab, path: location.pathname });
     if (tab === 'new') {
       setShowNewMenu(true);
       return;
     }
     setActiveTab(tab);
     if (isEditing && tab !== 'diary') {
-      console.log('[Mobile] switching from editor to tab, navigating to /');
       navigate('/', { replace: true });
     }
-  }, [isEditing, navigate, activeTab, location.pathname]);
+  }, [isEditing, navigate]);
 
   // location.key === "default" 表示用户直接通过 URL 打开（历史栈无上一页）
   // 否则用 navigate(-1) 返回应用内上一页
@@ -156,7 +152,6 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   }, []);
 
   const handleDocumentCreated = useCallback((id: string, type: string) => {
-    console.log('[Mobile] handleDocumentCreated', { id, type });
     setShowNewMenu(false);
     if (type === 'folder') {
       setActiveTab('files');

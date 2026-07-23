@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Node } from '../api/data';
 
 interface TocItem {
@@ -30,29 +30,21 @@ const LEVEL_DASH: Record<string, string> = {
 
 export default function TableOfContents({ nodes, documentId }: TableOfContentsProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [closed, setClosed] = useState(false);
+  const [closedDocumentId, setClosedDocumentId] = useState<string | null>(null);
   const rafRef = useRef<number>(0);
+  const documentKey = documentId ?? '__default__';
+  const closed = closedDocumentId === documentKey;
 
-  // Reset closed state when switching documents
-  const prevDocRef = useRef(documentId);
-  if (prevDocRef.current !== documentId) {
-    prevDocRef.current = documentId;
-    if (closed) setClosed(false);
-  }
-
-  const tocItems = useMemo(() => {
-    const headingNodes = nodes.filter(n => n.heading && n.content.trim());
-    if (headingNodes.length > 0) {
-      return headingNodes.map(n => ({
+  const headingNodes = nodes.filter(n => n.heading && n.content.trim());
+  const tocItems: TocItem[] = headingNodes.length > 0
+    ? headingNodes.map(n => ({
         id: n.id,
         content: n.content,
-        level: n.heading as 'h1' | 'h2' | 'h3' | 'h4',
-      }));
-    }
-    return nodes
-      .filter(n => !n.parent_node_id && n.content.trim())
-      .map(n => ({ id: n.id, content: n.content, level: 'top' as const }));
-  }, [nodes]);
+        level: n.heading as TocItem['level'],
+      }))
+    : nodes
+        .filter(n => !n.parent_node_id && n.content.trim())
+        .map(n => ({ id: n.id, content: n.content, level: 'top' }));
 
   // Scroll-based tracking
   useEffect(() => {
@@ -135,7 +127,7 @@ export default function TableOfContents({ nodes, documentId }: TableOfContentsPr
         <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-100/60 dark:border-gray-700/40 shrink-0">
           <span className="text-xs text-gray-400 dark:text-gray-500">目录</span>
           <button
-            onClick={() => setClosed(true)}
+            onClick={() => setClosedDocumentId(documentKey)}
             className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200/60 dark:hover:bg-gray-600/40 transition-colors"
             title="关闭目录"
           >

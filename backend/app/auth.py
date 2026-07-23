@@ -22,19 +22,17 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("TOKEN_EXPIRE_MINUTES", "43200"))  #
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 
+def _bcrypt_safe_password(password: str) -> str:
+    raw = password.encode("utf-8")
+    if len(raw) <= 72:
+        return password
+    return raw[:72].decode("utf-8", errors="ignore")
+
 def verify_password(plain_password, hashed_password):
-    # Truncate password to 72 bytes if necessary to prevent bcrypt error
-    # This is a common workaround for bcrypt's limitation
-    # Alternatively, one could hash the password with SHA256 before passing to bcrypt
-    if len(plain_password.encode('utf-8')) > 72:
-        plain_password = plain_password[:72]
-    return pwd_context.verify(plain_password, hashed_password)
+    return pwd_context.verify(_bcrypt_safe_password(plain_password), hashed_password)
 
 def get_password_hash(password):
-    # Truncate password to 72 bytes if necessary
-    if len(password.encode('utf-8')) > 72:
-        password = password[:72]
-    return pwd_context.hash(password)
+    return pwd_context.hash(_bcrypt_safe_password(password))
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()

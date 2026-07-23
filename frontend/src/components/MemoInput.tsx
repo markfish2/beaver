@@ -1,9 +1,8 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Send, Image, Paperclip, ChevronDown, Mic, MicOff, Maximize2, X, Sparkles } from 'lucide-react';
+import { Send, Image, Paperclip, ChevronDown, Mic, Maximize2, X, Sparkles } from 'lucide-react';
 import { createMemo, uploadFile, uploadAudio, uploadFromUrl, getMemoTags, createTodo, getAIConfigs } from '../api/data';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
-import WaveformCanvas from './WaveformCanvas';
 import VoiceRecordCard from './VoiceRecordCard';
 import AIChatPanel from './AIChatPanel';
 import { getPasteMarkdown, extractExternalImageUrls } from '../utils/htmlToMarkdown';
@@ -224,8 +223,6 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
 
   const showTagPopup = tagState.type === 'tag' && filteredTags.length > 0 && tagState.coords;
   const showMentionPopup = mentionState.type === 'mention' && filteredDocs.length > 0 && mentionState.coords;
-  const activeEditorRef = showExpandEditor ? expandEditorRef : editorRef;
-
   return (
     <div className="mb-6 relative">
       <div className="bg-white dark:bg-gray-800/50 rounded-xl overflow-visible border border-[#dad9d4] dark:border-gray-700/40">

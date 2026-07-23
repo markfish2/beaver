@@ -26,10 +26,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  useEffect(() => {
-    checkStatus();
-  }, []);
-
   const checkStatus = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -64,6 +60,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [location.pathname, navigate]);
 
+  useEffect(() => {
+    void checkStatus();
+  }, [checkStatus]);
+
   const login = useCallback(async (username: string, password: string) => {
     const data = await apiLogin(username, password);
     localStorage.setItem('token', data.access_token);
@@ -77,7 +77,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await apiSetupAdmin(username, password);
     await login(username, password);
     setIsSetupRequired(false);
-  }, [login, navigate]);
+  }, [login]);
 
   const logout = useCallback(() => {
     localStorage.removeItem('token');

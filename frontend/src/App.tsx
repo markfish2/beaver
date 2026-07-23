@@ -1,8 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, lazy, Suspense } from 'react';
-import Sidebar from './components/Sidebar';
-import MainArea from './components/MainArea';
-import MobileLayout from './components/mobile/MobileLayout';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DocumentProvider } from './context/DocumentContext';
 import { SearchProvider } from './context/SearchContext';
@@ -18,6 +15,9 @@ const SharePage = lazy(() => import('./pages/SharePage'));
 const ShareTargetPage = lazy(() => import('./pages/ShareTargetPage'));
 const ReloadPrompt = lazy(() => import('./components/ReloadPrompt'));
 const ConflictResolver = lazy(() => import('./components/ConflictResolver'));
+const Sidebar = lazy(() => import('./components/Sidebar'));
+const MainArea = lazy(() => import('./components/MainArea'));
+const MobileLayout = lazy(() => import('./components/mobile/MobileLayout'));
 
 // Protected Route Component
 const ProtectedRoute = ({ children }: { children: ReactNode }) => {

@@ -4,12 +4,19 @@ import { Excalidraw, MainMenu, exportToBlob, exportToSvg } from "@excalidraw/exc
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { Download, Image, FileJson, FileText, Loader2, StickyNote } from 'lucide-react';
 import { getExcalidrawDataFresh, updateExcalidrawData, loadExcalidrawFiles, VersionConflictError } from '../api/excalidraw';
-import type { Document } from '../api/data';
 import NoteEmbedContent from './NoteEmbedContent';
 import NotePickerDialog from './NotePickerDialog';
 
 // 模块级变量存储 Excalidraw API
 let _excalidrawApiInstance: ExcalidrawImperativeAPI | null = null;
+
+function omitViewportState<T extends Record<string, unknown>>(appState: T): T {
+  const result = { ...appState };
+  delete result.scrollX;
+  delete result.scrollY;
+  delete result.zoom;
+  return result;
+}
 
 // Error boundary to catch Excalidraw rendering errors (React 19 compatibility)
 class ExcalidrawErrorBoundary extends Component<
@@ -96,12 +103,14 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   const versionRef = useRef<number>(0);
   // documentId ref（避免闭包捕获旧值）
   const documentIdRef = useRef(documentId);
-  documentIdRef.current = documentId;
+  useEffect(() => {
+    documentIdRef.current = documentId;
+  }, [documentId]);
   // saveData ref（用于在 effect 中访问最新的 debounce 函数）
   const saveDataRef = useRef<any>(null);
 
   // renderEmbeddable: 渲染笔记引用
-  const renderEmbeddable = useCallback((element: any, appState: any) => {
+  const renderEmbeddable = useCallback((element: any) => {
     const link = element.link as string;
     if (!link || !link.startsWith('beaver://')) return null;
     const cacheKey = element.id;
@@ -244,7 +253,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           versionRef.current = data.version || 0;
           const sceneData = JSON.parse(data.scene_data);
           if (sceneData.elements?.length > 0) {
-            const { scrollX, scrollY, zoom, ...restAppState } = sceneData.appState || {};
+            const restAppState = omitViewportState(sceneData.appState || {});
 
             // 并行加载图片，与场景数据一起传入 initialData
             const files = await loadExcalidrawFiles(loadedDocId);
@@ -433,7 +442,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         const sceneData = JSON.parse(data.scene_data);
         versionRef.current = data.version || 0;
         filesDirtyRef.current = false;
-        const { scrollX, scrollY, zoom, ...restAppState } = sceneData.appState || {};
+        const restAppState = omitViewportState(sceneData.appState || {});
         // 用 updateScene 更新已挂载的 Excalidraw
         if (excalidrawRef.current) {
           excalidrawRef.current.updateScene({
@@ -583,9 +592,11 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   }, [documentId, reloadCanvas]);
 
   // 监听变化（用 ref 保存最新的 saveData，避免 Excalidraw 缓存旧回调）
-  saveDataRef.current = saveData;
   const flushSaveRef = useRef(flushSave);
-  flushSaveRef.current = flushSave;
+  useEffect(() => {
+    saveDataRef.current = saveData;
+    flushSaveRef.current = flushSave;
+  }, [saveData, flushSave]);
   const handleChange = useCallback(
     (elements: any[], appState: any, files: any) => {
       if (elements && elements.length > 0) {
@@ -605,7 +616,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         }
       }
     },
-    [isLoading, readOnly, saveData]
+    []
   );
 
   // 导出功能
@@ -616,7 +627,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     setShowExportMenu(false);
 
     switch (format) {
-      case 'png':
+      case 'png': {
         const pngBlob = await exportToBlob({
           elements: api.getSceneElements(),
           appState: api.getAppState(),
@@ -626,8 +637,9 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         });
         downloadBlob(pngBlob, `canvas-${Date.now()}.png`);
         break;
+      }
 
-      case 'svg':
+      case 'svg': {
         const svg = await exportToSvg({
           elements: api.getSceneElements(),
           appState: api.getAppState(),
@@ -635,14 +647,16 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         const svgBlob = new Blob([svg.outerHTML], { type: 'image/svg+xml' });
         downloadBlob(svgBlob, `canvas-${Date.now()}.svg`);
         break;
+      }
 
-      case 'json':
+      case 'json': {
         const elements = api.getSceneElements();
         const appState = api.getAppState();
         const jsonData = JSON.stringify({ elements, appState }, null, 2);
         const jsonBlob = new Blob([jsonData], { type: 'application/json' });
         downloadBlob(jsonBlob, `canvas-${Date.now()}.excalidraw`);
         break;
+      }
     }
   };
 

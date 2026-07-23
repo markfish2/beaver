@@ -2,10 +2,11 @@
 
 import os
 import re
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
 from pathlib import Path
+from ..dependencies import get_current_user
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 SKILL_DIR = Path(__file__).parent.parent.parent / "data" / "skill"
 
@@ -72,6 +73,8 @@ async def list_skills():
 @router.get("/{skill_id}")
 async def get_skill(skill_id: str):
     """获取单个 skill 详情"""
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", skill_id):
+        raise HTTPException(status_code=400, detail="Invalid skill id")
     filepath = SKILL_DIR / f"{skill_id}.md"
     if not filepath.exists():
         return {"error": "Skill not found"}

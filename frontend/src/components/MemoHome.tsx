@@ -30,7 +30,6 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   // Memo state
   const [memos, setMemos] = useState<Memo[]>([]);
   const memosRef = useRef(memos);
-  memosRef.current = memos;
   const [memoPage, setMemoPage] = useState(1);
   const [memoTotal, setMemoTotal] = useState(0);
   const [memoColumns, setMemoColumns] = useState<1 | 2>(1);
@@ -55,13 +54,17 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
 
   // Refs
   const memoPageRef = useRef(memoPage);
-  memoPageRef.current = memoPage;
   const memoViewRef = useRef(memoView);
-  memoViewRef.current = memoView;
   const tagFilterRef = useRef(tagFilter);
-  tagFilterRef.current = tagFilter;
   const searchFilterRef = useRef(searchFilter);
-  searchFilterRef.current = searchFilter;
+
+  useEffect(() => {
+    memosRef.current = memos;
+    memoPageRef.current = memoPage;
+    memoViewRef.current = memoView;
+    tagFilterRef.current = tagFilter;
+    searchFilterRef.current = searchFilter;
+  }, [memos, memoPage, memoView, tagFilter, searchFilter]);
 
   // 监听侧边栏的 memo 视图切换事件
   useEffect(() => {
@@ -150,7 +153,6 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
 
   // 从搜索结果页或知识图谱跳转过来时，同步 URL 参数到状态并清理
   useEffect(() => {
-    console.log('MemoHome: URL params - search:', searchFromUrl, 'highlight:', highlightFromUrl, 'view:', viewFromUrl, 'memoId:', memoIdFromUrl);
     if (searchFromUrl || highlightFromUrl || viewFromUrl || memoIdFromUrl) {
       if (searchFromUrl) {
         setSearchFilter(searchFromUrl);

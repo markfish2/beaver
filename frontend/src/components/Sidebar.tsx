@@ -2,7 +2,7 @@ import { Search, FileText, ChevronDown, Plus, Trash, Star, LogOut, ChevronLeft, 
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createDocument, deleteDocument, updateDocument, copyDocument, getNodes, createMemo, uploadFile, search as apiSearch, getTodos, createTodo, updateTodo, getMonthlyDiary, getOrCreateDayNode } from '../api/data';
 import type { Document as DocType, SearchResultItem, Todo } from '../api/data';
-import { createExcalidrawDocument, getExcalidrawData, getExcalidrawDataFresh } from '../api/excalidraw';
+import { createExcalidrawDocument, getExcalidrawDataFresh } from '../api/excalidraw';
 import { exportToBlob } from '@excalidraw/excalidraw';
 import { saveStateManager } from '../utils/saveStateManager';
 import { nodesToMemoMarkdown } from '../utils/convertNode';
@@ -14,7 +14,6 @@ import { useUserView } from '../context/UserViewContext';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
 import NewFolderDialog from './NewFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
-import FileIcon from './FileIcon';
 import FolderIcon from './FolderIcon';
 import DiaryCalendar from './DiaryCalendar';
 import TokenDialog from './TokenDialog';
@@ -44,7 +43,6 @@ const highlightText = (text: string, query: string) => {
   );
 };
 
-const SIDEBAR_EXPANDED_KEY = 'sidebar_content_expanded';
 const SIDEBAR_WIDTH_KEY = 'sidebar_width';
 const ICON_RAIL_WIDTH = 48;
 
@@ -135,7 +133,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   const { documents, isLoading, refreshDocuments, updateDocumentLocal, moveDocument, addDocument, removeDocument } = useDocuments();
   const { searchQuery, setSearchQuery } = useSearch();
   const [isExpanded, setIsExpanded] = useState<Record<string, boolean>>({});
-  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [, setShowUserMenu] = useState(false);
   const [contentExpanded, setContentExpanded] = useState(false); // 默认关闭
   const [isSearchMode, setIsSearchMode] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -241,8 +239,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       import('../api/data').then(mod => mod.getRecentDocuments(20)).then(setRecentDocuments).catch(() => {});
     }
   }, [viewMode]);
-  const [newMenuTarget, setNewMenuTarget] = useState<string | null>(null);
-  const [showFolderPicker, setShowFolderPicker] = useState(false);
+  const [newMenuTarget] = useState<string | null>(null);
   const newMenuRef = useRef<HTMLDivElement>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ show: boolean; id: string; title: string; type: 'document' | 'folder'; deleteMode?: 'move' | 'all' }>({ show: false, id: '', title: '', type: 'document' });
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
@@ -251,7 +248,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   const [draggedItem, setDraggedItem] = useState<{ id: string; type: 'document' | 'folder' } | null>(null);
   const draggedItemRef = useRef<{ id: string; type: 'document' | 'folder' } | null>(null);
   const [dragOverItem, setDragOverItem] = useState<string | null>(null);
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [, setSelectedFolderId] = useState<string | null>(null);
   const [clickedFolderId, setClickedFolderId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const stored = localStorage.getItem(SIDEBAR_WIDTH_KEY);
@@ -553,28 +550,6 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     return map;
   }, [filteredDocuments]);
 
-  // Build folder tree for the new menu picker
-  const folderTree = useMemo(() => {
-    const folders = documents.filter(d => d.type === 'folder');
-    const map = new Map<string | null, typeof folders>();
-    for (const f of folders) {
-      const key = f.parent_id ?? null;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(f);
-    }
-    for (const arr of map.values()) {
-      arr.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-    }
-    interface TreeNode { id: string; title: string; children: TreeNode[]; }
-    const build = (parentId: string | null): TreeNode[] =>
-      (map.get(parentId) || []).map(f => ({
-        id: f.id,
-        title: f.title || '无标题',
-        children: build(f.id),
-      }));
-    return build(null);
-  }, [documents]);
-
   const localSearchResults = useMemo(() => {
     if (!searchQuery.trim()) {
       return null;
@@ -682,11 +657,6 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent, doc: any) => {
-    e.stopPropagation();
-    setDeleteDialog({ show: true, id: doc.id, title: doc.title, type: doc.type, deleteMode: 'move' });
-  };
-
   const handleEditFolder = async (folderId: string, title: string) => {
     const oldDoc = documents.find(d => d.id === folderId);
     const oldTitle = oldDoc?.title;
@@ -768,6 +738,17 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     if (isMobile) setContentExpanded(false);
   };
 
+  const toggleViewPanel = (nextView: ViewMode) => {
+    setIsSearchMode(false);
+    setUserSubViewContext(null);
+    if (viewMode === nextView && contentExpanded) {
+      setContentExpanded(false);
+      return;
+    }
+    setViewMode(nextView);
+    setContentExpanded(true);
+  };
+
   const docResults = searchResults.filter(r => r.result_type === 'document' || r.result_type === 'document_title');
   const diaryResults = searchResults.filter(r => r.result_type === 'diary');
   const memoResults = searchResults.filter(r => r.result_type === 'memo');
@@ -789,14 +770,14 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     }
   };
 
-  const handleDragStart = (e: React.DragEvent, doc: any) => {
+  const handleDragStart = (e: React.DragEvent, doc: DocType) => {
     e.dataTransfer.effectAllowed = 'move';
     const item = { id: doc.id, type: doc.type };
     draggedItemRef.current = item;
     setDraggedItem(item);
   };
 
-  const handleDragOver = (e: React.DragEvent, doc: any) => {
+  const handleDragOver = (e: React.DragEvent, doc: DocType) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     
@@ -809,7 +790,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     setDragOverItem(null);
   };
 
-  const handleDrop = async (e: React.DragEvent, targetDoc: any) => {
+  const handleDrop = async (e: React.DragEvent, targetDoc: DocType) => {
     e.preventDefault();
     setDragOverItem(null);
 
@@ -844,7 +825,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   };
 
   // Long-press for mobile context menu
-  const startLongPress = (e: React.TouchEvent, doc: any) => {
+  const startLongPress = (e: React.TouchEvent, doc: DocType) => {
     longPressTriggeredRef.current = false;
     const touch = e.touches[0];
     longPressTimerRef.current = setTimeout(() => {
@@ -1166,7 +1147,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           <CalendarDays className="w-5 h-5" />
         </button>
         <button
-          onClick={() => { setIsSearchMode(false); setUserSubViewContext(null); viewMode === 'projects' && contentExpanded ? setContentExpanded(false) : (setViewMode('projects'), setContentExpanded(true)); }}
+          onClick={() => toggleViewPanel('projects')}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
             viewMode === 'projects' && contentExpanded && !isSearchMode
               ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
@@ -1177,7 +1158,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           <FolderKanban className="w-5 h-5" />
         </button>
         <button
-          onClick={() => { setIsSearchMode(false); setUserSubViewContext(null); viewMode === 'all' && contentExpanded ? setContentExpanded(false) : (setViewMode('all'), setContentExpanded(true)); }}
+          onClick={() => toggleViewPanel('all')}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
             viewMode === 'all' && contentExpanded && !isSearchMode
               ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
@@ -1188,7 +1169,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           <FileText className="w-5 h-5" />
         </button>
         <button
-          onClick={() => { setIsSearchMode(false); setUserSubViewContext(null); viewMode === 'recent' && contentExpanded ? setContentExpanded(false) : (setViewMode('recent'), setContentExpanded(true)); }}
+          onClick={() => toggleViewPanel('recent')}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
             viewMode === 'recent' && contentExpanded && !isSearchMode
               ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
@@ -1199,7 +1180,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           <Clock className={`w-5 h-5 ${viewMode === 'recent' && contentExpanded ? 'text-blue-500' : ''}`} />
         </button>
         <button
-          onClick={() => { setIsSearchMode(false); setUserSubViewContext(null); viewMode === 'starred' && contentExpanded ? setContentExpanded(false) : (setViewMode('starred'), setContentExpanded(true)); }}
+          onClick={() => toggleViewPanel('starred')}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
             viewMode === 'starred' && contentExpanded && !isSearchMode
               ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
@@ -1970,7 +1951,6 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           return result;
         };
         const excludedIds = moveDialog.docType === 'folder' ? getDescendantIds(moveDialog.docId) : new Set<string>();
-        const filteredTree: TreeNode[] = [];
         const buildFiltered = (parentId: string | null): TreeNode[] => {
           return documents
             .filter(d => d.type === 'folder' && d.parent_id === parentId && !excludedIds.has(d.id) && d.id !== moveDialog.docId)
@@ -2167,7 +2147,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                       // 大纲笔记和普通笔记：转换为 markdown
                       const nodes = await getNodes(contextMenu.docId);
                       const markdown = nodesToMemoMarkdown(nodes);
-                      const memo = await createMemo(markdown);
+                      await createMemo(markdown);
                       navigate('/');
                     }
                   } catch (error) {

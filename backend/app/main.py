@@ -228,68 +228,6 @@ def migrate_database():
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_projects_archived ON projects(is_archived)")
         cursor.execute("CREATE INDEX IF NOT EXISTS ix_projects_deleted ON projects(is_deleted)")
 
-        # 项目管理表
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS projects (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL DEFAULT '',
-                sort_order REAL DEFAULT 0.0,
-                is_archived INTEGER DEFAULT 0,
-                is_deleted INTEGER DEFAULT 0,
-                deleted_at TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS tasks (
-                id TEXT PRIMARY KEY,
-                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-                parent_id TEXT REFERENCES tasks(id) ON DELETE CASCADE,
-                title TEXT DEFAULT '',
-                start_date TEXT NOT NULL,
-                end_date TEXT NOT NULL,
-                is_done INTEGER DEFAULT 0,
-                sort_order REAL DEFAULT 0.0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_tasks_project_id ON tasks(project_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_tasks_parent_id ON tasks(parent_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_projects_archived ON projects(is_archived)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_projects_deleted ON projects(is_deleted)")
-
-        # 项目管理表
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS projects (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL DEFAULT '',
-                sort_order REAL DEFAULT 0.0,
-                is_archived INTEGER DEFAULT 0,
-                is_deleted INTEGER DEFAULT 0,
-                deleted_at TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS tasks (
-                id TEXT PRIMARY KEY,
-                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-                parent_id TEXT REFERENCES tasks(id) ON DELETE CASCADE,
-                title TEXT DEFAULT '',
-                start_date TEXT NOT NULL,
-                end_date TEXT NOT NULL,
-                is_done INTEGER DEFAULT 0,
-                sort_order REAL DEFAULT 0.0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_tasks_project_id ON tasks(project_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_tasks_parent_id ON tasks(parent_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_projects_archived ON projects(is_archived)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_projects_deleted ON projects(is_deleted)")
-
         conn.commit()
         logger.info("已确认 ai_conversations / ai_messages 表存在")
         conn.close()
@@ -298,7 +236,7 @@ def migrate_database():
 
 @app.on_event("startup")
 def migrate_excalidraw_to_files():
-    """将画布数据从 SQLite 迁移到文件系统。"""
+    """将旧画布数据安全迁移到文件系统，不覆盖已存在的场景。"""
     import sqlite3
     import json as json_mod
     from . import excalidraw_storage as ex_storage
@@ -313,25 +251,41 @@ def migrate_excalidraw_to_files():
         conn.close()
         if not rows:
             return
-        count = 0
+        migrated_ids = []
         for doc_id, scene_data_str in rows:
             try:
+                if ex_storage.read_scene(doc_id) is not None:
+                    # 文件系统版本已存在，应视为权威数据，仅清理旧 SQLite 副本。
+                    migrated_ids.append(doc_id)
+                    continue
                 scene_obj = json_mod.loads(scene_data_str)
                 files = scene_obj.pop("files", None)
                 ex_storage.write_scene(doc_id, scene_obj)
-                if files:
-                    ex_storage.write_files(doc_id, files)
-                count += 1
+                if isinstance(files, dict):
+                    meta = {}
+                    for file_id, file_info in files.items():
+                        if not isinstance(file_info, dict):
+                            continue
+                        data_url = file_info.get("dataURL") or file_info.get("dataUrl")
+                        if data_url:
+                            meta[file_id] = ex_storage.write_image_file(doc_id, file_id, data_url)
+                    if meta:
+                        ex_storage.write_files_meta(doc_id, meta)
+                migrated_ids.append(doc_id)
             except Exception as e:
                 logger.warning(f"迁移画布数据失败: {doc_id}, {e}")
-        if count > 0:
-            # 清空 SQLite 中的 scene_data
+        if migrated_ids:
+            # 只清空已经成功迁移或确认存在文件系统版本的记录。
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
-            cursor.execute("UPDATE excalidraw_data SET scene_data = NULL WHERE scene_data IS NOT NULL")
+            placeholders = ",".join("?" for _ in migrated_ids)
+            cursor.execute(
+                f"UPDATE excalidraw_data SET scene_data = NULL WHERE document_id IN ({placeholders})",
+                migrated_ids,
+            )
             conn.commit()
             conn.close()
-            logger.info(f"已迁移 {count} 个画布数据到文件系统")
+            logger.info(f"已处理 {len(migrated_ids)} 个旧画布数据")
     except Exception as e:
         logger.warning(f"画布数据迁移失败: {e}")
 

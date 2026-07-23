@@ -620,6 +620,10 @@ def batch_update_node_properties(db: Session, updates: list[schemas.NodeBatchPro
     return updated_nodes
 
 def batch_save_operations(db: Session, operations: list[schemas.BatchSaveOperation]):
+    allowed_node_properties = {
+        'is_completed', 'is_in_progress', 'is_collapsed', 'heading',
+        'is_bold', 'is_italic', 'color', 'highlight', 'is_todo',
+    }
     # Pre-fetch all referenced nodes in a single query
     node_id_set = set()
     for operation in operations:
@@ -690,12 +694,12 @@ def batch_save_operations(db: Session, operations: list[schemas.BatchSaveOperati
                     if db_node:
                         property_name = data.get('property')
                         new_value = data.get('newValue')
-                        if property_name and new_value is not None:
+                        if property_name in allowed_node_properties and new_value is not None:
                             setattr(db_node, property_name, new_value)
                             touched_doc_ids.add(db_node.document_id)
                             results.append({'id': operation.id, 'status': 'success'})
                         else:
-                            results.append({'id': operation.id, 'status': 'skipped', 'reason': 'missing property or value'})
+                            results.append({'id': operation.id, 'status': 'skipped', 'reason': 'invalid property or value'})
                     else:
                         results.append({'id': operation.id, 'status': 'failed', 'reason': 'node not found'})
                 else:

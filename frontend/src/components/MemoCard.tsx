@@ -46,13 +46,12 @@ SyntaxHighlighter.registerLanguage('cpp', cpp);
 SyntaxHighlighter.registerLanguage('go', go);
 SyntaxHighlighter.registerLanguage('rust', rust);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
-import { MoreVertical, Pencil, Trash2, Pin, PinOff, X, Check, Copy, CheckCheck, Image, Paperclip, FileText, Download, Archive, ArchiveRestore, ArrowUpRight, Globe, Maximize2, Minimize2, Sparkles } from 'lucide-react';
+import { MoreVertical, Pencil, Trash2, Pin, PinOff, X, Check, Copy, CheckCheck, Image, Paperclip, FileText, Download, Archive, ArchiveRestore, ArrowUpRight, Globe, Maximize2, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Memo, Document, LinkPreview } from '../api/data';
 import { uploadFile, getMemoTags, updateMemoColor, getThumbnailUrl, fetchLinkPreview, retryLinkPreview } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import LinkPreviewCard from './LinkPreviewCard';
-import { getPasteMarkdown } from '../utils/htmlToMarkdown';
 import MarkdownEditor from './MarkdownEditor';
 import type { MarkdownEditorHandle } from './MarkdownEditor';
 import EditorToolbar from './EditorToolbar';
@@ -64,8 +63,6 @@ import { stripTags, stripAttachments, normalizeTaskLists, normalizeHighlight, no
 import MemoToDocDialog from './MemoToDocDialog';
 import AudioPlayer from './AudioPlayer';
 import AIChatPanel from './AIChatPanel';
-import { useResizableTextarea } from '../hooks/useResizableTextarea';
-import { useAuth } from '../context/AuthContext';
 
 const MEMO_COLORS = [
   { name: '白', value: '#ffffff', dark: '#1f2937', whiteText: false },
@@ -178,9 +175,9 @@ function extractUrls(content: string): string[] {
 
   // Match bare URLs (outside markdown links)
   const stripped = content.replace(/\[([^\]]*)\]\([^)]+\)/g, '');
-  const bareUrlRegex = /(?<!\()(https?:\/\/[^\s<>\)\]]+)/g;
+  const bareUrlRegex = /(?<!\()(https?:\/\/[^\s<>)\]]+)/g;
   while ((m = bareUrlRegex.exec(stripped)) !== null) {
-    let url = m[1].replace(/[.,;:!?]+$/, '');
+    const url = m[1].replace(/[.,;:!?]+$/, '');
     urls.add(url);
   }
 
@@ -221,7 +218,7 @@ function useIsDark() {
   return isDark;
 }
 
-function getMemoBg(isDark: boolean, color: string | null, isPinned: boolean): string {
+function getMemoBg(isDark: boolean, color: string | null): string {
   if (isDark) {
     if (color) {
       const found = MEMO_COLORS.find(c => c.value === color);
@@ -291,7 +288,9 @@ const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => ({
   padding: '16px',
 });
 
-const CodeBlock = memo(function CodeBlock({ className, children, cardColor, ...props }: { className?: string; children: React.ReactNode; cardColor?: string | null; [key: string]: any }) {
+type CodeBlockProps = React.ComponentPropsWithoutRef<'code'> & { cardColor?: string | null };
+
+const CodeBlock = memo(function CodeBlock({ className, children, cardColor, ...props }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
   const isDark = useIsDark();
   const match = /language-(\w+)/.exec(className || '');
@@ -364,7 +363,6 @@ function ImagePreview({ images, src: initialSrc, onClose }: { images: string[]; 
   const [translate, setTranslate] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const lastTouchRef = useRef<{ dist: number; x: number; y: number; time: number } | null>(null);
   const pinchStartRef = useRef<{ dist: number; scale: number } | null>(null);
   const dragStartRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
   const doubleTapRef = useRef<number>(0);
@@ -397,11 +395,6 @@ function ImagePreview({ images, src: initialSrc, onClose }: { images: string[]; 
     const dy = touches[0].clientY - touches[1].clientY;
     return Math.sqrt(dx * dx + dy * dy);
   };
-
-  const getTouchCenter = (touches: TouchList) => ({
-    x: (touches[0].clientX + touches[1].clientX) / 2,
-    y: (touches[0].clientY + touches[1].clientY) / 2,
-  });
 
   const handleTouchStart = useCallback((e: ReactTouchEvent) => {
     e.stopPropagation();
@@ -621,16 +614,15 @@ function normalizeInProgressTasks(content: string): string {
 
 const markdownComponents = (
   onPreview: (url: string) => void,
-  onToggleCheckboxRef: React.MutableRefObject<((taskIndex: number) => void) | undefined>,
-  checkboxIndexRef: React.MutableRefObject<number>,
+  onToggleCheckbox: (taskIndex: number) => void,
+  checkboxCounter: { current: number },
   navigate: (to: string) => void,
   cardColor?: string | null,
 ): Components => {
   const cardColorDef = cardColor ? MEMO_COLORS.find(c => c.value === cardColor) : null;
   const isCardDark = !!cardColorDef?.whiteText;
-  const markerClass = isCardDark ? 'text-white/60' : 'text-gray-500 dark:text-gray-400';
   return {
-    code: (props: any) => {
+    code: (props) => {
       const match = /language-(\w+)/.exec(props.className || '');
       if (match && match[1] === 'mermaid') {
         return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
@@ -667,12 +659,15 @@ const markdownComponents = (
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
     },
     li: ({ children, ordered, index, node, ...props }) => {
+      void ordered;
+      void index;
+      void node;
       const liClassName = typeof props.className === 'string' ? props.className : '';
       const isTaskItem = liClassName.includes('task-list-item');
       const hasCheckboxDeep = (nodes: React.ReactNode[]): boolean =>
         nodes.some(child => {
-          if (!isValidElement(child)) return false;
-          if ((child.props as any)?.role === 'checkbox') return true;
+          if (!isValidElement<{ role?: string; children?: React.ReactNode }>(child)) return false;
+          if (child.props.role === 'checkbox') return true;
           if (child.props?.children) {
             return hasCheckboxDeep(Children.toArray(child.props.children));
           }
@@ -689,7 +684,7 @@ const markdownComponents = (
     },
     input: ({ checked, type, className: inputClassName, ...props }) => {
       if (type === 'checkbox') {
-        const idx = checkboxIndexRef.current++;
+        const idx = checkboxCounter.current++;
         return (
           <span
             role="checkbox"
@@ -703,7 +698,7 @@ const markdownComponents = (
             }`}
             onClick={(e) => {
               e.stopPropagation();
-              onToggleCheckboxRef.current?.(idx);
+              onToggleCheckbox(idx);
             }}
           >
             {checked && (
@@ -716,7 +711,7 @@ const markdownComponents = (
       }
       return <input type={type} checked={checked} className={inputClassName} {...props} />;
     },
-    blockquote: ({ children, ...props }: any) => {
+    blockquote: ({ children, ...props }) => {
       const isWarmDark = cardColor === '#b37f90' || cardColor === '#9ec8a8';
       const bqStyle = isCardDark
         ? isWarmDark
@@ -734,10 +729,7 @@ const markdownComponents = (
 
 const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, onToggleArchive, onTogglePublic, onToggleAI, onTagClick, onColorChange, isHighlighted, documents, readOnly }: MemoCardProps) {
   const isDark = useIsDark();
-  const { user } = useAuth();
   const navigate = useNavigate();
-  const navigateRef = useRef(navigate);
-  navigateRef.current = navigate;
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(memo.content);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -757,7 +749,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const [expanded, setExpanded] = useState(false);
   const [isLong, setIsLong] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
-  const bgColor = getMemoBg(isDark, memo.color, memo.is_pinned);
+  const bgColor = getMemoBg(isDark, memo.color);
 
   // Tag/mention state
   const [allTags, setAllTags] = useState<string[]>([]);
@@ -911,18 +903,15 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
     return () => { cancelled = true; };
   }, [urls]);
 
-  // 用 ref 存储回调，避免闭包过期问题
-  const toggleCheckboxRef = useRef<(taskIndex: number) => void>();
-  toggleCheckboxRef.current = (taskIndex: number) => {
+  const toggleCheckbox = useCallback((taskIndex: number) => {
     const newContent = toggleTaskCheckbox(memo.content, taskIndex);
     if (newContent !== memo.content) {
       onEdit(memo.id, newContent);
     }
-  };
-  // 内容变化时重置 checkbox 计数器
-  const checkboxIndexRef = useRef(0);
-  checkboxIndexRef.current = 0;
-  const mdComponents = useMemo(() => markdownComponents(setPreviewImage, toggleCheckboxRef, checkboxIndexRef, (...args) => navigateRef.current(...args), memo.color), [memo.color]);
+  }, [memo.content, memo.id, onEdit]);
+  // 每次 Markdown 渲染使用独立计数器，保证任务序号从零开始且不在 render 阶段写 React ref。
+  const checkboxCounter = { current: 0 };
+  const mdComponents = markdownComponents(setPreviewImage, toggleCheckbox, checkboxCounter, navigate, memo.color);
 
   // CodeMirror 编辑器自动管理高度，无需手动调整
 
@@ -939,10 +928,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
 
   // 点击外部关闭菜单 & 更新菜单位置
   useEffect(() => {
-    if (!showMenu) {
-      setMenuPos(null);
-      return;
-    }
+    if (!showMenu) return;
     const updatePos = () => {
       const btn = menuButtonRef.current;
       if (btn) {
@@ -1295,8 +1281,10 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       <div
         ref={contentRef}
         className={`memo-content text-base relative ${getMemoTextColor(isDark, memo.color) || 'text-gray-700 dark:text-gray-300'} ${readOnly ? '' : 'cursor-text'}`}
-        style={{ lineHeight: '1.75' }}
-        style={!expanded && isLong ? { maxHeight: '400px', overflow: 'hidden' } : undefined}
+        style={{
+          lineHeight: '1.75',
+          ...(!expanded && isLong ? { maxHeight: '400px', overflow: 'hidden' } : {}),
+        }}
         onDoubleClick={readOnly ? undefined : handleContentDoubleClick}
         title={readOnly ? undefined : "双击编辑"}
       >

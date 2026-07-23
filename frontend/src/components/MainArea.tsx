@@ -35,7 +35,7 @@ import { useSaveManager } from '../hooks/useSaveManager';
 import { useKeyboardScroll } from '../hooks/useKeyboardScroll';
 import { createCommandFactory } from '../commands/implementations';
 
-import { saveStateManager, PendingOperation } from '../utils/saveStateManager';
+import { saveStateManager, sendBatchSaveRequest, PendingOperation } from '../utils/saveStateManager';
 import { saveViewState, saveScrollPosition, loadScrollPosition } from '../utils/pwaState';
 
 // Helper to build tree from flat list for rendering
@@ -273,7 +273,7 @@ interface MainAreaProps {
 }
 
 const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, activeConvId = null }: MainAreaProps = {}) => {
-  const { setActiveConvId, refreshConvList, setUserSubView, selectedProjectId, setSelectedProjectId } = useUserView();
+  const { setActiveConvId, refreshConvList, selectedProjectId, setSelectedProjectId } = useUserView();
   const [showArchivedProjects, setShowArchivedProjects] = useState(false);
   const { documentId: urlDocumentId } = useParams();
   const navigate = useNavigate();
@@ -288,7 +288,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   const [currentDoc, setCurrentDoc] = useState<Document | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const { saveStatus, pendingCount, hasUnsavedChanges, isOnline, offlineQueueCount } = useSaveManager();
+  const { saveStatus, pendingCount, isOnline, offlineQueueCount } = useSaveManager();
   // Mobile state
   const [isMobile, setIsMobile] = useState(false);
   const { scrollToElement } = useKeyboardScroll({ enabled: isMobile });
@@ -404,10 +404,19 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           return { id: nodeId, content, note };
         }).filter(Boolean);
 
-        if (pendingData.length > 0) {
-          const blob = new Blob([JSON.stringify({ operations: pendingData })], { type: 'application/json' });
-          navigator.sendBeacon('/api/nodes/batch/save', blob);
-        }
+        const operations = pendingData.flatMap(node => node ? [
+          {
+            id: `final-content-${node.id}`,
+            type: 'updateContent',
+            data: { id: node.id, newContent: node.content },
+          },
+          {
+            id: `final-note-${node.id}`,
+            type: 'updateNote',
+            data: { id: node.id, newNote: node.note },
+          },
+        ] : []);
+        sendBatchSaveRequest(operations);
       }
 
       if (saveStateManager.hasUnsavedChanges()) {
@@ -612,9 +621,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       setShowRecoveryDialog(false);
       setRecoveryOperations([]);
       
-      if (documentId) {
-        fetchData(documentId);
-      }
+      // 当前节点状态已由命令的乐观更新保留；文档切换时会由加载 effect 重新拉取。
     } catch (error) {
       console.error('Recovery failed:', error);
       alert('恢复失败，部分操作可能未成功。请手动检查并重新编辑。');
@@ -770,20 +777,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     return () => window.removeEventListener('tag-click', handleTagClick);
   }, []);
 
-  useEffect(() => {
-    setTagFilter(null);
-    setViewMode('outline');
-    if (documentId) {
-      const id = ++fetchIdRef.current;
-      fetchData(documentId, id);
-    } else {
-      fetchIdRef.current++;
-      setNodes([]);
-      setCurrentDoc(null);
-      setIsLoading(false);
-    }
-  }, [documentId]);
-
   // 当 documents 加载完成后，如果 currentDoc 为 null 但有匹配的文档，更新 currentDoc
   useEffect(() => {
     if (documentId && !currentDoc && documents.length > 0) {
@@ -818,8 +811,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       // Check if this fetch is still current
       if (fetchId !== undefined && fetchId !== fetchIdRef.current) return;
 
-      let processedNodes = [...nodesData];
-      let ancestorsToExpand: string[] = [];
+      const processedNodes = [...nodesData];
+      const ancestorsToExpand: string[] = [];
 
       if (nodeIdFromUrl) {
         let current = processedNodes.find(n => n.id === nodeIdFromUrl);
@@ -843,7 +836,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       if (!foundDoc) {
         try {
           foundDoc = await getDocument(id);
-        } catch {}
+        } catch {
+          // 文档可能已删除；保留节点结果并让空状态处理。
+        }
       }
 
       // Check again after async operations
@@ -897,6 +892,20 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       }
     }
   };
+
+  useEffect(() => {
+    setTagFilter(null);
+    setViewMode('outline');
+    if (documentId) {
+      const id = ++fetchIdRef.current;
+      void fetchData(documentId, id);
+    } else {
+      fetchIdRef.current++;
+      setNodes([]);
+      setCurrentDoc(null);
+      setIsLoading(false);
+    }
+  }, [documentId]); // fetchData intentionally follows the selected document snapshot
 
   // Fetch diary days when document changes
   useEffect(() => {
@@ -1048,7 +1057,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     if (position === 'child') {
       // 变成目标节点的子节点，追加到末尾
       const existingChildren = nodes.filter(n => n.parent_node_id === targetNodeId);
-      let baseOrder = existingChildren.length > 0
+      const baseOrder = existingChildren.length > 0
         ? Math.max(...existingChildren.map(n => n.sort_order))
         : 0;
       topLevelSelected.forEach((node, i) => {
@@ -1351,88 +1360,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     }
   };
 
-  // ----- 光标位置精确保存与恢复工具函数 -----
-  const cursorPositionRef = useRef<{ nodeId: string; offset: number } | null>(null);
   const lastEditRef = useRef<{ nodeId: string; timestamp: number; oldContent: string } | null>(null);
-
-  const saveCursorPosition = useCallback(() => {
-    const sel = window.getSelection();
-    if (!sel || !sel.rangeCount || !sel.anchorNode) {
-      cursorPositionRef.current = null;
-      return;
-    }
-
-    let el: HTMLElement | null = sel.anchorNode instanceof Element
-      ? sel.anchorNode
-      : sel.anchorNode.parentElement;
-    while (el && !el.hasAttribute('data-node-id')) {
-      el = el.parentElement;
-    }
-    if (!el) {
-      cursorPositionRef.current = null;
-      return;
-    }
-
-    const contentEl = document.getElementById(`node-${el.getAttribute('data-node-id')}`);
-    if (!contentEl) {
-      cursorPositionRef.current = null;
-      return;
-    }
-
-    const range = sel.getRangeAt(0).cloneRange();
-    range.selectNodeContents(contentEl);
-    range.setEnd(sel.anchorNode, sel.anchorOffset);
-    const textOffset = range.toString().length;
-
-    cursorPositionRef.current = {
-      nodeId: el.getAttribute('data-node-id')!,
-      offset: textOffset
-    };
-  }, []);
-
-  const restoreCursorPosition = useCallback(() => {
-    const pos = cursorPositionRef.current;
-    if (!pos) return;
-
-    const el = document.getElementById(`node-${pos.nodeId}`);
-    if (!el) return;
-
-    el.focus({ preventScroll: true });
-    const safeOffset = Math.min(pos.offset, (el.textContent || '').length);
-
-    const sel = window.getSelection();
-    if (!sel) return;
-
-    const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    let accumulated = 0;
-    let targetNode: Text | null = null;
-    let targetOffset = 0;
-
-    while (tw.nextNode()) {
-      const textNode = tw.currentNode as Text;
-      const len = textNode.length;
-      if (accumulated + len >= safeOffset) {
-        targetNode = textNode;
-        targetOffset = safeOffset - accumulated;
-        break;
-      }
-      accumulated += len;
-    }
-
-    if (targetNode) {
-      const range = document.createRange();
-      range.setStart(targetNode, targetOffset);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    } else {
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      range.collapse(false);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    }
-  }, []);
 
   const focusNode = (nodeId: string, field: 'content' | 'note' = 'content') => {
     const el = document.getElementById(`${field}-${nodeId}`);
@@ -1466,7 +1394,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       e.preventDefault();
       const currentIndex = sortedNodes.findIndex(n => n.id === currentNode.id);
       if (currentIndex !== -1) {
-        let targetIndex = e.key === 'ArrowUp' ? currentIndex - 1 : currentIndex + 1;
+        const targetIndex = e.key === 'ArrowUp' ? currentIndex - 1 : currentIndex + 1;
         if (targetIndex >= 0 && targetIndex < sortedNodes.length) {
             const targetNode = sortedNodes[targetIndex];
             setFocusedNodeId({ id: targetNode.id, field: 'content' });
@@ -1752,8 +1680,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         }
       }
       
-      const currentIndex = sortedNodes.findIndex(n => n.id === currentNode.id);
-
       if (e.shiftKey) {
         // Outdent
         if (currentNode.parent_node_id) {
@@ -1799,7 +1725,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           const existingChildren = nodes.filter(n => n.parent_node_id === newParentId)
                                         .sort((a, b) => a.sort_order - b.sort_order);
           const lastChild = existingChildren.length > 0 ? existingChildren[existingChildren.length - 1] : null;
-          let newSortOrder = lastChild ? lastChild.sort_order + 1000 : Date.now();
+          const newSortOrder = lastChild ? lastChild.sort_order + 1000 : Date.now();
 
           execute(commands.createBatchMoveCommand([{
               id: currentNode.id,
@@ -1950,8 +1876,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
 
   const getSelectionFromRange = (rangeIds: string[], allNodes: Node[]): string[] => {
     const selectedIds = new Set<string>();
-    const rangeSet = new Set(rangeIds);
-
     // Helper to collect all descendants into selectedIds
     const collectDescendants = (id: string) => {
       const children = allNodes.filter(n => n.parent_node_id === id);
@@ -2192,12 +2116,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   }, [undo]);
 
   // Publish toolbar handlers to MobileToolbarContext for MobileLayout to render
-  const toolbarHandlersRef = useRef<any>(null);
-  if (!toolbarHandlersRef.current) {
-    toolbarHandlersRef.current = {};
-  }
-  // 每次更新已有对象的属性（引用不变）
-  Object.assign(toolbarHandlersRef.current, {
+  const toolbarHandlers = useMemo(() => ({
     onIndent: handleMobileIndent,
     onOutdent: handleMobileOutdent,
     onToggleTodo: handleMobileToggleComplete,
@@ -2207,12 +2126,16 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     onZoom: handleMobileZoom,
     onUndo: handleMobileUndo,
     onDelete: handleMobileDelete,
-  });
+  }), [
+    handleMobileIndent, handleMobileOutdent, handleMobileToggleComplete,
+    handleMobileAddNote, handleMobileMoveUp, handleMobileMoveDown,
+    handleMobileZoom, handleMobileUndo, handleMobileDelete,
+  ]);
 
   useEffect(() => {
     if (!isMobile) return;
-    publishToolbar(!!focusedNodeIdForToolbar, toolbarHandlersRef.current);
-  }, [isMobile, focusedNodeIdForToolbar, publishToolbar]);
+    publishToolbar(!!focusedNodeIdForToolbar, toolbarHandlers);
+  }, [isMobile, focusedNodeIdForToolbar, publishToolbar, toolbarHandlers]);
 
   // 当窗口失焦或非应用复制时，清除内部剪贴板缓存
   // 避免从外部复制文字后粘贴仍使用旧的内部节点数据
@@ -2740,6 +2663,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                   docMonth={diaryMonth!}
                   diaryDays={diaryDays}
                   onDayClick={handleDiaryDayClick}
+                  showMonthArrows={isMobile}
                   onMonthNavigate={async (y, m) => {
                     try {
                       const data = await getMonthlyDiary(y, m);
@@ -2908,7 +2832,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                     }
                 }
               }}
-              onMouseUp={(e) => {
+              onMouseUp={() => {
                 // 移动模式：执行移动
                 if (dragMoveRef.current.isMoving) {
                   if (dropTarget) {

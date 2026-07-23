@@ -34,12 +34,26 @@ export function useAudioRecorder() {
   const resolveRef = useRef<((blob: Blob) => void) | null>(null);
 
   // 更新波形数据
-  const updateWaveform = useCallback(() => {
+  const updateWaveform = useCallback(function updateWaveformFrame() {
     if (!analyserRef.current) return;
     const data = new Uint8Array(analyserRef.current.frequencyBinCount);
     analyserRef.current.getByteFrequencyData(data);
     setAnalyserData(new Uint8Array(data));
-    animFrameRef.current = requestAnimationFrame(updateWaveform);
+    animFrameRef.current = requestAnimationFrame(updateWaveformFrame);
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (maxTimerRef.current) {
+      clearTimeout(maxTimerRef.current);
+      maxTimerRef.current = null;
+    }
   }, []);
 
   const startRecording = useCallback(async (): Promise<Blob | null> => {
@@ -103,21 +117,7 @@ export function useAudioRecorder() {
       setState('idle');
       return null;
     }
-  }, [updateWaveform]);
-
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    }
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    if (maxTimerRef.current) {
-      clearTimeout(maxTimerRef.current);
-      maxTimerRef.current = null;
-    }
-  }, []);
+  }, [stopRecording, updateWaveform]);
 
   // 清理
   useEffect(() => {

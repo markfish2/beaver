@@ -46,11 +46,10 @@ SyntaxHighlighter.registerLanguage('cpp', cpp);
 SyntaxHighlighter.registerLanguage('go', go);
 SyntaxHighlighter.registerLanguage('rust', rust);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
-import { Pencil, Eye, Save, Columns2, Image, Paperclip, Copy, CheckCheck } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Pencil, Eye, Save, Columns2, Copy, CheckCheck } from 'lucide-react';
 import { getNodes, createNode, updateNode, uploadFile, uploadFromUrl, getMemoTags, getDocuments, updateDocument } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
-import type { Node, Document } from '../api/data';
+import type { Document } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts } from '../utils/markdownPreprocess';
 import { getPasteMarkdown, extractExternalImageUrls } from '../utils/htmlToMarkdown';
@@ -114,7 +113,6 @@ function NoteImage({ src, alt }: { src?: string; alt?: string }) {
 }
 
 export default function MarkdownNoteEditor({ documentId, isNew = false }: Props) {
-  const navigate = useNavigate();
   const { updateDocumentTitle } = useDocuments();
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>(isNew ? 'edit' : 'preview');
   const [content, setContent] = useState('');

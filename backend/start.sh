@@ -254,34 +254,6 @@ sqlite3 /app/data/app.db "CREATE TABLE IF NOT EXISTS tasks (
 sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_tasks_project_id ON tasks(project_id);" 2>/dev/null
 sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_tasks_parent_id ON tasks(parent_id);" 2>/dev/null
 
-# 项目管理表
-sqlite3 /app/data/app.db "CREATE TABLE IF NOT EXISTS projects (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL DEFAULT '',
-    sort_order REAL DEFAULT 0.0,
-    is_archived INTEGER DEFAULT 0,
-    is_deleted INTEGER DEFAULT 0,
-    deleted_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);" && echo "Created projects table" || echo "projects table already exists"
-sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_projects_archived ON projects(is_archived);" 2>/dev/null
-sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_projects_deleted ON projects(is_deleted);" 2>/dev/null
-
-sqlite3 /app/data/app.db "CREATE TABLE IF NOT EXISTS tasks (
-    id TEXT PRIMARY KEY,
-    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    parent_id TEXT REFERENCES tasks(id) ON DELETE CASCADE,
-    title TEXT DEFAULT '',
-    start_date TEXT NOT NULL,
-    end_date TEXT NOT NULL,
-    is_done INTEGER DEFAULT 0,
-    sort_order REAL DEFAULT 0.0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);" && echo "Created tasks table" || echo "tasks table already exists"
-sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_tasks_project_id ON tasks(project_id);" 2>/dev/null
-sqlite3 /app/data/app.db "CREATE INDEX IF NOT EXISTS ix_tasks_parent_id ON tasks(parent_id);" 2>/dev/null
-
 # 画布数据迁移：将 SQLite scene_data 列中的数据迁移到文件系统
 echo "Running excalidraw data migration..."
 python3 /app/migrate_excalidraw.py

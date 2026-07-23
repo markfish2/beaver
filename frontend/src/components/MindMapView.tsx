@@ -1,9 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Layers, ChevronDown } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import type { Node } from '../api/data';
-import { uploadFile, getFileUrl, getThumbnailUrl } from '../api/data';
+import { getThumbnailUrl } from '../api/data';
 
 interface MindMapViewProps {
   nodes: Node[];
@@ -571,10 +569,11 @@ function MindMapView({
       if (isDestroyed) return;
       
       // 注册插件（使用静态方法）
-      MindMap.usePlugin(Export);
-      MindMap.usePlugin(ExportPDF);
+      const registerPlugin = MindMap.usePlugin.bind(MindMap);
+      registerPlugin(Export);
+      registerPlugin(ExportPDF);
       // 注册移动端触控支持
-      MindMap.usePlugin(TouchEvent);
+      registerPlugin(TouchEvent);
       
       const data = convertNodesToMindMapData(nodes, collapseLevel);
       const mergedTheme = buildMergedTheme(currentLineStyle, currentColorTheme);
@@ -792,9 +791,10 @@ function MindMapView({
           const ExportPDF = (await import('simple-mind-map/src/plugins/ExportPDF.js')).default;
           const TouchEvent = (await import('simple-mind-map/src/plugins/TouchEvent.js')).default;
 
-          MindMap.usePlugin(Export);
-          MindMap.usePlugin(ExportPDF);
-          MindMap.usePlugin(TouchEvent);
+          const registerPlugin = MindMap.usePlugin.bind(MindMap);
+          registerPlugin(Export);
+          registerPlugin(ExportPDF);
+          registerPlugin(TouchEvent);
 
           const data = convertNodesToMindMapData(nodes, collapseLevel);
           const mergedTheme = buildMergedTheme(currentLineStyle, currentColorTheme);

@@ -14,6 +14,7 @@ from ..models import Attachment
 from ..schemas import UploadResponse
 from ..dependencies import get_current_user_flexible as get_current_user
 from ..schemas import User
+from ..url_safety import is_safe_http_url
 
 router = APIRouter(
     tags=["attachments"]
@@ -216,23 +217,38 @@ async def upload_from_url(
     import httpx
     ensure_upload_dir()
 
+    if not is_safe_http_url(req.url):
+        raise HTTPException(status_code=400, detail="不允许访问该 URL")
+
     try:
         async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-            resp = await client.get(req.url, headers={
+            async with client.stream('GET', req.url, headers={
                 'User-Agent': 'Mozilla/5.0 (compatible; MiniFlowy/1.0)',
                 'Referer': req.url,
-            })
-            if resp.status_code != 200:
-                raise HTTPException(status_code=400, detail=f"下载失败: HTTP {resp.status_code}")
+            }) as resp:
+                if resp.status_code != 200:
+                    raise HTTPException(status_code=400, detail=f"下载失败: HTTP {resp.status_code}")
+                if not is_safe_http_url(str(resp.url)):
+                    raise HTTPException(status_code=400, detail="重定向目标不安全")
+                try:
+                    declared_size = int(resp.headers.get('content-length', '0') or 0)
+                except ValueError:
+                    declared_size = 0
+                if declared_size > MAX_FILE_SIZE:
+                    raise HTTPException(status_code=413, detail=f"文件大小超过限制 ({MAX_FILE_SIZE // 1024 // 1024}MB)")
+                chunks = []
+                received = 0
+                async for chunk in resp.aiter_bytes():
+                    received += len(chunk)
+                    if received > MAX_FILE_SIZE:
+                        raise HTTPException(status_code=413, detail=f"文件大小超过限制 ({MAX_FILE_SIZE // 1024 // 1024}MB)")
+                    chunks.append(chunk)
+                content = b''.join(chunks)
+                content_type = resp.headers.get('content-type', 'image/jpeg').split(';')[0].strip()
 
-        content = resp.content
         file_size = len(content)
-        if file_size > MAX_FILE_SIZE:
-            raise HTTPException(status_code=413, detail=f"文件大小超过限制 ({MAX_FILE_SIZE // 1024 // 1024}MB)")
-
-        content_type = resp.headers.get('content-type', 'image/jpeg').split(';')[0].strip()
         if not content_type.startswith('image/'):
-            content_type = 'image/jpeg'
+            raise HTTPException(status_code=400, detail="URL 返回的不是图片")
 
         ext = mimetypes.guess_extension(content_type) or '.jpg'
         if ext == '.jpe':
@@ -280,6 +296,8 @@ async def download_file(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    if not filename or filename != os.path.basename(filename):
+        raise HTTPException(status_code=400, detail="无效的文件名")
     file_path = os.path.join(UPLOAD_DIR, filename)
     
     if not os.path.exists(file_path):

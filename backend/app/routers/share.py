@@ -4,8 +4,7 @@
 import os
 import re
 import uuid
-import ipaddress
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
@@ -17,22 +16,11 @@ import html2text
 from .. import crud, schemas
 from ..database import get_db
 from ..dependencies import get_current_user_flexible as get_current_user
+from ..url_safety import is_safe_http_url
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "uploads")
 
 router = APIRouter()
-
-# SSRF 防护：禁止访问内网地址
-_PRIVATE_NETWORKS = [
-    ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("169.254.0.0/16"),
-    ipaddress.ip_network("::1/128"),
-    ipaddress.ip_network("fc00::/7"),
-    ipaddress.ip_network("fe80::/10"),
-]
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
@@ -49,6 +37,27 @@ _IMAGE_EXTENSIONS = {
     "image/webp": ".webp",
     "image/svg+xml": ".svg",
 }
+MAX_ARTICLE_SIZE = 5 * 1024 * 1024
+MAX_IMAGE_SIZE = 50 * 1024 * 1024
+
+
+def _declared_size(response: httpx.Response) -> int:
+    try:
+        return int(response.headers.get("content-length", "0") or 0)
+    except ValueError:
+        return 0
+
+
+def _read_limited(response: httpx.Response, max_size: int) -> bytes | None:
+    """读取流式响应；超过限制时返回 None。"""
+    if _declared_size(response) > max_size:
+        return None
+    body = bytearray()
+    for chunk in response.iter_bytes():
+        body.extend(chunk)
+        if len(body) > max_size:
+            return None
+    return bytes(body)
 
 
 class ShareRequest(BaseModel):
@@ -64,36 +73,26 @@ class ShareResponse(BaseModel):
     images_count: int = 0
 
 
-def _is_safe_url(url: str) -> bool:
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        return False
-    hostname = parsed.hostname
-    if not hostname:
-        return False
-    try:
-        ip = ipaddress.ip_address(hostname)
-        for net in _PRIVATE_NETWORKS:
-            if ip in net:
-                return False
-    except ValueError:
-        pass
-    return True
-
-
 def _download_image(client: httpx.Client, img_url: str, upload_dir: str) -> str | None:
     """下载图片并保存到 uploads 目录，返回相对路径"""
     try:
-        resp = client.get(img_url, timeout=15, follow_redirects=True)
-        resp.raise_for_status()
-        content_type = resp.headers.get("content-type", "").split(";")[0].strip().lower()
-        if content_type not in _IMAGE_TYPES:
+        if not is_safe_http_url(img_url):
             return None
+        with client.stream("GET", img_url, timeout=15, follow_redirects=True) as resp:
+            resp.raise_for_status()
+            if not is_safe_http_url(str(resp.url)):
+                return None
+            content_type = resp.headers.get("content-type", "").split(";")[0].strip().lower()
+            if content_type not in _IMAGE_TYPES:
+                return None
+            content = _read_limited(resp, MAX_IMAGE_SIZE)
+            if content is None:
+                return None
         ext = _IMAGE_EXTENSIONS.get(content_type, ".jpg")
         filename = f"{uuid.uuid4().hex}{ext}"
         filepath = f"{upload_dir}/{filename}"
         with open(filepath, "wb") as f:
-            f.write(resp.content)
+            f.write(content)
         return f"/uploads/{filename}"
     except Exception:
         return None
@@ -133,7 +132,7 @@ def _extract_content_from_html(html: str, base_url: str, upload_dir: str) -> tup
 
     # 下载图片并替换路径
     downloaded = 0
-    with httpx.Client(headers=_HEADERS, verify=False) as client:
+    with httpx.Client(headers=_HEADERS) as client:
         for img_url in img_urls:
             abs_url = urljoin(base_url, img_url)
             local_path = _download_image(client, abs_url, upload_dir)
@@ -174,14 +173,20 @@ def share_content(
         content_parts.append(req.extracted_content.strip())
     # 处理 URL：抓取正文（仅当前端未预提取时）
     elif req.url and req.url.startswith("http"):
-        if not _is_safe_url(req.url):
+        if not is_safe_http_url(req.url):
             raise HTTPException(status_code=400, detail="不允许访问该 URL")
 
         try:
-            with httpx.Client(headers=_HEADERS, verify=False, follow_redirects=True, timeout=20) as client:
-                resp = client.get(req.url)
-                resp.raise_for_status()
-                html = resp.text
+            with httpx.Client(headers=_HEADERS, follow_redirects=True, timeout=20) as client:
+                with client.stream("GET", req.url) as resp:
+                    resp.raise_for_status()
+                    if not is_safe_http_url(str(resp.url)):
+                        raise HTTPException(status_code=400, detail="重定向目标不安全")
+                    body = _read_limited(resp, MAX_ARTICLE_SIZE)
+                    if body is None:
+                        raise HTTPException(status_code=413, detail="网页内容超过 5MB 限制")
+                    encoding = resp.encoding or "utf-8"
+                    html = body.decode(encoding, errors="replace")
 
             # 提取正文 + 下载图片
             article_md, images_count = _extract_content_from_html(html, req.url, UPLOAD_DIR)
