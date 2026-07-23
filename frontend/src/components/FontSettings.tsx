@@ -4,6 +4,7 @@ import { Settings2, Palette } from 'lucide-react';
 import { updateSettings } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
 import { showToast } from '../utils/toast';
+import { syncThemeChrome } from '../utils/themeChrome';
 
 type FontSize = 'small' | 'medium' | 'large';
 type FontFamily = 'system' | 'yahei' | 'pingfang' | 'kaiti' | 'fangsong' | 'syst';
@@ -182,12 +183,7 @@ const AppearanceStateProvider = ({
       document.documentElement.classList.remove('dark');
     }
 
-    // 更新所有 theme-color meta 标签，移除 media 查询让浏览器使用手动设置的颜色
-    const color = theme.isDark ? '#111827' : '#ffffff';
-    document.querySelectorAll('meta[name="theme-color"], meta[name="hw-theme-color"]').forEach(meta => {
-      meta.setAttribute('content', color);
-      meta.removeAttribute('media');
-    });
+    syncThemeChrome(theme.isDark);
 
     window.dispatchEvent(new CustomEvent('theme-change'));
   }, []);

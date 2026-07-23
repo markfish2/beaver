@@ -7,6 +7,8 @@ import TokenPanel from '../TokenPanel';
 import AISettingsPanel from '../AISettingsPanel';
 import TrashPanel from '../TrashPanel';
 import PasswordPanel from '../PasswordPanel';
+import { useFontSettings } from '../FontSettings';
+import { useIsDark } from '../../hooks/useIsDark';
 
 interface MobileTopBarProps {
   title: string;
@@ -23,60 +25,13 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
   const [searchQuery, setSearchQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
-
-  // 暗色模式状态
-  const [isDark, setIsDark] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
-      if (saved.theme === 'dark') return true;
-      if (saved.theme && saved.theme !== 'dark') return false;
-    } catch { /* ignore */ }
-    return document.documentElement.classList.contains('dark') ||
-      window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
-
-  // 监听主题变化
-  useEffect(() => {
-    const onThemeChange = () => {
-      try {
-        const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
-        if (saved.theme === 'dark') { setIsDark(true); return; }
-        if (saved.theme && saved.theme !== 'dark') { setIsDark(false); return; }
-      } catch { /* ignore */ }
-      setIsDark(document.documentElement.classList.contains('dark'));
-    };
-    window.addEventListener('theme-change', onThemeChange);
-    const mql = window.matchMedia('(prefers-color-scheme: dark)');
-    mql.addEventListener('change', onThemeChange);
-    return () => {
-      window.removeEventListener('theme-change', onThemeChange);
-      mql.removeEventListener('change', onThemeChange);
-    };
-  }, []);
+  const { setTheme } = useFontSettings();
+  const isDark = useIsDark();
 
   // 切换暗色/亮色
   const toggleDark = useCallback(() => {
-    const newDark = !isDark;
-    setIsDark(newDark);
-    document.documentElement.classList.toggle('dark', newDark);
-    // 更新 localStorage
-    try {
-      const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
-      saved.theme = newDark ? 'dark' : 'minimal';
-      localStorage.setItem('outline-font-settings', JSON.stringify(saved));
-      // 保存非暗色主题以便恢复
-      if (newDark) {
-        localStorage.setItem('outline-restored-theme', saved.theme === 'dark' ? 'minimal' : 'minimal');
-      }
-    } catch { /* ignore */ }
-    // 更新 theme-color meta，移除 media 查询
-    document.querySelectorAll('meta[name="theme-color"], meta[name="hw-theme-color"]').forEach(meta => {
-      meta.setAttribute('content', newDark ? '#111827' : '#ffffff');
-      meta.removeAttribute('media');
-    });
-    // 派发事件通知其他组件
-    window.dispatchEvent(new CustomEvent('theme-change'));
-  }, [isDark]);
+    setTheme(isDark ? 'minimal' : 'dark');
+  }, [isDark, setTheme]);
 
   useEffect(() => {
     if (showSearch && searchRef.current) {

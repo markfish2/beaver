@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { syncThemeChrome } from './utils/themeChrome.ts'
 
 // 系统暗色模式检测 + 监听系统主题变化
 // iOS PWA standalone 模式下首次加载 prefers-color-scheme 可能返回错误值
@@ -18,10 +19,7 @@ import App from './App.tsx'
       const dark = saved.theme === 'dark';
       document.documentElement.dataset.theme = saved.theme;
       document.documentElement.classList.toggle('dark', dark);
-      document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
-        meta.setAttribute('content', dark ? '#111827' : '#ffffff');
-        meta.removeAttribute('media');
-      });
+      syncThemeChrome(dark);
       return;
     }
 
@@ -31,9 +29,7 @@ import App from './App.tsx'
     if (dark !== lastDark) {
       lastDark = dark;
       document.documentElement.classList.toggle('dark', dark);
-      document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
-        meta.setAttribute('content', dark ? '#111827' : '#ffffff');
-      });
+      syncThemeChrome(dark);
       window.dispatchEvent(new Event('theme-change'));
     }
   }
@@ -45,18 +41,14 @@ import App from './App.tsx'
       const dark = saved.theme === 'dark';
       document.documentElement.dataset.theme = saved.theme;
       document.documentElement.classList.toggle('dark', dark);
-      document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
-        meta.setAttribute('content', dark ? '#111827' : '#ffffff');
-      });
+      syncThemeChrome(dark);
       return;
     }
     const dark = mq.matches;
     document.documentElement.dataset.theme = dark ? 'dark' : 'minimal';
     lastDark = dark;
     document.documentElement.classList.toggle('dark', dark);
-    document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
-      meta.setAttribute('content', dark ? '#111827' : '#ffffff');
-    });
+    syncThemeChrome(dark);
   }
 
   initialApply();
