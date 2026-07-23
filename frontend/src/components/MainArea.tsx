@@ -38,6 +38,16 @@ import { createCommandFactory } from '../commands/implementations';
 
 import { saveStateManager, sendBatchSaveRequest, PendingOperation } from '../utils/saveStateManager';
 import { saveViewState, saveScrollPosition, loadScrollPosition } from '../utils/pwaState';
+import { getErrorMessage } from '../utils/errors';
+
+interface SerializedNode {
+  content: string;
+  note?: string;
+  is_completed?: boolean;
+  is_todo?: boolean;
+  color?: string | null;
+  children: SerializedNode[];
+}
 
 // Helper to build tree from flat list for rendering
 const buildTree = (nodes: Node[]): (Node & { children: Node[] })[] => {
@@ -104,14 +114,14 @@ const nodesToMarkdown = (allNodes: Node[], selectedIds: string[]): string => {
 
 // 剪贴板寄存器
 const clipboardRegister = {
-  data: null as any[] | null,
+  data: null as SerializedNode[] | null,
   // 标记：是否刚由应用内部触发了复制
   isInternalCopy: false,
-  saveSerializedRows(data: any[]) {
+  saveSerializedRows(data: SerializedNode[]) {
     this.data = data;
     this.isInternalCopy = true;
   },
-  getSerializedRows(): any[] | null {
+  getSerializedRows(): SerializedNode[] | null {
     return this.data;
   },
   clear() {
@@ -121,10 +131,10 @@ const clipboardRegister = {
 };
 
 // Helper: 序列化节点为树结构（用于内部粘贴）
-const serializeNodesToTree = (allNodes: Node[], selectedIds: string[]): any[] => {
+const serializeNodesToTree = (allNodes: Node[], selectedIds: string[]): SerializedNode[] => {
   const selectedNodes = allNodes.filter(n => selectedIds.includes(n.id));
   
-  const processNode = (node: Node): any => {
+  const processNode = (node: Node): SerializedNode => {
     const children = allNodes.filter(n => n.parent_node_id === node.id && selectedIds.includes(n.id));
     return {
       content: node.content,
@@ -582,7 +592,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
               
             case 'batchMove':
               if (op.data.updates) {
-                const payload = op.data.updates.map((u: any) => ({ 
+                const payload = op.data.updates.map((u: { id: string; newParent: string | null; newOrder: number }) => ({
                   id: u.id, 
                   parent_node_id: u.newParent, 
                   sort_order: u.newOrder 
@@ -791,7 +801,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         if (mainContent) mainContent.scrollTop = scrollTop;
       });
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // 监听文章链接点击，导航到目标文章
   useEffect(() => {
@@ -1216,9 +1226,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
               });
               setNodes(prev => [...prev, newNode]);
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             console.error('图片上传失败', error);
-            const errorMessage = error?.response?.data?.detail || error?.message || '未知错误';
+            const errorMessage = getErrorMessage(error, '未知错误');
             alert(`图片上传失败: ${errorMessage}`);
           }
         }
@@ -1265,9 +1275,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
               });
               setNodes(prev => [...prev, newNode]);
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             console.error('附件上传失败', error);
-            const errorMessage = error?.response?.data?.detail || error?.message || '未知错误';
+            const errorMessage = getErrorMessage(error, '未知错误');
             alert(`附件上传失败: ${errorMessage}`);
           }
         }
@@ -1290,7 +1300,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     // 2. 尝试从系统剪贴板读取自定义 MIME 类型
     if (!parsedTree) {
       try {
-        const types = (e.clipboardData as any).types;
+        const types = Array.from(e.clipboardData.types);
         if (types?.includes?.('application/x-miniflowy-nodes') || Array.isArray(types) && types.includes('application/x-miniflowy-nodes')) {
           const raw = e.clipboardData.getData('application/x-miniflowy-nodes');
           if (raw) parsedTree = JSON.parse(raw);

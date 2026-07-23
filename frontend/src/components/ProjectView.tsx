@@ -226,7 +226,7 @@ export default function ProjectView({ projectId, showArchived = false, onToggleA
     // 后端同步
     try {
       const newParentId = position === 'inside' ? targetId : undefined;
-      await updateTask(taskId, { parent_id: newParentId as any });
+      await updateTask(taskId, { parent_id: newParentId });
     } catch {
       if (projectId) getTasks(projectId).then(setTasks);
     }

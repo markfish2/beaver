@@ -77,7 +77,9 @@ const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => ({
   background: isDark ? '#282c34' : '#fbfbf8', border: 'none', padding: '16px',
 });
 
-const CodeBlock = memo(function CodeBlock({ className, children, ...props }: { className?: string; children: React.ReactNode; [key: string]: any }) {
+type MarkdownCodeProps = Parameters<NonNullable<Components['code']>>[0];
+
+const CodeBlock = memo(function CodeBlock({ className, children, ...props }: MarkdownCodeProps) {
   const [copied, setCopied] = useState(false);
   const isDark = useIsDark();
   const match = /language-(\w+)/.exec(className || '');
@@ -327,7 +329,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
 
   const navigate_fn = useNavigate();
   const mdComponents = useMemo((): Components => ({
-    code: (props: any) => {
+    code: (props: MarkdownCodeProps) => {
       const match = /language-(\w+)/.exec(props.className || '');
       if (match && match[1] === 'mermaid') return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
       return <CodeBlock {...props} />;

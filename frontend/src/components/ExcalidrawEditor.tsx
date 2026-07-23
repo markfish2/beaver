@@ -1,7 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo, Component, Suspense } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
 import { Excalidraw, MainMenu, exportToBlob, exportToSvg } from "@excalidraw/excalidraw";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { AppState, BinaryFiles, ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from "@excalidraw/excalidraw/types";
 import { Download, Image, FileJson, FileText, Loader2, StickyNote } from 'lucide-react';
 import { getExcalidrawDataFresh, updateExcalidrawData, loadExcalidrawFiles, VersionConflictError } from '../api/excalidraw';
 import NoteEmbedContent from './NoteEmbedContent';
@@ -16,6 +16,11 @@ function omitViewportState<T extends Record<string, unknown>>(appState: T): T {
   delete result.scrollY;
   delete result.zoom;
   return result;
+}
+
+function fingerprint(elements: ReadonlyArray<{ id: string; version: number }>): string {
+  const lastElement = elements[elements.length - 1];
+  return `${elements.length}:${lastElement?.id || ''}:${lastElement?.version || ''}`;
 }
 
 // Error boundary to catch Excalidraw rendering errors (React 19 compatibility)
@@ -56,9 +61,9 @@ class ExcalidrawErrorBoundary extends Component<
 import { SaveStatusIndicator } from './SaveStatusIndicator';
 
 // 简单的 debounce 实现（带 cancel 方法）
-const debounce = <T extends (...args: any[]) => any>(func: T, wait: number) => {
+const debounce = <TArgs extends unknown[]>(func: (...args: TArgs) => void, wait: number) => {
   let timeout: NodeJS.Timeout | null = null;
-  const debounced = (...args: Parameters<T>) => {
+  const debounced = (...args: TArgs) => {
     if (timeout) clearTimeout(timeout);
     timeout = setTimeout(() => func(...args), wait);
   };
@@ -89,7 +94,12 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
 }) => {
   const excalidrawRef = useRef<ExcalidrawImperativeAPI>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [initialData, setInitialData] = useState<{ elements: any[]; appState: any; files?: any } | null>(null);
+  type SceneElements = ReturnType<ExcalidrawImperativeAPI['getSceneElements']>;
+  type SceneElement = SceneElements[number];
+  type SaveData = (elements: SceneElements, appState: AppState) => void;
+  type ScenePayload = { elements: SceneElements; appState: Partial<AppState>; files?: BinaryFiles };
+
+  const [initialData, setInitialData] = useState<ExcalidrawInitialDataState | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error' | 'conflict'>('idle');
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [localTitle, setLocalTitle] = useState(title);
@@ -107,11 +117,11 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     documentIdRef.current = documentId;
   }, [documentId]);
   // saveData ref（用于在 effect 中访问最新的 debounce 函数）
-  const saveDataRef = useRef<any>(null);
+  const saveDataRef = useRef<SaveData | null>(null);
   const reloadCanvasRef = useRef<() => Promise<void>>(async () => {});
 
   // renderEmbeddable: 渲染笔记引用
-  const renderEmbeddable = useCallback((element: any) => {
+  const renderEmbeddable = useCallback((element: SceneElement) => {
     const link = element.link as string;
     if (!link || !link.startsWith('beaver://')) return null;
     const cacheKey = element.id;
@@ -166,14 +176,14 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
       strokeStyle: 'solid' as const,
       roughness: 0 as const,
       opacity: 100,
-      angle: 0 as any,
+      angle: 0,
       groupIds: [],
       frameId: null,
       roundness: { type: 3 as const },
       seed: Math.floor(Math.random() * 2000000000),
       version: 1,
       versionNonce: Math.floor(Math.random() * 2000000000),
-      index: null as any,
+      index: null,
       isDeleted: false,
       boundElements: null,
       updated: Date.now(),
@@ -182,7 +192,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     };
 
     const elements = api.getSceneElements();
-    api.updateScene({ elements: [...elements, embeddableElement as any] });
+    api.updateScene({ elements: [...elements, embeddableElement] as unknown as SceneElements });
   }, []);
 
   // React Router 导航拦截：有未保存数据时弹窗确认
@@ -191,7 +201,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     const origReplace = window.history.replaceState;
 
     const intercept = (fn: typeof origPush) => {
-      return function (this: History, data: any, unused: string, url?: string | URL | null) {
+      return function (this: History, data: unknown, unused: string, url?: string | URL | null) {
         if (hasUnsavedChangesRef.current && url) {
           const current = window.location.pathname + window.location.search;
           const next = typeof url === 'string' ? url : url?.toString() || '';
@@ -260,7 +270,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
             const files = await loadExcalidrawFiles(loadedDocId);
             if (cancelled || documentIdRef.current !== loadedDocId) return;
 
-            const scenePayload: any = { elements: sceneData.elements, appState: restAppState };
+            const scenePayload = { elements: sceneData.elements, appState: restAppState } as ExcalidrawInitialDataState;
             if (Object.keys(files).length > 0) {
               scenePayload.files = files;
               filesRef.current = files;
@@ -306,7 +316,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         e.preventDefault();
         e.returnValue = '画布有未保存的更改，确定要离开吗？';
         // 同时尝试保存
-        const payload: any = {
+        const payload: ScenePayload = {
           elements,
           appState: { viewBackgroundColor: appState?.viewBackgroundColor, gridSize: appState?.gridSize },
         };
@@ -329,7 +339,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
       const elements = pendingElementsRef.current;
       const appState = pendingAppStateRef.current;
       if (hasUnsavedChangesRef.current && elements && elements.length > 0) {
-        const payload: any = {
+        const payload: ScenePayload = {
           elements,
           appState: { viewBackgroundColor: appState?.viewBackgroundColor, gridSize: appState?.gridSize },
         };
@@ -378,10 +388,10 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   // 保存锁、files 缓存、待保存数据
   const isSavingRef = useRef(false);
   const saveCompleteRef = useRef<(() => void) | null>(null);
-  const filesRef = useRef<any>(null);
+  const filesRef = useRef<BinaryFiles | null>(null);
   const filesDirtyRef = useRef(false);
-  const pendingElementsRef = useRef<any[]>(null);
-  const pendingAppStateRef = useRef<any>(null);
+  const pendingElementsRef = useRef<SceneElements | null>(null);
+  const pendingAppStateRef = useRef<AppState | null>(null);
 
   // 立即保存（绕过 debounce，用于页面关闭/组件卸载）
   const flushSave = useCallback(async () => {
@@ -399,7 +409,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
 
     isSavingRef.current = true;
     try {
-      const payload: any = {
+      const payload: ScenePayload = {
         elements,
         appState: {
           viewBackgroundColor: appState?.viewBackgroundColor,
@@ -476,12 +486,10 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   const hasUnsavedChangesRef = useRef(false);
   // 上次保存时的 elements 指纹（用于判断是否真正有变化）
   const savedFingerprintRef = useRef<string>('');
-  const fingerprint = (els: any[]) => `${els.length}:${els[els.length - 1]?.id || ''}:${els[els.length - 1]?.version || ''}`;
-
   // 防抖保存
   const saveData = useMemo(
     () =>
-      debounce(async (elements: any[], appState: any) => {
+      debounce(async (elements: SceneElements, appState: AppState) => {
         if (!elements || elements.length === 0) return;
         if (isSavingRef.current) return;
 
@@ -498,7 +506,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         }, 30000);
 
         try {
-          const payload: any = {
+          const payload: ScenePayload = {
             elements,
             appState: {
               viewBackgroundColor: appState.viewBackgroundColor,
@@ -539,13 +547,13 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           // 图片保存成功后，将 pending 状态的图片元素更新为 saved
           if (filesWereSaved && excalidrawRef.current) {
             const currentElements = excalidrawRef.current.getSceneElements();
-            const updatedElements = currentElements.map((el: any) => {
+            const updatedElements = currentElements.map((el) => {
               if (el.type === 'image' && el.status === 'pending' && el.fileId) {
                 return { ...el, status: 'saved' };
               }
               return el;
             });
-            const hasChanges = updatedElements.some((el: any, i: number) => el !== currentElements[i]);
+            const hasChanges = updatedElements.some((el, i: number) => el !== currentElements[i]);
             if (hasChanges) {
               excalidrawRef.current.updateScene({ elements: updatedElements });
             }
@@ -603,7 +611,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     flushSaveRef.current = flushSave;
   }, [saveData, flushSave]);
   const handleChange = useCallback(
-    (elements: any[], appState: any, files: any) => {
+    (elements: SceneElements, appState: AppState, files: BinaryFiles) => {
       if (elements && elements.length > 0) {
         // 记录最新数据（用于页面关闭时立即保存）
         pendingElementsRef.current = elements;

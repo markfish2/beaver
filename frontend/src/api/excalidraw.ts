@@ -1,5 +1,7 @@
 import api from './client';
 import { dataCache } from './cache';
+import axios from 'axios';
+import type { BinaryFileData, BinaryFiles } from '@excalidraw/excalidraw/types';
 
 export interface ExcalidrawData {
   id: string;
@@ -72,8 +74,8 @@ export const updateExcalidrawData = async (
     });
     dataCache.invalidate(`excalidraw:${documentId}`);
     return response.data;
-  } catch (e: any) {
-    if (e?.response?.status === 409) {
+  } catch (e: unknown) {
+    if (axios.isAxiosError<{ detail?: { current_version?: number } }>(e) && e.response?.status === 409) {
       const detail = e.response.data?.detail;
       throw new VersionConflictError(detail?.current_version ?? 0);
     }
@@ -105,13 +107,13 @@ export const getExcalidrawFilesMeta = async (documentId: string): Promise<Record
  * 加载画布的所有图片文件，返回 Excalidraw files 对象。
  * 图片通过独立 API 按需加载为 dataUrl。
  */
-export const loadExcalidrawFiles = async (documentId: string): Promise<Record<string, any>> => {
+export const loadExcalidrawFiles = async (documentId: string): Promise<BinaryFiles> => {
   const meta = await getExcalidrawFilesMeta(documentId);
   const fileIds = Object.keys(meta);
   if (fileIds.length === 0) return {};
 
   const token = localStorage.getItem('token');
-  const files: Record<string, any> = {};
+  const files: BinaryFiles = {};
 
   // 并行加载所有图片（每批最多 5 个，避免并发过多）
   const batchSize = 5;
@@ -141,7 +143,7 @@ export const loadExcalidrawFiles = async (documentId: string): Promise<Record<st
           dataURL: dataUrl,
           created: 0,
           lastRetrieved: 0,
-        };
+        } as BinaryFileData;
       }
     }
   }

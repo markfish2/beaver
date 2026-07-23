@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { getErrorMessage } from '../utils/errors';
 
 const SetupPage = () => {
   const [username, setUsername] = useState('');
@@ -27,8 +28,8 @@ const SetupPage = () => {
 
     try {
       await setup(username, password);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || '初始化失败，请重试');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, '初始化失败，请重试'));
     }
   };
 

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Loader2, BookmarkPlus, Database, Globe, Wand2, StickyNote, FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import remarkMath from 'remark-math';
@@ -32,6 +33,9 @@ interface AIChatMainViewProps {
   onConversationCreated?: (convId: string) => void;
   onNavigate?: (type: string, id: string) => void;
 }
+
+type MarkdownCodeProps = Parameters<NonNullable<Components['code']>>[0];
+type MarkdownLinkProps = Parameters<NonNullable<Components['a']>>[0];
 
 export default function AIChatMainView({ conversationId, onConversationCreated, onNavigate }: AIChatMainViewProps) {
   const { addDocument } = useDocuments();
@@ -265,14 +269,14 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
                     remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
                     rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]}
                     components={{
-                      code: (props: any) => {
+                      code: (props: MarkdownCodeProps) => {
                         const match = /language-(\w+)/.exec(props.className || '');
                         if (match && match[1] === 'mermaid') {
                           return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
                         }
                         return <code {...props} />;
                       },
-                      a: ({ href, children, ...props }: any) => {
+                      a: ({ href, children, ...props }: MarkdownLinkProps) => {
                         if (href && href.startsWith('/d/')) {
                           return (
                             <a

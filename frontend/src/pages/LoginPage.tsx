@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { getErrorMessage } from '../utils/errors';
 
 const LoginPage = () => {
   const [username, setUsername] = useState('');
@@ -28,8 +29,8 @@ const LoginPage = () => {
 
     try {
       await login(username, password);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || '用户名或密码错误');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, '用户名或密码错误'));
     }
   };
 

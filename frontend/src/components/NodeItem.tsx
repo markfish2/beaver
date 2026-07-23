@@ -1037,7 +1037,7 @@ const NodeItem = memo(({
                <NodeItem
                  key={child.id}
                  node={child}
-                 childrenNodes={(child as any).children}
+                 childrenNodes={'children' in child ? child.children : []}
                  documents={documents}
                  onContentChange={onContentChange}
                  onNoteChange={onNoteChange}
