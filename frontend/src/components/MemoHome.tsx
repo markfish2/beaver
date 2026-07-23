@@ -33,7 +33,9 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   const [memoPage, setMemoPage] = useState(1);
   const [memoTotal, setMemoTotal] = useState(0);
   const [memoColumnsOverride, setMemoColumnsOverride] = useState<1 | 2 | null>(null);
-  const memoColumns: 1 | 2 = memoColumnsOverride ?? (user?.memo_columns === 2 ? 2 : 1);
+  const savedMemoColumns: 1 | 2 = memoColumnsOverride ?? (user?.memo_columns === 2 ? 2 : 1);
+  // 移动端始终单栏，避免卡片正文、代码和附件被压缩到不可读宽度。
+  const memoColumns: 1 | 2 = isMobile ? 1 : savedMemoColumns;
   const [memoView, setMemoView] = useState<'active' | 'archived' | 'public' | 'wanderer' | 'media'>(() => {
     const saved = loadViewState();
     return saved.memoView || 'active';
@@ -373,7 +375,12 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
         </button>
       )}
 
-      <div className="flex flex-row max-w-[670px] mx-auto px-4 pb-20 gap-6" style={{ paddingTop: document.documentElement.dataset.mobileLayout ? '24px' : 'calc(env(safe-area-inset-top, 0px) + 24px)' }}>
+      <div
+        className={`flex flex-row mx-auto px-4 pb-20 gap-6 transition-[max-width] ${
+          memoColumns === 2 ? 'max-w-[960px]' : 'max-w-[670px]'
+        }`}
+        style={{ paddingTop: document.documentElement.dataset.mobileLayout ? '24px' : 'calc(env(safe-area-inset-top, 0px) + 24px)' }}
+      >
         {/* 左栏：输入框 + 待办 + 随想 */}
         <div className="flex-1 min-w-0">
           {memoView === 'active' && <MemoInput onMemoCreated={handleMemoCreated} documents={documents} />}
@@ -518,7 +525,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
                   {memoView === 'archived' ? '已归档' : memoView === 'public' ? '已公开' : memoView === 'wanderer' ? '随机漫游' : memoView === 'media' ? '图片文件' : '随想记录'}
                 </h2>
               </div>
-              {memoView !== 'media' && (
+              {memoView !== 'media' && !isMobile && (
               <button
                 onClick={toggleMemoColumns}
                 className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"

@@ -310,6 +310,62 @@
 .dark .memo-content hr { border-top-color: #374151; }
 .memo-content span[role="checkbox"] { margin-right: 0.375rem; }
 
+/* Memo 卡片使用语义色变量，避免彩色卡片继续套用全局灰阶。 */
+.memo-card-themed .memo-content,
+.memo-card-themed .memo-content h1,
+.memo-card-themed .memo-content h2,
+.memo-card-themed .memo-content h3,
+.memo-card-themed .memo-content h4,
+.memo-card-themed .memo-content h5,
+.memo-card-themed .memo-content h6 {
+  color: var(--memo-text);
+}
+.memo-card-themed .memo-content h1,
+.memo-card-themed .memo-content hr {
+  border-color: var(--memo-surface-border);
+}
+.memo-card-themed .memo-content blockquote {
+  color: var(--memo-quote-text);
+  border-left-color: var(--memo-quote-border);
+}
+.memo-card-themed .memo-content a {
+  color: var(--memo-link);
+}
+.memo-card-themed .memo-content a:hover {
+  color: var(--memo-link-hover);
+}
+.memo-card-themed .memo-document-link {
+  color: var(--memo-link);
+  background: var(--memo-surface);
+  text-decoration: none;
+}
+.memo-card-themed .memo-document-link:hover {
+  color: var(--memo-link-hover);
+}
+.memo-card-themed .memo-content code:not(pre code) {
+  color: var(--memo-inline-code-text);
+  background: var(--memo-inline-code-bg);
+}
+.memo-card-themed .memo-content mark {
+  color: var(--memo-text);
+  background: var(--memo-surface);
+  outline: 1px solid var(--memo-surface-border);
+}
+.memo-card-themed .memo-content th,
+.memo-card-themed .memo-content td {
+  border-color: var(--memo-surface-border);
+}
+.memo-card-themed .memo-content th {
+  color: var(--memo-text);
+  background: var(--memo-surface);
+}
+.memo-card-themed .memo-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
 /* Excalidraw: 隐藏工具栏下方的操作提示 */
 .excalidraw .HintViewer { display: none !important; }
 

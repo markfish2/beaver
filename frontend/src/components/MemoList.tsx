@@ -20,18 +20,23 @@ interface MemoListProps {
   documents?: Document[];
 }
 
-function estimateHeight(m: Memo): number {
+function estimateHeight(m: Memo, compact: boolean): number {
   const lines = m.content.split('\n').length;
   const codeBlocks = (m.content.match(/```/g) || []).length / 2;
   const chars = m.content.length;
-  const raw = lines * 20 + codeBlocks * 120 + Math.floor(chars / 80) * 20;
+  const charsPerLine = compact ? 46 : 80;
+  const raw = lines * 20 + codeBlocks * (compact ? 105 : 120) + Math.floor(chars / charsPerLine) * 20;
   const contentH = Math.min(raw, 400);
   const hasCollapse = raw > 400 ? 24 : 0;
-  const tags = (m.content.match(/#[a-zA-Z0-9_一-龥]+/g) || []).length > 0 ? 32 : 0;
-  const images = (m.content.match(/!\[/g) || []).length > 0 ? 96 : 0;
+  const tagCount = (m.content.match(/#[a-zA-Z0-9_一-龥]+/g) || []).length;
+  const tags = tagCount > 0 ? Math.ceil(tagCount / (compact ? 3 : 6)) * 28 : 0;
+  const imageCount = (m.content.match(/!\[/g) || []).length;
+  const images = imageCount > 0 ? (compact ? 150 : 220) : 0;
+  const attachmentCount = (m.content.match(/(?<!!)\[[^\]]+\]\([^)]+\)/g) || []).length;
+  const attachments = attachmentCount > 0 ? 46 + attachmentCount * 34 : 0;
   const urlCount = (m.content.match(/https?:\/\//g) || []).length;
   const linkPreviews = urlCount > 0 ? urlCount * 72 : 0;
-  return 60 + contentH + hasCollapse + tags + images + linkPreviews;
+  return 60 + contentH + hasCollapse + tags + images + attachments + linkPreviews;
 }
 
 function LoadMoreSentinel({ onLoadMore, hasMore }: { onLoadMore: () => Promise<void>; hasMore: boolean }) {
@@ -73,7 +78,7 @@ const MemoList = memo(function MemoList({ memos, columns, onEdit, onDelete, onTo
     const right: Memo[] = [];
     let leftH = 0, rightH = 0;
     for (const memo of memos) {
-      const h = estimateHeight(memo);
+      const h = estimateHeight(memo, true);
       if (leftH <= rightH) {
         left.push(memo);
         leftH += h;
@@ -103,14 +108,14 @@ const MemoList = memo(function MemoList({ memos, columns, onEdit, onDelete, onTo
           <div className="space-y-3" style={{ contain: 'layout' }}>
             {leftCol.map(memo => (
               <div key={memo.id} id={`memo-${memo.id}`}>
-                <MemoCard memo={memo} onEdit={onEdit} onDelete={onDelete} onTogglePin={onTogglePin} onToggleArchive={onToggleArchive} onTogglePublic={onTogglePublic} onToggleAI={onToggleAI} onTagClick={onTagClick} onColorChange={onColorChange} isHighlighted={highlightId === memo.id} documents={documents} />
+                <MemoCard memo={memo} onEdit={onEdit} onDelete={onDelete} onTogglePin={onTogglePin} onToggleArchive={onToggleArchive} onTogglePublic={onTogglePublic} onToggleAI={onToggleAI} onTagClick={onTagClick} onColorChange={onColorChange} isHighlighted={highlightId === memo.id} documents={documents} compact />
               </div>
             ))}
           </div>
           <div className="space-y-3" style={{ contain: 'layout' }}>
             {rightCol.map(memo => (
               <div key={memo.id} id={`memo-${memo.id}`}>
-                <MemoCard memo={memo} onEdit={onEdit} onDelete={onDelete} onTogglePin={onTogglePin} onToggleArchive={onToggleArchive} onTogglePublic={onTogglePublic} onToggleAI={onToggleAI} onTagClick={onTagClick} onColorChange={onColorChange} isHighlighted={highlightId === memo.id} documents={documents} />
+                <MemoCard memo={memo} onEdit={onEdit} onDelete={onDelete} onTogglePin={onTogglePin} onToggleArchive={onToggleArchive} onTogglePublic={onTogglePublic} onToggleAI={onToggleAI} onTagClick={onTagClick} onColorChange={onColorChange} isHighlighted={highlightId === memo.id} documents={documents} compact />
               </div>
             ))}
           </div>

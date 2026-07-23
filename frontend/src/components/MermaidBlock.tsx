@@ -2,15 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 import elkLayouts from '@mermaid-js/layout-elk';
 
-let mermaidInitialized = false;
+let initializedTheme: 'dark' | 'default' | null = null;
 
-async function initMermaid() {
-  if (mermaidInitialized) return;
+async function initMermaid(dark?: boolean) {
+  const theme = (dark ?? document.documentElement.classList.contains('dark')) ? 'dark' : 'default';
+  if (initializedTheme === theme) return;
   // 注册 ELK 布局插件
   await mermaid.registerExternalDiagrams([elkLayouts]);
   mermaid.initialize({
     startOnLoad: false,
-    theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+    theme,
     securityLevel: 'loose',
     fontFamily: 'inherit',
     flowchart: {
@@ -20,14 +21,15 @@ async function initMermaid() {
       padding: 15,
     },
   });
-  mermaidInitialized = true;
+  initializedTheme = theme;
 }
 
 interface MermaidBlockProps {
   code: string;
+  dark?: boolean;
 }
 
-export default function MermaidBlock({ code }: MermaidBlockProps) {
+export default function MermaidBlock({ code, dark }: MermaidBlockProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,7 +37,7 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
     let cancelled = false;
 
     const render = async () => {
-      await initMermaid();
+      await initMermaid(dark);
       if (!containerRef.current) return;
       try {
         // 预处理：修复常见语法问题，自动注入 ELK 渲染器
@@ -63,7 +65,7 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
 
     render();
     return () => { cancelled = true; };
-  }, [code]);
+  }, [code, dark]);
 
   if (error) {
     return (

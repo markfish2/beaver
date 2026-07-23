@@ -64,35 +64,15 @@ import { stripTags, stripAttachments, normalizeTaskLists, normalizeHighlight, no
 import MemoToDocDialog from './MemoToDocDialog';
 import AudioPlayer from './AudioPlayer';
 import AIChatPanel from './AIChatPanel';
-
-const MEMO_COLORS = [
-  { name: '白', value: '#ffffff', dark: '#1f2937', whiteText: false },
-  { name: '浅卡片', value: '#E5DFD2', dark: '#2a2720', whiteText: false },
-  { name: '强调黑', value: '#1A1A1A', dark: '#1A1A1A', whiteText: true },
-  { name: '标志橙', value: '#b37f90', dark: '#8B4A2E', whiteText: true },
-  { name: '鼠尾草', value: '#d1dfe8', dark: '#2a3a2d', whiteText: false },
-  { name: '深鼠尾草', value: '#9ec8a8', dark: '#3d5240', whiteText: true },
-];
-
-const TAG_COLORS = [
-  { bg: '#eff6ff', text: '#2563eb', border: '#93c5fd', darkBg: '#172554', darkText: '#60a5fa', darkBorder: '#1e40af' },
-  { bg: '#f0fdf4', text: '#16a34a', border: '#86efac', darkBg: '#052e16', darkText: '#4ade80', darkBorder: '#166534' },
-  { bg: '#fef3c7', text: '#d97706', border: '#fcd34d', darkBg: '#451a03', darkText: '#fbbf24', darkBorder: '#92400e' },
-  { bg: '#fce7f3', text: '#db2777', border: '#f9a8d4', darkBg: '#500724', darkText: '#f472b6', darkBorder: '#9d174d' },
-  { bg: '#f3e8ff', text: '#9333ea', border: '#c4b5fd', darkBg: '#2e1065', darkText: '#a78bfa', darkBorder: '#6b21a8' },
-  { bg: '#ecfeff', text: '#0891b2', border: '#67e8f9', darkBg: '#083344', darkText: '#22d3ee', darkBorder: '#155e75' },
-  { bg: '#fff1f2', text: '#e11d48', border: '#fda4af', darkBg: '#4c0519', darkText: '#fb7185', darkBorder: '#9f1239' },
-  { bg: '#fdf4ff', text: '#c026d3', border: '#e879f9', darkBg: '#4a044e', darkText: '#d946ef', darkBorder: '#86198f' },
-  { bg: '#f0f9ff', text: '#0284c7', border: '#7dd3fc', darkBg: '#082f49', darkText: '#38bdf8', darkBorder: '#075985' },
-  { bg: '#fefce8', text: '#ca8a04', border: '#fde047', darkBg: '#422006', darkText: '#facc15', darkBorder: '#a16207' },
-];
+import { useIsDark } from '../hooks/useIsDark';
+import { getMemoPalette, getMemoPaletteStyle, MEMO_COLOR_OPTIONS, MEMO_TAG_COLORS, type MemoCardPalette } from './memoCardTheme';
 
 function tagColorIndex(tag: string): number {
   let h = 0;
   for (let i = 0; i < tag.length; i++) {
     h = (h * 31 + tag.charCodeAt(i)) | 0;
   }
-  return Math.abs(h) % TAG_COLORS.length;
+  return Math.abs(h) % MEMO_TAG_COLORS.length;
 }
 
 interface MemoCardProps {
@@ -108,117 +88,21 @@ interface MemoCardProps {
   isHighlighted?: boolean;
   documents?: Document[];
   readOnly?: boolean;
+  compact?: boolean;
 }
-
-function useIsDark() {
-  const check = () => {
-    // 优先从 localStorage 读取用户明确选择的主题
-    try {
-      const saved = localStorage.getItem('outline-font-settings');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.theme === 'dark') return true;
-        if (parsed.theme && parsed.theme !== 'dark') return false;
-      }
-    } catch { /* ignore parse error */ }
-    // 无明确主题时，检查 DOM class 或系统偏好
-    return document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
-  };
-  const [isDark, setIsDark] = useState(check);
-  useEffect(() => {
-    const update = () => setIsDark(check());
-    // 监听 FontSettings 派发的主题变更事件（Android PWA 兼容）
-    window.addEventListener('theme-change', update);
-    // MutationObserver 作为补充
-    const obs = new MutationObserver(update);
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    // 系统主题变化（桌面浏览器）
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    mq.addEventListener('change', update);
-    return () => {
-      window.removeEventListener('theme-change', update);
-      obs.disconnect();
-      mq.removeEventListener('change', update);
-    };
-  }, []);
-  return isDark;
-}
-
-function getMemoBg(isDark: boolean, color: string | null): string {
-  if (isDark) {
-    if (color) {
-      const found = MEMO_COLORS.find(c => c.value === color);
-      return found ? found.dark : '#1f2937';
-    }
-    return '#1f2937';
-  }
-  return color || '#ffffff';
-}
-
-function getMemoTextColor(isDark: boolean, color: string | null): string {
-  if (!color) return '';
-  const found = MEMO_COLORS.find(c => c.value === color);
-  if (!found) return '';
-  if (isDark) {
-    if (found.value === '#1A1A1A' || found.value === '#9ec8a8') return 'text-white';
-    return '';
-  }
-  return found.whiteText ? 'text-white' : '';
-}
-
-function getMemoSecondaryBg(isDark: boolean, color: string | null): string {
-  // 代码块、图片块、附件块的背景色，基于卡片颜色适配
-  if (!color) return '';
-  const found = MEMO_COLORS.find(c => c.value === color);
-  if (!found) return '';
-  if (isDark) {
-    if (found.value === '#1A1A1A') return 'bg-[#111111]';
-    if (found.value === '#b37f90') return 'bg-[#6b4a55]';
-    if (found.value === '#9ec8a8') return 'bg-[#4a7a55]';
-    if (found.value === '#d1dfe8') return 'bg-[#3a4a55]';
-    return '';
-  }
-  if (found.value === '#1A1A1A') return 'bg-[#252525]';
-  if (found.value === '#b37f90') return 'bg-[#c9a0ae]';
-  if (found.value === '#9ec8a8') return 'bg-[#85b892]';
-  if (found.value === '#d1dfe8') return 'bg-[#b8cdd8]';
-  if (found.value === '#E5DFD2') return 'bg-[#d9d3c6]';
-  return '';
-}
-
-function getMemoSecondaryBorder(isDark: boolean, color: string | null): string {
-  if (!color) return '';
-  const found = MEMO_COLORS.find(c => c.value === color);
-  if (!found) return '';
-  if (isDark) {
-    if (found.value === '#1A1A1A') return 'border-[#333333]';
-    if (found.value === '#b37f90') return 'border-[#8a5a68]';
-    if (found.value === '#9ec8a8') return 'border-[#5a8a65]';
-    if (found.value === '#d1dfe8') return 'border-[#4a6a7a]';
-    return '';
-  }
-  if (found.value === '#1A1A1A') return 'border-[#3a3a3a]';
-  if (found.value === '#b37f90') return 'border-[#a06a7a]';
-  if (found.value === '#9ec8a8') return 'border-[#70a87e]';
-  if (found.value === '#d1dfe8') return 'border-[#a0b8c5]';
-  if (found.value === '#E5DFD2') return 'border-[#c9c3b6]';
-  return '';
-}
-
-const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => ({
+const codeBlockCustomStyle = (palette: MemoCardPalette): React.CSSProperties => ({
   margin: 0,
   borderRadius: '0 0 0.5rem 0.5rem',
   fontSize: '0.95em',
-  background: isDark ? '#282c34' : '#fbfbf8',
+  background: palette.surfaceStrong,
   border: 'none',
   padding: '16px',
 });
 
-type CodeBlockProps = React.ComponentPropsWithoutRef<'code'> & { cardColor?: string | null };
+type CodeBlockProps = React.ComponentPropsWithoutRef<'code'> & { palette: MemoCardPalette; compact?: boolean };
 
-const CodeBlock = memo(function CodeBlock({ className, children, cardColor, ...props }: CodeBlockProps) {
+const CodeBlock = memo(function CodeBlock({ className, children, palette, compact = false, ...props }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
-  const isDark = useIsDark();
   const match = /language-(\w+)/.exec(className || '');
   const language = match ? match[1] : '';
   const code = String(children).replace(/\n$/, '');
@@ -230,23 +114,19 @@ const CodeBlock = memo(function CodeBlock({ className, children, cardColor, ...p
     setTimeout(() => setCopied(false), 2000);
   }, [code]);
 
-  const secondaryBg = getMemoSecondaryBg(isDark, cardColor);
-  const secondaryBorder = getMemoSecondaryBorder(isDark, cardColor);
-  const isCardDark = !!cardColor && !!(MEMO_COLORS.find(c => c.value === cardColor)?.whiteText);
-  const codeHeaderBg = secondaryBg ? undefined : (isDark ? '#282c34' : '#f6f5f0');
-  const codeBorderClass = secondaryBorder || 'border-[#dad9d4] dark:border-gray-700';
-
   if (isBlock) {
     const useHighlight = language && language !== 'markdown' && language !== 'text';
     return (
-      <div className={`relative rounded-lg overflow-hidden border ${codeBorderClass}`}>
-        <div className={`flex items-center justify-between px-3 py-1.5 border-b ${codeBorderClass} ${secondaryBg || ''}`}
-          style={codeHeaderBg ? { background: codeHeaderBg } : undefined}
+      <div className="relative rounded-lg overflow-hidden border" style={{ borderColor: palette.surfaceBorder }}>
+        <div
+          className={`flex items-center justify-between border-b ${compact ? 'px-2 py-1' : 'px-3 py-1.5'}`}
+          style={{ background: palette.surface, borderColor: palette.surfaceBorder }}
         >
-          <span className={`text-[11px] font-mono ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{language || 'text'}</span>
+          <span className="text-[11px] font-mono" style={{ color: palette.mutedText }}>{language || 'text'}</span>
           <button
             onClick={handleCopy}
-            className="flex items-center p-1 rounded-md bg-white/90 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-600 transition-all"
+            className="flex items-center p-1 rounded-md border transition-opacity hover:opacity-80"
+            style={{ color: palette.text, background: palette.surfaceStrong, borderColor: palette.surfaceBorder }}
             title={copied ? '已复制' : '复制代码'}
           >
             {copied ? <CheckCheck className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
@@ -254,32 +134,30 @@ const CodeBlock = memo(function CodeBlock({ className, children, cardColor, ...p
         </div>
         {useHighlight ? (
           <SyntaxHighlighter
-            style={isDark ? oneDark : ghcolors}
+            style={palette.isDarkSurface ? oneDark : ghcolors}
             language={language}
             PreTag="div"
-            customStyle={{ ...codeBlockCustomStyle(isDark) }}
+            customStyle={{ ...codeBlockCustomStyle(palette), padding: compact ? '10px' : '16px', fontSize: compact ? '0.82em' : '0.95em' }}
           >
             {code}
           </SyntaxHighlighter>
         ) : (
-          <pre className="p-4 overflow-x-auto text-sm font-mono" style={{ background: isDark ? '#1e1e1e' : '#fafafa', margin: 0 }}>
-            <code>{code}</code>
+          <pre className={`${compact ? 'p-2.5 text-xs' : 'p-4 text-sm'} overflow-x-auto font-mono`} style={{ background: palette.surfaceStrong, color: palette.text, margin: 0 }}>
+            <code style={{ color: palette.text }}>{code}</code>
           </pre>
         )}
       </div>
     );
   }
 
-  // 行内代码：深色卡片适配
-  const inlineCodeStyle = isCardDark ? (() => {
-    if (cardColor === '#1A1A1A') return { background: 'rgba(255,255,255,0.15)', color: '#e5e5e5' };
-    if (cardColor === '#b37f90') return { background: 'rgba(255,255,255,0.18)', color: '#f0ebe6' };
-    if (cardColor === '#9ec8a8') return { background: 'rgba(255,255,255,0.15)', color: '#e8e0d8' };
-    return undefined;
-  })() : undefined;
-
   return (
-    <code className={className} {...props} style={inlineCodeStyle}>{children}</code>
+    <code
+      className={className}
+      {...props}
+      style={{ background: palette.inlineCodeBackground, color: palette.inlineCodeText }}
+    >
+      {children}
+    </code>
   );
 });
 
@@ -543,22 +421,21 @@ const markdownComponents = (
   onToggleCheckbox: (taskIndex: number) => void,
   checkboxCounter: { current: number },
   navigate: (to: string) => void,
-  cardColor?: string | null,
+  palette: MemoCardPalette,
+  compact: boolean,
 ): Components => {
-  const cardColorDef = cardColor ? MEMO_COLORS.find(c => c.value === cardColor) : null;
-  const isCardDark = !!cardColorDef?.whiteText;
   return {
     code: (props) => {
       const match = /language-(\w+)/.exec(props.className || '');
       if (match && match[1] === 'mermaid') {
-        return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
+        return <MermaidBlock code={String(props.children).replace(/\n$/, '')} dark={palette.isDarkSurface} />;
       }
-      return <CodeBlock {...props} cardColor={cardColor} />;
+      return <CodeBlock {...props} palette={palette} compact={compact} />;
     },
     img: ({ src, alt }) => {
       // 检测音频文件
       if (src && /\.(mp4|webm|ogg|wav|mp3|m4a)(\?|$)/i.test(src)) {
-        return <AudioPlayer src={src} />;
+        return <AudioPlayer src={src} themed />;
       }
       return <MemoImage src={src} alt={alt} onPreview={onPreview} />;
     },
@@ -567,7 +444,7 @@ const markdownComponents = (
         return (
           <a
             href={href}
-            className="text-[#3f587f] hover:text-[#2d4159] dark:text-[#6b8ab5] dark:hover:text-[#a3bdd6] bg-[#3f587f]/10 dark:bg-[#3f587f]/20 px-1 rounded cursor-pointer"
+            className="memo-document-link px-1 rounded cursor-pointer"
             onMouseDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -618,10 +495,9 @@ const markdownComponents = (
             className={`absolute left-0 top-[5px] inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border cursor-pointer shrink-0 transition-colors ${
               checked
                 ? 'bg-[#3f587f] border-[#3f587f]'
-                : isCardDark
-                  ? 'bg-white/20 border-white/40'
-                  : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-500'
+                : ''
             }`}
+            style={checked ? undefined : { background: palette.surface, borderColor: palette.surfaceBorder }}
             onClick={(e) => {
               e.stopPropagation();
               onToggleCheckbox(idx);
@@ -637,23 +513,11 @@ const markdownComponents = (
       }
       return <input type={type} checked={checked} className={inputClassName} {...props} />;
     },
-    blockquote: ({ children, ...props }) => {
-      const isWarmDark = cardColor === '#b37f90' || cardColor === '#9ec8a8';
-      const bqStyle = isCardDark
-        ? isWarmDark
-          ? { color: '#f0ebe6', borderLeftColor: '#e8e0d8' }
-          : { color: 'rgba(255,255,255,0.8)', borderLeftColor: 'rgba(255,255,255,0.4)' }
-        : undefined;
-      return (
-        <blockquote {...props} style={bqStyle}>
-          {children}
-        </blockquote>
-      );
-    },
+    blockquote: ({ children, ...props }) => <blockquote {...props}>{children}</blockquote>,
   };
 };
 
-const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, onToggleArchive, onTogglePublic, onToggleAI, onTagClick, onColorChange, isHighlighted, documents, readOnly }: MemoCardProps) {
+const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, onToggleArchive, onTogglePublic, onToggleAI, onTagClick, onColorChange, isHighlighted, documents, readOnly, compact = false }: MemoCardProps) {
   const isDark = useIsDark();
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
@@ -675,7 +539,8 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const [expanded, setExpanded] = useState(false);
   const [isLong, setIsLong] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
-  const bgColor = getMemoBg(isDark, memo.color);
+  const palette = getMemoPalette(isDark, memo.color);
+  const bgColor = palette.background;
 
   // Tag/mention state
   const [allTags, setAllTags] = useState<string[]>([]);
@@ -839,7 +704,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   }, [memo.content, memo.id, onEdit]);
   // 每次 Markdown 渲染使用独立计数器，保证任务序号从零开始且不在 render 阶段写 React ref。
   const checkboxCounter = { current: 0 };
-  const mdComponents = markdownComponents(setPreviewImage, toggleCheckbox, checkboxCounter, navigate, memo.color);
+  const mdComponents = markdownComponents(setPreviewImage, toggleCheckbox, checkboxCounter, navigate, palette, compact);
 
   // CodeMirror 编辑器自动管理高度，无需手动调整
 
@@ -1042,7 +907,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
           ? 'border-amber-200 dark:border-amber-800/60'
           : 'border-[#dad9d4] dark:border-gray-700'
       }`}
-      style={{ backgroundColor: bgColor }}
+      style={{ ...getMemoPaletteStyle(palette), backgroundColor: bgColor, color: palette.text, borderColor: palette.border }}
       >
         <div className="relative">
           <MarkdownEditor
@@ -1162,16 +1027,16 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   }
 
   return (
-    <div id={`memo-${memo.id}`} className={`group rounded-xl p-4 min-w-0 overflow-hidden border border-[#dad9d4] dark:border-gray-700 ${
+    <div id={`memo-${memo.id}`} className={`memo-card-themed group rounded-xl min-w-0 overflow-hidden border ${compact ? 'p-3' : 'p-4'} ${
       isHighlighted ? 'outline outline-2 outline-blue-400 dark:outline-blue-500 outline-offset-2' : ''}`}
-    style={{ backgroundColor: bgColor, contain: 'layout' }}
+    style={{ ...getMemoPaletteStyle(palette), backgroundColor: bgColor, color: palette.text, borderColor: palette.border, contain: 'layout' }}
     >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           {memo.is_pinned && (
             <Pin className="w-3 h-3 text-amber-500 dark:text-amber-400 fill-current" />
           )}
-          <span className={`text-sm ${getMemoTextColor(isDark, memo.color) || 'text-gray-400 dark:text-gray-500'}`}>
+          <span className="text-sm" style={{ color: palette.mutedText }}>
             {formatTime(memo.created_at)}
           </span>
         </div>
@@ -1179,24 +1044,21 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
         {/* 右侧：AI排除图标 + 地球图标 + 三点菜单 */}
         <div className="flex items-center gap-1">
           {memo.ai_excluded && (
-            <svg className={`w-3.5 h-3.5 ${getMemoTextColor(isDark, memo.color) || 'text-gray-400 dark:text-gray-500'}`} viewBox="0 0 24 24" fill="none">
+            <svg className="w-3.5 h-3.5" style={{ color: palette.mutedText }} viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5"/>
               <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
           )}
           {memo.is_public && (
-            <Globe className={`w-3.5 h-3.5 ${getMemoTextColor(isDark, memo.color) || 'text-gray-400 dark:text-gray-500'}`} />
+            <Globe className="w-3.5 h-3.5" style={{ color: palette.mutedText }} />
           )}
         {!readOnly && (() => {
-          const iconClass = getMemoTextColor(isDark, memo.color) || 'text-gray-400 dark:text-gray-500';
-          const hoverClass = (memo.color && MEMO_COLORS.find(cl => cl.value === memo.color)?.whiteText && !isDark)
-            ? 'hover:text-white/80'
-            : 'hover:text-gray-600 dark:hover:text-gray-300';
           return (
             <button
               ref={menuButtonRef}
               onClick={() => setShowMenu(!showMenu)}
-              className={`p-1 rounded transition-colors ${iconClass} ${hoverClass}`}
+              className="p-1 rounded transition-opacity hover:opacity-70"
+              style={{ color: palette.mutedText }}
               title="更多操作"
             >
               <MoreVertical className="w-4 h-4" />
@@ -1208,9 +1070,10 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
 
       <div
         ref={contentRef}
-        className={`memo-content text-base relative ${getMemoTextColor(isDark, memo.color) || 'text-gray-700 dark:text-gray-300'} ${readOnly ? '' : 'cursor-text'}`}
+        className={`memo-content text-base relative ${readOnly ? '' : 'cursor-text'}`}
         style={{
           lineHeight: '1.75',
+          color: palette.text,
           ...(!expanded && isLong ? { maxHeight: '400px', overflow: 'hidden' } : {}),
         }}
         onDoubleClick={readOnly ? undefined : handleContentDoubleClick}
@@ -1227,11 +1090,8 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       {isLong && (
         <button
           onClick={() => setExpanded(prev => !prev)}
-          className={`mt-1 text-sm transition-colors ${
-            (memo.color && MEMO_COLORS.find(cl => cl.value === memo.color)?.whiteText && !isDark)
-              ? 'text-white/70 hover:text-white'
-              : 'text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300'
-          }`}
+          className="mt-1 text-sm transition-opacity hover:opacity-75"
+          style={{ color: palette.link }}
         >
           {expanded ? '收起' : '显示更多'}
         </button>
@@ -1240,31 +1100,30 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       {/* 图片画廊 */}
       {images.length > 0 && (() => {
         const count = images.length;
-        const cols = count === 1 ? 2 : count === 2 ? 2 : count === 3 ? 3 : 4;
-        const hasMore = count > 4;
-        const bgStyle = getMemoSecondaryBg(isDark, memo.color) ? {} : { background: isDark ? '#111827' : '#fbfbf8' };
+        const cols = count === 1 ? 1 : compact ? 2 : Math.min(count, 4);
+        const hasMore = count > (compact ? 2 : 4);
         const scrollbarStyle = { scrollbarWidth: 'thin' as const, scrollbarColor: isDark ? '#4b5563 transparent' : '#d1d5db transparent' };
         return (
-          <div className={`mt-3 rounded-lg overflow-hidden border ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}>
+          <div className="mt-3 rounded-lg overflow-hidden border" style={{ borderColor: palette.surfaceBorder }}>
             <div
-              className={`px-3 py-1.5 text-xs border-b ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'} ${getMemoTextColor(isDark, memo.color) || 'text-gray-500 dark:text-gray-400'} ${getMemoSecondaryBg(isDark, memo.color) || ''}`}
-              style={getMemoSecondaryBg(isDark, memo.color) ? undefined : { background: isDark ? '#1f2937' : '#f6f5f0' }}
+              className="px-3 py-1.5 text-xs border-b"
+              style={{ color: palette.mutedText, background: palette.surface, borderColor: palette.surfaceBorder }}
             >
               图片 ({count})
             </div>
             {hasMore ? (
               // >4张：横向滚动，每张大小和4张一致
               <div
-                className={`flex ${getMemoSecondaryBg(isDark, memo.color) || ''}`}
-                style={{ gap: '5px', padding: '5px', overflowX: 'auto', ...bgStyle, ...scrollbarStyle }}
+                className="flex"
+                style={{ gap: '5px', padding: '5px', overflowX: 'auto', background: palette.surfaceStrong, ...scrollbarStyle }}
               >
                 {images.map((img, i) => (
                   <img
                     key={i}
                     src={getThumbnailUrl(img.url)}
                     alt={img.alt}
-                    className={`flex-shrink-0 aspect-square object-cover border cursor-pointer hover:opacity-80 transition-opacity ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}
-                    style={{ width: 'calc((100% - 25px) / 4)', borderRadius: 0 }}
+                    className="flex-shrink-0 aspect-square object-cover border cursor-pointer hover:opacity-80 transition-opacity"
+                    style={{ width: compact ? 'calc((100% - 5px) / 2)' : 'calc((100% - 15px) / 4)', borderRadius: 0, borderColor: palette.surfaceBorder }}
                     onClick={() => setPreviewImage(img.url)}
                   />
                 ))}
@@ -1272,16 +1131,15 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
             ) : (
               // ≤4张：Grid 均分
               <div
-                className={getMemoSecondaryBg(isDark, memo.color) || ''}
-                style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '5px', padding: '5px', ...bgStyle }}
+                style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '5px', padding: '5px', background: palette.surfaceStrong }}
               >
                 {images.map((img, i) => (
                   <img
                     key={i}
                     src={getThumbnailUrl(img.url)}
                     alt={img.alt}
-                    className={`w-full aspect-square object-cover border cursor-pointer hover:opacity-80 transition-opacity ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}
-                    style={{ borderRadius: 0 }}
+                    className={`w-full object-cover border cursor-pointer hover:opacity-80 transition-opacity ${count === 1 ? 'max-h-80' : 'aspect-square'}`}
+                    style={{ borderRadius: 0, borderColor: palette.surfaceBorder }}
                     onClick={() => setPreviewImage(img.url)}
                   />
                 ))}
@@ -1293,25 +1151,26 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
 
       {/* 附件列表 */}
       {fileLinks.length > 0 && (
-        <div className={`mt-3 rounded-lg overflow-hidden border ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}>
+        <div className="mt-3 rounded-lg overflow-hidden border" style={{ borderColor: palette.surfaceBorder }}>
           <div
-            className={`px-3 py-1.5 text-xs border-b ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'} ${getMemoTextColor(isDark, memo.color) || 'text-gray-500 dark:text-gray-400'} ${getMemoSecondaryBg(isDark, memo.color) || ''}`}
-            style={getMemoSecondaryBg(isDark, memo.color) ? undefined : { background: isDark ? '#1f2937' : '#f6f5f0' }}
+            className="px-3 py-1.5 text-xs border-b"
+            style={{ color: palette.mutedText, background: palette.surface, borderColor: palette.surfaceBorder }}
           >
             附件 ({fileLinks.length})
           </div>
-          <div className={`flex flex-col gap-1 p-3 ${getMemoSecondaryBg(isDark, memo.color) || ''}`} style={getMemoSecondaryBg(isDark, memo.color) ? undefined : { background: isDark ? '#111827' : '#fbfbf8' }}>
+          <div className="flex flex-col gap-1 p-3" style={{ background: palette.surfaceStrong }}>
             {fileLinks.map((file, i) => (
               <a
                 key={i}
                 href={file.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-700/50 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors min-w-0"
+                className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg transition-opacity hover:opacity-80 min-w-0"
+                style={{ color: palette.text, background: palette.surface }}
               >
-                <FileText className="w-3.5 h-3.5 flex-shrink-0 text-gray-400 dark:text-gray-500" />
+                <FileText className="w-3.5 h-3.5 flex-shrink-0" style={{ color: palette.mutedText }} />
                 <span className="truncate">{file.name}</span>
-                <Download className="w-3 h-3 flex-shrink-0 text-gray-400 dark:text-gray-500 ml-auto" />
+                <Download className="w-3 h-3 flex-shrink-0 ml-auto" style={{ color: palette.mutedText }} />
               </a>
             ))}
           </div>
@@ -1327,75 +1186,35 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
               preview={linkPreviews.get(url) ?? null}
               isLoading={!linkPreviews.has(url)}
               error={linkPreviews.has(url) && linkPreviews.get(url) === null}
+              palette={palette}
+              compact={compact}
             />
           ))}
         </div>
       )}
 
-      {tags.length > 0 && (() => {
-        const cardColorDef = memo.color ? MEMO_COLORS.find(cl => cl.value === memo.color) : null;
-        const isCardDark = cardColorDef?.whiteText && !isDark;
-        const isCardMuted = !isDark && cardColorDef && (cardColorDef.value === '#E5DFD2' || cardColorDef.value === '#d1dfe8');
-        return (
-          <div className="flex flex-wrap gap-1.5 mt-3">
-            {tags.map(tag => {
-              const c = TAG_COLORS[tagColorIndex(tag)];
-              // 深色卡片：半透明白色
-              if (isCardDark) {
-                return (
-                  <button
-                    key={tag}
-                    onClick={(e) => { e.stopPropagation(); onTagClick(tag); }}
-                    className="px-2.5 py-0.5 rounded-full cursor-pointer transition-colors"
-                    style={{
-                      fontSize: '11px',
-                      backgroundColor: 'rgba(255,255,255,0.2)',
-                      color: '#ffffff',
-                      border: '1px solid rgba(255,255,255,0.3)',
-                    }}
-                  >
-                    {tag}
-                  </button>
-                );
-              }
-              // 柔和底色卡片：深灰色标签
-              if (isCardMuted) {
-                return (
-                  <button
-                    key={tag}
-                    onClick={(e) => { e.stopPropagation(); onTagClick(tag); }}
-                    className="px-2.5 py-0.5 rounded-full cursor-pointer transition-colors"
-                    style={{
-                      fontSize: '11px',
-                      backgroundColor: 'rgba(0,0,0,0.08)',
-                      color: '#374151',
-                      border: '1px solid rgba(0,0,0,0.12)',
-                    }}
-                  >
-                    {tag}
-                  </button>
-                );
-              }
-              // 默认白色卡片：原有彩色标签
-              return (
-                <button
-                  key={tag}
-                  onClick={(e) => { e.stopPropagation(); onTagClick(tag); }}
-                  className="px-2.5 py-0.5 rounded-full cursor-pointer transition-colors"
-                  style={{
-                    fontSize: '11px',
-                    backgroundColor: isDark ? c.darkBg : c.bg,
-                    color: isDark ? c.darkText : c.text,
-                    border: `1px solid ${isDark ? c.darkBorder : c.border}`,
-                  }}
-                >
-                  {tag}
-                </button>
-              );
-            })}
-          </div>
-        );
-      })()}
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-3">
+          {tags.map(tag => {
+            const c = MEMO_TAG_COLORS[tagColorIndex(tag)];
+            return (
+              <button
+                key={tag}
+                onClick={(e) => { e.stopPropagation(); onTagClick(tag); }}
+                className="px-2.5 py-0.5 rounded-full cursor-pointer transition-opacity hover:opacity-80"
+                style={{
+                  fontSize: '11px',
+                  backgroundColor: isDark ? c.darkBg : c.bg,
+                  color: isDark ? c.darkText : c.text,
+                  border: `1px solid ${isDark ? c.darkBorder : c.border}`,
+                }}
+              >
+                {tag}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* 删除确认弹窗 - portal 到 body 避免被 contain:layout 裁剪 */}
       {showDeleteConfirm && createPortal(
@@ -1485,18 +1304,18 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
           <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
           <div className="px-3 py-2">
             <div className="flex items-center gap-1.5">
-              {MEMO_COLORS.map(c => (
+              {MEMO_COLOR_OPTIONS.map(c => (
                 <button
                   key={c.value}
                   onClick={() => handleColorChange(memo.color === c.value ? null : c.value)}
                   className={`w-5 h-5 rounded-full border transition-transform hover:scale-110 ${
                     memo.color === c.value
-                      ? 'ring-2 ring-offset-1 dark:ring-offset-gray-800 ' + (c.whiteText ? 'ring-white/70' : 'ring-gray-400 dark:ring-gray-500')
+                      ? 'ring-2 ring-offset-1 ring-gray-500 dark:ring-gray-300 dark:ring-offset-gray-800'
                       : c.value === '#ffffff'
                         ? 'border-gray-400 dark:border-gray-500'
                         : 'border-white/20 dark:border-white/10'
                   }`}
-                  style={{ backgroundColor: isDark ? c.dark : c.value }}
+                  style={{ backgroundColor: (isDark ? c.dark : c.light).background }}
                   title={c.name}
                 />
               ))}
