@@ -1147,10 +1147,14 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
         const hasMore = count > (compact ? 2 : 4);
         const scrollbarStyle = { scrollbarWidth: 'thin' as const, scrollbarColor: isDark ? '#4b5563 transparent' : '#d1d5db transparent' };
         return (
-          <div className="mt-3 rounded-lg overflow-hidden border" style={{ borderColor: palette.surfaceBorder }}>
+          <div className="mt-3 rounded-lg overflow-hidden border" style={{ borderColor: palette.codeBorder ?? palette.surfaceBorder }}>
             <div
               className="px-3 py-1.5 text-xs border-b"
-              style={{ color: palette.mutedText, background: palette.surface, borderColor: palette.surfaceBorder }}
+              style={{
+                color: palette.codeMutedText ?? palette.mutedText,
+                background: palette.codeHeaderBackground ?? palette.surface,
+                borderColor: palette.codeBorder ?? palette.surfaceBorder,
+              }}
             >
               图片 ({count})
             </div>
@@ -1158,7 +1162,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
               // >4张：横向滚动，每张大小和4张一致
               <div
                 className="flex"
-                style={{ gap: '5px', padding: '5px', overflowX: 'auto', background: palette.surfaceStrong, ...scrollbarStyle }}
+                style={{ gap: '5px', padding: '5px', overflowX: 'auto', background: palette.codeBlockBackground ?? palette.surfaceStrong, ...scrollbarStyle }}
               >
                 {images.map((img, i) => (
                   <img
@@ -1166,7 +1170,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
                     src={getThumbnailUrl(img.url)}
                     alt={img.alt}
                     className="flex-shrink-0 aspect-square object-cover border cursor-pointer hover:opacity-80 transition-opacity"
-                    style={{ width: compact ? 'calc((100% - 5px) / 2)' : 'calc((100% - 15px) / 4)', borderRadius: 0, borderColor: palette.surfaceBorder }}
+                    style={{ width: compact ? 'calc((100% - 5px) / 2)' : 'calc((100% - 15px) / 4)', borderRadius: 0, borderColor: palette.codeBorder ?? palette.surfaceBorder }}
                     onClick={() => setPreviewImage(img.url)}
                   />
                 ))}
@@ -1174,7 +1178,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
             ) : (
               // ≤4张：Grid 均分
               <div
-                style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '5px', padding: '5px', background: palette.surfaceStrong }}
+                style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '5px', padding: '5px', background: palette.codeBlockBackground ?? palette.surfaceStrong }}
               >
                 {images.map((img, i) => (
                   <img
@@ -1182,7 +1186,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
                     src={getThumbnailUrl(img.url)}
                     alt={img.alt}
                     className={`w-full object-cover border cursor-pointer hover:opacity-80 transition-opacity ${count === 1 ? 'max-h-80' : 'aspect-square'}`}
-                    style={{ borderRadius: 0, borderColor: palette.surfaceBorder }}
+                    style={{ borderRadius: 0, borderColor: palette.codeBorder ?? palette.surfaceBorder }}
                     onClick={() => setPreviewImage(img.url)}
                   />
                 ))}
@@ -1194,14 +1198,18 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
 
       {/* 附件列表 */}
       {fileLinks.length > 0 && (
-        <div className="mt-3 rounded-lg overflow-hidden border" style={{ borderColor: palette.surfaceBorder }}>
+        <div className="mt-3 rounded-lg overflow-hidden border" style={{ borderColor: palette.codeBorder ?? palette.surfaceBorder }}>
           <div
             className="px-3 py-1.5 text-xs border-b"
-            style={{ color: palette.mutedText, background: palette.surface, borderColor: palette.surfaceBorder }}
+            style={{
+              color: palette.codeMutedText ?? palette.mutedText,
+              background: palette.codeHeaderBackground ?? palette.surface,
+              borderColor: palette.codeBorder ?? palette.surfaceBorder,
+            }}
           >
             附件 ({fileLinks.length})
           </div>
-          <div className="flex flex-col gap-1 p-3" style={{ background: palette.surfaceStrong }}>
+          <div className="flex flex-col gap-1 p-3" style={{ background: palette.codeBlockBackground ?? palette.surfaceStrong }}>
             {fileLinks.map((file, i) => (
               <a
                 key={i}
@@ -1209,11 +1217,14 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg transition-opacity hover:opacity-80 min-w-0"
-                style={{ color: palette.text, background: palette.surface }}
+                style={{
+                  color: palette.codeText ?? palette.text,
+                  background: palette.plainCodeBlockBackground ?? palette.surface,
+                }}
               >
-                <FileText className="w-3.5 h-3.5 flex-shrink-0" style={{ color: palette.mutedText }} />
+                <FileText className="w-3.5 h-3.5 flex-shrink-0" style={{ color: palette.codeMutedText ?? palette.mutedText }} />
                 <span className="truncate">{file.name}</span>
-                <Download className="w-3 h-3 flex-shrink-0 ml-auto" style={{ color: palette.mutedText }} />
+                <Download className="w-3 h-3 flex-shrink-0 ml-auto" style={{ color: palette.codeMutedText ?? palette.mutedText }} />
               </a>
             ))}
           </div>
