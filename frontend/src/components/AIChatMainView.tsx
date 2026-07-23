@@ -245,7 +245,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
   const isEmpty = messages.length === 0 && !loadingConv;
 
   return (
-    <div className={`flex-1 flex flex-col h-full bg-[#FAFAF5] dark:bg-gray-900 ${isEmpty ? 'items-center justify-center' : ''}`}>
+    <div className={`flex-1 flex flex-col h-full bg-[var(--app-canvas)] ${isEmpty ? 'items-center justify-center' : ''}`}>
       {/* Messages */}
       <div className={`${isEmpty ? 'hidden' : 'flex-1 overflow-y-auto'}`}>
         <div className="max-w-[700px] mx-auto px-4 pb-4 space-y-4" style={{ paddingTop: `max(calc(env(safe-area-inset-top, 0px) + 58px), 1rem)` }}>

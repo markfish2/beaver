@@ -13,9 +13,10 @@ import App from './App.tsx'
   function applyTheme() {
     const saved = (() => { try { return JSON.parse(localStorage.getItem('outline-font-settings') || '{}'); } catch { return {}; } })();
 
-    // 如果用户明确选择了主题（非 system/跟随系统），尊重用户选择
-    if (saved.theme === 'dark' || saved.theme === 'light') {
+    // 明确主题优先；system 才跟随设备。
+    if (saved.theme && saved.theme !== 'system') {
       const dark = saved.theme === 'dark';
+      document.documentElement.dataset.theme = saved.theme;
       document.documentElement.classList.toggle('dark', dark);
       document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
         meta.setAttribute('content', dark ? '#111827' : '#ffffff');
@@ -26,6 +27,7 @@ import App from './App.tsx'
 
     // 没有明确选择或选择"跟随系统"→ 跟随系统
     const dark = mq.matches;
+    document.documentElement.dataset.theme = dark ? 'dark' : 'minimal';
     if (dark !== lastDark) {
       lastDark = dark;
       document.documentElement.classList.toggle('dark', dark);
@@ -39,8 +41,9 @@ import App from './App.tsx'
   // 初始应用
   function initialApply() {
     const saved = (() => { try { return JSON.parse(localStorage.getItem('outline-font-settings') || '{}'); } catch { return {}; } })();
-    if (saved.theme === 'dark' || saved.theme === 'light') {
+    if (saved.theme && saved.theme !== 'system') {
       const dark = saved.theme === 'dark';
+      document.documentElement.dataset.theme = saved.theme;
       document.documentElement.classList.toggle('dark', dark);
       document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
         meta.setAttribute('content', dark ? '#111827' : '#ffffff');
@@ -48,6 +51,7 @@ import App from './App.tsx'
       return;
     }
     const dark = mq.matches;
+    document.documentElement.dataset.theme = dark ? 'dark' : 'minimal';
     lastDark = dark;
     document.documentElement.classList.toggle('dark', dark);
     document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {

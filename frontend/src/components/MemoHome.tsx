@@ -357,7 +357,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   }, []);
 
   return (
-    <div className={`overflow-y-auto bg-[#faf9f5] dark:bg-gray-900 custom-scrollbar ${document.documentElement.dataset.mobileLayout ? 'flex-1' : 'flex-1 h-screen'}`}
+    <div className={`overflow-y-auto bg-[var(--app-canvas)] custom-scrollbar ${document.documentElement.dataset.mobileLayout ? 'flex-1' : 'flex-1 h-screen'}`}
       style={document.documentElement.dataset.mobileLayout ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 44px)', paddingBottom: '52px' } : undefined}
     >
       {/* 移动端菜单按钮 (hidden when MobileLayout is active) */}

@@ -1,11 +1,10 @@
 import { useState, useEffect, useMemo, Fragment, useRef, useCallback, lazy } from 'react';
 import type { SetStateAction } from 'react';
-import { Menu, ChevronUp, ChevronDown } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import Breadcrumbs from './Breadcrumbs';
 import NodeItem from './NodeItem';
 import MobileToolbar from './MobileToolbar';
 import { useMobileToolbar } from '../context/MobileToolbarContext';
-import { useFontSettings } from './FontSettings';
 import LoadingSkeleton from './LoadingSkeleton';
 import { SaveStatusIndicator } from './SaveStatusIndicator';
 import RecoveryDialog from './RecoveryDialog';
@@ -275,7 +274,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   // Mobile toolbar context - publish handlers to parent layout
   const { publish: publishToolbar, isInsideProvider: hasToolbarProvider } = useMobileToolbar();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [headerCollapsed, setHeaderCollapsed] = useState(true);
 
   const markEditing = useCallback((nodeId: string) => {
     setEditingNodes(prev => new Set(prev).add(nodeId));
@@ -578,9 +576,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   // Undo/Redo Hook
   const { execute, undo, redo } = useHistory();
   const commands = useMemo(() => createCommandFactory(setNodes), []);
-
-  // Font Settings Hook
-  const fontSettings = useFontSettings();
 
   // View Mode State - 'outline' or 'mindmap'
   const [viewModeState, setViewModeState] = useState<{ documentId: string | null; value: 'outline' | 'mindmap' }>({ documentId, value: 'outline' });
@@ -2343,19 +2338,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans h-screen">
-      {!document.documentElement.dataset.mobileLayout && (
-        <>
-          {/* 导航栏展开/收起按钮 — 始终可见 */}
-          <button
-            onClick={() => setHeaderCollapsed(prev => !prev)}
-            className="absolute top-0 left-1/2 -translate-x-1/2 z-10 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200/80 dark:hover:bg-gray-700/80 transition-colors"
-            style={{ paddingTop: isMobile ? 'calc(env(safe-area-inset-top, 0px) + 2px)' : '2px' }}
-            title={headerCollapsed ? '展开导航栏' : '收起导航栏'}
-          >
-            {headerCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-          </button>
-
-          {!headerCollapsed && (
+      {!document.documentElement.dataset.mobileLayout && currentDoc?.type !== 'note' && (
           <div className="flex items-center justify-between px-6 bg-gray-50/80 dark:bg-gray-800/50" style={{ minHeight: '3rem', paddingTop: isMobile ? 'env(safe-area-inset-top)' : undefined, boxShadow: '0 2px 8px -3px rgba(0,0,0,0.08)' }}>
             <div className="flex items-center flex-wrap gap-1">
           {/* 移动端菜单按钮 */}
@@ -2478,13 +2461,10 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             nodes={nodes}
             currentDoc={currentDoc}
             generateMarkdownPreview={generateMarkdownPreview}
-            fontSettings={fontSettings}
           />
           <SaveStatusIndicator status={saveStatus} pendingCount={pendingCount} offlineQueueCount={offlineQueueCount} />
         </div>
       </div>
-          )}
-        </>
       )}
 
       {!isOnline && (

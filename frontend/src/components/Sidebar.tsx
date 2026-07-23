@@ -1195,18 +1195,18 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           )}
           {contentExpanded && (
             <div
-              className="fixed inset-y-0 left-0 flex shadow-xl bg-[#FAFAF5] dark:bg-gray-800"
+              className="fixed inset-y-0 left-0 flex shadow-xl bg-[var(--app-surface)]"
               style={{ zIndex: 58, width: `calc(80vw)` }}
             >
               {/* 图标栏 */}
-              <div className={`h-full bg-[#F7F7F2] dark:bg-gray-900 flex flex-col items-center py-3 select-none shrink-0 border-r border-gray-200 dark:border-gray-700`}
+              <div className="h-full bg-[var(--app-canvas)] flex flex-col items-center py-3 select-none shrink-0 border-r border-gray-200 dark:border-gray-700"
                    style={{ width: ICON_RAIL_WIDTH }}>
                 {iconRailContent}
               </div>
               {/* 内容面板 */}
               <div
                 ref={sidebarRef}
-                className="flex-1 h-full bg-[#FAFAF5] dark:bg-gray-800 flex flex-col select-none text-sm relative overflow-hidden"
+                className="flex-1 h-full bg-[var(--app-surface)] flex flex-col select-none text-sm relative overflow-hidden"
               >
                 {isSearchMode ? (
                   /* 搜索模式 */
@@ -1407,7 +1407,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
         /* 桌面端：原有布局 */
         <>
           {/* 左侧图标栏 */}
-          <div className={`h-full bg-[#F7F7F2] dark:bg-gray-900 flex flex-col items-center py-3 select-none shrink-0 ${contentExpanded ? 'border-r border-gray-200 dark:border-gray-700' : ''}`}
+          <div className={`h-full bg-[var(--app-canvas)] flex flex-col items-center py-3 select-none shrink-0 ${contentExpanded ? 'border-r border-gray-200 dark:border-gray-700' : ''}`}
                style={{ width: ICON_RAIL_WIDTH }}>
             {iconRailContent}
           </div>
@@ -1415,7 +1415,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           {/* 内容面板 - 可折叠 */}
           <div
             ref={sidebarRef}
-            className={`h-full bg-[#FAFAF5] dark:bg-gray-800 flex flex-col select-none text-sm relative border-r border-gray-200 dark:border-gray-700 ${
+            className={`h-full bg-[var(--app-surface)] flex flex-col select-none text-sm relative border-r border-gray-200 dark:border-gray-700 ${
               isResizing ? '' : 'transition-all duration-300 ease-in-out'
             } ${!contentExpanded ? 'overflow-hidden' : ''}`}
             style={{
@@ -1524,7 +1524,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                         <ChevronLeft className="w-4 h-4" />
                       </button>
                     </div>
-                    <div className="flex-1 relative overflow-hidden bg-[#FAFAF5] dark:bg-gray-800">
+                    <div className="flex-1 relative overflow-hidden bg-[var(--app-surface)]">
                       <div ref={listRef} className="absolute inset-0 overflow-y-auto custom-scrollbar" onDragOver={(e) => e.preventDefault()} onDrop={handleRootDrop} onClick={() => setSelectedFolderId(null)}>
                         {viewMode === 'user' ? (
                           <div className="py-2">

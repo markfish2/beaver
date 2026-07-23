@@ -259,7 +259,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
             {showAIHistory && (
               <>
                 <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowAIHistory(false)} />
-                <div className="fixed top-0 right-0 bottom-0 w-72 bg-[#FAFAF5] dark:bg-gray-800 z-50 shadow-xl flex flex-col">
+                <div className="fixed top-0 right-0 bottom-0 w-72 bg-[var(--app-surface)] z-50 shadow-xl flex flex-col">
                   <AIChatSidebar
                     activeConvId={activeConvId}
                     onSelectConversation={(convId) => {

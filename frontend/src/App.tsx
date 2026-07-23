@@ -7,6 +7,7 @@ import { DiaryProvider } from './context/DiaryContext';
 import { UserViewProvider, useUserView } from './context/UserViewContext';
 import { useRetryFailedPreviews } from './hooks/useRetryFailedPreviews';
 import type { ReactNode } from 'react';
+import { AppearanceProvider } from './components/FontSettings';
 
 const SetupPage = lazy(() => import('./pages/SetupPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -148,19 +149,21 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <SearchProvider>
-          <DocumentProvider>
-            <DiaryProvider>
-              <UserViewProvider>
-                <AppRoutes />
-                <Suspense fallback={null}>
-                  <ReloadPrompt />
-                  <ConflictResolver />
-                </Suspense>
-              </UserViewProvider>
-            </DiaryProvider>
-          </DocumentProvider>
-        </SearchProvider>
+        <AppearanceProvider>
+          <SearchProvider>
+            <DocumentProvider>
+              <DiaryProvider>
+                <UserViewProvider>
+                  <AppRoutes />
+                  <Suspense fallback={null}>
+                    <ReloadPrompt />
+                    <ConflictResolver />
+                  </Suspense>
+                </UserViewProvider>
+              </DiaryProvider>
+            </DocumentProvider>
+          </SearchProvider>
+        </AppearanceProvider>
       </AuthProvider>
     </Router>
   );

@@ -37,7 +37,7 @@ const LoginPage = () => {
   if (isLoading) return <div className="h-screen flex items-center justify-center text-gray-400">Loading...</div>;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#fbfbf9] dark:bg-gray-900 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--app-canvas)] px-4">
       <div className="w-full max-w-sm">
         {/* Logo & Title */}
         <div className="flex flex-col items-center mb-8">

@@ -4,9 +4,11 @@ import { useAuth } from '../context/AuthContext';
 import { updateProfile } from '../api/auth';
 import { uploadFile } from '../api/data';
 import { showToast } from '../utils/toast';
+import { FontSettingsPanel, useFontSettings } from './FontSettings';
 
 export default function UserProfileEditor() {
   const { user, checkStatus } = useAuth();
+  const appearance = useFontSettings();
   const [nickname, setNickname] = useState(user?.nickname || '');
   const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState(user?.phone || '');
@@ -94,6 +96,14 @@ export default function UserProfileEditor() {
     <div className="flex-1 overflow-y-auto p-6">
       <div className="max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">个人资料</h1>
+
+        <section className="mb-8 rounded-2xl border border-gray-200 bg-white/70 p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800/70">
+          <h2 className="mb-1 text-base font-semibold text-gray-900 dark:text-gray-100">外观与主题</h2>
+          <p className="mb-5 text-sm text-gray-500 dark:text-gray-400">
+            主题、字体和字号会保存到账号，并同步到其他设备。
+          </p>
+          <FontSettingsPanel {...appearance} isOpen={true} setIsOpen={() => {}} hideButton={true} />
+        </section>
 
         {/* Avatar */}
         <div className="flex items-center gap-6 mb-8">

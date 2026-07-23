@@ -99,7 +99,7 @@ export default function AIChatPanel({ context, onWriteBack, onClose }: AIChatPan
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="flex flex-col w-[90vw] max-w-[680px] h-[75vh] bg-[#FAFAF5] dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+        className="flex flex-col w-[90vw] max-w-[680px] h-[75vh] bg-[var(--app-surface-raised)] rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* 顶栏 */}

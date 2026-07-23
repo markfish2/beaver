@@ -46,7 +46,7 @@ SyntaxHighlighter.registerLanguage('cpp', cpp);
 SyntaxHighlighter.registerLanguage('go', go);
 SyntaxHighlighter.registerLanguage('rust', rust);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
-import { Pencil, Eye, Save, Columns2, Copy, CheckCheck } from 'lucide-react';
+import { Pencil, Eye, Save, Columns2, Copy, CheckCheck, Download, Share2 } from 'lucide-react';
 import { getNodes, createNode, updateNode, uploadFile, uploadFromUrl, getMemoTags, getDocuments, updateDocument } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
 import type { Document } from '../api/data';
@@ -62,6 +62,7 @@ import type { PopupItem } from './TagMentionPopup';
 import { tagMentionExtension } from '../extensions/tagMentionExtension';
 import type { TagMentionState } from '../extensions/tagMentionExtension';
 import AIChatPanel from './AIChatPanel';
+import ShareDialog from './ShareDialog';
 
 interface Props {
   documentId: string;
@@ -119,6 +120,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>(isNew ? 'edit' : 'preview');
   const [content, setContent] = useState('');
   const [showAIPanel, setShowAIPanel] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
   const [title, setTitle] = useState('');
   const [nodeId, setNodeId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -134,6 +136,16 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedRef = useRef('');
   const pendingSaveRef = useRef<string | null>(null);
+
+  const handleDownload = useCallback(() => {
+    const currentContent = editorRef.current?.getValue() ?? content;
+    const url = URL.createObjectURL(new Blob([currentContent], { type: 'text/markdown;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${title || 'note'}.md`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }, [content, title]);
 
   const [tagState, setTagState] = useState<TagMentionState>({ type: null, query: '', coords: null, from: 0, to: 0 });
   const [mentionState, setMentionState] = useState<TagMentionState>({ type: null, query: '', coords: null, from: 0, to: 0 });
@@ -399,7 +411,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   const showMentionPopup = mentionState.type === 'mention' && filteredDocs.length > 0 && mentionState.coords;
 
   return (
-    <div className="flex flex-col h-full bg-[#FBF8F3] dark:bg-transparent">
+    <div className="flex flex-col h-full bg-[var(--app-canvas)]">
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 dark:border-gray-800 shrink-0">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
@@ -410,6 +422,22 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
           {uploading && <span className="text-xs text-blue-500 shrink-0">上传中...</span>}
         </div>
         <div className="flex items-center gap-1 shrink-0 ml-4">
+          <button
+            onClick={handleDownload}
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+            title="导出 Markdown"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden lg:inline">导出</span>
+          </button>
+          <button
+            onClick={() => setShowShareDialog(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+            title="分享笔记"
+          >
+            <Share2 className="h-4 w-4" />
+            <span className="hidden lg:inline">分享</span>
+          </button>
           <button onClick={() => setViewMode(viewMode === 'preview' ? 'edit' : 'preview')}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm leading-none rounded-lg transition-colors ${viewMode === 'preview' ? 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>
             {viewMode === 'preview' ? <><Pencil className="w-4 h-4" />编辑</> : <><Eye className="w-4 h-4" />阅读</>}
@@ -465,6 +493,12 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
           onWriteBack={(newContent) => { setContent(newContent); editorRef.current?.view?.dispatch({ changes: { from: 0, to: editorRef.current.view.state.doc.length, insert: newContent } }); scheduleSave(newContent); }}
           onClose={() => setShowAIPanel(false)} />
       )}
+      <ShareDialog
+        key={`${documentId}-${showShareDialog}`}
+        isOpen={showShareDialog}
+        documentId={documentId}
+        onCancel={() => setShowShareDialog(false)}
+      />
     </div>
   );
 }
