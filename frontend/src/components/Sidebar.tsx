@@ -24,6 +24,8 @@ import AIChatSidebar from './AIChatSidebar';
 import { getProjects, createProject, updateProject, deleteProject, archiveProject } from '../api/projects';
 import type { Project } from '../api/projects';
 import { formatRelativeTime, highlightSidebarText as highlightText } from './sidebarFormatting';
+import { useFontSettings } from './FontSettings';
+import { useIsDark } from '../hooks/useIsDark';
 
 interface SidebarProps {
   onDocumentSelect?: () => void;
@@ -121,55 +123,12 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     }
   }, [isExpanded]);
 
-  // 暗色模式状态
-  const [isDark, setIsDark] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
-      if (saved.theme === 'dark') return true;
-      if (saved.theme && saved.theme !== 'dark') return false;
-    } catch { /* ignore */ }
-    return document.documentElement.classList.contains('dark') ||
-      window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
-
-  useEffect(() => {
-    const onThemeChange = () => {
-      try {
-        const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
-        if (saved.theme === 'dark') { setIsDark(true); return; }
-        if (saved.theme && saved.theme !== 'dark') { setIsDark(false); return; }
-      } catch { /* ignore */ }
-      setIsDark(document.documentElement.classList.contains('dark'));
-    };
-    window.addEventListener('theme-change', onThemeChange);
-    const mql = window.matchMedia('(prefers-color-scheme: dark)');
-    mql.addEventListener('change', onThemeChange);
-    return () => {
-      window.removeEventListener('theme-change', onThemeChange);
-      mql.removeEventListener('change', onThemeChange);
-    };
-  }, []);
+  const { setTheme } = useFontSettings();
+  const isDark = useIsDark();
 
   const toggleDark = useCallback(() => {
-    const newDark = !isDark;
-    setIsDark(newDark);
-    document.documentElement.classList.toggle('dark', newDark);
-    try {
-      const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
-      saved.theme = newDark ? 'dark' : 'minimal';
-      localStorage.setItem('outline-font-settings', JSON.stringify(saved));
-      if (newDark) {
-        localStorage.setItem('outline-restored-theme', 'minimal');
-      }
-    } catch { /* ignore */ }
-    const color = newDark ? '#111827' : '#ffffff';
-    // 更新 theme-color：移除 media 查询，让浏览器使用手动设置的颜色
-    document.querySelectorAll('meta[name="theme-color"], meta[name="hw-theme-color"]').forEach(meta => {
-      meta.setAttribute('content', color);
-      meta.removeAttribute('media');
-    });
-    window.dispatchEvent(new CustomEvent('theme-change'));
-  }, [isDark]);
+    setTheme(isDark ? 'minimal' : 'dark');
+  }, [isDark, setTheme]);
 
   // Wrapper to update both context and notify parent
   const setUserSubView = useCallback((view: UserSubView) => {
