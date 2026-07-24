@@ -61,13 +61,13 @@ const THEMES: Record<Theme, {
 }> = {
   system: {
     name: '跟随系统',
-    bg: '#FDFDFC',
-    text: '#333333',
-    secondaryText: '#888888',
-    accent: '#1A73E8',
+    bg: '#FAF9F5',
+    text: '#111827',
+    secondaryText: '#6B7280',
+    accent: '#3F587F',
     guideColor: '#e5e7eb',
     headingColor: '#111111',
-    preview: 'bg-gradient-to-r from-[#FDFDFC] to-[#262624]',
+    preview: 'bg-gradient-to-r from-white to-[#111827]',
     isDark: false
   },
   minimal: {
@@ -158,10 +158,23 @@ const AppearanceStateProvider = ({
 
   // 应用主题 CSS 变量和样式
   const applyTheme = useCallback((themeKey: Theme) => {
+    const systemDark = themeKey === 'system'
+      && window.matchMedia('(prefers-color-scheme: dark)').matches;
     const resolvedKey = themeKey === 'system'
-      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'minimal')
+      ? (systemDark ? 'system-dark' : 'system-light')
       : themeKey;
-    const theme = THEMES[resolvedKey];
+    const theme = systemDark
+      ? {
+          ...THEMES.system,
+          bg: '#111827',
+          text: '#F3F4F6',
+          secondaryText: '#9CA3AF',
+          accent: '#8EA4BB',
+          guideColor: '#374151',
+          headingColor: '#FFFFFF',
+          isDark: true,
+        }
+      : THEMES[themeKey];
     const root = document.documentElement;
     root.dataset.theme = resolvedKey;
     root.style.setProperty('--outline-bg-color', theme.bg);

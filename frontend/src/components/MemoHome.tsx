@@ -389,7 +389,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
           {memoView === 'active' && allPendingTasks.length > 0 && (
             <div className="mb-6">
               <h2 className="text-sm font-semibold text-gray-400 dark:text-gray-500 mb-3 uppercase tracking-wider">未完成事项</h2>
-              <div className="bg-white dark:bg-gray-800/50 rounded-xl p-4 border border-[#dad9d4] dark:border-gray-700/40 ">
+              <div className="bg-[#ffffff] dark:bg-gray-800/50 rounded-xl p-4 border border-[#dad9d4] dark:border-gray-700/40 ">
                 <div>
                   {/* 构建 document_id → diary_date 映射 */}
                   {(() => {

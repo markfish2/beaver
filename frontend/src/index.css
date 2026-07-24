@@ -59,6 +59,54 @@
  * 语义令牌用于阅读内容、代码、引用等不能用普通灰阶表达的区域。
  */
 :root,
+:root[data-theme="system-light"] {
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+  --color-gray-950: #030712;
+  --app-canvas: #faf9f5;
+  --app-surface: #faf9f5;
+  --app-surface-raised: #ffffff;
+  --app-icon-rail: #f5f4ee;
+  --app-code-bg: #f3f4f6;
+  --app-code-text: #1f2937;
+  --app-quote-bg: #f9fafb;
+  --app-quote-border: #e5e7eb;
+  --app-link: #3f587f;
+  --app-selection: #dbeafe;
+}
+
+:root[data-theme="system-dark"] {
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+  --color-gray-950: #030712;
+  --app-canvas: #111827;
+  --app-surface: #1f2937;
+  --app-surface-raised: #374151;
+  --app-icon-rail: #111827;
+  --app-code-bg: #111827;
+  --app-code-text: #e5e7eb;
+  --app-quote-bg: #1f2937;
+  --app-quote-border: #4b5563;
+  --app-link: #8ea4bb;
+  --app-selection: #334766;
+}
+
 :root[data-theme="minimal"] {
   --color-gray-50: #f9fafb;
   --color-gray-100: #f3f4f6;
@@ -74,6 +122,7 @@
   --app-canvas: #fdfdfc;
   --app-surface: #fdfdfc;
   --app-surface-raised: #ffffff;
+  --app-icon-rail: #fdfdfc;
   --app-code-bg: #fff8c5;
   --app-code-text: #333333;
   --app-quote-bg: #f9fafb;
@@ -97,6 +146,7 @@
   --app-canvas: #f4efe6;
   --app-surface: #fbf7f0;
   --app-surface-raised: #fffaf2;
+  --app-icon-rail: #f4efe6;
   --app-code-bg: #e9dfd1;
   --app-code-text: #493b31;
   --app-quote-bg: #ede3d5;
@@ -120,6 +170,7 @@
   --app-canvas: #f3f5f6;
   --app-surface: #fbfcfc;
   --app-surface-raised: #ffffff;
+  --app-icon-rail: #f3f5f6;
   --app-code-bg: #e5ebed;
   --app-code-text: #293b43;
   --app-quote-bg: #eaf0f2;
@@ -143,6 +194,7 @@
   --app-canvas: #262624;
   --app-surface: #2d2d2a;
   --app-surface-raised: #353532;
+  --app-icon-rail: #262624;
   --app-code-bg: #1f1f1d;
   --app-code-text: #e2d9ce;
   --app-quote-bg: #32302c;

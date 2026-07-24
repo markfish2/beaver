@@ -1202,7 +1202,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
               style={{ zIndex: 58, width: `calc(80vw)` }}
             >
               {/* 图标栏 */}
-              <div className="h-full bg-[var(--app-canvas)] flex flex-col items-center py-3 select-none shrink-0 border-r border-gray-200 dark:border-gray-700"
+              <div className="h-full bg-[var(--app-icon-rail)] flex flex-col items-center py-3 select-none shrink-0 border-r border-gray-200 dark:border-gray-700"
                    style={{ width: ICON_RAIL_WIDTH }}>
                 {iconRailContent}
               </div>
@@ -1410,7 +1410,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
         /* 桌面端：原有布局 */
         <>
           {/* 左侧图标栏 */}
-          <div className={`h-full bg-[var(--app-canvas)] flex flex-col items-center py-3 select-none shrink-0 ${contentExpanded ? 'border-r border-gray-200 dark:border-gray-700' : ''}`}
+          <div className={`h-full bg-[var(--app-icon-rail)] flex flex-col items-center py-3 select-none shrink-0 ${contentExpanded ? 'border-r border-gray-200 dark:border-gray-700' : ''}`}
                style={{ width: ICON_RAIL_WIDTH }}>
             {iconRailContent}
           </div>

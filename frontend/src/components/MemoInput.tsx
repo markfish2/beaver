@@ -230,7 +230,7 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
   const showMentionPopup = mentionState.type === 'mention' && filteredDocs.length > 0 && mentionState.coords;
   return (
     <div className="mb-6 relative">
-      <div className="bg-white dark:bg-gray-800/50 rounded-xl overflow-visible border border-[#dad9d4] dark:border-gray-700/40">
+      <div className="bg-[#ffffff] dark:bg-gray-800/50 rounded-xl overflow-visible border border-[#dad9d4] dark:border-gray-700/40">
         {/* 紧凑 CodeMirror 编辑器 */}
         <div onPaste={handlePaste}>
           <MarkdownEditor

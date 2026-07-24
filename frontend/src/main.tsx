@@ -25,7 +25,7 @@ import { syncThemeChrome } from './utils/themeChrome.ts'
 
     // 没有明确选择或选择"跟随系统"→ 跟随系统
     const dark = mq.matches;
-    document.documentElement.dataset.theme = dark ? 'dark' : 'minimal';
+    document.documentElement.dataset.theme = dark ? 'system-dark' : 'system-light';
     if (dark !== lastDark) {
       lastDark = dark;
       document.documentElement.classList.toggle('dark', dark);
@@ -45,7 +45,7 @@ import { syncThemeChrome } from './utils/themeChrome.ts'
       return;
     }
     const dark = mq.matches;
-    document.documentElement.dataset.theme = dark ? 'dark' : 'minimal';
+    document.documentElement.dataset.theme = dark ? 'system-dark' : 'system-light';
     lastDark = dark;
     document.documentElement.classList.toggle('dark', dark);
     syncThemeChrome(dark);

@@ -6,7 +6,7 @@ function checkDark() {
     if (saved) {
       const parsed = JSON.parse(saved);
       if (parsed.theme === 'dark') return true;
-      if (parsed.theme && parsed.theme !== 'dark') return false;
+      if (parsed.theme && parsed.theme !== 'system') return false;
     }
   } catch { /* ignore parse error */ }
   return document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
