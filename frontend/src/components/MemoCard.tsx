@@ -891,7 +891,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
               <X className="w-4 h-4" />
             </button>
         </div>
-        <div className="flex-1 overflow-hidden" onPaste={handlePaste}>
+        <div className="flex-1 overflow-hidden" onPasteCapture={handlePaste}>
             {(() => {
               try {
                 return (
@@ -952,7 +952,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       }`}
       style={{ ...getMemoPaletteStyle(palette), backgroundColor: bgColor, color: palette.text, borderColor: palette.border }}
       >
-        <div className="relative" onPaste={handlePaste}>
+        <div className="relative" onPasteCapture={handlePaste}>
           <MarkdownEditor
             ref={editorRef}
             value={editContent}
