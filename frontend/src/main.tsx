@@ -65,8 +65,40 @@ import { syncThemeChrome } from './utils/themeChrome.ts'
   mq.addEventListener('change', applyTheme);
 })();
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+const DEV_SW_RESET_KEY = 'beaver-dev-sw-reset';
+
+async function clearDevelopmentServiceWorker(): Promise<boolean> {
+  if (!import.meta.env.DEV || !('serviceWorker' in navigator)) return true;
+
+  try {
+    const controlled = navigator.serviceWorker.controller !== null;
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map(registration => registration.unregister()));
+
+    if ('caches' in window) {
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
+    }
+
+    // 已被旧开发 SW 控制的页面需要刷新一次，刷新后才会真正脱离控制。
+    if (controlled && sessionStorage.getItem(DEV_SW_RESET_KEY) !== 'done') {
+      sessionStorage.setItem(DEV_SW_RESET_KEY, 'done');
+      window.location.reload();
+      return false;
+    }
+    sessionStorage.removeItem(DEV_SW_RESET_KEY);
+  } catch (error) {
+    console.warn('清理开发 Service Worker 失败，继续启动应用', error);
+  }
+
+  return true;
+}
+
+void clearDevelopmentServiceWorker().then(shouldRender => {
+  if (!shouldRender) return;
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+});

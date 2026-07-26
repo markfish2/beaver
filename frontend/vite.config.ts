@@ -74,7 +74,8 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
       devOptions: {
-        enabled: true
+        // 开发模块由 Vite/HMR 管理，Service Worker 缓存会造成切回标签页后加载到旧模块。
+        enabled: false
       }
     })
   ],

@@ -2243,12 +2243,14 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       // --- 下面保留原有的 Undo/Redo 逻辑 --- 
       
       // Undo/Redo (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z)
-      // Only let browser handle native undo in textarea/input; contentEditable nodes still use custom undo
+      // 表单和 CodeMirror 使用各自的原生历史；大纲 contentEditable 节点仍使用命令历史。
       const target = e.target as HTMLElement;
       const isTextField = target.tagName === 'TEXTAREA' || target.tagName === 'INPUT';
+      const isCodeMirror = target.closest('.cm-editor') !== null;
+      const usesEditorHistory = isTextField || isCodeMirror;
 
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
-        if (isTextField) return;
+        if (usesEditorHistory) return;
         e.preventDefault();
         e.stopPropagation();
 
@@ -2261,7 +2263,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       }
 
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') {
-        if (isTextField) return;
+        if (usesEditorHistory) return;
         e.preventDefault();
         e.stopPropagation();
         await redo();
