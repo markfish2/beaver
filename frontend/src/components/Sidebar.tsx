@@ -1,4 +1,4 @@
-import { Search, FileText, ChevronDown, Plus, Trash, Star, LogOut, ChevronLeft, ChevronRight, Folder, Edit2, CalendarDays, MoreHorizontal, Copy, ArrowUpRight, ListTree, FolderPlus, FilePlus, Move, Frame, StickyNote, Square, Key, Clock, Lock, Sparkles, User, Sun, Moon, FolderKanban, Archive } from 'lucide-react';
+import { Search, FileText, ChevronDown, Plus, Trash, Star, LogOut, ChevronLeft, ChevronRight, Folder, Edit2, CalendarDays, MoreHorizontal, Copy, ArrowUpRight, ListTree, FolderPlus, FilePlus, Move, Frame, StickyNote, Square, Key, Clock, Lock, Sparkles, User, Sun, Moon, FolderKanban, Archive, Palette } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createDocument, deleteDocument, updateDocument, copyDocument, getNodes, createMemo, uploadFile, search as apiSearch, getTodos, createTodo, updateTodo, getMonthlyDiary, getOrCreateDayNode } from '../api/data';
 import type { Document as DocType, SearchResultItem, Todo } from '../api/data';
@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { useDocuments } from '../context/DocumentContext';
 import { useSearch } from '../context/SearchContext';
 import { useUserView } from '../context/UserViewContext';
+import type { UserSubView } from '../context/UserViewContext';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
 import NewFolderDialog from './NewFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
@@ -44,7 +45,6 @@ const MAX_PANEL_WIDTH = 460;
 const navigationNonce = () => Date.now();
 
 type ViewMode = 'diary' | 'all' | 'starred' | 'recent' | 'memo' | 'user' | 'ai' | 'projects';
-type UserSubView = 'profile' | 'token' | 'ai' | 'trash' | 'password';
 const VIEW_MODES: ViewMode[] = ['diary', 'all', 'starred', 'recent', 'memo', 'user', 'ai', 'projects'];
 
 const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: SidebarProps) => {
@@ -127,7 +127,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   const isDark = useIsDark();
 
   const toggleDark = useCallback(() => {
-    setTheme(isDark ? 'minimal' : 'dark');
+    setTheme(isDark ? 'system' : 'dark');
   }, [isDark, setTheme]);
 
   // Wrapper to update both context and notify parent
@@ -1294,6 +1294,9 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                           <button onClick={() => { setUserSubView('profile'); onDocumentSelect?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
                             <User className="w-4 h-4 text-gray-400" /><span>个人资料</span>
                           </button>
+                          <button onClick={() => { setUserSubView('appearance'); onDocumentSelect?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
+                            <Palette className="w-4 h-4 text-gray-400" /><span>外观与主题</span>
+                          </button>
                           <button onClick={() => { setUserSubView('token'); onDocumentSelect?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
                             <Key className="w-4 h-4 text-gray-400" /><span>API Token</span>
                           </button>
@@ -1538,6 +1541,14 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                             >
                               <User className="w-4 h-4 text-gray-400" />
                               <span>个人资料</span>
+                            </button>
+                            {/* 外观与主题 */}
+                            <button
+                              onClick={() => { setUserSubView('appearance'); onDocumentSelect?.(); }}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors"
+                            >
+                              <Palette className="w-4 h-4 text-gray-400" />
+                              <span>外观与主题</span>
                             </button>
                             {/* API Token */}
                             <button

@@ -12,11 +12,13 @@ import TableOfContents from './TableOfContents';
 import DocumentSettingsMenu from './DocumentSettingsMenu';
 import DiaryDateBar from './DiaryDateBar';
 import UserProfileEditor from './UserProfileEditor';
+import AppearanceSettingsPage from './AppearanceSettingsPage';
 import TokenPanel from './TokenPanel';
 import TrashPanel from './TrashPanel';
 import PasswordPanel from './PasswordPanel';
 import AISettingsPanel from './AISettingsPanel';
 import { useUserView } from '../context/UserViewContext';
+import type { UserSubView } from '../context/UserViewContext';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { getNodes, getDocument, updateNode, updateDocument, deleteNode, createNode, createNodesBatch, uploadFile, batchUpdateNodes, batchMoveNodes, batchDeleteNodes, moveNode, getDiaryDayDates, getOrCreateDayNode, getMonthlyDiary } from '../api/data';
 import type { Node, Document } from '../api/data';
@@ -153,8 +155,6 @@ const serializeNodesToTree = (allNodes: Node[], selectedIds: string[]): Serializ
     .filter(n => !n.parent_node_id || !selectedIds.includes(n.parent_node_id))
     .map(node => processNode(node));
 };
-
-type UserSubView = 'profile' | 'token' | 'ai' | 'trash' | 'password';
 
 interface MainAreaProps {
   diaryDocId?: string | null;
@@ -2295,6 +2295,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     return (
       <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
         {userSubView === 'profile' && <UserProfileEditor />}
+        {userSubView === 'appearance' && <AppearanceSettingsPage />}
         {userSubView === 'token' && <TokenPanel />}
         {userSubView === 'ai' && <AISettingsPanel />}
         {userSubView === 'trash' && <TrashPanel />}
