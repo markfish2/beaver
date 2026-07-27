@@ -33,12 +33,17 @@ export function normalizeListSeparators(content: string): string {
     const cur = lines[i];
     const isListItem = /^\s*[-*+]\s/.test(cur) || /^\s*\d+\.\s/.test(cur);
     const isBlockquote = cur.trimStart().startsWith('>');
-    if (!isListItem && !isBlockquote) continue;
     const nextTrimmed = next.trimStart();
     const nextIsListItem = /^\s*[-*+]\s/.test(next) || /^\s*\d+\.\s/.test(next);
     const nextIsBlank = nextTrimmed === '';
     const nextIsIndented = /^\s{2,}/.test(next) || /^\t/.test(next);
     const nextIsBlockquote = nextTrimmed.startsWith('>');
+    if (!isListItem && !isBlockquote) {
+      if (!nextIsBlank && nextIsListItem && nextIsIndented && cur.trim() !== '') {
+        result.push('');
+      }
+      continue;
+    }
     if (isListItem && !nextIsListItem && !nextIsBlank && !nextIsIndented && !nextIsBlockquote) {
       result.push('');
     }
@@ -114,19 +119,36 @@ export function normalizeCallouts(content: string): string {
   };
 
   const defaultIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>';
-  return content.replace(
-    /^>\s*\[!(\w+)\]\s*(.*?)\n((?:>.*\n?)*)/gm,
-    (_match, type: string, title: string, body: string) => {
-      const lowerType = type.toLowerCase();
-      const icon = icons[lowerType] || defaultIcon;
-      const cleanBody = body
-        .split('\n')
-        .map((line: string) => line.replace(/^>\s?/, ''))
-        .join('\n')
-        .trim();
-      return `<div class="callout callout-${lowerType}"><span class="callout-icon">${icon}</span><div class="callout-body"><div class="callout-content">${cleanBody}</div></div></div>\n`;
+  const lines = content.split('\n');
+  const result: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const header = lines[i].match(/^ {0,3}>\s*\[!(\w+)\]\s*(.*?)\s*$/);
+    if (!header) {
+      result.push(lines[i]);
+      continue;
     }
-  );
+
+    const [, type, title] = header;
+    const bodyLines: string[] = [];
+    let j = i + 1;
+    while (j < lines.length) {
+      const body = lines[j].match(/^ {0,3}>\s?(.*)$/);
+      if (!body) break;
+      bodyLines.push(body[1]);
+      j++;
+    }
+
+    const lowerType = type.toLowerCase();
+    const icon = icons[lowerType] || defaultIcon;
+    const cleanBody = bodyLines.join('\n').trim();
+    const contentHtml = cleanBody || title.trim();
+    result.push(`<div class="callout callout-${lowerType}"><span class="callout-icon">${icon}</span><div class="callout-body"><div class="callout-content">${contentHtml}</div></div></div>`);
+    result.push('');
+    i = j - 1;
+  }
+
+  return result.join('\n');
 }
 
 /** Full preprocessing pipeline: strip tags/attachments, then normalize lists/highlights/code blocks/callouts. */
@@ -141,5 +163,5 @@ export function escapeCodeBlockHtml(content: string): string {
 }
 
 export function preprocessMarkdown(content: string): string {
-  return escapeCodeBlockHtml(escapeFullWidthColon(normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(stripAttachments(stripTags(normalizeCallouts(content)))))))));
+  return escapeCodeBlockHtml(normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(stripAttachments(stripTags(normalizeCallouts(content))))))));
 }

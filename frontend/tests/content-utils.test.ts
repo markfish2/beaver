@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { flattenParsedNodes, parseMarkdown } from '../src/components/mainAreaClipboard.ts';
 import { extractMemoFileLinks, extractMemoImages, extractMemoTags, extractMemoUrls } from '../src/components/memoCardContent.ts';
+import { normalizeCallouts, preprocessMarkdown } from '../src/utils/markdownPreprocess.ts';
 
 test('解析 Markdown 层级、任务和备注', () => {
   const tree = parseMarkdown('- [ ] 父任务\n  > 备注\n  - [x] 子任务\n# 标题');
@@ -28,4 +29,34 @@ test('Memo 内容提取排除代码标签、图片链接和内部文档链接', 
   assert.deepEqual(extractMemoImages(content), [{ alt: '图', url: 'https://cdn.test/a.png' }]);
   assert.deepEqual(extractMemoFileLinks(content), [{ name: '附件', url: 'https://cdn.test/a.pdf' }]);
   assert.deepEqual(new Set(extractMemoUrls(content)), new Set(['https://cdn.test/a.png', 'https://cdn.test/a.pdf', 'https://site.test/a']));
+});
+
+test('缩进 callout 不会影响后续正文和列表解析', () => {
+  const content = [
+    '> 测试',
+    '- 测试',
+    '> [!info] 注意  ',
+    '> 这是感叹号',
+    '**坚持**',
+    '  - 测定时',
+    '  - 测试',
+    '',
+    ' > [!info] 注意',
+    '  > 这是感叹号',
+    '',
+    '这个会影响到后面',
+    '  **坚持**',
+    '    - 测定时',
+    '    - 测试',
+  ].join('\n');
+
+  const normalized = normalizeCallouts(content);
+  assert.equal((normalized.match(/class="callout callout-info"/g) || []).length, 2);
+  assert.ok(normalized.includes('</div>\n\n**坚持**'));
+  const twoSpaces = ' '.repeat(2);
+  const fourSpaces = ' '.repeat(4);
+  assert.ok(normalized.endsWith(`\n这个会影响到后面\n${twoSpaces}**坚持**\n${fourSpaces}- 测定时\n${fourSpaces}- 测试`));
+  const processed = preprocessMarkdown(content);
+  assert.ok(processed.includes(`</div>\n\n**坚持**\n\n${twoSpaces}- 测定时\n${twoSpaces}- 测试`));
+  assert.ok(processed.endsWith(`\n这个会影响到后面\n${twoSpaces}**坚持**\n\n${fourSpaces}- 测定时\n${fourSpaces}- 测试`));
 });
