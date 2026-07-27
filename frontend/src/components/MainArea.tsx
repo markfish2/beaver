@@ -168,6 +168,7 @@ const createSortOrder = () => Date.now();
 const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, activeConvId = null }: MainAreaProps = {}) => {
   const { setActiveConvId, refreshConvList, selectedProjectId, setSelectedProjectId } = useUserView();
   const [showArchivedProjects, setShowArchivedProjects] = useState(false);
+  const [archivedProjectsReloadKey, setArchivedProjectsReloadKey] = useState(0);
   const { documentId: urlDocumentId } = useParams();
   const navigate = useNavigate();
   const documentId = diaryDocId || urlDocumentId;
@@ -180,6 +181,23 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   const [loadedDoc, setCurrentDoc] = useState<Document | null>(null);
+
+  useEffect(() => {
+    const openArchivedProjects = () => {
+      setSelectedProjectId(null);
+      setShowArchivedProjects(true);
+      setArchivedProjectsReloadKey(prev => prev + 1);
+    };
+    const closeArchivedProjects = () => {
+      setShowArchivedProjects(false);
+    };
+    window.addEventListener('projects-open-archived', openArchivedProjects);
+    window.addEventListener('projects-close-archived', closeArchivedProjects);
+    return () => {
+      window.removeEventListener('projects-open-archived', openArchivedProjects);
+      window.removeEventListener('projects-close-archived', closeArchivedProjects);
+    };
+  }, [setSelectedProjectId]);
   const currentDoc = useMemo(() => {
     if (!documentId) return null;
     const normalizedId = documentId.replace(/-/g, '');
@@ -2283,6 +2301,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         <ProjectView
           projectId={selectedProjectId}
           showArchived={showArchivedProjects}
+          archivedReloadKey={archivedProjectsReloadKey}
           onToggleArchived={setShowArchivedProjects}
           onDeselectProject={() => setSelectedProjectId(null)}
         />

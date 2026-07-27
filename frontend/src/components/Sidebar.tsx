@@ -238,6 +238,33 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     }
   }, [viewMode, projects.length, setSelectedProjectId]);
 
+  useEffect(() => {
+    const refreshProjects = () => {
+      getProjects().then(setProjects).catch(console.error);
+    };
+    window.addEventListener('projects-refresh', refreshProjects);
+    return () => window.removeEventListener('projects-refresh', refreshProjects);
+  }, []);
+
+  const openArchivedProjects = useCallback(() => {
+    setIsSearchMode(false);
+    setUserSubViewContext(null);
+    setViewMode('projects');
+    setContentExpanded(true);
+    setSelectedProjectId(null);
+    window.dispatchEvent(new CustomEvent('projects-open-archived'));
+  }, [setSelectedProjectId, setUserSubViewContext]);
+
+  const closeArchivedProjects = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('projects-close-archived'));
+  }, []);
+
+  useEffect(() => {
+    if (viewMode !== 'projects') {
+      closeArchivedProjects();
+    }
+  }, [closeArchivedProjects, viewMode]);
+
   // 监听从其他组件（如近7天计划）切换到项目视图的事件
   useEffect(() => {
     const handler = (e: Event) => {
@@ -484,6 +511,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       const pid = parentId !== undefined ? parentId : newMenuTarget;
       const newDoc = await createDocument('新文章', 'document', pid, Date.now());
       addDocument(newDoc);
+      closeArchivedProjects();
       navigate(`/d/${newDoc.id}`);
       onDocumentSelect?.();
       window.dispatchEvent(new CustomEvent('sidebarClose'));
@@ -497,6 +525,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       const pid = parentId !== undefined ? parentId : newMenuTarget;
       const newDoc = await createDocument('新笔记', 'note', pid, Date.now());
       addDocument(newDoc);
+      closeArchivedProjects();
       navigate(`/d/${newDoc.id}`);
       onDocumentSelect?.();
       window.dispatchEvent(new CustomEvent('sidebarClose'));
@@ -531,6 +560,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       const pid = parentId !== undefined ? parentId : newMenuTarget;
       const newDoc = await createExcalidrawDocument('无标题画布', pid);
       addDocument(newDoc);
+      closeArchivedProjects();
       navigate(`/d/${newDoc.id}`);
       onDocumentSelect?.();
       window.dispatchEvent(new CustomEvent('sidebarClose'));
@@ -619,6 +649,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   };
 
   const handleSearchResultClick = (result: SearchResultItem) => {
+    closeArchivedProjects();
     switch (result.result_type) {
       case 'document':
       case 'document_title':
@@ -655,6 +686,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   const handleSelect = (id: string, type: 'document' | 'folder' | 'note' | 'excalidraw') => {
     setContextMenu(null);
     if (type === 'document' || type === 'note' || type === 'excalidraw') {
+      closeArchivedProjects();
       navigate(`/d/${id}`);
       onDocumentSelect?.();
       setSelectedFolderId(null);
@@ -1325,10 +1357,31 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                         />
                       ) : viewMode === 'projects' ? (
                         <div className="flex flex-col h-full">
+                          <div className="shrink-0 border-b border-gray-200 dark:border-gray-700 p-2 space-y-1">
+                            <button
+                              onClick={() => setShowNewProjectDialog(true)}
+                              className="w-full flex items-center gap-2 px-2 py-2 text-sm text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                            >
+                              <Plus className="w-4 h-4 text-gray-400" />
+                              <span>新建项目</span>
+                            </button>
+                            <button
+                              onClick={openArchivedProjects}
+                              className="w-full flex items-center gap-2 px-2 py-2 text-sm text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                            >
+                              <Archive className="w-4 h-4 text-gray-400" />
+                              <span>已归档项目</span>
+                            </button>
+                          </div>
                           <div className="flex-1 overflow-y-auto">
                             {projects.map(p => (
                               <div key={p.id}
-                                onClick={() => { if (editingProjectId !== p.id) setSelectedProjectId(p.id); }}
+                                onClick={() => {
+                                  if (editingProjectId !== p.id) {
+                                    closeArchivedProjects();
+                                    setSelectedProjectId(p.id);
+                                  }
+                                }}
                                 onContextMenu={(e) => {
                                   e.preventDefault();
                                   setProjectContextMenu({ id: p.id, name: p.name, x: e.clientX, y: e.clientY });
@@ -1601,10 +1654,31 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                           <div className="p-4 text-xs text-gray-400 text-center">加载中...</div>
                         ) : viewMode === 'projects' ? (
                           <div className="flex flex-col h-full">
+                            <div className="shrink-0 border-b border-gray-200 dark:border-gray-700 p-2 space-y-1">
+                              <button
+                                onClick={() => setShowNewProjectDialog(true)}
+                                className="w-full flex items-center gap-2 px-2 py-2 text-sm text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                              >
+                                <Plus className="w-4 h-4 text-gray-400" />
+                                <span>新建项目</span>
+                              </button>
+                              <button
+                                onClick={openArchivedProjects}
+                                className="w-full flex items-center gap-2 px-2 py-2 text-sm text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                              >
+                                <Archive className="w-4 h-4 text-gray-400" />
+                                <span>已归档项目</span>
+                              </button>
+                            </div>
                             <div className="flex-1 overflow-y-auto">
                               {projects.map(p => (
                                 <div key={p.id}
-                                  onClick={() => { if (editingProjectId !== p.id) setSelectedProjectId(p.id); }}
+                                  onClick={() => {
+                                    if (editingProjectId !== p.id) {
+                                      closeArchivedProjects();
+                                      setSelectedProjectId(p.id);
+                                    }
+                                  }}
                                   onContextMenu={(e) => {
                                     e.preventDefault();
                                     setProjectContextMenu({ id: p.id, name: p.name, x: e.clientX, y: e.clientY });
@@ -1955,6 +2029,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
               try {
                 await archiveProject(id);
                 setProjects(prev => prev.filter(p => p.id !== id));
+                window.dispatchEvent(new CustomEvent('projects-open-archived'));
               } catch (err) { console.error('Failed to archive project:', err); }
             }}
             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"

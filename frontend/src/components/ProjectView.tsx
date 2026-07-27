@@ -11,6 +11,7 @@ import GanttChart from './GanttChart';
 interface ProjectViewProps {
   projectId: string | null;
   showArchived?: boolean;
+  archivedReloadKey?: number;
   onToggleArchived?: (show: boolean) => void;
   onDeselectProject?: () => void;
   isMobile?: boolean;
@@ -49,7 +50,7 @@ function addChildToTree(tasks: Task[], parentId: string, child: Task): Task[] {
   });
 }
 
-export default function ProjectView({ projectId, showArchived = false, onToggleArchived, onDeselectProject: _onDeselectProject, isMobile = false }: ProjectViewProps) {
+export default function ProjectView({ projectId, showArchived = false, archivedReloadKey = 0, onToggleArchived, onDeselectProject, isMobile = false }: ProjectViewProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showGantt, setShowGantt] = useState(true);
   const [splitRatio, setSplitRatio] = useState(0.5); // 0.2 ~ 0.8
@@ -84,7 +85,7 @@ export default function ProjectView({ projectId, showArchived = false, onToggleA
     getArchivedProjects()
       .then(setArchivedProjects)
       .catch(err => console.error('Failed to load archived projects:', err));
-  }, [showArchived, projectId]);
+  }, [showArchived, projectId, archivedReloadKey]);
 
   // ==================== 乐观更新的 CRUD ====================
 
@@ -93,6 +94,7 @@ export default function ProjectView({ projectId, showArchived = false, onToggleA
     setTasks(prev => updateTaskInTree(prev, id, t => ({ ...t, is_done: !t.is_done })));
     try {
       await toggleTask(id);
+      window.dispatchEvent(new CustomEvent('projects-refresh'));
       // 静默刷新以获取级联变化（父任务自动完成等）
       if (projectId) getTasks(projectId).then(setTasks).catch(() => {});
     } catch {
@@ -238,10 +240,20 @@ export default function ProjectView({ projectId, showArchived = false, onToggleA
     try {
       await unarchiveProject(id);
       setArchivedProjects(prev => prev.filter(p => p.id !== id));
+      window.dispatchEvent(new CustomEvent('projects-refresh'));
     } catch (err) {
       console.error('Failed to unarchive project:', err);
     }
   }, []);
+
+  const handleArchiveToggle = useCallback(() => {
+    if (projectId) {
+      onDeselectProject?.();
+      onToggleArchived?.(true);
+      return;
+    }
+    onToggleArchived?.(!showArchived);
+  }, [onDeselectProject, onToggleArchived, projectId, showArchived]);
 
   // ==================== Render ====================
 
@@ -251,7 +263,7 @@ export default function ProjectView({ projectId, showArchived = false, onToggleA
         {/* Header with archived toggle */}
         <div className="flex items-center justify-end px-4 py-3 border-b border-gray-200 dark:border-gray-700">
           <button
-            onClick={() => onToggleArchived?.(!showArchived)}
+            onClick={handleArchiveToggle}
             className={`p-1.5 rounded-lg transition-colors ${
               showArchived
                 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
@@ -328,21 +340,7 @@ export default function ProjectView({ projectId, showArchived = false, onToggleA
           )}
         </div>
 
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => {
-              onToggleArchived?.(!showArchived);
-            }}
-            className={`p-1.5 rounded-lg transition-colors ${
-              showArchived
-                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500'
-            }`}
-            title="查看已归档"
-          >
-            <Archive size={16} />
-          </button>
-        </div>
+        <div className="flex items-center gap-1" />
       </div>
 
       {/* Content: task list + optional gantt */}
@@ -400,16 +398,27 @@ export default function ProjectView({ projectId, showArchived = false, onToggleA
                 onChange={e => setNewTitle(e.target.value)}
                 onKeyDown={handleAddKeyDown}
                 placeholder="任务标题..."
-                className="w-full bg-transparent text-sm text-gray-800 dark:text-gray-100 outline-none border-b border-blue-400 py-1 placeholder:text-gray-400"
+                className="w-full bg-transparent text-base text-gray-800 dark:text-gray-100 outline-none border-b border-blue-400 py-1.5 placeholder:text-gray-400"
               />
               <div className="flex items-center gap-2">
-                <Calendar size={12} className="text-gray-400" />
-                <input type="date" value={newStart} onChange={e => setNewStart(e.target.value)} className="text-[11px] bg-transparent outline-none text-gray-400 cursor-pointer" />
-                <span className="text-gray-300 dark:text-gray-600 text-[11px]">-</span>
-                <input type="date" value={newEnd} onChange={e => setNewEnd(e.target.value)} className="text-[11px] bg-transparent outline-none text-gray-400 cursor-pointer" />
+                <Calendar size={16} className="text-gray-400" />
+                <input type="date" value={newStart} onChange={e => setNewStart(e.target.value)} className="text-sm bg-transparent outline-none text-gray-500 dark:text-gray-400 cursor-pointer" />
+                <span className="text-gray-300 dark:text-gray-600 text-sm">-</span>
+                <input type="date" value={newEnd} onChange={e => setNewEnd(e.target.value)} className="text-sm bg-transparent outline-none text-gray-500 dark:text-gray-400 cursor-pointer" />
                 <div className="flex-1" />
-                <button onClick={() => setShowAddForm(false)} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">取消</button>
-                <button onClick={handleCreateTask} disabled={!newTitle.trim()} className="text-xs text-blue-500 hover:text-blue-600 disabled:opacity-40 disabled:cursor-not-allowed">添加</button>
+                <button
+                  onClick={() => setShowAddForm(false)}
+                  className="px-3 py-1.5 rounded-full text-sm text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleCreateTask}
+                  disabled={!newTitle.trim()}
+                  className="px-3 py-1.5 rounded-full text-sm text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  添加
+                </button>
               </div>
             </div>
           )}
