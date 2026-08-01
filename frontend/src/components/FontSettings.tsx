@@ -10,7 +10,7 @@ type FontSize = 'small' | 'medium' | 'large';
 type FontFamily = 'system' | 'yahei' | 'pingfang' | 'kaiti' | 'fangsong' | 'syst';
 type Theme = 'system' | 'minimal' | 'warm' | 'dark' | 'geek';
 type SelectableTheme = Exclude<Theme, 'dark'>;
-type MarkdownStyle = 'default' | 'pie';
+type MarkdownStyle = 'default' | 'pie' | 'markamd';
 
 interface FontSettings {
   fontSize: FontSize;
@@ -59,6 +59,11 @@ const MARKDOWN_STYLE_LABELS: Record<MarkdownStyle, { name: string; description: 
     name: 'Pie 学术',
     description: '参考 academic：衬线正文、红棕链接、论文式表格与引用',
     preview: 'π',
+  },
+  markamd: {
+    name: 'Marka.md',
+    description: '参考 marka.md：清爽标题线、橙色强调、轻量代码与引用',
+    preview: 'Md',
   },
 };
 
@@ -357,7 +362,9 @@ const MarkdownStyleSection = ({
             <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-lg ${
               style === 'pie'
                 ? 'border-[#6f2d22]/30 bg-[#fbfaf6] font-serif text-[#9a1f12]'
-                : 'border-gray-200 bg-white text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
+                : style === 'markamd'
+                  ? 'border-[#fe640b]/30 bg-[#eff1f5] font-mono text-[#fe640b] dark:border-[#fab387]/30 dark:bg-[#1e1e2e] dark:text-[#fab387]'
+                  : 'border-gray-200 bg-white text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
             }`}>
               {item.preview}
             </span>

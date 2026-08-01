@@ -6,6 +6,44 @@ export function normalizeTaskLists(content: string): string {
   return content.replace(/^(\s*)[-*+]\s*\[([ xX*])\] /gm, '$1- [$2] ');
 }
 
+export function isMarkdownTaskLine(trimmedLine: string): boolean {
+  return /^[-*+]\s*\[[ xX*-]\]\s/.test(trimmedLine);
+}
+
+export function getMarkdownTaskOrdinalAtLine(content: string, oneBasedLine: number | null): number | null {
+  if (oneBasedLine == null) return null;
+  const lines = content.split('\n');
+  let ordinal = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (!isMarkdownTaskLine(lines[i].trimStart())) continue;
+    if (i + 1 === oneBasedLine) return ordinal;
+    ordinal++;
+  }
+  return null;
+}
+
+export function toggleMarkdownTaskByOrdinal(content: string, taskIndex: number): string {
+  const lines = content.split('\n');
+  let taskCount = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trimStart();
+    if (!isMarkdownTaskLine(trimmed)) continue;
+    if (taskCount === taskIndex) {
+      const line = lines[i];
+      const indentLength = line.length - trimmed.length;
+      const indent = line.slice(0, indentLength);
+      const marker = trimmed[0];
+      const rest = trimmed.slice(trimmed.indexOf(']') + 2);
+      const currentMark = trimmed.slice(trimmed.indexOf('['), trimmed.indexOf(']') + 1).toLowerCase();
+      const nextMark = currentMark === '[ ]' ? '[x]' : '[ ]';
+      lines[i] = `${indent}${marker} ${nextMark} ${rest}`;
+      return lines.join('\n');
+    }
+    taskCount++;
+  }
+  return content;
+}
+
 
 export function normalizeHighlight(content: string): string {
   const lines = content.split('\n');

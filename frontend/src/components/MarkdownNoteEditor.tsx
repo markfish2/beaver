@@ -52,7 +52,7 @@ import { getNodes, createNode, updateNode, uploadFile, getMemoTags, getDocuments
 import { useDocuments } from '../context/DocumentContext';
 import type { Document } from '../api/data';
 import MermaidBlock from './MermaidBlock';
-import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts } from '../utils/markdownPreprocess';
+import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts, getMarkdownTaskOrdinalAtLine, toggleMarkdownTaskByOrdinal } from '../utils/markdownPreprocess';
 import { getPasteMarkdown } from '../utils/htmlToMarkdown';
 import { localizeMarkdownImages } from '../utils/markdownImageUpload';
 import { useIsDark } from '../hooks/useIsDark';
@@ -81,6 +81,19 @@ const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => ({
 });
 
 type MarkdownCodeProps = Parameters<NonNullable<Components['code']>>[0];
+
+type MarkdownAstNodeWithPosition = {
+  position?: {
+    start?: {
+      line?: number;
+    };
+  };
+};
+
+function getNodeStartLine(node: unknown): number | null {
+  const line = (node as MarkdownAstNodeWithPosition | undefined)?.position?.start?.line;
+  return typeof line === 'number' && Number.isFinite(line) ? line : null;
+}
 
 const CodeBlock = memo(function CodeBlock({ className, children, ...props }: MarkdownCodeProps) {
   const [copied, setCopied] = useState(false);
@@ -341,6 +354,20 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   }, [handleFileUpload, scheduleSave, content]);
 
   const navigate_fn = useNavigate();
+  const processedContent = useMemo(() => preprocess(content), [content]);
+  const handlePreviewTaskToggle = useCallback((sourceLine: number | null) => {
+    const taskIndex = getMarkdownTaskOrdinalAtLine(processedContent, sourceLine);
+    if (taskIndex == null) return;
+    const nextContent = toggleMarkdownTaskByOrdinal(content, taskIndex);
+    if (nextContent === content) return;
+    setContent(nextContent);
+    const view = editorRef.current?.view;
+    if (view) {
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: nextContent } });
+    }
+    scheduleSave(nextContent);
+  }, [content, processedContent, scheduleSave]);
+
   const mdComponents = useMemo((): Components => ({
     code: (props: MarkdownCodeProps) => {
       const match = /language-(\w+)/.exec(props.className || '');
@@ -356,9 +383,62 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
       }
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 underline">{children}</a>;
     },
-  }), [navigate_fn]);
-
-  const processedContent = useMemo(() => preprocess(content), [content]);
+    li: ({ children, ordered, index, node, ...props }) => {
+      void ordered;
+      void index;
+      const liClassName = typeof props.className === 'string' ? props.className : '';
+      if (liClassName.includes('task-list-item')) {
+        const sourceLine = getNodeStartLine(node);
+        return (
+          <li
+            {...props}
+            className={`${liClassName} relative list-none`}
+            style={{ paddingLeft: 22, marginLeft: 0, listStyle: 'none' }}
+            onClick={(e) => {
+              const target = e.target as HTMLElement;
+              const checkbox = target.closest('[role="checkbox"]');
+              if (!checkbox || !e.currentTarget.contains(checkbox)) return;
+              e.preventDefault();
+              e.stopPropagation();
+              handlePreviewTaskToggle(sourceLine);
+            }}
+          >
+            {children}
+          </li>
+        );
+      }
+      return <li {...props}>{children}</li>;
+    },
+    input: ({ checked, type, className, ...props }) => {
+      if (type === 'checkbox') {
+        return (
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={checked}
+            className={`absolute left-0 top-[5px] z-20 inline-flex h-[14px] w-[14px] shrink-0 cursor-pointer items-center justify-center rounded-full border transition-colors ${
+              checked
+                ? 'border-[#3f587f] bg-[#3f587f]'
+                : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800'
+            }`}
+            onMouseDown={(e) => {
+              e.preventDefault();
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+            }}
+          >
+            {checked && (
+              <svg viewBox="0 0 16 16" fill="none" className="h-2 w-2 text-white" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3.5 8.5L6.5 11.5L12.5 4.5" />
+              </svg>
+            )}
+          </button>
+        );
+      }
+      return <input type={type} checked={checked} className={className} {...props} />;
+    },
+  }), [handlePreviewTaskToggle, navigate_fn]);
 
   // Scroll sync: bidirectional editor ↔ preview in split mode (from markamd)
   useEffect(() => {

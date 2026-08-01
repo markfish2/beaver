@@ -1,0 +1,375 @@
+:root {
+  --markdown-markamd-bg: #eff1f5;
+  --markdown-markamd-bg-solid: #ffffff;
+  --markdown-markamd-fg: #4c4f69;
+  --markdown-markamd-muted: #8c91a3;
+  --markdown-markamd-border: #ccd0da;
+  --markdown-markamd-accent: #fe640b;
+  --markdown-markamd-surface: #e6e9ef;
+  --markdown-markamd-surface-hover: #dce0e8;
+  --markdown-markamd-code-bg: #eef0f4;
+  --markdown-markamd-code-header: #e6e9ef;
+  --markdown-markamd-block-code-bg: #f6f8fa;
+  --markdown-markamd-block-code-header: #f6f8fa;
+  --markdown-markamd-block-code-border: #d0d7de;
+  --markdown-markamd-block-code-text: #24292f;
+  --markdown-markamd-block-code-muted: #57606a;
+  --markdown-markamd-selection: rgba(254, 100, 11, 0.18);
+  --markdown-markamd-radius-sm: 6px;
+  --markdown-markamd-radius-md: 8px;
+  --markdown-markamd-font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --markdown-markamd-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.dark,
+:root[data-theme="system-dark"] {
+  --markdown-markamd-bg: #1e1e2e;
+  --markdown-markamd-bg-solid: #181825;
+  --markdown-markamd-fg: #cdd6f4;
+  --markdown-markamd-muted: #8b91a8;
+  --markdown-markamd-border: #313244;
+  --markdown-markamd-accent: #fab387;
+  --markdown-markamd-surface: #181825;
+  --markdown-markamd-surface-hover: #45475a;
+  --markdown-markamd-code-bg: #202032;
+  --markdown-markamd-code-header: #181825;
+  --markdown-markamd-block-code-bg: #f6f8fa;
+  --markdown-markamd-block-code-header: #f6f8fa;
+  --markdown-markamd-block-code-border: #d0d7de;
+  --markdown-markamd-block-code-text: #24292f;
+  --markdown-markamd-block-code-muted: #57606a;
+  --markdown-markamd-selection: rgba(250, 179, 135, 0.22);
+}
+
+:root[data-theme="minimal"]:not(.dark) {
+  --markdown-markamd-bg: #ffffff;
+  --markdown-markamd-bg-solid: #ffffff;
+  --markdown-markamd-fg: #111111;
+  --markdown-markamd-muted: #6f6f6f;
+  --markdown-markamd-border: #d9d9d9;
+  --markdown-markamd-accent: #111111;
+  --markdown-markamd-surface: #f5f5f5;
+  --markdown-markamd-surface-hover: #ececec;
+  --markdown-markamd-code-bg: #f5f5f5;
+  --markdown-markamd-code-header: #eeeeee;
+  --markdown-markamd-selection: rgba(17, 17, 17, 0.14);
+}
+
+:root[data-theme="warm"]:not(.dark) {
+  --markdown-markamd-bg: #f7f4e9;
+  --markdown-markamd-bg-solid: #fffdf7;
+  --markdown-markamd-fg: #2d3624;
+  --markdown-markamd-muted: #7d8670;
+  --markdown-markamd-border: #dad6c4;
+  --markdown-markamd-accent: #7b9a4e;
+  --markdown-markamd-surface: #ede9d8;
+  --markdown-markamd-surface-hover: #e3dcc4;
+  --markdown-markamd-code-bg: #efead8;
+  --markdown-markamd-code-header: #e8e1cc;
+  --markdown-markamd-selection: rgba(123, 154, 78, 0.2);
+}
+
+:root[data-theme="geek"]:not(.dark) {
+  --markdown-markamd-bg: #ffffff;
+  --markdown-markamd-bg-solid: #ffffff;
+  --markdown-markamd-fg: #202124;
+  --markdown-markamd-muted: #6f737a;
+  --markdown-markamd-border: #dadce0;
+  --markdown-markamd-accent: #1a73e8;
+  --markdown-markamd-surface: #f8fafd;
+  --markdown-markamd-surface-hover: #edf4ff;
+  --markdown-markamd-code-bg: #f3f7fd;
+  --markdown-markamd-code-header: #edf4ff;
+  --markdown-markamd-selection: rgba(26, 115, 232, 0.18);
+}
+
+:root[data-markdown-style="markamd"] .memo-content {
+  color: var(--markdown-markamd-fg) !important;
+  font-family: var(--markdown-markamd-font-ui);
+  font-size: var(--prose-font-size);
+  line-height: var(--prose-line-height);
+  letter-spacing: -0.01em;
+}
+
+:root[data-markdown-style="markamd"] .memo-content ::selection {
+  background: var(--markdown-markamd-selection);
+}
+
+:root[data-markdown-style="markamd"] .memo-content > * + * {
+  margin-top: 1em;
+}
+
+:root[data-markdown-style="markamd"] .memo-content h1,
+:root[data-markdown-style="markamd"] .memo-content h2,
+:root[data-markdown-style="markamd"] .memo-content h3,
+:root[data-markdown-style="markamd"] .memo-content h4,
+:root[data-markdown-style="markamd"] .memo-content h5,
+:root[data-markdown-style="markamd"] .memo-content h6 {
+  color: var(--markdown-markamd-fg) !important;
+  font-family: inherit;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  margin: 1.6em 0 0.65em;
+}
+
+:root[data-markdown-style="markamd"] .memo-content h1 {
+  position: relative;
+  margin-top: 0;
+  padding-bottom: 0.35em;
+  border-bottom: 1px solid var(--markdown-markamd-border) !important;
+  font-size: 1.8em !important;
+}
+
+:root[data-markdown-style="markamd"] .memo-content h1::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 36px;
+  height: 1px;
+  background: var(--markdown-markamd-accent);
+}
+
+:root[data-markdown-style="markamd"] .memo-content h2 {
+  border-bottom: 0 !important;
+  padding-bottom: 0;
+  font-size: 1.32em !important;
+}
+
+:root[data-markdown-style="markamd"] .memo-content h3 { font-size: 1.1em !important; }
+:root[data-markdown-style="markamd"] .memo-content h4 { color: var(--markdown-markamd-muted) !important; font-size: 1em !important; }
+:root[data-markdown-style="markamd"] .memo-content h5 { color: var(--markdown-markamd-muted) !important; font-size: 0.94em !important; }
+:root[data-markdown-style="markamd"] .memo-content h6 { color: var(--markdown-markamd-muted) !important; font-size: 0.88em !important; text-transform: uppercase; letter-spacing: 0.04em; }
+
+:root[data-markdown-style="markamd"] .memo-content p {
+  margin: 1em 0;
+}
+
+:root[data-markdown-style="markamd"] .memo-content a,
+:root[data-markdown-style="markamd"] .memo-content .memo-document-link {
+  color: var(--markdown-markamd-accent) !important;
+  text-decoration: none !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--markdown-markamd-accent) 40%, transparent);
+  background: transparent !important;
+}
+
+:root[data-markdown-style="markamd"] .memo-content a:hover,
+:root[data-markdown-style="markamd"] .memo-content .memo-document-link:hover {
+  border-bottom-color: var(--markdown-markamd-accent);
+}
+
+:root[data-markdown-style="markamd"] .memo-content strong {
+  font-weight: 600;
+}
+
+:root[data-markdown-style="markamd"] .memo-content em {
+  font-style: italic;
+}
+
+:root[data-markdown-style="markamd"] .memo-content s,
+:root[data-markdown-style="markamd"] .memo-content del {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  opacity: 0.7;
+}
+
+:root[data-markdown-style="markamd"] .memo-content mark {
+  color: inherit !important;
+  background: color-mix(in srgb, var(--markdown-markamd-accent) 22%, transparent) !important;
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+
+:root[data-markdown-style="markamd"] .memo-content blockquote {
+  color: var(--markdown-markamd-muted) !important;
+  border-left: 2px solid var(--markdown-markamd-accent) !important;
+  padding: 2px 0 2px 14px;
+  margin: 1em 0;
+  font-style: italic;
+  background: transparent !important;
+}
+
+:root[data-markdown-style="markamd"] .memo-content blockquote > :first-child {
+  margin-top: 0;
+}
+
+:root[data-markdown-style="markamd"] .memo-content blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+:root[data-markdown-style="markamd"] .memo-content ul,
+:root[data-markdown-style="markamd"] .memo-content ol {
+  list-style-position: outside !important;
+  padding-left: 1.4em;
+  margin: 0.85em 0 1em;
+}
+
+:root[data-markdown-style="markamd"] .memo-content ul {
+  list-style-type: disc !important;
+}
+
+:root[data-markdown-style="markamd"] .memo-content ol {
+  list-style-type: decimal !important;
+}
+
+:root[data-markdown-style="markamd"] .memo-content li {
+  display: list-item;
+  line-height: 1.62;
+  padding-left: 0.05em;
+}
+
+:root[data-markdown-style="markamd"] .memo-content li + li {
+  margin-top: 0.25em;
+}
+
+:root[data-markdown-style="markamd"] .memo-content li > p {
+  margin: 0;
+}
+
+:root[data-markdown-style="markamd"] .memo-content input[type="checkbox"] {
+  accent-color: var(--markdown-markamd-accent);
+}
+
+:root[data-markdown-style="markamd"] .memo-content button[role="checkbox"] {
+  margin: 0;
+  appearance: none;
+}
+
+:root[data-markdown-style="markamd"] .memo-content code,
+:root[data-markdown-style="markamd"] .memo-content pre,
+:root[data-markdown-style="markamd"] .memo-content .markdown-code-language {
+  font-family: var(--markdown-markamd-font-mono) !important;
+}
+
+:root[data-markdown-style="markamd"] .memo-content code:not(pre code) {
+  color: color-mix(in srgb, var(--markdown-markamd-accent) 70%, var(--markdown-markamd-fg)) !important;
+  background: color-mix(in srgb, var(--markdown-markamd-accent) 8%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--markdown-markamd-accent) 18%, var(--markdown-markamd-border));
+  border-radius: var(--markdown-markamd-radius-sm);
+  padding: 1.5px 6px;
+  font-size: 0.86em;
+}
+
+:root[data-markdown-style="markamd"] .memo-card-themed .memo-content code:not(pre code) {
+  color: color-mix(in srgb, var(--markdown-markamd-accent) 70%, var(--markdown-markamd-fg)) !important;
+  background: color-mix(in srgb, var(--markdown-markamd-accent) 8%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--markdown-markamd-accent) 18%, var(--markdown-markamd-border)) !important;
+  border-radius: var(--markdown-markamd-radius-sm) !important;
+  padding: 1.5px 6px !important;
+  font-size: 0.86em !important;
+}
+
+:root[data-markdown-style="markamd"] .memo-content .markdown-code-block {
+  border: 1px solid var(--markdown-markamd-block-code-border) !important;
+  border-radius: var(--markdown-markamd-radius-md) !important;
+  background: var(--markdown-markamd-block-code-bg) !important;
+  box-shadow: none !important;
+}
+
+:root[data-markdown-style="markamd"] .memo-content .markdown-code-header {
+  color: var(--markdown-markamd-block-code-muted) !important;
+  background: var(--markdown-markamd-block-code-header) !important;
+  border-color: var(--markdown-markamd-block-code-border) !important;
+  border-bottom-width: 1px !important;
+}
+
+:root[data-markdown-style="markamd"] .memo-content .markdown-code-language {
+  color: var(--markdown-markamd-block-code-muted) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.02em;
+}
+
+:root[data-markdown-style="markamd"] .memo-content .markdown-code-body,
+:root[data-markdown-style="markamd"] .memo-content .markdown-code-body pre,
+:root[data-markdown-style="markamd"] .memo-content pre {
+  color: var(--markdown-markamd-block-code-text) !important;
+  background: var(--markdown-markamd-block-code-bg) !important;
+  border-radius: 0 0 calc(var(--markdown-markamd-radius-md) - 1px) calc(var(--markdown-markamd-radius-md) - 1px) !important;
+  font-size: 0.85em !important;
+  line-height: 1.6 !important;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+:root[data-markdown-style="markamd"] .memo-content .markdown-code-copy {
+  color: var(--markdown-markamd-block-code-muted) !important;
+  background: #ffffff !important;
+  border-color: var(--markdown-markamd-block-code-border) !important;
+  border-radius: var(--markdown-markamd-radius-sm) !important;
+  opacity: 0.82;
+}
+
+:root[data-markdown-style="markamd"] .memo-content .markdown-code-copy:hover {
+  color: var(--markdown-markamd-block-code-text) !important;
+  border-color: var(--markdown-markamd-block-code-muted) !important;
+}
+
+:root[data-markdown-style="markamd"] .memo-content table {
+  border-collapse: collapse;
+  margin: 1.2em 0;
+  width: auto;
+  max-width: 100%;
+  font-size: 0.95em;
+}
+
+:root[data-markdown-style="markamd"] .memo-content th,
+:root[data-markdown-style="markamd"] .memo-content td {
+  border: 1px solid var(--markdown-markamd-border) !important;
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+:root[data-markdown-style="markamd"] .memo-content th {
+  color: var(--markdown-markamd-fg) !important;
+  background: var(--markdown-markamd-surface) !important;
+  font-weight: 600;
+}
+
+:root[data-markdown-style="markamd"] .memo-content tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--markdown-markamd-surface) 32%, transparent);
+}
+
+:root[data-markdown-style="markamd"] .memo-content hr {
+  border: 0;
+  border-top: 1px solid var(--markdown-markamd-border) !important;
+  margin: 2em 0;
+}
+
+:root[data-markdown-style="markamd"] .memo-content img {
+  max-width: 100%;
+  border: 1px solid var(--markdown-markamd-border);
+  border-radius: var(--markdown-markamd-radius-md);
+  background: var(--markdown-markamd-bg-solid);
+}
+
+:root[data-markdown-style="markamd"] .memo-content video,
+:root[data-markdown-style="markamd"] .memo-content audio {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  border-radius: var(--markdown-markamd-radius-md);
+}
+
+:root[data-markdown-style="markamd"] .memo-content video {
+  border: 1px solid var(--markdown-markamd-border);
+  background: var(--markdown-markamd-surface);
+}
+
+:root[data-markdown-style="markamd"] .memo-content audio {
+  margin: 10px 0;
+}
+
+:root[data-markdown-style="markamd"] .memo-content kbd {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.5em;
+  padding: 0 0.42em;
+  border: 1px solid var(--markdown-markamd-border);
+  border-radius: var(--markdown-markamd-radius-sm);
+  background: var(--markdown-markamd-surface);
+  color: var(--markdown-markamd-muted);
+  font-family: var(--markdown-markamd-font-mono);
+  font-size: 0.78em;
+}

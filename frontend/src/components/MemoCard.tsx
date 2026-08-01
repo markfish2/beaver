@@ -60,7 +60,7 @@ import TagMentionPopup from './TagMentionPopup';
 import type { PopupItem } from './TagMentionPopup';
 import { tagMentionExtension } from '../extensions/tagMentionExtension';
 import type { TagMentionState } from '../extensions/tagMentionExtension';
-import { stripTags, stripAttachments, normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts, escapeCodeBlockHtml } from '../utils/markdownPreprocess';
+import { stripTags, stripAttachments, normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts, escapeCodeBlockHtml, getMarkdownTaskOrdinalAtLine, toggleMarkdownTaskByOrdinal } from '../utils/markdownPreprocess';
 import MemoToDocDialog from './MemoToDocDialog';
 import AudioPlayer from './AudioPlayer';
 import AIChatPanel from './AIChatPanel';
@@ -369,53 +369,17 @@ const MemoImage = memo(function MemoImage({ src, alt, onPreview }: { src?: strin
   );
 });
 
-function isUnchecked(trimmed: string): boolean {
-  return /^[-*+]\s*\[ \]\s/.test(trimmed);
-}
+type MarkdownAstNodeWithPosition = {
+  position?: {
+    start?: {
+      line?: number;
+    };
+  };
+};
 
-function isInProgress(trimmed: string): boolean {
-  return /^[-*+]\s*\[-\]\s/.test(trimmed);
-}
-
-function isChecked(trimmed: string): boolean {
-  return /^[-*+]\s*\[[xX*]\]\s/.test(trimmed);
-}
-
-function isTaskLine(trimmed: string): boolean {
-  return isUnchecked(trimmed) || isInProgress(trimmed) || isChecked(trimmed);
-}
-
-function toggleTaskCheckbox(content: string, taskIndex: number): string {
-  const lines = content.split('\n');
-  const strippedLines = lines.map(l => {
-    let s = l.replace(/#[a-zA-Z0-9_一-龥]+/g, '');
-    s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '');
-    s = s.replace(/(?<!!)\[([^\]]+)\]\(([^)]+)\)/g, '');
-    return s;
-  });
-  let taskCount = 0;
-  for (let i = 0; i < strippedLines.length; i++) {
-    const trimmed = strippedLines[i].trimStart();
-    if (isTaskLine(trimmed)) {
-      if (taskCount === taskIndex) {
-        const origTrimmed = lines[i].trimStart();
-        const marker = origTrimmed[0];
-        const indent = lines[i].slice(0, lines[i].indexOf(origTrimmed[0]));
-        const rest = origTrimmed.slice(origTrimmed.indexOf(']') + 2);
-        // 两态循环：[ ] ↔ [x]（memo 不需要进行中状态）
-        let newMark: string;
-        if (isChecked(origTrimmed) || isInProgress(origTrimmed)) {
-          newMark = '[ ]';
-        } else {
-          newMark = '[x]';
-        }
-        lines[i] = `${indent}${marker} ${newMark} ${rest}`;
-        return lines.join('\n');
-      }
-      taskCount++;
-    }
-  }
-  return content;
+function getNodeStartLine(node: unknown): number | null {
+  const line = (node as MarkdownAstNodeWithPosition | undefined)?.position?.start?.line;
+  return typeof line === 'number' && Number.isFinite(line) ? line : null;
 }
 
 // 将 [-] 进行中任务转为未完成复选框（memo 只需要两态）
@@ -425,8 +389,7 @@ function normalizeInProgressTasks(content: string): string {
 
 const markdownComponents = (
   onPreview: (url: string) => void,
-  onToggleCheckbox: (taskIndex: number) => void,
-  checkboxCounter: { current: number },
+  onToggleCheckbox: (sourceLine: number | null) => void,
   navigate: (to: string) => void,
   palette: MemoCardPalette,
   compact: boolean,
@@ -471,7 +434,6 @@ const markdownComponents = (
     li: ({ children, ordered, index, node, ...props }) => {
       void ordered;
       void index;
-      void node;
       const liClassName = typeof props.className === 'string' ? props.className : '';
       const isTaskItem = liClassName.includes('task-list-item');
       const hasCheckboxDeep = (nodes: React.ReactNode[]): boolean =>
@@ -487,27 +449,45 @@ const markdownComponents = (
       const hasCheckbox = isTaskItem || hasCheckboxDeep(arr);
       // 任务列表使用自定义渲染，普通列表使用浏览器原生渲染
       if (hasCheckbox) {
-        return <li className="list-none relative pl-[22px] leading-[1.5]">{children}</li>;
+        const sourceLine = getNodeStartLine(node);
+        return (
+          <li
+            className="list-none relative leading-[1.5]"
+            style={{ paddingLeft: 22, marginLeft: 0, listStyle: 'none' }}
+            onClick={(e) => {
+              const target = e.target as HTMLElement;
+              const checkbox = target.closest('[role="checkbox"]');
+              if (!checkbox || !e.currentTarget.contains(checkbox)) return;
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleCheckbox(sourceLine);
+            }}
+          >
+            {children}
+          </li>
+        );
       }
       // 普通列表：让浏览器原生渲染标记（有序数字/无序圆点）
       return <li {...props}>{children}</li>;
     },
     input: ({ checked, type, className: inputClassName, ...props }) => {
       if (type === 'checkbox') {
-        const idx = checkboxCounter.current++;
         return (
-          <span
+          <button
+            type="button"
             role="checkbox"
             aria-checked={checked}
-            className={`absolute left-0 top-[5px] inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border cursor-pointer shrink-0 transition-colors ${
+            className={`absolute left-0 top-[5px] z-20 inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border cursor-pointer shrink-0 transition-colors ${
               checked
                 ? 'bg-[#3f587f] border-[#3f587f]'
                 : ''
             }`}
             style={checked ? undefined : { background: palette.surface, borderColor: palette.surfaceBorder }}
+            onMouseDown={(e) => {
+              e.preventDefault();
+            }}
             onClick={(e) => {
-              e.stopPropagation();
-              onToggleCheckbox(idx);
+              e.preventDefault();
             }}
           >
             {checked && (
@@ -515,7 +495,7 @@ const markdownComponents = (
                 <path d="M3.5 8.5L6.5 11.5L12.5 4.5" />
               </svg>
             )}
-          </span>
+          </button>
         );
       }
       return <input type={type} checked={checked} className={inputClassName} {...props} />;
@@ -703,15 +683,15 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
     return () => { cancelled = true; };
   }, [urls]);
 
-  const toggleCheckbox = useCallback((taskIndex: number) => {
-    const newContent = toggleTaskCheckbox(memo.content, taskIndex);
+  const toggleCheckbox = useCallback((sourceLine: number | null) => {
+    const taskIndex = getMarkdownTaskOrdinalAtLine(strippedContent, sourceLine);
+    if (taskIndex == null) return;
+    const newContent = toggleMarkdownTaskByOrdinal(memo.content, taskIndex);
     if (newContent !== memo.content) {
       onEdit(memo.id, newContent);
     }
-  }, [memo.content, memo.id, onEdit]);
-  // 每次 Markdown 渲染使用独立计数器，保证任务序号从零开始且不在 render 阶段写 React ref。
-  const checkboxCounter = { current: 0 };
-  const mdComponents = markdownComponents(setPreviewImage, toggleCheckbox, checkboxCounter, navigate, palette, compact);
+  }, [memo.content, memo.id, onEdit, strippedContent]);
+  const mdComponents = markdownComponents(setPreviewImage, toggleCheckbox, navigate, palette, compact);
 
   // CodeMirror 编辑器自动管理高度，无需手动调整
 

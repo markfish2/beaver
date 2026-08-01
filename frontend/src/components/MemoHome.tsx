@@ -14,7 +14,7 @@ import { parseTodoDueDate } from '../utils/todoDueDate';
 import { useDocuments } from '../context/DocumentContext';
 import { useAuth } from '../context/AuthContext';
 import { updateSettings } from '../api/auth';
-import { saveViewState, loadViewState, saveMemosCache, loadMemosCache } from '../utils/pwaState';
+import { saveViewState, loadViewState, saveMemosCache, loadMemosCache, clearMemosCache } from '../utils/pwaState';
 
 interface MemoHomeProps {
   sidebarOpen: boolean;
@@ -60,6 +60,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   const memoViewRef = useRef(memoView);
   const tagFilterRef = useRef(tagFilter);
   const searchFilterRef = useRef(searchFilter);
+  const fetchMemosSeqRef = useRef(0);
 
   useEffect(() => {
     memosRef.current = memos;
@@ -133,14 +134,17 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   // 首页随想数据（根据 memoView 切换活跃/归档，支持标签/搜索筛选）
   useEffect(() => {
     const fetchMemos = async () => {
+      const seq = ++fetchMemosSeqRef.current;
       try {
         const isArchived = memoView === 'archived';
         const isPublic = memoView === 'public';
         const data = await getMemos(1, 20, isArchived, tagFilter || undefined, searchFilter || undefined, isPublic);
+        if (seq !== fetchMemosSeqRef.current) return;
         setMemos(data.memos);
         setMemoTotal(data.total);
         setMemoPage(1);
       } catch (e) {
+        if (seq !== fetchMemosSeqRef.current) return;
         console.error('Failed to fetch memos', e);
       }
     };
@@ -269,6 +273,16 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
 
   // 随想 handlers
   const handleMemoCreated = useCallback((memo: Memo) => {
+    fetchMemosSeqRef.current += 1;
+    setMemoView('active');
+    setTagFilter(null);
+    setSearchFilter(null);
+    void clearMemosCache();
+    saveViewState({ memoView: 'active', tagFilter: null });
+    try {
+      localStorage.setItem('miniflowy-memo-view', 'active');
+      localStorage.removeItem('miniflowy-memo-tag');
+    } catch {}
     setMemos(prev => {
       const firstNonPinned = prev.findIndex(m => !m.is_pinned);
       if (firstNonPinned === -1) return [memo, ...prev];

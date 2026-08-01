@@ -642,17 +642,23 @@ const NodeItem = memo(({
           <div className="relative">
             {/* 待办复选框 - 当节点是待办状态时显示，absolute 定位在第一行中心 */}
             {node.is_todo && (
-              <span
+              <button
+                type="button"
                 role="checkbox"
                 aria-checked={node.is_completed || false}
-                className={`absolute left-0 top-[5px] inline-flex items-center justify-center w-4 h-4 rounded-full border cursor-pointer shrink-0 transition-colors ${
+                className={`absolute left-0 top-[5px] z-20 inline-flex items-center justify-center w-4 h-4 rounded-full border cursor-pointer shrink-0 transition-colors ${
                   (node.is_completed || false)
                     ? 'bg-emerald-500 border-emerald-500'
                     : (node.is_in_progress || false)
                       ? 'bg-white dark:bg-gray-700 border-blue-400'
                       : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-500'
                 }`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 onClick={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
                   // 三态循环：未完成 → 进行中 → 已完成 → 未完成
                   if (node.is_completed) {
@@ -671,7 +677,7 @@ const NodeItem = memo(({
                 ) : (node.is_in_progress || false) ? (
                   <span className="w-2 h-0.5 bg-blue-400 rounded-full"></span>
                 ) : null}
-              </span>
+              </button>
             )}
 
             {/* 内容区域 - 支持文字+图片/附件同时显示 */}
