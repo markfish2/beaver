@@ -41,6 +41,7 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
+  const pendingDayClicksRef = useRef<Set<string>>(new Set());
 
   // Handle todo drop on a day cell: create diary node from todo, then delete todo
   const handleTodoDrop = async (day: number, e: React.DragEvent) => {
@@ -212,9 +213,16 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
 
   // Click a day in calendar → navigate and create day node
   const handleDayClick = async (day: number) => {
+    const pendingKey = `${year}-${month}-${day}`;
+    if (pendingDayClicksRef.current.has(pendingKey)) return;
+    pendingDayClicksRef.current.add(pendingKey);
     // If already viewing this month's diary, use context handler (no navigation)
     if (isActiveMonth && diaryCtx.handleDayClick) {
-      diaryCtx.handleDayClick(day);
+      try {
+        await diaryCtx.handleDayClick(day);
+      } finally {
+        pendingDayClicksRef.current.delete(pendingKey);
+      }
       return;
     }
     setLoading(true);
@@ -229,6 +237,7 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
     } catch (e) {
       console.error('Failed to open diary', e);
     } finally {
+      pendingDayClicksRef.current.delete(pendingKey);
       setLoading(false);
     }
   };

@@ -463,6 +463,12 @@ const NodeItem = memo(({
   // Check if this node is part of a multi-selection
   const isInMultiSelection = selectedNodeIds.length > 1 && selectedNodeIds.includes(node.id);
 
+  useEffect(() => {
+    if (isInMultiSelection) {
+      setShowToolbar(false);
+    }
+  }, [isInMultiSelection]);
+
   const handleStyleChange = (styles: Partial<Node>) => {
     if (isInMultiSelection) {
       selectedNodeIds.forEach(id => onStyleChange?.(id, styles));
@@ -548,25 +554,27 @@ const NodeItem = memo(({
         {/* Bullet wrapper - relative 定位使按钮居中仅对齐内容行，不受备注高度影响 */}
         <div className={`relative flex-shrink-0 ${getBulletMarginTop()} ${!hasChildren ? 'ml-0' : ''}`}>
           {/* Edit Button - 悬停时显示 */}
-          <button
-            ref={triggerRef}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!showToolbar && triggerRef.current) {
-                const rect = triggerRef.current.getBoundingClientRect();
-                setToolbarPos({ top: rect.bottom + 4, left: rect.left });
-              }
-              setShowToolbar(!showToolbar);
-            }}
-            className={`absolute -left-10 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center z-10 transition-opacity cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded ${
-              showToolbar ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-            }`}
-            title="编辑样式"
-          >
-            <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-            </svg>
-          </button>
+          {!isInMultiSelection && (
+            <button
+              ref={triggerRef}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!showToolbar && triggerRef.current) {
+                  const rect = triggerRef.current.getBoundingClientRect();
+                  setToolbarPos({ top: rect.bottom + 4, left: rect.left });
+                }
+                setShowToolbar(!showToolbar);
+              }}
+              className={`absolute -left-10 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center z-10 transition-opacity cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded ${
+                showToolbar ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+              }`}
+              title="编辑样式"
+            >
+              <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
+          )}
 
           {/* Drag Handle - 悬停时显示，拖拽移动单个节点 */}
           <div
@@ -1033,7 +1041,7 @@ const NodeItem = memo(({
       {/* Children Container (Recursive) - 折叠时不渲染子节点，彻底从 DOM 移除 */}
       {hasChildren && !localCollapsed && (
         <div>
-          <div className={`ml-[7px] pl-[25px] border-l ${isDateNode ? 'mt-[10px]' : ''}`} style={{ borderColor: 'var(--outline-guide-color, #e5e7eb)' }}>
+          <div className={`ml-[0.625rem] pl-[1.375rem] border-l ${isDateNode ? 'mt-[10px]' : ''}`} style={{ borderColor: 'var(--outline-guide-color, #e5e7eb)' }}>
              {childrenNodes.map(child => (
                <NodeItem
                  key={child.id}

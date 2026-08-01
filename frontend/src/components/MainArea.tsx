@@ -253,6 +253,11 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const selectedNodeIdsRef = useRef(selectedNodeIds);
   useEffect(() => { selectedNodeIdsRef.current = selectedNodeIds; }, [selectedNodeIds]);
   const [batchEditPosition, setBatchEditPosition] = useState<{ x: number; y: number } | null>(null);
+  const [batchEditButtonPosition, setBatchEditButtonPosition] = useState<{ x: number; y: number } | null>(null);
+  const updateSelectedNodeIds = useCallback((action: SetStateAction<string[]>) => {
+    setBatchEditPosition(null);
+    setSelectedNodeIds(action);
+  }, []);
   const [confirmDialog, setConfirmDialog] = useState<{
     show: boolean;
     nodeId: string;
@@ -262,11 +267,13 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const dragSelectionRef = useRef({ isDragging: false, startNodeId: null as string | null, lastRangeStr: '' });
   const [isDragMoving, setIsDragMoving] = useState(false);
   const [dropTarget, setDropTarget] = useState<{ nodeId: string; position: 'before' | 'after' | 'child' } | null>(null);
-  const dragMoveRef = useRef({ isMoving: false, startNodeId: null as string | null });
+  const dropTargetRef = useRef<{ nodeId: string; position: 'before' | 'after' | 'child' } | null>(null);
+  const dragMoveRef = useRef({ isMoving: false, startNodeId: null as string | null, selectedIds: [] as string[] });
   const ghostAnchorRef = useRef<HTMLInputElement>(null);
   const nodeIdFromUrl = searchParams.get('nodeId');
   // Diary state
   const { diaryDays, setDiaryDays, register: registerDiaryHandler, unregister: unregisterDiaryHandler, registerAddNode, unregisterAddNode } = diaryCtx;
+  const pendingDiaryDayClicksRef = useRef<Set<string>>(new Set());
   const isDiaryDoc = !!(currentDoc?.diary_date);
   const diaryYear = useMemo(() => {
     const m = currentDoc?.diary_date?.match(/^(\d{4})-(\d{2})$/);
@@ -305,6 +312,52 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     });
   }, []);
 
+  const updateBatchEditButtonPosition = useCallback(() => {
+    if (selectedNodeIdsRef.current.length <= 1 || dragMoveRef.current.isMoving) {
+      setBatchEditButtonPosition(null);
+      return;
+    }
+
+    const selectedSet = new Set(selectedNodeIdsRef.current);
+    const selectedRows = Array.from(document.querySelectorAll<HTMLElement>('[data-node-id]'))
+      .filter(row => {
+        const nodeId = row.getAttribute('data-node-id');
+        return !!nodeId && selectedSet.has(nodeId);
+      });
+
+    if (selectedRows.length === 0) {
+      setBatchEditButtonPosition(null);
+      return;
+    }
+
+    const rects = selectedRows.map(row => row.getBoundingClientRect());
+    const top = Math.min(...rects.map(rect => rect.top));
+    const bottom = Math.max(...rects.map(rect => rect.bottom));
+    const left = Math.min(...rects.map(rect => rect.left));
+
+    setBatchEditButtonPosition({
+      x: Math.max(12, left - 42),
+      y: top + (bottom - top) / 2,
+    });
+  }, []);
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(updateBatchEditButtonPosition);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [selectedNodeIds, nodes, updateBatchEditButtonPosition]);
+
+  useEffect(() => {
+    if (selectedNodeIds.length <= 1) return;
+
+    const handleViewportChange = () => updateBatchEditButtonPosition();
+    window.addEventListener('scroll', handleViewportChange, true);
+    window.addEventListener('resize', handleViewportChange);
+    return () => {
+      window.removeEventListener('scroll', handleViewportChange, true);
+      window.removeEventListener('resize', handleViewportChange);
+    };
+  }, [selectedNodeIds.length, updateBatchEditButtonPosition]);
+
   // 监听全局鼠标松开和点击，拦截拖拽后的点击事件，防止选区消失
   useEffect(() => {
     const handleClickCapture = (e: MouseEvent) => {
@@ -316,12 +369,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       }
     };
 
-    const handleMouseUp = (e: MouseEvent) => {
+    const handleMouseUp = () => {
       // 移动模式由容器的 onMouseUp 处理，这里跳过
       if (dragMoveRef.current.isMoving) return;
-      if (dragSelectionRef.current.isDragging && selectedNodeIds.length > 1) {
-        setBatchEditPosition({ x: e.clientX, y: e.clientY });
-      }
       dragSelectionRef.current.startNodeId = null;
       setTimeout(() => {
         dragSelectionRef.current.isDragging = false;
@@ -334,7 +384,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       window.removeEventListener('click', handleClickCapture, true);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [selectedNodeIds.length]);
+  }, []);
 
   // 拦截页面关闭/刷新，提示未保存的数据
   useEffect(() => {
@@ -828,6 +878,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   // Handle clicking a day in the diary date bar (returns true if handled)
   const handleDiaryDayClick = useCallback(async (day: number): Promise<boolean> => {
     if (diaryYear === null || diaryMonth === null || !documentId) return false;
+    const pendingKey = `${diaryYear}-${diaryMonth}-${day}`;
+    if (pendingDiaryDayClicksRef.current.has(pendingKey)) return true;
+    pendingDiaryDayClicksRef.current.add(pendingKey);
     try {
       const result = await getOrCreateDayNode(diaryYear, diaryMonth, day);
 
@@ -855,7 +908,18 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         if (result.child_node) {
           newNodes.push(result.child_node as Node);
         }
-        setNodes(prev => [...prev, ...newNodes]);
+        setNodes(prev => {
+          const existingDateNode = prev.find(n =>
+            n.parent_node_id === null
+            && n.heading === 'h1'
+            && n.content === dateContent
+          );
+          if (existingDateNode || prev.some(n => n.id === result.node_id)) {
+            return prev;
+          }
+          const existingIds = new Set(prev.map(n => n.id));
+          return [...prev, ...newNodes.filter(n => !existingIds.has(n.id))];
+        });
         // Update diary days
         setDiaryDays(prev => new Set([...prev, day]));
       }
@@ -877,6 +941,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     } catch (e) {
       console.error('Failed to handle day click', e);
       return false;
+    } finally {
+      pendingDiaryDayClicksRef.current.delete(pendingKey);
     }
   }, [diaryYear, diaryMonth, documentId, setDiaryDays]);
 
@@ -940,75 +1006,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const isDescendantOf = (sourceId: string, targetId: string, allNodes: Node[]): boolean => {
     const descendants = getDescendants(sourceId, allNodes);
     return descendants.some(d => d.id === targetId);
-  };
-
-  // 小黑点按住 → 只记录起点，不选节点（避免干扰容器的框选逻辑）
-  const executeMultiNodeMove = (targetNodeId: string, position: 'before' | 'after' | 'child') => {
-    const selectedSet = new Set(selectedNodeIds);
-    // 筛选顶层选中节点（父节点未被选中的）
-    const topLevelSelected = sortedNodes
-      .filter(n => selectedSet.has(n.id) && (!n.parent_node_id || !selectedSet.has(n.parent_node_id)));
-
-    if (topLevelSelected.length === 0) return;
-
-    // 防止移动到自身或子孙节点下
-    for (const sel of topLevelSelected) {
-      if (sel.id === targetNodeId || isDescendantOf(sel.id, targetNodeId, nodes)) {
-        return;
-      }
-    }
-
-    const targetNode = nodes.find(n => n.id === targetNodeId);
-    if (!targetNode) return;
-
-    const moveUpdates: { id: string; oldParent: string | null; oldOrder: number; newParent: string | null; newOrder: number }[] = [];
-
-    if (position === 'child') {
-      // 变成目标节点的子节点，追加到末尾
-      const existingChildren = nodes.filter(n => n.parent_node_id === targetNodeId);
-      const baseOrder = existingChildren.length > 0
-        ? Math.max(...existingChildren.map(n => n.sort_order))
-        : 0;
-      topLevelSelected.forEach((node, i) => {
-        moveUpdates.push({
-          id: node.id,
-          oldParent: node.parent_node_id,
-          oldOrder: node.sort_order,
-          newParent: targetNodeId,
-          newOrder: baseOrder + (i + 1) * 1000,
-        });
-      });
-    } else {
-      // 插入到目标节点之前/之后，与目标同级
-      const newParent = targetNode.parent_node_id;
-      if (position === 'before') {
-        // 在目标之前，逆序插入使第一个选中节点紧贴目标前面
-        topLevelSelected.forEach((node, i) => {
-          moveUpdates.push({
-            id: node.id,
-            oldParent: node.parent_node_id,
-            oldOrder: node.sort_order,
-            newParent,
-            newOrder: targetNode.sort_order - (topLevelSelected.length - i) * 1000,
-          });
-        });
-      } else {
-        // 在目标之后
-        topLevelSelected.forEach((node, i) => {
-          moveUpdates.push({
-            id: node.id,
-            oldParent: node.parent_node_id,
-            oldOrder: node.sort_order,
-            newParent,
-            newOrder: targetNode.sort_order + (i + 1) * 1000,
-          });
-        });
-      }
-    }
-
-    execute(commands.createBatchMoveCommand(moveUpdates));
-    setSelectedNodeIds([]);
-    setDropTarget(null);
   };
 
   const handleDelete = async (id: string) => {
@@ -1654,7 +1651,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     });
   }, []);
 
-  const getSortedNodes = (allNodes: Node[]) => {
+  const getSortedNodes = useCallback((allNodes: Node[]) => {
     // 预建索引：parentId → children (O(n) 构建，避免每次 filter 扫描全量)
     const childrenMap = new Map<string | null, Node[]>();
     for (const node of allNodes) {
@@ -1759,67 +1756,128 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     };
 
     return buildFilteredTree(null);
-  };
+  }, [currentDoc?.title, searchQuery, tagFilter, zoomedNodeId]);
+
+  // 小黑点按住 → 只记录起点，不选节点（避免干扰容器的框选逻辑）
+  const executeMultiNodeMove = useCallback((targetNodeId: string, position: 'before' | 'after' | 'child', movingIds = selectedNodeIds) => {
+    const selectedSet = new Set(movingIds);
+    // 筛选顶层选中节点（父节点未被选中的）
+    const topLevelSelected = getSortedNodes(nodes)
+      .filter(n => selectedSet.has(n.id) && (!n.parent_node_id || !selectedSet.has(n.parent_node_id)));
+
+    if (topLevelSelected.length === 0) return;
+
+    // 防止移动到自身或子孙节点下
+    for (const sel of topLevelSelected) {
+      if (sel.id === targetNodeId || isDescendantOf(sel.id, targetNodeId, nodes)) {
+        return;
+      }
+    }
+
+    const targetNode = nodes.find(n => n.id === targetNodeId);
+    if (!targetNode) return;
+
+    const moveUpdates: { id: string; oldParent: string | null; oldOrder: number; newParent: string | null; newOrder: number }[] = [];
+
+    if (position === 'child') {
+      // 变成目标节点的子节点，追加到末尾
+      const existingChildren = nodes.filter(n => n.parent_node_id === targetNodeId);
+      const baseOrder = existingChildren.length > 0
+        ? Math.max(...existingChildren.map(n => n.sort_order))
+        : 0;
+      topLevelSelected.forEach((node, i) => {
+        moveUpdates.push({
+          id: node.id,
+          oldParent: node.parent_node_id,
+          oldOrder: node.sort_order,
+          newParent: targetNodeId,
+          newOrder: baseOrder + (i + 1) * 1000,
+        });
+      });
+    } else {
+      // 插入到目标节点之前/之后，与目标同级
+      const newParent = targetNode.parent_node_id;
+      if (position === 'before') {
+        // 在目标之前，逆序插入使第一个选中节点紧贴目标前面
+        topLevelSelected.forEach((node, i) => {
+          moveUpdates.push({
+            id: node.id,
+            oldParent: node.parent_node_id,
+            oldOrder: node.sort_order,
+            newParent,
+            newOrder: targetNode.sort_order - (topLevelSelected.length - i) * 1000,
+          });
+        });
+      } else {
+        // 在目标之后
+        topLevelSelected.forEach((node, i) => {
+          moveUpdates.push({
+            id: node.id,
+            oldParent: node.parent_node_id,
+            oldOrder: node.sort_order,
+            newParent,
+            newOrder: targetNode.sort_order + (i + 1) * 1000,
+          });
+        });
+      }
+    }
+
+    execute(commands.createBatchMoveCommand(moveUpdates));
+    updateSelectedNodeIds([]);
+    dropTargetRef.current = null;
+    setDropTarget(null);
+  }, [commands, execute, getSortedNodes, nodes, selectedNodeIds, updateSelectedNodeIds]);
+
+  const updateDropTarget = useCallback((next: { nodeId: string; position: 'before' | 'after' | 'child' } | null) => {
+    dropTargetRef.current = next;
+    setDropTarget(prev => {
+      if (prev?.nodeId === next?.nodeId && prev?.position === next?.position) return prev;
+      return next;
+    });
+  }, []);
+
+  const finishDragMove = useCallback(() => {
+    if (!dragMoveRef.current.isMoving) return;
+    const currentDropTarget = dropTargetRef.current;
+    const movingIds = dragMoveRef.current.selectedIds;
+    if (currentDropTarget && movingIds.length > 0) {
+      executeMultiNodeMove(currentDropTarget.nodeId, currentDropTarget.position, movingIds);
+    }
+    dragMoveRef.current = { isMoving: false, startNodeId: null, selectedIds: [] };
+    setIsDragMoving(false);
+    updateDropTarget(null);
+  }, [executeMultiNodeMove, updateDropTarget]);
+
+  useEffect(() => {
+    if (!isDragMoving) return;
+    const handleWindowMouseUp = () => finishDragMove();
+    const handleWindowBlur = () => finishDragMove();
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    window.addEventListener('blur', handleWindowBlur);
+    return () => {
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+      window.removeEventListener('blur', handleWindowBlur);
+    };
+  }, [finishDragMove, isDragMoving]);
 
   const getSelectionFromRange = (rangeIds: string[], allNodes: Node[]): string[] => {
-    const selectedIds = new Set<string>();
-    // Helper to collect all descendants into selectedIds
-    const collectDescendants = (id: string) => {
-      const children = allNodes.filter(n => n.parent_node_id === id);
-      children.forEach(child => {
-        selectedIds.add(child.id);
-        collectDescendants(child.id);
-      });
-    };
+    // Workflowy 式多选：鼠标扫过的“可见连续行”是基础选区。
+    // 为了复制/拖动时保持层级结构，自动补充这些节点的祖先链；
+    // 但不自动补充未扫过的子孙或兄弟，避免跨多个分支时选区被扩大。
+    const selectedIds = new Set(rangeIds);
+    const nodeById = new Map(allNodes.map(node => [node.id, node]));
 
-    rangeIds.forEach(id => {
-      selectedIds.add(id);
-      collectDescendants(id);
-    });
-    
-    const isAncestorOf = (ancestorId: string, descendantId: string): boolean => {
-      const node = allNodes.find(n => n.id === descendantId);
-      if (!node || !node.parent_node_id) return false;
-      if (node.parent_node_id === ancestorId) return true;
-      return isAncestorOf(ancestorId, node.parent_node_id);
-    };
-    
-    const rootNodesInRange: string[] = [];
-    rangeIds.forEach(id => {
-      const hasAncestorInRange = rangeIds.some(otherId => otherId !== id && isAncestorOf(otherId, id));
-      if (!hasAncestorInRange) {
-        rootNodesInRange.push(id);
+    for (const id of rangeIds) {
+      let current = nodeById.get(id);
+      while (current?.parent_node_id) {
+        selectedIds.add(current.parent_node_id);
+        current = nodeById.get(current.parent_node_id);
       }
-    });
-    
-    if (rootNodesInRange.length <= 1) {
-      return Array.from(selectedIds);
     }
-    
-    rangeIds.forEach(id => {
-      let currentId = id;
-      while (true) {
-        const node = allNodes.find(n => n.id === currentId);
-        if (!node || !node.parent_node_id) break;
-        
-        const parentId = node.parent_node_id;
-        const siblings = allNodes.filter(n => n.parent_node_id === parentId && n.id !== currentId);
-        const hasSelectedSibling = siblings.some(s => selectedIds.has(s.id));
-        
-        if (hasSelectedSibling) break;
-        
-        selectedIds.add(parentId);
-        const parentSiblings = allNodes.filter(n => n.parent_node_id === parentId);
-        parentSiblings.forEach(sibling => {
-          selectedIds.add(sibling.id);
-          getDescendants(sibling.id);
-        });
-        
-        currentId = parentId;
-      }
-    });
-    
-    return Array.from(selectedIds);
+
+    return allNodes
+      .filter(node => selectedIds.has(node.id))
+      .map(node => node.id);
   };
 
   const generateMarkdownPreview = (allNodes: Node[]): string => {
@@ -2100,7 +2158,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           });
           const uniqueDescendants = allDescendants.filter(d => !selectedNodeIds.includes(d.id));
           execute(commands.createBatchDeleteCommand(nodesToDelete, uniqueDescendants));
-          setSelectedNodeIds([]);
+          updateSelectedNodeIds([]);
           return;
         }
 
@@ -2141,7 +2199,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             execute(commands.createBatchDeleteCommand(nodesToDelete, uniqueDescendants));
           }
           
-          setSelectedNodeIds([]);
+          updateSelectedNodeIds([]);
           return;
         }
 
@@ -2253,7 +2311,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
 
         // 4. Escape 清除选择
         if (e.key === 'Escape') {
-          setSelectedNodeIds([]);
+          updateSelectedNodeIds([]);
           return;
         }
       }
@@ -2292,7 +2350,23 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     // Use capture phase to intercept shortcuts before they reach editing elements
     window.addEventListener('keydown', handleGlobalKey, { capture: true });
     return () => window.removeEventListener('keydown', handleGlobalKey, { capture: true });
-  }, [undo, redo, commands, execute]);
+  }, [undo, redo, commands, execute, updateSelectedNodeIds]);
+
+  const getSelectedNodes = useCallback(() => {
+    const selectedSet = new Set(selectedNodeIds);
+    return nodes.filter(node => selectedSet.has(node.id));
+  }, [nodes, selectedNodeIds]);
+
+  const selectionAllMatch = useCallback(<K extends keyof Node>(key: K, value: Node[K]) => {
+    const selectedNodes = getSelectedNodes();
+    return selectedNodes.length > 0 && selectedNodes.every(node => node[key] === value);
+  }, [getSelectedNodes]);
+
+  const applyBatchStyleToggle = useCallback(<K extends keyof Node>(key: K, activeValue: Node[K], inactiveValue: Node[K]) => {
+    const nextValue = selectionAllMatch(key, activeValue) ? inactiveValue : activeValue;
+    selectedNodeIds.forEach(id => handleStyleChange(id, { [key]: nextValue } as Partial<Node>));
+    setBatchEditPosition(null);
+  }, [handleStyleChange, selectedNodeIds, selectionAllMatch]);
 
   // Project view rendering (also handles archived projects view when no project selected)
   if (selectedProjectId || showArchivedProjects) {
@@ -2507,7 +2581,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         <>
         <div
           className="main-content-area flex-1 overflow-y-auto px-8 py-8 custom-scrollbar"
-          onClick={() => setSelectedNodeIds([])}
+          onClick={() => updateSelectedNodeIds([])}
         >
           <div className="max-w-[900px] ml-auto mr-auto md:ml-16 md:mr-auto">
             {currentDoc && !isDiaryDoc && (
@@ -2585,8 +2659,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                 if (handleEl) {
                   e.preventDefault();
                   const dragNodeId = handleEl.getAttribute('data-drag-handle')!;
-                  setSelectedNodeIds([dragNodeId]);
-                  dragMoveRef.current = { isMoving: true, startNodeId: dragNodeId };
+                  updateSelectedNodeIds([dragNodeId]);
+                  dragMoveRef.current = { isMoving: true, startNodeId: dragNodeId, selectedIds: [dragNodeId] };
                   setIsDragMoving(true);
                   return;
                 }
@@ -2598,7 +2672,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                   // 如果点击的节点已选中 → 进入移动模式
                   if (nodeId && selectedNodeIds.includes(nodeId) && selectedNodeIds.length > 0) {
                     e.preventDefault();
-                    dragMoveRef.current = { isMoving: true, startNodeId: nodeId };
+                    dragMoveRef.current = { isMoving: true, startNodeId: nodeId, selectedIds: [...selectedNodeIds] };
                     setIsDragMoving(true);
                     return;
                   }
@@ -2606,7 +2680,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                   dragSelectionRef.current.startNodeId = nodeId;
                   dragSelectionRef.current.isDragging = false;
                 } else {
-                  setSelectedNodeIds([]);
+                  updateSelectedNodeIds([]);
                 }
               }}
               onMouseMove={(e) => {
@@ -2633,7 +2707,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                     }
                   }
 
-                  if (targetNodeId && !selectedNodeIds.includes(targetNodeId)) {
+                  if (targetNodeId && !dragMoveRef.current.selectedIds.includes(targetNodeId)) {
                     // 计算放置位置（上1/4 → before，下1/4 → after，中间1/2 → child）
                     const targetEl = document.querySelector(`[data-node-id="${targetNodeId}"]`);
                     if (targetEl) {
@@ -2647,45 +2721,38 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                       } else {
                         position = 'child';
                       }
-                      const newTarget = { nodeId: targetNodeId, position };
-                      setDropTarget(prev => {
-                        if (prev && prev.nodeId === newTarget.nodeId && prev.position === newTarget.position) return prev;
-                        return newTarget;
-                      });
+                      updateDropTarget({ nodeId: targetNodeId, position });
                     }
                   } else {
-                    setDropTarget(prev => prev ? null : prev);
+                    updateDropTarget(null);
                   }
                   return;
                 }
 
-                // 框选模式：原有逻辑
+                // 框选模式：按行中心点和鼠标 Y 坐标计算范围，避免快速滑过节点时漏选
                 const { startNodeId } = dragSelectionRef.current;
                 if (!startNodeId) return;
 
-                let currentId: string | null = null;
-                const target = e.target as HTMLElement;
-                const nodeEl = target.closest('[data-node-id]') as HTMLElement;
+                const allRows = Array.from(document.querySelectorAll<HTMLElement>('[data-node-id]'));
+                const rowMetrics = allRows
+                  .map((row, index) => {
+                    const rect = row.getBoundingClientRect();
+                    return {
+                      id: row.getAttribute('data-node-id'),
+                      index,
+                      top: rect.top,
+                      bottom: rect.bottom,
+                      center: rect.top + rect.height / 2,
+                    };
+                  })
+                  .filter((item): item is { id: string; index: number; top: number; bottom: number; center: number } => !!item.id);
 
-                const allRows = Array.from(document.querySelectorAll('[data-node-id]'));
-
-                if (nodeEl) {
-                  currentId = nodeEl.getAttribute('data-node-id');
-                } else {
-                  let minDistance = Infinity;
-                  for (const row of allRows) {
-                      const rect = row.getBoundingClientRect();
-                      if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
-                          currentId = row.getAttribute('data-node-id');
-                          break;
-                      }
-                      const dist = Math.min(Math.abs(e.clientY - rect.top), Math.abs(e.clientY - rect.bottom));
-                      if (dist < minDistance) {
-                          minDistance = dist;
-                          currentId = row.getAttribute('data-node-id');
-                      }
-                  }
-                }
+                const currentRow = rowMetrics.find(row => e.clientY >= row.top && e.clientY <= row.bottom)
+                  ?? rowMetrics.reduce<{ id: string; index: number; top: number; bottom: number; center: number } | null>((nearest, row) => {
+                    if (!nearest) return row;
+                    return Math.abs(e.clientY - row.center) < Math.abs(e.clientY - nearest.center) ? row : nearest;
+                  }, null);
+                const currentId = currentRow?.id ?? null;
 
                 if (currentId && currentId !== startNodeId) {
                     dragSelectionRef.current.isDragging = true;
@@ -2694,18 +2761,20 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                       document.activeElement.blur();
                     }
 
-                    const startIdx = allRows.findIndex(row => row.getAttribute('data-node-id') === startNodeId);
-                    const currentIdx = allRows.findIndex(row => row.getAttribute('data-node-id') === currentId);
+                    const startIdx = rowMetrics.find(row => row.id === startNodeId)?.index ?? -1;
+                    const currentIdx = currentRow?.index ?? -1;
 
                     if (startIdx !== -1 && currentIdx !== -1) {
                       const min = Math.min(startIdx, currentIdx);
                       const max = Math.max(startIdx, currentIdx);
-                      const rangeIds = allRows.slice(min, max + 1).map(row => row.getAttribute('data-node-id') as string);
+                      const rangeIds = rowMetrics
+                        .filter(row => row.index >= min && row.index <= max)
+                        .map(row => row.id);
 
                       const selectedArray = getSelectionFromRange(rangeIds, nodes);
                       const rangeStr = selectedArray.join(',');
                       if (dragSelectionRef.current.lastRangeStr !== rangeStr) {
-                          setSelectedNodeIds(selectedArray);
+                          updateSelectedNodeIds(selectedArray);
                           dragSelectionRef.current.lastRangeStr = rangeStr;
                       }
                     }
@@ -2714,12 +2783,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
               onMouseUp={() => {
                 // 移动模式：执行移动
                 if (dragMoveRef.current.isMoving) {
-                  if (dropTarget) {
-                    executeMultiNodeMove(dropTarget.nodeId, dropTarget.position);
-                  }
-                  dragMoveRef.current = { isMoving: false, startNodeId: null };
-                  setIsDragMoving(false);
-                  setDropTarget(null);
+                  finishDragMove();
                   return;
                 }
               }}
@@ -2748,12 +2812,12 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                         selectedNodeIds={selectedNodeIds}
                         onSelect={(id, multi) => {
                           if (multi) {
-                            setSelectedNodeIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+                            updateSelectedNodeIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
                           } else {
-                            setSelectedNodeIds([id]);
+                            updateSelectedNodeIds([id]);
                           }
                         }}
-                        clearSelection={() => setSelectedNodeIds([])}
+                        clearSelection={() => updateSelectedNodeIds([])}
                         isDragMoving={isDragMoving}
                         onStartEditing={markEditing}
                         onEndEditing={markSaved}
@@ -2797,6 +2861,35 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         <DropIndicator targetNodeId={dropTarget.nodeId} position={dropTarget.position} />
       )}
 
+      {/* Batch Edit Entry Button */}
+      {batchEditButtonPosition && !batchEditPosition && selectedNodeIds.length > 1 && !isDragMoving && (
+        <button
+          type="button"
+          className="fixed z-[145] h-8 px-2.5 rounded-full bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-700 shadow-lg text-xs font-medium text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/40 transition-colors"
+          style={{
+            left: `${batchEditButtonPosition.x}px`,
+            top: `${batchEditButtonPosition.y}px`,
+            transform: 'translateY(-50%)',
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setBatchEditPosition({
+              x: batchEditButtonPosition.x + 44,
+              y: batchEditButtonPosition.y,
+            });
+          }}
+          title="打开批量编辑"
+          aria-label={`打开 ${selectedNodeIds.length} 个节点的批量编辑菜单`}
+        >
+          编辑
+        </button>
+      )}
+
       {/* Mobile Toolbar - inline only when not inside MobileToolbarProvider */}
       {isMobile && !hasToolbarProvider && (
         <MobileToolbar
@@ -2819,8 +2912,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           className="fixed z-[150] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-2"
           style={{ 
             left: `${batchEditPosition.x}px`, 
-            top: `${batchEditPosition.y + 10}px`,
-            transform: 'translateX(-50%)'
+            top: `${batchEditPosition.y}px`,
+            transform: 'translateY(-50%)'
           }}
         >
           <div className="flex items-center gap-1">
@@ -2829,56 +2922,38 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             </span>
             <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { is_bold: true }));
-                setBatchEditPosition(null);
-              }}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm font-bold"
+              onClick={() => applyBatchStyleToggle('is_bold', true, false)}
+              className={`p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm font-bold ${selectionAllMatch('is_bold', true) ? 'bg-blue-500 text-white hover:bg-blue-600' : ''}`}
               title="加粗"
             >
               B
             </button>
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { is_italic: true }));
-                setBatchEditPosition(null);
-              }}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm italic"
+              onClick={() => applyBatchStyleToggle('is_italic', true, false)}
+              className={`p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm italic ${selectionAllMatch('is_italic', true) ? 'bg-blue-500 text-white hover:bg-blue-600' : ''}`}
               title="斜体"
             >
               I
             </button>
             <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { color: 'red' }));
-                setBatchEditPosition(null);
-              }}
-              className="w-5 h-5 rounded-full bg-red-500 hover:ring-2 ring-red-300"
+              onClick={() => applyBatchStyleToggle('color', 'red', null)}
+              className={`w-5 h-5 rounded-full bg-red-500 hover:ring-2 ring-red-300 ${selectionAllMatch('color', 'red') ? 'ring-2 ring-offset-2 ring-red-500' : ''}`}
               title="红色"
             />
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { color: 'blue' }));
-                setBatchEditPosition(null);
-              }}
-              className="w-5 h-5 rounded-full bg-blue-500 hover:ring-2 ring-blue-300"
+              onClick={() => applyBatchStyleToggle('color', 'blue', null)}
+              className={`w-5 h-5 rounded-full bg-blue-500 hover:ring-2 ring-blue-300 ${selectionAllMatch('color', 'blue') ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
               title="蓝色"
             />
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { color: 'green' }));
-                setBatchEditPosition(null);
-              }}
-              className="w-5 h-5 rounded-full bg-green-500 hover:ring-2 ring-green-300"
+              onClick={() => applyBatchStyleToggle('color', 'green', null)}
+              className={`w-5 h-5 rounded-full bg-green-500 hover:ring-2 ring-green-300 ${selectionAllMatch('color', 'green') ? 'ring-2 ring-offset-2 ring-green-500' : ''}`}
               title="绿色"
             />
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { color: 'purple' }));
-                setBatchEditPosition(null);
-              }}
-              className="w-5 h-5 rounded-full bg-purple-500 hover:ring-2 ring-purple-300"
+              onClick={() => applyBatchStyleToggle('color', 'purple', null)}
+              className={`w-5 h-5 rounded-full bg-purple-500 hover:ring-2 ring-purple-300 ${selectionAllMatch('color', 'purple') ? 'ring-2 ring-offset-2 ring-purple-500' : ''}`}
               title="紫色"
             />
             <button
@@ -2893,11 +2968,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             </button>
             <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { highlight: 'yellow' }));
-                setBatchEditPosition(null);
-              }}
-              className="w-5 h-5 rounded bg-yellow-200 hover:ring-2 ring-yellow-300"
+              onClick={() => applyBatchStyleToggle('highlight', 'yellow', null)}
+              className={`w-5 h-5 rounded bg-yellow-200 hover:ring-2 ring-yellow-300 ${selectionAllMatch('highlight', 'yellow') ? 'ring-2 ring-offset-2 ring-yellow-400' : ''}`}
               title="黄色高亮"
             />
             <button
@@ -2912,41 +2984,29 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             </button>
             <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { is_todo: true }));
-                setBatchEditPosition(null);
-              }}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm"
+              onClick={() => applyBatchStyleToggle('is_todo', true, false)}
+              className={`p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm ${selectionAllMatch('is_todo', true) ? 'bg-blue-500 text-white hover:bg-blue-600' : ''}`}
               title="设为待办"
             >
               ☑️
             </button>
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { heading: 'h1' }));
-                setBatchEditPosition(null);
-              }}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm font-bold"
+              onClick={() => applyBatchStyleToggle('heading', 'h1', null)}
+              className={`p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm font-bold ${selectionAllMatch('heading', 'h1') ? 'bg-blue-500 text-white hover:bg-blue-600' : ''}`}
               title="一级标题"
             >
               H1
             </button>
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { heading: 'h2' }));
-                setBatchEditPosition(null);
-              }}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm font-bold"
+              onClick={() => applyBatchStyleToggle('heading', 'h2', null)}
+              className={`p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm font-bold ${selectionAllMatch('heading', 'h2') ? 'bg-blue-500 text-white hover:bg-blue-600' : ''}`}
               title="二级标题"
             >
               H2
             </button>
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { heading: 'h3' }));
-                setBatchEditPosition(null);
-              }}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm font-bold"
+              onClick={() => applyBatchStyleToggle('heading', 'h3', null)}
+              className={`p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm font-bold ${selectionAllMatch('heading', 'h3') ? 'bg-blue-500 text-white hover:bg-blue-600' : ''}`}
               title="三级标题"
             >
               H3
@@ -2965,7 +3025,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             <button
               onClick={() => {
                 setBatchEditPosition(null);
-                setSelectedNodeIds([]);
+                updateSelectedNodeIds([]);
               }}
               className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500 dark:text-gray-400"
               title="关闭"

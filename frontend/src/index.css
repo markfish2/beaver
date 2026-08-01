@@ -433,12 +433,15 @@ body,
   line-height: 1.25;
   margin-top: 1.6em;
 }
-.memo-content h1:first-child { margin-top: 0; }
+.memo-content h1:first-child,
+.memo-content h2:first-child,
+.memo-content h3:first-child,
+.memo-content h4:first-child { margin-top: 0; }
 .memo-content h1 { font-size: 1.8em; margin-top: 0; padding-bottom: 0.35em; border-bottom: 1px solid #e5e7eb; }
 .dark .memo-content h1 { border-bottom-color: #374151; }
-.memo-content h2 { font-size: 1.32em; }
-.memo-content h3 { font-size: 1.1em; }
-.memo-content h4 { font-size: 1em; color: #6b7280; }
+.memo-content h2 { font-size: 1.32em; margin-top: 0.9em; }
+.memo-content h3 { font-size: 1.1em; margin-top: 0.75em; }
+.memo-content h4 { font-size: 1em; margin-top: 0.65em; color: #6b7280; }
 .dark .memo-content h4 { color: #9ca3af; }
 .memo-content h5, .memo-content h6 { font-size: 1em; font-weight: 600; margin-top: 1em; }
 /* 段落 */
