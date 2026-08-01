@@ -1,14 +1,22 @@
-import { useState, useEffect } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Settings2, Palette } from 'lucide-react';
+import { updateSettings } from '../api/auth';
+import { useAuth } from '../context/AuthContext';
+import { showToast } from '../utils/toast';
+import { syncThemeChrome } from '../utils/themeChrome';
 
 type FontSize = 'small' | 'medium' | 'large';
 type FontFamily = 'system' | 'yahei' | 'pingfang' | 'kaiti' | 'fangsong' | 'syst';
-type Theme = 'minimal' | 'warm' | 'dark' | 'geek';
+type Theme = 'system' | 'minimal' | 'warm' | 'dark' | 'geek';
+type SelectableTheme = Exclude<Theme, 'dark'>;
+type MarkdownTheme = 'default' | 'pie';
 
 interface FontSettings {
   fontSize: FontSize;
   fontFamily: FontFamily;
   theme: Theme;
+  markdownTheme: MarkdownTheme;
 }
 
 const FONT_SIZE_MAP: Record<FontSize, string> = {
@@ -27,9 +35,9 @@ const FONT_FAMILY_MAP: Record<FontFamily, string> = {
 };
 
 const FONT_SIZE_LABELS: Record<FontSize, string> = {
-  small: '小',
-  medium: '中',
-  large: '大'
+  small: '紧凑',
+  medium: '标准',
+  large: '舒展'
 };
 
 const FONT_FAMILY_LABELS: Record<FontFamily, string> = {
@@ -53,6 +61,17 @@ const THEMES: Record<Theme, {
   preview: string;
   isDark: boolean;
 }> = {
+  system: {
+    name: '跟随系统',
+    bg: '#FAF9F5',
+    text: '#111827',
+    secondaryText: '#6B7280',
+    accent: '#3F587F',
+    guideColor: '#e5e7eb',
+    headingColor: '#111111',
+    preview: 'bg-gradient-to-r from-white to-[#111827]',
+    isDark: false
+  },
   minimal: {
     name: '极简纯粹',
     bg: '#FDFDFC',
@@ -65,73 +84,108 @@ const THEMES: Record<Theme, {
     isDark: false
   },
   warm: {
-    name: '温润护眼',
-    bg: '#FBFBF9',
-    text: '#433F38',
-    secondaryText: '#9CA3AF',
-    accent: '#10B981',
-    guideColor: '#e5e7eb',
-    headingColor: '#1F1D1A',
-    preview: 'bg-[#FBFBF9]',
+    name: '暖沙',
+    bg: '#F4EFE6',
+    text: '#3D352D',
+    secondaryText: '#817469',
+    accent: '#A95F3A',
+    guideColor: '#DCCFC0',
+    headingColor: '#302820',
+    preview: 'bg-[#F4EFE6]',
     isDark: false
   },
   dark: {
-    name: '沉浸深色',
-    bg: '#1A1B1E',
-    text: '#D1D3D6',
-    secondaryText: '#8B919D',
-    accent: '#7D56F4',
+    name: '深炭',
+    bg: '#262624',
+    text: '#E7E4DD',
+    secondaryText: '#AAA69E',
+    accent: '#E08A68',
     guideColor: 'rgba(255,255,255,0.06)',
     headingColor: '#F0F1F3',
     preview: 'bg-[#1A1B1E]',
     isDark: true
   },
   geek: {
-    name: '现代极客',
-    bg: '#F6F8FA',
-    text: '#24292F',
-    secondaryText: '#57606A',
-    accent: '#0969DA',
-    guideColor: '#e1e4e8',
-    headingColor: '#0D1117',
-    preview: 'bg-[#F6F8FA]',
+    name: '雾蓝',
+    bg: '#F3F5F6',
+    text: '#273238',
+    secondaryText: '#65747C',
+    accent: '#527A8A',
+    guideColor: '#D7DEE1',
+    headingColor: '#1F292E',
+    preview: 'bg-[#F3F5F6]',
     isDark: false
   }
 };
 
+const SELECTABLE_THEMES: SelectableTheme[] = ['system', 'minimal', 'warm', 'geek'];
+
+const MARKDOWN_THEME_LABELS: Record<MarkdownTheme, string> = {
+  default: '默认',
+  pie: 'Pie',
+};
+
 const STORAGE_KEY = 'outline-font-settings';
 
-const RESTORED_THEME_KEY = 'outline-restored-theme';
+interface AppearanceContextValue {
+  settings: FontSettings;
+  setFontSize: (fontSize: FontSize) => void;
+  setFontFamily: (fontFamily: FontFamily) => void;
+  setTheme: (theme: Theme) => void;
+  setMarkdownTheme: (theme: MarkdownTheme) => void;
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
+}
 
-export const useFontSettings = () => {
+const AppearanceContext = createContext<AppearanceContextValue | null>(null);
+
+const AppearanceStateProvider = ({
+  children,
+  accountSettings,
+}: {
+  children: ReactNode;
+  accountSettings?: FontSettings;
+}) => {
   const [settings, setSettings] = useState<FontSettings>(() => {
+    if (accountSettings) return accountSettings;
     const saved = localStorage.getItem(STORAGE_KEY);
-    const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        let theme: Theme = parsed.theme || 'minimal';
-        if (systemDark) {
-          // 系统暗色时强制 dark，但保存用户的非 dark 偏好（用于切回亮色时恢复）
-          if (theme !== 'dark') {
-            localStorage.setItem(RESTORED_THEME_KEY, theme);
-          }
-          theme = 'dark';
-        }
-        return { fontSize: parsed.fontSize || 'medium', fontFamily: parsed.fontFamily || 'system', theme };
+        const theme: Theme = parsed.theme || 'system';
+        const markdownTheme: MarkdownTheme = parsed.markdownTheme || 'default';
+        return { fontSize: parsed.fontSize || 'medium', fontFamily: parsed.fontFamily || 'system', theme, markdownTheme };
       } catch {
         // fallback to default
       }
     }
     // 无保存设置时，检测系统暗色模式
-    return { fontSize: 'medium', fontFamily: 'system', theme: systemDark ? 'dark' : 'minimal' };
+    return { fontSize: 'medium', fontFamily: 'system', theme: 'system', markdownTheme: 'default' };
   });
 
   const [isOpen, setIsOpen] = useState(false);
 
   // 应用主题 CSS 变量和样式
-  const applyTheme = (theme: typeof THEMES[Theme]) => {
+  const applyTheme = useCallback((themeKey: Theme) => {
+    const systemDark = themeKey === 'system'
+      && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const resolvedKey = themeKey === 'system'
+      ? (systemDark ? 'system-dark' : 'system-light')
+      : themeKey;
+    const theme = systemDark
+      ? {
+          ...THEMES.system,
+          bg: '#111827',
+          text: '#F3F4F6',
+          secondaryText: '#9CA3AF',
+          accent: '#8EA4BB',
+          guideColor: '#374151',
+          headingColor: '#FFFFFF',
+          isDark: true,
+        }
+      : THEMES[themeKey];
     const root = document.documentElement;
+    root.dataset.theme = resolvedKey;
     root.style.setProperty('--outline-bg-color', theme.bg);
     root.style.setProperty('--outline-text-color', theme.text);
     root.style.setProperty('--outline-secondary-text', theme.secondaryText);
@@ -151,41 +205,18 @@ export const useFontSettings = () => {
       document.documentElement.classList.remove('dark');
     }
 
-    // 更新所有 theme-color meta 标签，移除 media 查询让浏览器使用手动设置的颜色
-    const color = theme.isDark ? '#111827' : '#ffffff';
-    document.querySelectorAll('meta[name="theme-color"], meta[name="hw-theme-color"]').forEach(meta => {
-      meta.setAttribute('content', color);
-      meta.removeAttribute('media');
-    });
+    syncThemeChrome(theme.isDark);
 
     window.dispatchEvent(new CustomEvent('theme-change'));
-  };
+  }, []);
 
-  // 系统主题变化时，实时更新并保存设置
+  // 只有“跟随系统”会响应设备模式变化，不覆盖用户明确选择的主题。
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = (e: MediaQueryListEvent) => {
-      if (e.matches) {
-        // 系统切到暗色 → 保存当前非 dark 偏好，强制暗色主题
-        setSettings(prev => {
-          if (prev.theme !== 'dark') {
-            localStorage.setItem(RESTORED_THEME_KEY, prev.theme);
-          }
-          return { ...prev, theme: 'dark' };
-        });
-      } else {
-        // 系统切到亮色 → 恢复之前保存的非 dark 主题
-        const restored = localStorage.getItem(RESTORED_THEME_KEY) as Theme | null;
-        setSettings(prev => ({
-          ...prev,
-          theme: restored && restored !== 'dark' ? restored : (prev.theme === 'dark' ? 'minimal' : prev.theme),
-        }));
-        localStorage.removeItem(RESTORED_THEME_KEY);
-      }
-    };
+    const handler = () => settings.theme === 'system' && applyTheme('system');
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
-  }, []);
+  }, [applyTheme, settings.theme]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
@@ -203,29 +234,74 @@ export const useFontSettings = () => {
     document.body.style.fontWeight = '400';
 
     // 应用主题颜色
-    applyTheme(THEMES[settings.theme]);
-  }, [settings]);
+    applyTheme(settings.theme);
 
-  const setFontSize = (fontSize: FontSize) => {
+    // 应用 Markdown 主题
+    root.dataset.mdTheme = settings.markdownTheme || 'default';
+  }, [applyTheme, settings]);
+
+  const persist = useCallback(async (next: Partial<{ theme: Theme; font_family: FontFamily; font_size: FontSize }>) => {
+    try {
+      await updateSettings(next);
+    } catch {
+      showToast('外观设置同步失败，已保存在当前设备', 'error');
+    }
+  }, []);
+
+  const setFontSize = useCallback((fontSize: FontSize) => {
     setSettings(prev => ({ ...prev, fontSize }));
-  };
+    void persist({ font_size: fontSize });
+  }, [persist]);
 
-  const setFontFamily = (fontFamily: FontFamily) => {
+  const setFontFamily = useCallback((fontFamily: FontFamily) => {
     setSettings(prev => ({ ...prev, fontFamily }));
-  };
+    void persist({ font_family: fontFamily });
+  }, [persist]);
 
-  const setTheme = (theme: Theme) => {
+  const setTheme = useCallback((theme: Theme) => {
     setSettings(prev => ({ ...prev, theme }));
-  };
+    void persist({ theme });
+  }, [persist]);
 
-  return {
+  const setMarkdownTheme = useCallback((markdownTheme: MarkdownTheme) => {
+    setSettings(prev => ({ ...prev, markdownTheme }));
+  }, []);
+
+  const value = useMemo(() => ({
     settings,
     setFontSize,
     setFontFamily,
     setTheme,
+    setMarkdownTheme,
     isOpen,
     setIsOpen
-  };
+  }), [isOpen, setFontFamily, setFontSize, setMarkdownTheme, setTheme, settings]);
+
+  return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>;
+};
+
+export const AppearanceProvider = ({ children }: { children: ReactNode }) => {
+  const { user } = useAuth();
+  const accountSettings = user ? {
+    theme: (user.theme as Theme) || 'system',
+    fontFamily: (user.font_family as FontFamily) || 'system',
+    fontSize: (user.font_size as FontSize) || 'medium',
+  } : undefined;
+  const accountKey = user
+    ? `${user.id}:${user.theme}:${user.font_family}:${user.font_size}`
+    : 'local';
+
+  return (
+    <AppearanceStateProvider key={accountKey} accountSettings={accountSettings}>
+      {children}
+    </AppearanceStateProvider>
+  );
+};
+
+export const useFontSettings = () => {
+  const context = useContext(AppearanceContext);
+  if (!context) throw new Error('useFontSettings must be used within AppearanceProvider');
+  return context;
 };
 
 interface FontSettingsPanelProps {
@@ -243,10 +319,11 @@ export const FontSettingsPanel = ({
   setFontSize,
   setFontFamily,
   setTheme,
+  setMarkdownTheme,
   isOpen,
   setIsOpen,
   hideButton = false,
-}: FontSettingsPanelProps) => {
+}: FontSettingsPanelProps & { setMarkdownTheme?: (theme: MarkdownTheme) => void }) => {
   if (hideButton) {
     // Render content only (for use inside other menus)
     return (
@@ -260,7 +337,7 @@ export const FontSettingsPanel = ({
             </label>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {(Object.keys(THEMES) as Theme[]).map((theme) => (
+            {SELECTABLE_THEMES.map((theme) => (
               <button
                 key={theme}
                 onClick={() => setTheme(theme)}
@@ -274,10 +351,10 @@ export const FontSettingsPanel = ({
                 <div>
                   <div className="text-xs font-medium text-gray-800 dark:text-gray-200">{THEMES[theme].name}</div>
                   <div className="text-[10px] text-gray-500 mt-0.5">
+                    {theme === 'system' && '随设备自动切换'}
                     {theme === 'minimal' && 'Workflowy 风格'}
-                    {theme === 'warm' && 'Logseq 风格'}
-                    {theme === 'dark' && 'Obsidian 风格'}
-                    {theme === 'geek' && 'GitHub 风格'}
+                    {theme === 'warm' && '低刺激的暖色阅读'}
+                    {theme === 'geek' && '清晰冷静的雾蓝层次'}
                   </div>
                 </div>
               </button>
@@ -286,6 +363,33 @@ export const FontSettingsPanel = ({
         </div>
 
         <div className="border-t border-gray-200 dark:border-gray-700 my-4" />
+
+        {/* Markdown Theme Section */}
+        {setMarkdownTheme && (
+          <div className="mb-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Palette className="w-4 h-4 text-gray-500" />
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Markdown 主题
+              </label>
+            </div>
+            <div className="flex gap-2">
+              {(Object.keys(MARKDOWN_THEME_LABELS) as MarkdownTheme[]).map((mdTheme) => (
+                <button
+                  key={mdTheme}
+                  onClick={() => setMarkdownTheme(mdTheme)}
+                  className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                    (settings.markdownTheme || 'default') === mdTheme
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  {MARKDOWN_THEME_LABELS[mdTheme]}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Font Size Section */}
         <div className="mb-4">
@@ -331,6 +435,30 @@ export const FontSettingsPanel = ({
             ))}
           </div>
         </div>
+
+        <div className="border-t border-gray-200 dark:border-gray-700 my-4" />
+
+        {/* Markdown 渲染主题 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Markdown 渲染风格
+          </label>
+          <div className="flex gap-2">
+            {(Object.keys(MARKDOWN_THEME_LABELS) as MarkdownTheme[]).map((mdTheme) => (
+              <button
+                key={mdTheme}
+                onClick={() => setMarkdownTheme?.(mdTheme)}
+                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                  (settings.markdownTheme || 'default') === mdTheme
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                {MARKDOWN_THEME_LABELS[mdTheme]}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -361,7 +489,7 @@ export const FontSettingsPanel = ({
                 </label>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {(Object.keys(THEMES) as Theme[]).map((theme) => (
+                {SELECTABLE_THEMES.map((theme) => (
                   <button
                     key={theme}
                     onClick={() => setTheme(theme)}
@@ -375,10 +503,10 @@ export const FontSettingsPanel = ({
                     <div>
                       <div className="text-xs font-medium text-gray-800 dark:text-gray-200">{THEMES[theme].name}</div>
                       <div className="text-[10px] text-gray-500 mt-0.5">
-                        {theme === 'minimal' && 'Workflowy 风格'}
-                        {theme === 'warm' && 'Logseq 风格'}
-                        {theme === 'dark' && 'Obsidian 风格'}
-                        {theme === 'geek' && 'GitHub 风格'}
+                        {theme === 'system' && '随设备自动切换'}
+                        {theme === 'minimal' && '温和、克制的纸张感'}
+                        {theme === 'warm' && '低刺激的暖色阅读'}
+                        {theme === 'geek' && '清晰冷静的雾蓝层次'}
                       </div>
                     </div>
                   </button>
