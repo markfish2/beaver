@@ -70,21 +70,21 @@
 
 :root[data-markdown-style="pie"] .memo-content h1 {
   text-align: center;
-  font-size: 1.72em !important;
+  font-size: calc(1.72em - 2px) !important;
   font-weight: 700;
   padding-bottom: 0.36em;
   border-bottom: 1px solid var(--markdown-pie-soft-border) !important;
 }
 
 :root[data-markdown-style="pie"] .memo-content h2 {
-  font-size: 1.34em !important;
+  font-size: calc(1.34em - 2px) !important;
   font-weight: 700;
   border-bottom: none !important;
   padding-bottom: 0;
 }
 
-:root[data-markdown-style="pie"] .memo-content h3 { font-size: 1.16em !important; }
-:root[data-markdown-style="pie"] .memo-content h4 { font-size: 1.04em !important; color: var(--markdown-pie-muted) !important; }
+:root[data-markdown-style="pie"] .memo-content h3 { font-size: calc(1.16em - 2px) !important; }
+:root[data-markdown-style="pie"] .memo-content h4 { font-size: calc(1.04em - 2px) !important; color: var(--markdown-pie-muted) !important; }
 :root[data-markdown-style="pie"] .memo-content h5 { font-size: 1.08em; }
 :root[data-markdown-style="pie"] .memo-content h6 { font-size: 1em; color: var(--markdown-pie-muted) !important; }
 
@@ -116,7 +116,7 @@
 :root[data-markdown-style="pie"] .memo-content blockquote {
   color: var(--markdown-pie-muted) !important;
   border-left: 2px solid var(--markdown-pie-border) !important;
-  padding: 0.25em 1.5em;
+  padding: 0.125em 1.5em;
   margin: 1.2em 0;
   font-style: italic;
   background: transparent !important;
@@ -124,6 +124,15 @@
 
 :root[data-markdown-style="pie"] .memo-content blockquote p {
   text-align: left;
+  margin: 0.5em 0;
+}
+
+:root[data-markdown-style="pie"] .memo-content blockquote p:first-child {
+  margin-top: 0.25em;
+}
+
+:root[data-markdown-style="pie"] .memo-content blockquote p:last-child {
+  margin-bottom: 0.25em;
 }
 
 :root[data-markdown-style="pie"] .memo-content ul,
@@ -182,8 +191,8 @@
   color: var(--markdown-pie-link) !important;
   background: var(--markdown-pie-code-bg) !important;
   border: 1px solid var(--markdown-pie-soft-border);
-  border-radius: 3px;
-  padding: 0.08em 0.32em;
+  border-radius: 999px;
+  padding: 0.08em 0.44em;
   font-size: 0.88em;
 }
 
@@ -218,27 +227,52 @@
 }
 
 :root[data-markdown-style="pie"] .memo-content table {
-  border-collapse: collapse;
+  border: 1px solid var(--markdown-pie-border);
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 0.55rem;
   width: 100%;
   margin: 1.2em 0;
-  font-size: 0.95em;
+  font-size: calc(var(--prose-font-size) - 2px) !important;
+  line-height: 1.48;
+  overflow: hidden;
 }
 
 :root[data-markdown-style="pie"] .memo-content th,
 :root[data-markdown-style="pie"] .memo-content td {
-  border: 1px solid var(--markdown-pie-border) !important;
+  border: 0 !important;
+  border-right: 1px solid var(--markdown-pie-border) !important;
+  border-bottom: 1px solid var(--markdown-pie-border) !important;
+  font-size: calc(var(--prose-font-size) - 2px) !important;
   padding: 0.28em 1ch;
+}
+
+:root[data-markdown-style="pie"] .memo-content th *,
+:root[data-markdown-style="pie"] .memo-content td * {
+  font-size: inherit !important;
+}
+
+:root[data-markdown-style="pie"] .memo-content tr > :last-child {
+  border-right: 0 !important;
+}
+
+:root[data-markdown-style="pie"] .memo-content tbody tr:last-child > td,
+:root[data-markdown-style="pie"] .memo-content tbody tr:last-child > th,
+:root[data-markdown-style="pie"] .memo-content table > tr:last-child > td,
+:root[data-markdown-style="pie"] .memo-content table > tr:last-child > th {
+  border-bottom: 0 !important;
 }
 
 :root[data-markdown-style="pie"] .memo-content th {
   color: var(--markdown-pie-table-head-text) !important;
   background: var(--markdown-pie-table-head) !important;
+  border-bottom: 1px solid var(--markdown-pie-border) !important;
   font-weight: 700;
 }
 
 :root[data-markdown-style="pie"] .memo-content hr {
   border: none;
-  border-top: 3px double var(--markdown-pie-border) !important;
+  border-top: 1px solid var(--markdown-pie-soft-border) !important;
   margin: 2em 0;
 }
 
