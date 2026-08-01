@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -46,14 +47,14 @@ SyntaxHighlighter.registerLanguage('cpp', cpp);
 SyntaxHighlighter.registerLanguage('go', go);
 SyntaxHighlighter.registerLanguage('rust', rust);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
-import { Pencil, Eye, Save, Columns2, Image, Paperclip, Copy, CheckCheck } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { getNodes, createNode, updateNode, uploadFile, uploadFromUrl, getMemoTags, getDocuments, updateDocument } from '../api/data';
+import { Pencil, Eye, Save, Columns2, Copy, CheckCheck, Download, Share2 } from 'lucide-react';
+import { getNodes, createNode, updateNode, uploadFile, getMemoTags, getDocuments, updateDocument } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
-import type { Node, Document } from '../api/data';
+import type { Document } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts } from '../utils/markdownPreprocess';
-import { getPasteMarkdown, extractExternalImageUrls } from '../utils/htmlToMarkdown';
+import { getPasteMarkdown } from '../utils/htmlToMarkdown';
+import { localizeMarkdownImages } from '../utils/markdownImageUpload';
 import { useIsDark } from '../hooks/useIsDark';
 import MarkdownEditor from './MarkdownEditor';
 import type { MarkdownEditorHandle } from './MarkdownEditor';
@@ -63,6 +64,7 @@ import type { PopupItem } from './TagMentionPopup';
 import { tagMentionExtension } from '../extensions/tagMentionExtension';
 import type { TagMentionState } from '../extensions/tagMentionExtension';
 import AIChatPanel from './AIChatPanel';
+import ShareDialog from './ShareDialog';
 
 interface Props {
   documentId: string;
@@ -73,14 +75,54 @@ function preprocess(content: string): string {
   return normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(normalizeCallouts(content)))));
 }
 
-const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => ({
-  margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: '0.95em',
-  background: isDark ? '#282c34' : '#fbfbf8', border: 'none', padding: '16px',
-});
+// Pie 主题的 One Dark 风格语法高亮
+const pieOneDark: Record<string, React.CSSProperties> = {
+  'code[class*="language-"]': { color: '#f0f0f0', background: '#292d3e' },
+  'pre[class*="language-"]': { color: '#f0f0f0', background: '#292d3e' },
+  comment: { color: '#676e95' },
+  prolog: { color: '#676e95' },
+  doctype: { color: '#676e95' },
+  cdata: { color: '#676e95' },
+  punctuation: { color: '#89ddff' },
+  property: { color: '#c792ea' },
+  tag: { color: '#ff5370' },
+  boolean: { color: '#f78c6c' },
+  number: { color: '#f78c6c' },
+  constant: { color: '#f78c6c' },
+  symbol: { color: '#f78c6c' },
+  deleted: { color: '#ff5370' },
+  selector: { color: '#c3e88d' },
+  'attr-name': { color: '#ffcb6b' },
+  string: { color: '#c3e88d' },
+  char: { color: '#c3e88d' },
+  builtin: { color: '#ffcb6b' },
+  inserted: { color: '#c3e88d' },
+  operator: { color: '#89ddff' },
+  entity: { color: '#89ddff', cursor: 'help' },
+  url: { color: '#89ddff' },
+  atrule: { color: '#c792ea' },
+  'attr-value': { color: '#c3e88d' },
+  keyword: { color: '#c792ea' },
+  function: { color: '#82aaff' },
+  'class-name': { color: '#ffcb6b' },
+  regex: { color: '#89ddff' },
+  important: { color: '#89ddff', fontWeight: 'bold' },
+  variable: { color: '#f07178' },
+  bold: { fontWeight: 'bold' },
+  italic: { fontStyle: 'italic' },
+};
 
-const CodeBlock = memo(function CodeBlock({ className, children, ...props }: { className?: string; children: React.ReactNode; [key: string]: any }) {
+const codeBlockCustomStyle = (isDark: boolean, isPie: boolean): React.CSSProperties => {
+  if (isPie) return { margin: 0, borderRadius: '0 0 4px 4px', fontSize: '0.9rem', lineHeight: '1.55', background: '#292d3e', border: 'none', padding: '0.8rem 0 1rem', color: '#f0f0f0' };
+  return { margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: '0.95em', background: isDark ? '#282c34' : '#fbfbf8', border: 'none', padding: '16px' };
+};
+
+type MarkdownCodeProps = Parameters<NonNullable<Components['code']>>[0];
+
+const CodeBlock = memo(function CodeBlock({ className, children, ...props }: MarkdownCodeProps) {
   const [copied, setCopied] = useState(false);
   const isDark = useIsDark();
+  const isPie = typeof document !== 'undefined' && document.documentElement.dataset.mdTheme === 'pie';
   const match = /language-(\w+)/.exec(className || '');
   const language = match ? match[1] : '';
   const code = String(children).replace(/\n$/, '');
@@ -89,18 +131,27 @@ const CodeBlock = memo(function CodeBlock({ className, children, ...props }: { c
 
   if (isBlock) {
     const useHighlight = language && language !== 'markdown' && language !== 'text';
+    // Pie 主题：统一深色代码块
+    const wrapperBg = isPie ? '#292d3e' : undefined;
+    const wrapperBorder = isPie ? '1px solid #3a3f55' : undefined;
+    const headerBg = isPie ? '#1e2233' : (isDark ? '#282c34' : '#f6f5f0');
+    const headerBorder = isPie ? '#3a3f55' : undefined;
+    const labelColor = isPie ? '#676e95' : undefined;
+    const plainBg = isPie ? '#292d3e' : (isDark ? '#1e1e1e' : '#fafafa');
+    const plainColor = isPie ? '#f0f0f0' : undefined;
+
     return (
-      <div className="relative rounded-lg overflow-hidden border border-[#dad9d4] dark:border-gray-700">
-        <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#dad9d4] dark:border-gray-700" style={{ background: isDark ? '#282c34' : '#f6f5f0' }}>
-          <span className={`text-[11px] font-mono ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{language || 'text'}</span>
-          <button onClick={handleCopy} className="flex items-center p-1 rounded-md bg-white/90 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-600 transition-all" title={copied ? '已复制' : '复制代码'}>
+      <div className="relative rounded-lg overflow-hidden" style={{ background: wrapperBg, border: wrapperBorder || undefined, ...(isPie ? {} : { borderWidth: 1, borderStyle: 'solid', borderColor: isDark ? '#374151' : '#dad9d4' }) }}>
+        <div className="flex items-center justify-between px-3 py-1.5" style={{ background: headerBg, borderBottom: headerBorder ? `1px solid ${headerBorder}` : `1px solid ${isDark ? '#374151' : '#dad9d4'}` }}>
+          <span className="text-[11px] font-mono" style={{ color: labelColor || (isDark ? '#9ca3af' : '#6b7280') }}>{language || 'text'}</span>
+          <button onClick={handleCopy} className="flex items-center p-1 rounded-md transition-all" style={{ background: isPie ? '#3a3f55' : (isDark ? '#374151' : 'rgba(255,255,255,0.9)'), border: `1px solid ${isPie ? '#4a4f65' : (isDark ? '#4b5563' : '#e5e7eb')}`, color: isPie ? '#a3a3a3' : (isDark ? '#d1d5db' : '#4b5563') }} title={copied ? '已复制' : '复制代码'}>
             {copied ? <CheckCheck className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           </button>
         </div>
         {useHighlight ? (
-          <SyntaxHighlighter style={isDark ? oneDark : ghcolors} language={language} PreTag="div" customStyle={{ ...codeBlockCustomStyle(isDark) }}>{code}</SyntaxHighlighter>
+          <SyntaxHighlighter style={isPie ? pieOneDark : (isDark ? oneDark : ghcolors)} language={language} PreTag="div" customStyle={{ ...codeBlockCustomStyle(isDark, isPie) }}>{code}</SyntaxHighlighter>
         ) : (
-          <pre className="p-4 overflow-x-auto text-sm font-mono" style={{ background: isDark ? '#1e1e1e' : '#fafafa', margin: 0 }}><code>{code}</code></pre>
+          <pre className="p-4 overflow-x-auto text-sm font-mono" style={{ background: plainBg, color: plainColor, margin: 0 }}><code>{code}</code></pre>
         )}
       </div>
     );
@@ -114,11 +165,11 @@ function NoteImage({ src, alt }: { src?: string; alt?: string }) {
 }
 
 export default function MarkdownNoteEditor({ documentId, isNew = false }: Props) {
-  const navigate = useNavigate();
   const { updateDocumentTitle } = useDocuments();
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>(isNew ? 'edit' : 'preview');
   const [content, setContent] = useState('');
   const [showAIPanel, setShowAIPanel] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
   const [title, setTitle] = useState('');
   const [nodeId, setNodeId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -134,6 +185,16 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedRef = useRef('');
   const pendingSaveRef = useRef<string | null>(null);
+
+  const handleDownload = useCallback(() => {
+    const currentContent = editorRef.current?.getValue() ?? content;
+    const url = URL.createObjectURL(new Blob([currentContent], { type: 'text/markdown;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${title || 'note'}.md`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }, [content, title]);
 
   const [tagState, setTagState] = useState<TagMentionState>({ type: null, query: '', coords: null, from: 0, to: 0 });
   const [mentionState, setMentionState] = useState<TagMentionState>({ type: null, query: '', coords: null, from: 0, to: 0 });
@@ -171,6 +232,8 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   const isTagPopupActive = useCallback(() => tagState.type === 'tag' && filteredTags.length > 0, [tagState, filteredTags]);
   const isMentionPopupActive = useCallback(() => mentionState.type === 'mention' && filteredDocs.length > 0, [mentionState, filteredDocs]);
 
+  // CodeMirror stores these callbacks and invokes them only for editor events, never during React render.
+  // eslint-disable-next-line react-hooks/refs
   const tmExtension = useMemo(() => tagMentionExtension({
     onTagSearch: (s) => { setTagState(s); setTagDropdownIndex(0); },
     onMentionSearch: (s) => { setMentionState(s); setMentionDropdownIndex(0); },
@@ -195,7 +258,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
       editorRef.current?.focus();
     },
     isPopupActive: () => isTagPopupActive() || isMentionPopupActive(),
-  }), [allTags.length, documents.length, filteredTags, filteredDocs, tagDropdownIndex, mentionDropdownIndex, isTagPopupActive, isMentionPopupActive]);
+  }), [allTags.length, documents.length, filteredTags, filteredDocs, tagDropdownIndex, mentionDropdownIndex, isTagPopupActive, isMentionPopupActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     return () => {
@@ -306,28 +369,27 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
       editorRef.current?.insertText(md);
       const newContent = editorRef.current?.getValue() ?? content;
       scheduleSave(newContent);
-      const externalUrls = extractExternalImageUrls(md);
-      if (externalUrls.length > 0) {
+      if (md.includes('![')) {
         setUploading(true);
-        Promise.allSettled(externalUrls.map(async (url) => {
-          try { const res = await uploadFromUrl(url); return { originalUrl: url, localUrl: res.file_path.replace(/^\/api/, '') }; }
-          catch { return null; }
-        })).then((results) => {
+        try {
+          const result = await localizeMarkdownImages(md);
           const view = editorRef.current?.view;
-          if (!view) { setUploading(false); return; }
+          if (!view) return;
           let updated = view.state.doc.toString();
-          for (const r of results) { if (r && r.status === 'fulfilled' && r.value) updated = updated.split(r.value.originalUrl).join(r.value.localUrl); }
+          if (result.markdown !== md) updated = updated.replace(md, result.markdown);
           if (updated !== view.state.doc.toString()) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: updated } });
           scheduleSave(updated);
+          if (result.failedUrls.length > 0) alert(`${result.failedUrls.length} 张图片未能自动上传，已保留原地址`);
+        } finally {
           setUploading(false);
-        });
+        }
       }
     }
   }, [handleFileUpload, scheduleSave, content]);
 
   const navigate_fn = useNavigate();
   const mdComponents = useMemo((): Components => ({
-    code: (props: any) => {
+    code: (props: MarkdownCodeProps) => {
       const match = /language-(\w+)/.exec(props.className || '');
       if (match && match[1] === 'mermaid') return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
       return <CodeBlock {...props} />;
@@ -397,7 +459,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   const showMentionPopup = mentionState.type === 'mention' && filteredDocs.length > 0 && mentionState.coords;
 
   return (
-    <div className="flex flex-col h-full bg-[#FBF8F3] dark:bg-transparent">
+    <div className="flex flex-col h-full bg-[var(--app-canvas)]">
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 dark:border-gray-800 shrink-0">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
@@ -408,6 +470,22 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
           {uploading && <span className="text-xs text-blue-500 shrink-0">上传中...</span>}
         </div>
         <div className="flex items-center gap-1 shrink-0 ml-4">
+          <button
+            onClick={handleDownload}
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+            title="导出 Markdown"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden lg:inline">导出</span>
+          </button>
+          <button
+            onClick={() => setShowShareDialog(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+            title="分享笔记"
+          >
+            <Share2 className="h-4 w-4" />
+            <span className="hidden lg:inline">分享</span>
+          </button>
           <button onClick={() => setViewMode(viewMode === 'preview' ? 'edit' : 'preview')}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm leading-none rounded-lg transition-colors ${viewMode === 'preview' ? 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>
             {viewMode === 'preview' ? <><Pencil className="w-4 h-4" />编辑</> : <><Eye className="w-4 h-4" />阅读</>}
@@ -422,7 +500,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
         {(viewMode === 'edit' || viewMode === 'split') && (
           <div className={`${viewMode === 'split' ? 'w-1/2 border-r border-gray-200 dark:border-gray-700' : 'w-full h-full'} flex flex-col`}>
             <div ref={editorScrollRef} className={`flex-1 min-h-0 overflow-y-auto scrollbar-none ${viewMode === 'split' ? '' : 'flex justify-center'}`}>
-              <div className={`flex flex-col ${viewMode === 'split' ? 'w-full' : 'w-full max-w-[768px]'}`} onPaste={handlePaste}>
+              <div className={`flex flex-col ${viewMode === 'split' ? 'w-full' : 'w-full max-w-[768px]'}`} onPasteCapture={handlePaste}>
                 <MarkdownEditor ref={editorRef} value={content} onChange={(val) => { setContent(val); scheduleSave(val); }}
                   compact={false} placeholder="开始书写... (支持 Markdown，输入 # 添加标签，@ 链接笔记)" className="flex-1 min-h-0 px-6 pt-6"
                   extensions={[tmExtension]}
@@ -463,6 +541,12 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
           onWriteBack={(newContent) => { setContent(newContent); editorRef.current?.view?.dispatch({ changes: { from: 0, to: editorRef.current.view.state.doc.length, insert: newContent } }); scheduleSave(newContent); }}
           onClose={() => setShowAIPanel(false)} />
       )}
+      <ShareDialog
+        key={`${documentId}-${showShareDialog}`}
+        isOpen={showShareDialog}
+        documentId={documentId}
+        onCancel={() => setShowShareDialog(false)}
+      />
     </div>
   );
 }
