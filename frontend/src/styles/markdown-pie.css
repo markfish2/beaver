@@ -231,56 +231,14 @@
 }
 .dark [data-md-theme="pie"] .memo-content .task-list-item input[type="checkbox"] { accent-color: #ff6b63; }
 
-/* 代码块 - 覆盖 CodeBlock 组件样式 */
+/* 代码块 - 基础样式（组件内部已处理 Pie 主题配色） */
 [data-md-theme="pie"] .memo-content pre {
   margin: 1.8rem 0 2rem;
   font-family: 'Fira Code', 'JetBrains Mono', Consolas, monospace;
   font-size: 0.9rem;
   line-height: 1.55;
-  color: #f0f0f0;
-  background-color: #292d3e;
-  border-radius: 4px;
-  padding: 0.8rem 0 1rem;
-  overflow-x: auto;
-  border: none;
 }
 [data-md-theme="pie"] .memo-content pre code,
 [data-md-theme="pie"] .memo-content pre code span {
-  font-size: inherit !important;
-  line-height: inherit !important;
-  background: transparent !important;
-  color: inherit;
-}
-
-/* CodeBlock 组件 wrapper div */
-[data-md-theme="pie"] .memo-content .relative.rounded-lg.overflow-hidden {
-  border-color: #292d3e !important;
-  background-color: #292d3e;
-}
-
-/* CodeBlock 组件 header bar */
-[data-md-theme="pie"] .memo-content .relative.rounded-lg.overflow-hidden > div:first-child {
-  background-color: #1e2233 !important;
-  border-bottom-color: #3a3f55 !important;
-}
-
-/* CodeBlock 组件语言标签 */
-[data-md-theme="pie"] .memo-content .relative.rounded-lg.overflow-hidden span.text-\[11px\] {
-  color: #676e95 !important;
-}
-
-/* SyntaxHighlighter 容器 */
-[data-md-theme="pie"] .memo-content .relative.rounded-lg.overflow-hidden > div:last-child {
-  background-color: #292d3e !important;
-}
-
-/* 复制按钮 */
-[data-md-theme="pie"] .memo-content .relative.rounded-lg.overflow-hidden button {
-  background-color: #3a3f55 !important;
-  border-color: #4a4f65 !important;
-  color: #a3a3a3 !important;
-}
-[data-md-theme="pie"] .memo-content .relative.rounded-lg.overflow-hidden button:hover {
-  background-color: #4a4f65 !important;
-  color: #e5e5e5 !important;
+  font-family: inherit;
 }
