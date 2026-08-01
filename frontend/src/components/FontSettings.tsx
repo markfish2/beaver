@@ -10,11 +10,13 @@ type FontSize = 'small' | 'medium' | 'large';
 type FontFamily = 'system' | 'yahei' | 'pingfang' | 'kaiti' | 'fangsong' | 'syst';
 type Theme = 'system' | 'minimal' | 'warm' | 'dark' | 'geek';
 type SelectableTheme = Exclude<Theme, 'dark'>;
+type MarkdownTheme = 'default' | 'pie';
 
 interface FontSettings {
   fontSize: FontSize;
   fontFamily: FontFamily;
   theme: Theme;
+  markdownTheme: MarkdownTheme;
 }
 
 const FONT_SIZE_MAP: Record<FontSize, string> = {
@@ -118,6 +120,11 @@ const THEMES: Record<Theme, {
 
 const SELECTABLE_THEMES: SelectableTheme[] = ['system', 'minimal', 'warm', 'geek'];
 
+const MARKDOWN_THEME_LABELS: Record<MarkdownTheme, string> = {
+  default: '默认',
+  pie: 'Pie',
+};
+
 const STORAGE_KEY = 'outline-font-settings';
 
 interface AppearanceContextValue {
@@ -125,6 +132,7 @@ interface AppearanceContextValue {
   setFontSize: (fontSize: FontSize) => void;
   setFontFamily: (fontFamily: FontFamily) => void;
   setTheme: (theme: Theme) => void;
+  setMarkdownTheme: (theme: MarkdownTheme) => void;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
 }
@@ -145,13 +153,14 @@ const AppearanceStateProvider = ({
       try {
         const parsed = JSON.parse(saved);
         const theme: Theme = parsed.theme || 'system';
-        return { fontSize: parsed.fontSize || 'medium', fontFamily: parsed.fontFamily || 'system', theme };
+        const markdownTheme: MarkdownTheme = parsed.markdownTheme || 'default';
+        return { fontSize: parsed.fontSize || 'medium', fontFamily: parsed.fontFamily || 'system', theme, markdownTheme };
       } catch {
         // fallback to default
       }
     }
     // 无保存设置时，检测系统暗色模式
-    return { fontSize: 'medium', fontFamily: 'system', theme: 'system' };
+    return { fontSize: 'medium', fontFamily: 'system', theme: 'system', markdownTheme: 'default' };
   });
 
   const [isOpen, setIsOpen] = useState(false);
@@ -226,6 +235,9 @@ const AppearanceStateProvider = ({
 
     // 应用主题颜色
     applyTheme(settings.theme);
+
+    // 应用 Markdown 主题
+    root.dataset.mdTheme = settings.markdownTheme || 'default';
   }, [applyTheme, settings]);
 
   const persist = useCallback(async (next: Partial<{ theme: Theme; font_family: FontFamily; font_size: FontSize }>) => {
@@ -251,14 +263,19 @@ const AppearanceStateProvider = ({
     void persist({ theme });
   }, [persist]);
 
+  const setMarkdownTheme = useCallback((markdownTheme: MarkdownTheme) => {
+    setSettings(prev => ({ ...prev, markdownTheme }));
+  }, []);
+
   const value = useMemo(() => ({
     settings,
     setFontSize,
     setFontFamily,
     setTheme,
+    setMarkdownTheme,
     isOpen,
     setIsOpen
-  }), [isOpen, setFontFamily, setFontSize, setTheme, settings]);
+  }), [isOpen, setFontFamily, setFontSize, setMarkdownTheme, setTheme, settings]);
 
   return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>;
 };
@@ -302,10 +319,11 @@ export const FontSettingsPanel = ({
   setFontSize,
   setFontFamily,
   setTheme,
+  setMarkdownTheme,
   isOpen,
   setIsOpen,
   hideButton = false,
-}: FontSettingsPanelProps) => {
+}: FontSettingsPanelProps & { setMarkdownTheme?: (theme: MarkdownTheme) => void }) => {
   if (hideButton) {
     // Render content only (for use inside other menus)
     return (
@@ -345,6 +363,33 @@ export const FontSettingsPanel = ({
         </div>
 
         <div className="border-t border-gray-200 dark:border-gray-700 my-4" />
+
+        {/* Markdown Theme Section */}
+        {setMarkdownTheme && (
+          <div className="mb-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Palette className="w-4 h-4 text-gray-500" />
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Markdown 主题
+              </label>
+            </div>
+            <div className="flex gap-2">
+              {(Object.keys(MARKDOWN_THEME_LABELS) as MarkdownTheme[]).map((mdTheme) => (
+                <button
+                  key={mdTheme}
+                  onClick={() => setMarkdownTheme(mdTheme)}
+                  className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                    (settings.markdownTheme || 'default') === mdTheme
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  {MARKDOWN_THEME_LABELS[mdTheme]}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Font Size Section */}
         <div className="mb-4">
@@ -386,6 +431,30 @@ export const FontSettingsPanel = ({
                 style={{ fontFamily: FONT_FAMILY_MAP[family] }}
               >
                 {FONT_FAMILY_LABELS[family]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="border-t border-gray-200 dark:border-gray-700 my-4" />
+
+        {/* Markdown 渲染主题 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Markdown 渲染风格
+          </label>
+          <div className="flex gap-2">
+            {(Object.keys(MARKDOWN_THEME_LABELS) as MarkdownTheme[]).map((mdTheme) => (
+              <button
+                key={mdTheme}
+                onClick={() => setMarkdownTheme?.(mdTheme)}
+                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                  (settings.markdownTheme || 'default') === mdTheme
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                {MARKDOWN_THEME_LABELS[mdTheme]}
               </button>
             ))}
           </div>
