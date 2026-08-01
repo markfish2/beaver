@@ -53,6 +53,186 @@
   --highlight-mint-text: #166534;
 }
 
+/*
+ * 全局外观系统
+ * 主题通过重映射 Tailwind 灰阶覆盖页面、侧栏、卡片、弹窗和表单；
+ * 语义令牌用于阅读内容、代码、引用等不能用普通灰阶表达的区域。
+ */
+:root,
+:root[data-theme="system-light"] {
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+  --color-gray-950: #030712;
+  --app-canvas: #faf9f5;
+  --app-surface: #faf9f5;
+  --app-surface-raised: #ffffff;
+  --app-icon-rail: #f5f4ee;
+  --app-code-bg: #f3f4f6;
+  --app-code-text: #1f2937;
+  --app-quote-bg: #f9fafb;
+  --app-quote-border: #e5e7eb;
+  --app-link: #3f587f;
+  --app-selection: #dbeafe;
+}
+
+:root[data-theme="system-dark"] {
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+  --color-gray-950: #030712;
+  --app-canvas: #111827;
+  --app-surface: #1f2937;
+  --app-surface-raised: #374151;
+  --app-icon-rail: #111827;
+  --app-code-bg: #111827;
+  --app-code-text: #e5e7eb;
+  --app-quote-bg: #1f2937;
+  --app-quote-border: #4b5563;
+  --app-link: #8ea4bb;
+  --app-selection: #334766;
+}
+
+:root[data-theme="minimal"] {
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+  --color-gray-950: #030712;
+  --app-canvas: #fdfdfc;
+  --app-surface: #fdfdfc;
+  --app-surface-raised: #ffffff;
+  --app-icon-rail: #fdfdfc;
+  --app-code-bg: #fff8c5;
+  --app-code-text: #333333;
+  --app-quote-bg: #f9fafb;
+  --app-quote-border: #e5e7eb;
+  --app-link: #1a73e8;
+  --app-selection: #dbeafe;
+}
+
+:root[data-theme="warm"] {
+  --color-gray-50: #faf6ef;
+  --color-gray-100: #f0e8dc;
+  --color-gray-200: #dfd2c2;
+  --color-gray-300: #cab9a5;
+  --color-gray-400: #a08f80;
+  --color-gray-500: #817469;
+  --color-gray-600: #695d53;
+  --color-gray-700: #51473f;
+  --color-gray-800: #3d352f;
+  --color-gray-900: #302923;
+  --color-gray-950: #221d19;
+  --app-canvas: #f4efe6;
+  --app-surface: #fbf7f0;
+  --app-surface-raised: #fffaf2;
+  --app-icon-rail: #f4efe6;
+  --app-code-bg: #e9dfd1;
+  --app-code-text: #493b31;
+  --app-quote-bg: #ede3d5;
+  --app-quote-border: #a95f3a;
+  --app-link: #914b2e;
+  --app-selection: #e6cdbd;
+}
+
+:root[data-theme="geek"] {
+  --color-gray-50: #f7f9fa;
+  --color-gray-100: #eaf0f2;
+  --color-gray-200: #d7e0e3;
+  --color-gray-300: #bdcbd0;
+  --color-gray-400: #899ba3;
+  --color-gray-500: #65747c;
+  --color-gray-600: #526068;
+  --color-gray-700: #3e4a50;
+  --color-gray-800: #2d383d;
+  --color-gray-900: #202a2f;
+  --color-gray-950: #161e22;
+  --app-canvas: #f3f5f6;
+  --app-surface: #fbfcfc;
+  --app-surface-raised: #ffffff;
+  --app-icon-rail: #f3f5f6;
+  --app-code-bg: #e5ebed;
+  --app-code-text: #293b43;
+  --app-quote-bg: #eaf0f2;
+  --app-quote-border: #527a8a;
+  --app-link: #3f7185;
+  --app-selection: #cfe0e6;
+}
+
+:root[data-theme="dark"] {
+  --color-gray-50: #f3f1ec;
+  --color-gray-100: #e7e4dd;
+  --color-gray-200: #d0ccc4;
+  --color-gray-300: #b8b3aa;
+  --color-gray-400: #aaa69e;
+  --color-gray-500: #8b8881;
+  --color-gray-600: #66635e;
+  --color-gray-700: #4a4844;
+  --color-gray-800: #353532;
+  --color-gray-900: #262624;
+  --color-gray-950: #1c1c1a;
+  --app-canvas: #262624;
+  --app-surface: #2d2d2a;
+  --app-surface-raised: #353532;
+  --app-icon-rail: #262624;
+  --app-code-bg: #1f1f1d;
+  --app-code-text: #e2d9ce;
+  --app-quote-bg: #32302c;
+  --app-quote-border: #e08a68;
+  --app-link: #efa181;
+  --app-selection: #604536;
+}
+
+body,
+#root {
+  background: var(--app-canvas);
+}
+
+/* 现有组件大量使用 bg-white；仅重映射背景工具，不影响 text-white。 */
+.bg-white {
+  background-color: var(--app-surface);
+}
+
+::selection {
+  background: var(--app-selection);
+}
+
+.memo-content a,
+.main-content-area a {
+  color: var(--app-link);
+}
+
+.memo-content blockquote {
+  background: var(--app-quote-bg);
+  border-left-color: var(--app-quote-border);
+}
+
+.memo-content code:not(pre code),
+.main-content-area code:not(pre code) {
+  background: var(--app-code-bg);
+  color: var(--app-code-text);
+}
+
 .dark {
   /* 高亮颜色 - 暗色模式 (WCAG AA 级对比度 >= 4.5:1) */
   /* 红色高亮：深红背景 + 亮红文字 */
@@ -234,81 +414,183 @@
   will-change: transform, opacity;
 }
 
-/* Memo Markdown 渲染样式 */
+/* Memo Markdown 渲染样式 (Academic theme) */
 .memo-content {
   overflow-wrap: break-word;
   word-break: break-word;
   min-width: 0;
-  font-family: var(--prose-font-family);
+  font-family: "STIX2Text", "Times New Roman", Georgia, serif;
   font-size: var(--prose-font-size);
-  line-height: var(--prose-line-height);
-  letter-spacing: -0.01em;
+  line-height: 1.5em;
+  color: #1f2937;
 }
-/* 段落间距：相邻元素间距 1em (markamd style) */
+.dark .memo-content { color: #e5e7eb; }
+
+/* 段落间距 */
 .memo-content > * + * { margin-top: 1em; }
-/* 标题 */
-.memo-content h1, .memo-content h2, .memo-content h3, .memo-content h4 {
-  font-weight: 600;
-  letter-spacing: -0.015em;
-  line-height: 1.25;
-  margin-top: 1.6em;
+
+/* 标题 - 学术风格 */
+.memo-content h1, .memo-content h2, .memo-content h3,
+.memo-content h4, .memo-content h5, .memo-content h6 {
+  font-family: inherit;
+  line-height: 1.5em;
+  margin-bottom: 1em;
+  margin-top: 1em;
 }
-.memo-content h1:first-child { margin-top: 0; }
-.memo-content h1 { font-size: 1.8em; margin-top: 0; padding-bottom: 0.35em; border-bottom: 1px solid #e5e7eb; }
-.dark .memo-content h1 { border-bottom-color: #374151; }
-.memo-content h2 { font-size: 1.32em; }
-.memo-content h3 { font-size: 1.1em; }
-.memo-content h4 { font-size: 1em; color: #6b7280; }
-.dark .memo-content h4 { color: #9ca3af; }
-.memo-content h5, .memo-content h6 { font-size: 1em; font-weight: 600; margin-top: 1em; }
-/* 段落 */
-.memo-content p { margin-bottom: 1em; }
+.memo-content h1:first-child,
+.memo-content h2:first-child,
+.memo-content h3:first-child,
+.memo-content h4:first-child { margin-top: 0; }
+.memo-content h1 { font-size: 2.4em; text-align: center; }
+.memo-content h2 { font-size: 1.8em; }
+.memo-content h3 { font-size: 1.4em; }
+.memo-content h4 { font-size: 1.2em; }
+.memo-content h5 { font-size: 1.1em; }
+.memo-content h6 { font-size: 1em; }
+
+/* 段落 - 两端对齐 */
+.memo-content p {
+  margin-top: 1em;
+  margin-bottom: 1em;
+  text-align: justify;
+}
 .memo-content p:last-child { margin-bottom: 0; }
-/* 列表 - 覆盖 Tailwind preflight 的 list-style: none */
+
+/* 列表 */
 .memo-content ul { list-style: disc inside !important; padding-left: 1.4em; margin-bottom: 1em; }
 .memo-content ol { list-style: decimal inside !important; padding-left: 1.4em; margin-bottom: 1em; }
-.memo-content li { line-height: var(--prose-line-height); }
+.memo-content li { line-height: 1.5em; }
 .memo-content li + li { margin-top: 0.25em; }
 .memo-content li > ul, .memo-content li > ol { margin-bottom: 0; padding-left: 1.4em; }
+
 /* 行内代码 */
-.memo-content code:not(pre code) { background: #fff8c5; padding: 0.1em 0.3em; border-radius: 3px; font-size: 0.86em; font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace; }
-.dark .memo-content code:not(pre code) { background: #4a3f1a; }
+.memo-content code:not(pre code) {
+  font-family: 'Latin Modern Mono Light', 'JetBrains Mono', "Fira Code", Consolas, monospace !important;
+  background: #f0f0f0;
+  padding: 0.1em 0.3em;
+  border-radius: 2px;
+  font-size: 0.9em;
+}
+.dark .memo-content code:not(pre code) { background: #374151; }
+
 /* 代码块 */
-.memo-content pre { border-radius: 0.5rem; overflow-x: auto; margin-bottom: 1em; max-width: 100%; }
+.memo-content pre {
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin-bottom: 1em;
+  max-width: 100%;
+}
+.dark .memo-content pre { border-color: #4b5563; }
 .memo-content pre code,
 .memo-content pre code span {
-  font-size: 0.85em !important;
-  line-height: 1.6 !important;
-  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+  font-family: 'Latin Modern Mono Light', 'JetBrains Mono', "Fira Code", Consolas, monospace !important;
+  font-size: 0.9em !important;
+  line-height: 1.5 !important;
 }
-/* 高亮 */
-.memo-content mark { background: #fef08a; padding: 0.05em 0.15em; border-radius: 2px; }
+
+/* 高亮 - 学术黄色 */
+.memo-content mark { background: #fff387; padding: 0.05em 0.15em; }
 .dark .memo-content mark { background: #854d0e; color: #fef3c7; }
-/* 引用 */
-.memo-content blockquote { border-left: 3px solid #d1d5db; padding-left: 1.25rem; color: #6b7280; margin-bottom: 1em; margin-left: 0; font-style: italic; }
-.dark .memo-content blockquote { border-left-color: #4b5563; color: #9ca3af; }
-/* 链接 */
-.memo-content a { color: #2563eb; text-decoration: underline; word-break: break-all; transition: color 0.15s; }
-.dark .memo-content a { color: #60a5fa; }
-.memo-content a:hover { color: #1d4ed8; }
-.dark .memo-content a:hover { color: #93bbfd; }
+
+/* 引用 - 学术风格 */
+.memo-content blockquote {
+  font-style: italic;
+  padding: 0.25em 24px;
+  position: relative;
+  color: #383838;
+  border-left: 2px solid;
+  margin: 1em 0;
+}
+.dark .memo-content blockquote { color: #d1d5db; border-left-color: #6b7280; }
+
+/* 链接 - 学术红色 */
+.memo-content a { color: #a00; text-decoration: underline; word-break: break-all; transition: color 0.15s; }
+.dark .memo-content a { color: #ef4444; }
+.memo-content a:hover { color: #7f1d1d; }
+.dark .memo-content a:hover { color: #fca5a5; }
+
 /* 图片 */
-.memo-content img { max-width: 100%; border-radius: 0.5rem; margin: 0.5em 0; }
-/* 表格 */
-.memo-content table { border-collapse: collapse; width: 100%; margin-bottom: 1em; font-size: 0.95em; }
-.memo-content th, .memo-content td { border: 1px solid #d1d5db; padding: 6px 10px; text-align: left; }
-.dark .memo-content th, .dark .memo-content td { border-color: #4b5563; }
-.memo-content th { background: rgba(0,0,0,0.03); font-weight: 600; }
-.dark .memo-content th { background: rgba(255,255,255,0.05); }
+.memo-content img { max-width: 100%; border-radius: 4px; margin: 0.5em 0; }
+
+/* 表格 - 学术风格 */
+.memo-content table { border-collapse: collapse; width: 100%; margin-bottom: 1em; }
+.memo-content th, .memo-content td { border: 1px solid; padding-left: 1ch; padding-right: 1ch; padding-top: 4px; padding-bottom: 4px; }
+.memo-content td, .memo-content th { border-color: #d1d5db; }
+.dark .memo-content td, .dark .memo-content th { border-color: #4b5563; }
+.memo-content th {
+  border-bottom: 0;
+  padding-top: 2px;
+  background: #575c61;
+  border-color: #333;
+  color: #f3f3f3;
+}
+
 /* 分割线 */
-.memo-content hr { border: none; border-top: 1px solid #e5e7eb; margin: 2em 0; }
-.dark .memo-content hr { border-top-color: #374151; }
+.memo-content hr { border: none; border-top: 1px solid #d1d5db; margin: 2em 0; }
+.dark .memo-content hr { border-top-color: #4b5563; }
+
 /* 强调 */
-.memo-content strong { font-weight: 600; }
-.memo-content s, .memo-content del { text-decoration: line-through; text-decoration-thickness: 1.5px; opacity: 0.7; }
-.memo-content hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.5rem 0; }
-.dark .memo-content hr { border-top-color: #374151; }
+.memo-content strong { font-weight: bold; }
+.memo-content em { font-style: italic; }
+.memo-content s, .memo-content del { text-decoration: line-through; opacity: 0.7; }
 .memo-content span[role="checkbox"] { margin-right: 0.375rem; }
+
+/* Memo 卡片使用语义色变量，避免彩色卡片继续套用全局灰阶。 */
+.memo-card-themed .memo-content,
+.memo-card-themed .memo-content h1,
+.memo-card-themed .memo-content h2,
+.memo-card-themed .memo-content h3,
+.memo-card-themed .memo-content h4,
+.memo-card-themed .memo-content h5,
+.memo-card-themed .memo-content h6 {
+  color: var(--memo-text);
+}
+.memo-card-themed .memo-content h1,
+.memo-card-themed .memo-content hr {
+  border-color: var(--memo-surface-border);
+}
+.memo-card-themed .memo-content blockquote {
+  color: var(--memo-quote-text);
+  border-left-color: var(--memo-quote-border);
+}
+.memo-card-themed .memo-content a {
+  color: var(--memo-link);
+}
+.memo-card-themed .memo-content a:hover {
+  color: var(--memo-link-hover);
+}
+.memo-card-themed .memo-document-link {
+  color: var(--memo-link);
+  background: var(--memo-surface);
+  text-decoration: none;
+}
+.memo-card-themed .memo-document-link:hover {
+  color: var(--memo-link-hover);
+}
+.memo-card-themed .memo-content code:not(pre code) {
+  color: var(--memo-inline-code-text);
+  background: var(--memo-inline-code-bg);
+}
+.memo-card-themed .memo-content mark {
+  color: var(--memo-text);
+  background: var(--memo-surface);
+  outline: 1px solid var(--memo-surface-border);
+}
+.memo-card-themed .memo-content th,
+.memo-card-themed .memo-content td {
+  border-color: var(--memo-surface-border);
+}
+.memo-card-themed .memo-content th {
+  color: var(--memo-text);
+  background: var(--memo-surface);
+}
+.memo-card-themed .memo-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
 
 /* Excalidraw: 隐藏工具栏下方的操作提示 */
 .excalidraw .HintViewer { display: none !important; }
