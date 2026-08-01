@@ -119,15 +119,15 @@ const CodeBlock = memo(function CodeBlock({ className, children, palette, compac
   if (isBlock) {
     const useHighlight = language && language !== 'markdown' && language !== 'text';
     return (
-      <div className="relative rounded-lg overflow-hidden border" style={{ borderColor: palette.codeBorder ?? palette.surfaceBorder }}>
+      <div className="markdown-code-block relative rounded-lg overflow-hidden border" style={{ borderColor: palette.codeBorder ?? palette.surfaceBorder }}>
         <div
-          className={`flex items-center justify-between border-b ${compact ? 'px-2 py-1' : 'px-3 py-1.5'}`}
+          className={`markdown-code-header flex items-center justify-between border-b ${compact ? 'px-2 py-1' : 'px-3 py-1.5'}`}
           style={{ background: palette.codeHeaderBackground ?? palette.surface, borderColor: palette.codeBorder ?? palette.surfaceBorder }}
         >
-          <span className="text-[11px] font-mono" style={{ color: palette.codeMutedText ?? palette.mutedText }}>{language || 'text'}</span>
+          <span className="markdown-code-language text-[11px] font-mono" style={{ color: palette.codeMutedText ?? palette.mutedText }}>{language || 'text'}</span>
           <button
             onClick={handleCopy}
-            className="flex items-center p-1 rounded-md border transition-opacity hover:opacity-80"
+            className="markdown-code-copy flex items-center p-1 rounded-md border transition-opacity hover:opacity-80"
             style={{
               color: palette.codeButtonText ?? palette.text,
               background: palette.codeButtonBackground ?? palette.surfaceStrong,
@@ -143,12 +143,13 @@ const CodeBlock = memo(function CodeBlock({ className, children, palette, compac
             style={palette.isDarkSurface ? oneDark : ghcolors}
             language={language}
             PreTag="div"
+            className="markdown-code-body"
             customStyle={{ ...codeBlockCustomStyle(palette), padding: compact ? '10px' : '16px', fontSize: compact ? '0.82em' : '0.95em' }}
           >
             {code}
           </SyntaxHighlighter>
         ) : (
-          <pre className={`${compact ? 'p-2.5 text-xs' : 'p-4 text-sm'} overflow-x-auto font-mono`} style={{ background: palette.plainCodeBlockBackground ?? palette.surfaceStrong, color: palette.codeText ?? palette.text, margin: 0 }}>
+          <pre className={`markdown-code-body ${compact ? 'p-2.5 text-xs' : 'p-4 text-sm'} overflow-x-auto font-mono`} style={{ background: palette.plainCodeBlockBackground ?? palette.surfaceStrong, color: palette.codeText ?? palette.text, margin: 0 }}>
             <code style={{ color: palette.codeText ?? palette.text }}>{code}</code>
           </pre>
         )}

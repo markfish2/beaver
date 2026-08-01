@@ -21,6 +21,7 @@ class User(UserBase):
     theme: str
     font_family: str
     font_size: str
+    markdown_style: str = "default"
     memo_columns: int = 1
     nickname: Optional[str] = None
     email: Optional[str] = None
@@ -34,6 +35,7 @@ class UserSettingsUpdate(BaseModel):
     theme: Optional[str] = None
     font_family: Optional[str] = None
     font_size: Optional[str] = None
+    markdown_style: Optional[str] = None
     memo_columns: Optional[int] = None
 
 class UserProfileUpdate(BaseModel):

@@ -13,6 +13,7 @@ import { syncThemeChrome } from './utils/themeChrome.ts'
 
   function applyTheme() {
     const saved = (() => { try { return JSON.parse(localStorage.getItem('outline-font-settings') || '{}'); } catch { return {}; } })();
+    document.documentElement.dataset.markdownStyle = saved.markdownStyle || 'default';
 
     // 明确主题优先；system 才跟随设备。
     if (saved.theme && saved.theme !== 'system') {
@@ -37,6 +38,7 @@ import { syncThemeChrome } from './utils/themeChrome.ts'
   // 初始应用
   function initialApply() {
     const saved = (() => { try { return JSON.parse(localStorage.getItem('outline-font-settings') || '{}'); } catch { return {}; } })();
+    document.documentElement.dataset.markdownStyle = saved.markdownStyle || 'default';
     if (saved.theme && saved.theme !== 'system') {
       const dark = saved.theme === 'dark';
       document.documentElement.dataset.theme = saved.theme;

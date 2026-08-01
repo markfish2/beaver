@@ -28,12 +28,15 @@ class MigrationTest(unittest.TestCase):
 
         self.assertIn("nodes.version", first)
         self.assertIn("documents.updated_at", first)
+        self.assertIn("users.markdown_style", first)
         self.assertEqual(second, [])
         with sqlite3.connect(self.db_path) as connection:
             node_columns = {row[1] for row in connection.execute("PRAGMA table_info(nodes)")}
+            user_columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
             document = connection.execute("SELECT version, updated_at FROM documents WHERE id='doc-1'").fetchone()
             indexes = {row[1] for row in connection.execute("PRAGMA index_list(documents)")}
         self.assertTrue({"note", "is_todo", "is_in_progress", "version"}.issubset(node_columns))
+        self.assertIn("markdown_style", user_columns)
         self.assertEqual(document[0], 1)
         self.assertIsNotNone(document[1])
         self.assertIn("ix_documents_sort_order", indexes)

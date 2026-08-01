@@ -94,17 +94,17 @@ const CodeBlock = memo(function CodeBlock({ className, children, ...props }: Mar
   if (isBlock) {
     const useHighlight = language && language !== 'markdown' && language !== 'text';
     return (
-      <div className="relative rounded-lg overflow-hidden border border-[#dad9d4] dark:border-gray-700">
-        <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#dad9d4] dark:border-gray-700" style={{ background: isDark ? '#282c34' : '#f6f5f0' }}>
-          <span className={`text-[11px] font-mono ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{language || 'text'}</span>
-          <button onClick={handleCopy} className="flex items-center p-1 rounded-md bg-white/90 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-600 transition-all" title={copied ? '已复制' : '复制代码'}>
+      <div className="markdown-code-block relative rounded-lg overflow-hidden border border-[#dad9d4] dark:border-gray-700">
+        <div className="markdown-code-header flex items-center justify-between px-3 py-1.5 border-b border-[#dad9d4] dark:border-gray-700" style={{ background: isDark ? '#282c34' : '#f6f5f0' }}>
+          <span className={`markdown-code-language text-[11px] font-mono ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{language || 'text'}</span>
+          <button onClick={handleCopy} className="markdown-code-copy flex items-center p-1 rounded-md bg-white/90 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-600 transition-all" title={copied ? '已复制' : '复制代码'}>
             {copied ? <CheckCheck className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           </button>
         </div>
         {useHighlight ? (
-          <SyntaxHighlighter style={isDark ? oneDark : ghcolors} language={language} PreTag="div" customStyle={{ ...codeBlockCustomStyle(isDark) }}>{code}</SyntaxHighlighter>
+          <SyntaxHighlighter style={isDark ? oneDark : ghcolors} language={language} PreTag="div" className="markdown-code-body" customStyle={{ ...codeBlockCustomStyle(isDark) }}>{code}</SyntaxHighlighter>
         ) : (
-          <pre className="p-4 overflow-x-auto text-sm font-mono" style={{ background: isDark ? '#1e1e1e' : '#fafafa', margin: 0 }}><code>{code}</code></pre>
+          <pre className="markdown-code-body p-4 overflow-x-auto text-sm font-mono" style={{ background: isDark ? '#1e1e1e' : '#fafafa', margin: 0 }}><code>{code}</code></pre>
         )}
       </div>
     );
@@ -475,7 +475,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
         )}
         {(viewMode === 'preview' || viewMode === 'split') && (
           <div ref={previewRef} className={`${viewMode === 'split' ? 'w-1/2' : 'w-full h-full'} overflow-y-auto scrollbar-none flex flex-col items-center`}>
-            <div className="memo-content max-w-[768px] w-full text-base text-gray-700 dark:text-gray-300 p-6" style={{ lineHeight: '1.75' }}>
+            <div className="markdown-note-preview memo-content max-w-[768px] w-full text-base text-gray-700 dark:text-gray-300 p-6" style={{ lineHeight: '1.75' }}>
               {content.trim() ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]} components={mdComponents}>{processedContent}</ReactMarkdown>
               ) : <p className="text-gray-400 dark:text-gray-500 italic">空笔记</p>}

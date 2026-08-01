@@ -10,11 +10,13 @@ type FontSize = 'small' | 'medium' | 'large';
 type FontFamily = 'system' | 'yahei' | 'pingfang' | 'kaiti' | 'fangsong' | 'syst';
 type Theme = 'system' | 'minimal' | 'warm' | 'dark' | 'geek';
 type SelectableTheme = Exclude<Theme, 'dark'>;
+type MarkdownStyle = 'default' | 'pie';
 
 interface FontSettings {
   fontSize: FontSize;
   fontFamily: FontFamily;
   theme: Theme;
+  markdownStyle: MarkdownStyle;
 }
 
 const FONT_SIZE_MAP: Record<FontSize, string> = {
@@ -45,6 +47,19 @@ const FONT_FAMILY_LABELS: Record<FontFamily, string> = {
   kaiti: '楷体',
   fangsong: '仿宋',
   syst: '思源宋体'
+};
+
+const MARKDOWN_STYLE_LABELS: Record<MarkdownStyle, { name: string; description: string; preview: string }> = {
+  default: {
+    name: '默认',
+    description: '适合日常记录，和当前 Memo 风格一致',
+    preview: 'Aa',
+  },
+  pie: {
+    name: 'Pie 学术',
+    description: '参考 academic：衬线正文、红棕链接、论文式表格与引用',
+    preview: 'π',
+  },
 };
 
 // 主题配置 - 4个精选主题
@@ -125,6 +140,7 @@ interface AppearanceContextValue {
   setFontSize: (fontSize: FontSize) => void;
   setFontFamily: (fontFamily: FontFamily) => void;
   setTheme: (theme: Theme) => void;
+  setMarkdownStyle: (style: MarkdownStyle) => void;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
 }
@@ -134,9 +150,11 @@ const AppearanceContext = createContext<AppearanceContextValue | null>(null);
 const AppearanceStateProvider = ({
   children,
   accountSettings,
+  onSettingsPersisted,
 }: {
   children: ReactNode;
   accountSettings?: FontSettings;
+  onSettingsPersisted?: (user: Awaited<ReturnType<typeof updateSettings>>) => void;
 }) => {
   const [settings, setSettings] = useState<FontSettings>(() => {
     if (accountSettings) return accountSettings;
@@ -145,13 +163,18 @@ const AppearanceStateProvider = ({
       try {
         const parsed = JSON.parse(saved);
         const theme: Theme = parsed.theme || 'system';
-        return { fontSize: parsed.fontSize || 'medium', fontFamily: parsed.fontFamily || 'system', theme };
+        return {
+          fontSize: parsed.fontSize || 'medium',
+          fontFamily: parsed.fontFamily || 'system',
+          theme,
+          markdownStyle: parsed.markdownStyle || 'default',
+        };
       } catch {
         // fallback to default
       }
     }
     // 无保存设置时，检测系统暗色模式
-    return { fontSize: 'medium', fontFamily: 'system', theme: 'system' };
+    return { fontSize: 'medium', fontFamily: 'system', theme: 'system', markdownStyle: 'default' };
   });
 
   const [isOpen, setIsOpen] = useState(false);
@@ -217,6 +240,7 @@ const AppearanceStateProvider = ({
     // 应用字体设置
     root.style.setProperty('--outline-font-size', FONT_SIZE_MAP[settings.fontSize]);
     root.style.setProperty('--outline-font-family', FONT_FAMILY_MAP[settings.fontFamily]);
+    root.dataset.markdownStyle = settings.markdownStyle;
 
     // 应用字体到 body
     document.body.style.fontSize = FONT_SIZE_MAP[settings.fontSize];
@@ -228,13 +252,14 @@ const AppearanceStateProvider = ({
     applyTheme(settings.theme);
   }, [applyTheme, settings]);
 
-  const persist = useCallback(async (next: Partial<{ theme: Theme; font_family: FontFamily; font_size: FontSize }>) => {
+  const persist = useCallback(async (next: Partial<{ theme: Theme; font_family: FontFamily; font_size: FontSize; markdown_style: MarkdownStyle }>) => {
     try {
-      await updateSettings(next);
+      const updatedUser = await updateSettings(next);
+      onSettingsPersisted?.(updatedUser);
     } catch {
       showToast('外观设置同步失败，已保存在当前设备', 'error');
     }
-  }, []);
+  }, [onSettingsPersisted]);
 
   const setFontSize = useCallback((fontSize: FontSize) => {
     setSettings(prev => ({ ...prev, fontSize }));
@@ -251,31 +276,38 @@ const AppearanceStateProvider = ({
     void persist({ theme });
   }, [persist]);
 
+  const setMarkdownStyle = useCallback((markdownStyle: MarkdownStyle) => {
+    setSettings(prev => ({ ...prev, markdownStyle }));
+    void persist({ markdown_style: markdownStyle });
+  }, [persist]);
+
   const value = useMemo(() => ({
     settings,
     setFontSize,
     setFontFamily,
     setTheme,
+    setMarkdownStyle,
     isOpen,
     setIsOpen
-  }), [isOpen, setFontFamily, setFontSize, setTheme, settings]);
+  }), [isOpen, setFontFamily, setFontSize, setMarkdownStyle, setTheme, settings]);
 
   return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>;
 };
 
 export const AppearanceProvider = ({ children }: { children: ReactNode }) => {
-  const { user } = useAuth();
+  const { user, applyUser } = useAuth();
   const accountSettings = user ? {
     theme: (user.theme as Theme) || 'system',
     fontFamily: (user.font_family as FontFamily) || 'system',
     fontSize: (user.font_size as FontSize) || 'medium',
+    markdownStyle: (user.markdown_style as MarkdownStyle) || 'default',
   } : undefined;
   const accountKey = user
-    ? `${user.id}:${user.theme}:${user.font_family}:${user.font_size}`
+    ? `${user.id}:${user.theme}:${user.font_family}:${user.font_size}:${user.markdown_style}`
     : 'local';
 
   return (
-    <AppearanceStateProvider key={accountKey} accountSettings={accountSettings}>
+    <AppearanceStateProvider key={accountKey} accountSettings={accountSettings} onSettingsPersisted={applyUser}>
       {children}
     </AppearanceStateProvider>
   );
@@ -292,16 +324,60 @@ interface FontSettingsPanelProps {
   setFontSize: (size: FontSize) => void;
   setFontFamily: (family: FontFamily) => void;
   setTheme: (theme: Theme) => void;
+  setMarkdownStyle: (style: MarkdownStyle) => void;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   hideButton?: boolean;
 }
+
+const MarkdownStyleSection = ({
+  value,
+  onChange,
+}: {
+  value: MarkdownStyle;
+  onChange: (style: MarkdownStyle) => void;
+}) => (
+  <div className="mb-4">
+    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+      Markdown 解析风格
+    </label>
+    <div className="grid grid-cols-2 gap-2">
+      {(Object.keys(MARKDOWN_STYLE_LABELS) as MarkdownStyle[]).map((style) => {
+        const item = MARKDOWN_STYLE_LABELS[style];
+        return (
+          <button
+            key={style}
+            onClick={() => onChange(style)}
+            className={`flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all ${
+              value === style
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                : 'border-transparent bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-700'
+            }`}
+          >
+            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-lg ${
+              style === 'pie'
+                ? 'border-[#6f2d22]/30 bg-[#fbfaf6] font-serif text-[#9a1f12]'
+                : 'border-gray-200 bg-white text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
+            }`}>
+              {item.preview}
+            </span>
+            <span className="min-w-0">
+              <span className="block text-xs font-medium text-gray-800 dark:text-gray-200">{item.name}</span>
+              <span className="mt-0.5 block text-[10px] leading-snug text-gray-500 dark:text-gray-400">{item.description}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  </div>
+);
 
 export const FontSettingsPanel = ({
   settings,
   setFontSize,
   setFontFamily,
   setTheme,
+  setMarkdownStyle,
   isOpen,
   setIsOpen,
   hideButton = false,
@@ -343,6 +419,8 @@ export const FontSettingsPanel = ({
             ))}
           </div>
         </div>
+
+        <MarkdownStyleSection value={settings.markdownStyle} onChange={setMarkdownStyle} />
 
         {/* Font Size Section */}
         <div className="mb-4">
@@ -444,6 +522,8 @@ export const FontSettingsPanel = ({
             </div>
 
             <div className="border-t border-gray-200 dark:border-gray-700 my-4" />
+
+            <MarkdownStyleSection value={settings.markdownStyle} onChange={setMarkdownStyle} />
 
             {/* Font Size Section */}
             <div className="mb-4">

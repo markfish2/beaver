@@ -6,6 +6,7 @@ export interface User {
   theme: string;
   font_family: string;
   font_size: string;
+  markdown_style: string;
   memo_columns: number;
   nickname?: string;
   email?: string;
@@ -45,7 +46,7 @@ export const getMe = async () => {
   return response.data;
 };
 
-export const updateSettings = async (settings: { theme?: string; font_family?: string; font_size?: string; memo_columns?: number }) => {
+export const updateSettings = async (settings: { theme?: string; font_family?: string; font_size?: string; markdown_style?: string; memo_columns?: number }) => {
   const response = await api.put<User>('/users/settings', settings);
   return response.data;
 };

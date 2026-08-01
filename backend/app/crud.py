@@ -36,6 +36,8 @@ def update_user_settings(db: Session, user_id: uuid.UUID, settings: schemas.User
         db_user.font_family = settings.font_family
     if settings.font_size:
         db_user.font_size = settings.font_size
+    if settings.markdown_style:
+        db_user.markdown_style = settings.markdown_style
     if settings.memo_columns is not None:
         db_user.memo_columns = settings.memo_columns
     db.commit()

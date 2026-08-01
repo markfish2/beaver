@@ -15,6 +15,7 @@ class User(Base):
     theme: Mapped[str] = mapped_column(String, default="system")
     font_family: Mapped[str] = mapped_column(String, default="system")
     font_size: Mapped[str] = mapped_column(String, default="medium")
+    markdown_style: Mapped[str] = mapped_column(String, default="default")
     memo_columns: Mapped[int] = mapped_column(Integer, default=1)
     nickname: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
