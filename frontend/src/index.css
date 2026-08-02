@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "./styles/markdown-pie.css";
 @import "./styles/markdown-markamd.css";
+@import "./styles/markdown-lapis.css";
 @variant dark (&:where(.dark, .dark *));
 
 @theme {
@@ -107,78 +108,6 @@
   --app-quote-border: #4b5563;
   --app-link: #8ea4bb;
   --app-selection: #334766;
-}
-
-:root[data-theme="minimal"] {
-  --color-gray-50: #f9fafb;
-  --color-gray-100: #f3f4f6;
-  --color-gray-200: #e5e7eb;
-  --color-gray-300: #d1d5db;
-  --color-gray-400: #9ca3af;
-  --color-gray-500: #6b7280;
-  --color-gray-600: #4b5563;
-  --color-gray-700: #374151;
-  --color-gray-800: #1f2937;
-  --color-gray-900: #111827;
-  --color-gray-950: #030712;
-  --app-canvas: #fdfdfc;
-  --app-surface: #fdfdfc;
-  --app-surface-raised: #ffffff;
-  --app-icon-rail: #fdfdfc;
-  --app-code-bg: #fff8c5;
-  --app-code-text: #333333;
-  --app-quote-bg: #f9fafb;
-  --app-quote-border: #e5e7eb;
-  --app-link: #1a73e8;
-  --app-selection: #dbeafe;
-}
-
-:root[data-theme="warm"] {
-  --color-gray-50: #faf6ef;
-  --color-gray-100: #f0e8dc;
-  --color-gray-200: #dfd2c2;
-  --color-gray-300: #cab9a5;
-  --color-gray-400: #a08f80;
-  --color-gray-500: #817469;
-  --color-gray-600: #695d53;
-  --color-gray-700: #51473f;
-  --color-gray-800: #3d352f;
-  --color-gray-900: #302923;
-  --color-gray-950: #221d19;
-  --app-canvas: #f4efe6;
-  --app-surface: #fbf7f0;
-  --app-surface-raised: #fffaf2;
-  --app-icon-rail: #f4efe6;
-  --app-code-bg: #e9dfd1;
-  --app-code-text: #493b31;
-  --app-quote-bg: #ede3d5;
-  --app-quote-border: #a95f3a;
-  --app-link: #914b2e;
-  --app-selection: #e6cdbd;
-}
-
-:root[data-theme="geek"] {
-  --color-gray-50: #f7f9fa;
-  --color-gray-100: #eaf0f2;
-  --color-gray-200: #d7e0e3;
-  --color-gray-300: #bdcbd0;
-  --color-gray-400: #899ba3;
-  --color-gray-500: #65747c;
-  --color-gray-600: #526068;
-  --color-gray-700: #3e4a50;
-  --color-gray-800: #2d383d;
-  --color-gray-900: #202a2f;
-  --color-gray-950: #161e22;
-  --app-canvas: #f3f5f6;
-  --app-surface: #fbfcfc;
-  --app-surface-raised: #ffffff;
-  --app-icon-rail: #f3f5f6;
-  --app-code-bg: #e5ebed;
-  --app-code-text: #293b43;
-  --app-quote-bg: #eaf0f2;
-  --app-quote-border: #527a8a;
-  --app-link: #3f7185;
-  --app-selection: #cfe0e6;
 }
 
 :root[data-theme="dark"] {
@@ -480,8 +409,9 @@ body,
 /* 图片 */
 .memo-content img { max-width: 100%; border-radius: 0.5rem; margin: 0.5em 0; }
 /* 表格 */
-.memo-content table { border-collapse: collapse; width: 100%; margin-bottom: 1em; font-size: 0.95em; }
-.memo-content th, .memo-content td { border: 1px solid #d1d5db; padding: 6px 10px; text-align: left; }
+.memo-content table { border-collapse: collapse; width: 100%; margin-bottom: 1em; font-size: 0.82em !important; line-height: 1.48; }
+.memo-content th, .memo-content td { border: 1px solid #d1d5db; padding: 6px 10px; text-align: left; font-size: inherit !important; }
+.memo-content th *, .memo-content td * { font-size: inherit !important; }
 .dark .memo-content th, .dark .memo-content td { border-color: #4b5563; }
 .memo-content th { background: rgba(0,0,0,0.03); font-weight: 600; }
 .dark .memo-content th { background: rgba(255,255,255,0.05); }

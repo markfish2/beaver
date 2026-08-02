@@ -8,9 +8,8 @@ import { syncThemeChrome } from '../utils/themeChrome';
 
 type FontSize = 'small' | 'medium' | 'large';
 type FontFamily = 'system' | 'yahei' | 'pingfang' | 'kaiti' | 'fangsong' | 'syst';
-type Theme = 'system' | 'minimal' | 'warm' | 'dark' | 'geek';
-type SelectableTheme = Exclude<Theme, 'dark'>;
-type MarkdownStyle = 'default' | 'pie' | 'markamd';
+type Theme = 'system' | 'dark';
+type MarkdownStyle = 'default' | 'pie' | 'markamd' | 'lapis';
 
 interface FontSettings {
   fontSize: FontSize;
@@ -65,9 +64,16 @@ const MARKDOWN_STYLE_LABELS: Record<MarkdownStyle, { name: string; description: 
     description: '参考 marka.md：清爽标题线、橙色强调、轻量代码与引用',
     preview: 'Md',
   },
+  lapis: {
+    name: 'Lapis',
+    description: '参考 Typora Lapis：蓝灰衬线标题、浅色代码块与论文式排版',
+    preview: 'La',
+  },
 };
 
-// 主题配置 - 4个精选主题
+const normalizeTheme = (theme: unknown): Theme => theme === 'dark' ? 'dark' : 'system';
+
+// 全局主题只保留默认设计体系；theme 仅表示跟随系统或强制夜间模式。
 const THEMES: Record<Theme, {
   name: string;
   bg: string;
@@ -80,7 +86,7 @@ const THEMES: Record<Theme, {
   isDark: boolean;
 }> = {
   system: {
-    name: '跟随系统',
+    name: '系统默认',
     bg: '#FAF9F5',
     text: '#111827',
     secondaryText: '#6B7280',
@@ -90,53 +96,18 @@ const THEMES: Record<Theme, {
     preview: 'bg-gradient-to-r from-white to-[#111827]',
     isDark: false
   },
-  minimal: {
-    name: '极简纯粹',
-    bg: '#FDFDFC',
-    text: '#333333',
-    secondaryText: '#888888',
-    accent: '#1A73E8',
-    guideColor: '#e5e7eb',
-    headingColor: '#111111',
-    preview: 'bg-[#FDFDFC]',
-    isDark: false
-  },
-  warm: {
-    name: '暖沙',
-    bg: '#F4EFE6',
-    text: '#3D352D',
-    secondaryText: '#817469',
-    accent: '#A95F3A',
-    guideColor: '#DCCFC0',
-    headingColor: '#302820',
-    preview: 'bg-[#F4EFE6]',
-    isDark: false
-  },
   dark: {
-    name: '深炭',
-    bg: '#262624',
-    text: '#E7E4DD',
-    secondaryText: '#AAA69E',
-    accent: '#E08A68',
-    guideColor: 'rgba(255,255,255,0.06)',
-    headingColor: '#F0F1F3',
-    preview: 'bg-[#1A1B1E]',
+    name: '系统默认 · 夜间',
+    bg: '#111827',
+    text: '#F3F4F6',
+    secondaryText: '#9CA3AF',
+    accent: '#8EA4BB',
+    guideColor: '#374151',
+    headingColor: '#FFFFFF',
+    preview: 'bg-[#111827]',
     isDark: true
-  },
-  geek: {
-    name: '雾蓝',
-    bg: '#F3F5F6',
-    text: '#273238',
-    secondaryText: '#65747C',
-    accent: '#527A8A',
-    guideColor: '#D7DEE1',
-    headingColor: '#1F292E',
-    preview: 'bg-[#F3F5F6]',
-    isDark: false
   }
 };
-
-const SELECTABLE_THEMES: SelectableTheme[] = ['system', 'minimal', 'warm', 'geek'];
 
 const STORAGE_KEY = 'outline-font-settings';
 
@@ -167,7 +138,7 @@ const AppearanceStateProvider = ({
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        const theme: Theme = parsed.theme || 'system';
+        const theme = normalizeTheme(parsed.theme);
         return {
           fontSize: parsed.fontSize || 'medium',
           fontFamily: parsed.fontFamily || 'system',
@@ -301,8 +272,17 @@ const AppearanceStateProvider = ({
 
 export const AppearanceProvider = ({ children }: { children: ReactNode }) => {
   const { user, applyUser } = useAuth();
+  useEffect(() => {
+    if (!user?.theme || user.theme === 'system' || user.theme === 'dark') return;
+    void updateSettings({ theme: 'system' })
+      .then(applyUser)
+      .catch(() => {
+        // 保留前端归一化结果；下次用户修改外观时会再次同步。
+      });
+  }, [applyUser, user?.theme]);
+
   const accountSettings = user ? {
-    theme: (user.theme as Theme) || 'system',
+    theme: normalizeTheme(user.theme),
     fontFamily: (user.font_family as FontFamily) || 'system',
     fontSize: (user.font_size as FontSize) || 'medium',
     markdownStyle: (user.markdown_style as MarkdownStyle) || 'default',
@@ -328,12 +308,25 @@ interface FontSettingsPanelProps {
   settings: FontSettings;
   setFontSize: (size: FontSize) => void;
   setFontFamily: (family: FontFamily) => void;
-  setTheme: (theme: Theme) => void;
   setMarkdownStyle: (style: MarkdownStyle) => void;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   hideButton?: boolean;
 }
+
+const GlobalThemeInfo = () => (
+  <div className="mb-5">
+    <div className="flex items-center gap-2 mb-3">
+      <Palette className="w-4 h-4 text-gray-500" />
+      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        全局主题
+      </label>
+    </div>
+    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-300">
+      系统默认主题。日间/夜间模式由系统或顶部切换按钮控制；Markdown 解析风格可单独选择。
+    </div>
+  </div>
+);
 
 const MarkdownStyleSection = ({
   value,
@@ -364,7 +357,9 @@ const MarkdownStyleSection = ({
                 ? 'border-[#6f2d22]/30 bg-[#fbfaf6] font-serif text-[#9a1f12]'
                 : style === 'markamd'
                   ? 'border-[#fe640b]/30 bg-[#eff1f5] font-mono text-[#fe640b] dark:border-[#fab387]/30 dark:bg-[#1e1e2e] dark:text-[#fab387]'
-                  : 'border-gray-200 bg-white text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
+                  : style === 'lapis'
+                    ? 'border-[#a2b6d4]/50 bg-[#f6f8fa] font-serif text-[#4870ac] dark:border-[#47556d] dark:bg-[#1e222a] dark:text-[#abbad4]'
+                    : 'border-gray-200 bg-white text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
             }`}>
               {item.preview}
             </span>
@@ -383,7 +378,6 @@ export const FontSettingsPanel = ({
   settings,
   setFontSize,
   setFontFamily,
-  setTheme,
   setMarkdownStyle,
   isOpen,
   setIsOpen,
@@ -393,39 +387,7 @@ export const FontSettingsPanel = ({
     // Render content only (for use inside other menus)
     return (
       <div>
-        {/* Theme Section */}
-        <div className="mb-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Palette className="w-4 h-4 text-gray-500" />
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              主题风格
-            </label>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {SELECTABLE_THEMES.map((theme) => (
-              <button
-                key={theme}
-                onClick={() => setTheme(theme)}
-                className={`flex flex-col items-start gap-2 p-3 rounded-lg border-2 transition-all text-left ${
-                  settings.theme === theme
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                    : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-              >
-                <div className={`w-full h-10 rounded-md border border-gray-200 ${THEMES[theme].preview}`} />
-                <div>
-                  <div className="text-xs font-medium text-gray-800 dark:text-gray-200">{THEMES[theme].name}</div>
-                  <div className="text-[10px] text-gray-500 mt-0.5">
-                    {theme === 'system' && '随设备自动切换'}
-                    {theme === 'minimal' && 'Workflowy 风格'}
-                    {theme === 'warm' && '低刺激的暖色阅读'}
-                    {theme === 'geek' && '清晰冷静的雾蓝层次'}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
+        <GlobalThemeInfo />
 
         <MarkdownStyleSection value={settings.markdownStyle} onChange={setMarkdownStyle} />
 
@@ -494,39 +456,7 @@ export const FontSettingsPanel = ({
             onClick={() => setIsOpen(false)}
           />
           <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 p-4 max-h-[80vh] overflow-y-auto">
-            {/* Theme Section */}
-            <div className="mb-5">
-              <div className="flex items-center gap-2 mb-3">
-                <Palette className="w-4 h-4 text-gray-500" />
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  主题风格
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {SELECTABLE_THEMES.map((theme) => (
-                  <button
-                    key={theme}
-                    onClick={() => setTheme(theme)}
-                    className={`flex flex-col items-start gap-2 p-3 rounded-lg border-2 transition-all text-left ${
-                      settings.theme === theme
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                        : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    <div className={`w-full h-10 rounded-md border border-gray-200 ${THEMES[theme].preview}`} />
-                    <div>
-                      <div className="text-xs font-medium text-gray-800 dark:text-gray-200">{THEMES[theme].name}</div>
-                      <div className="text-[10px] text-gray-500 mt-0.5">
-                        {theme === 'system' && '随设备自动切换'}
-                        {theme === 'minimal' && '温和、克制的纸张感'}
-                        {theme === 'warm' && '低刺激的暖色阅读'}
-                        {theme === 'geek' && '清晰冷静的雾蓝层次'}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
+            <GlobalThemeInfo />
 
             <div className="border-t border-gray-200 dark:border-gray-700 my-4" />
 

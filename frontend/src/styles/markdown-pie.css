@@ -233,7 +233,7 @@
   border-radius: 0.55rem;
   width: 100%;
   margin: 1.2em 0;
-  font-size: calc(var(--prose-font-size) - 2px) !important;
+  font-size: 0.82em !important;
   line-height: 1.48;
   overflow: hidden;
 }
@@ -243,7 +243,7 @@
   border: 0 !important;
   border-right: 1px solid var(--markdown-pie-border) !important;
   border-bottom: 1px solid var(--markdown-pie-border) !important;
-  font-size: calc(var(--prose-font-size) - 2px) !important;
+  font-size: inherit !important;
   padding: 0.28em 1ch;
 }
 

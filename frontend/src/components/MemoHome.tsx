@@ -335,10 +335,6 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
     setTagFilter(prev => prev === tag ? null : tag);
   }, []);
 
-  const handleMemoColorChange = useCallback((id: string, color: string | null) => {
-    setMemos(prev => prev.map(m => m.id === id ? { ...m, color } : m));
-  }, []);
-
   const handleMemoTogglePublic = useCallback(async (id: string, is_public: boolean) => {
     setMemos(prev => prev.map(m => m.id === id ? { ...m, is_public } : m));
     try {
@@ -597,7 +593,6 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
                 onTogglePublic={handleMemoTogglePublic}
                 onToggleAI={handleMemoToggleAI}
                 onTagClick={handleMemoTagClick}
-                onColorChange={handleMemoColorChange}
                 onLoadMore={handleLoadMoreMemos}
                 hasMore={memos.length < memoTotal}
                 highlightId={highlightMemoId}

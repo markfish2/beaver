@@ -43,6 +43,33 @@ const DEFAULT_PANEL_WIDTH = 212;  // 260 - 48 = 212 (total visual width stays 26
 const MIN_PANEL_WIDTH = 160;
 const MAX_PANEL_WIDTH = 460;
 const navigationNonce = () => Date.now();
+const DOCUMENT_ITEM_TYPES = new Set<DocType['type']>(['document', 'note', 'excalidraw']);
+
+const compareFolderTitle = (a: DocType, b: DocType) =>
+  (a.title || '').localeCompare(b.title || '', 'zh-CN', {
+    numeric: true,
+    sensitivity: 'base',
+  });
+
+const resolveDocumentSortTime = (doc: DocType) => {
+  const updatedAt = doc.updated_at ? Date.parse(doc.updated_at) : 0;
+  if (Number.isFinite(updatedAt) && updatedAt > 0) return updatedAt;
+  return doc.sort_order || 0;
+};
+
+const compareDocumentByLastEditedDesc = (sortTimes: Map<string, number>) => (a: DocType, b: DocType) => {
+  const timeDiff = (sortTimes.get(b.id) || 0) - (sortTimes.get(a.id) || 0);
+  if (timeDiff !== 0) return timeDiff;
+  return (b.sort_order || 0) - (a.sort_order || 0);
+};
+
+const compareFileMenuItem = (sortTimes: Map<string, number>) => (a: DocType, b: DocType) => {
+  const aIsFolder = a.type === 'folder';
+  const bIsFolder = b.type === 'folder';
+  if (aIsFolder !== bIsFolder) return aIsFolder ? -1 : 1;
+  if (aIsFolder && bIsFolder) return compareFolderTitle(a, b);
+  return compareDocumentByLastEditedDesc(sortTimes)(a, b);
+};
 
 type ViewMode = 'diary' | 'all' | 'starred' | 'recent' | 'memo' | 'user' | 'ai' | 'projects';
 const VIEW_MODES: ViewMode[] = ['diary', 'all', 'starred', 'recent', 'memo', 'user', 'ai', 'projects'];
@@ -473,27 +500,29 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     return filtered;
   }, [documents, viewMode]);
 
+  const documentSortTimes = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const doc of documents) {
+      map.set(doc.id, resolveDocumentSortTime(doc));
+    }
+    return map;
+  }, [documents]);
+
+  const compareByLastEdited = useMemo(() => compareDocumentByLastEditedDesc(documentSortTimes), [documentSortTimes]);
+  const compareFileItem = useMemo(() => compareFileMenuItem(documentSortTimes), [documentSortTimes]);
+
   // 预排序的 children 索引，避免 renderFileTree 每次排序
   const sortedChildrenMap = useMemo(() => {
     const map = new Map<string | null, typeof filteredDocuments>();
-    const sortFn = (a: typeof filteredDocuments[0], b: typeof filteredDocuments[0]) => {
-      const aIsFolder = a.type === 'folder' ? 0 : 1;
-      const bIsFolder = b.type === 'folder' ? 0 : 1;
-      if (aIsFolder !== bIsFolder) return aIsFolder - bIsFolder;
-      if (a.type === 'folder' && b.type === 'folder') {
-        return (a.title || '').localeCompare(b.title || '', 'zh-CN', { numeric: true });
-      }
-      return (b.sort_order || 0) - (a.sort_order || 0);
-    };
     for (const doc of filteredDocuments) {
       const key = doc.parent_id || null;
       let arr = map.get(key);
       if (!arr) { arr = []; map.set(key, arr); }
       arr.push(doc);
     }
-    for (const arr of map.values()) arr.sort(sortFn);
+    for (const arr of map.values()) arr.sort(compareFileItem);
     return map;
-  }, [filteredDocuments]);
+  }, [compareFileItem, filteredDocuments]);
 
   const localSearchResults = useMemo(() => {
     if (!searchQuery.trim()) {
@@ -501,10 +530,10 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     }
     
     const query = searchQuery.toLowerCase().trim();
-    return documents.filter(d =>
-      (d.type === 'document' || d.type === 'note') && d.title.toLowerCase().includes(query)
-    );
-  }, [documents, searchQuery]);
+    return documents
+      .filter(d => DOCUMENT_ITEM_TYPES.has(d.type) && d.title.toLowerCase().includes(query))
+      .sort(compareByLastEdited);
+  }, [compareByLastEdited, documents, searchQuery]);
 
   const handleCreateDocument = async (parentId?: string | null) => {
     try {
@@ -836,23 +865,15 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
 
     if (searchQuery.trim() && localSearchResults) {
       if (parentId === null) {
-        children = localSearchResults.sort((a, b) => {
-          const aIsFolder = a.type === 'folder' ? 0 : 1;
-          const bIsFolder = b.type === 'folder' ? 0 : 1;
-          if (aIsFolder !== bIsFolder) return aIsFolder - bIsFolder;
-          if (a.type === 'folder' && b.type === 'folder') {
-            return (a.title || '').localeCompare(b.title || '', 'zh-CN', { numeric: true });
-          }
-          return (b.sort_order || 0) - (a.sort_order || 0);
-        });
+        children = localSearchResults;
       } else {
         return null;
       }
     } else if (viewMode === 'starred') {
       if (parentId === null) {
         children = filteredDocuments
-          .filter(d => d.type === 'document' || d.type === 'note' || d.type === 'excalidraw')
-          .sort((a, b) => (b.sort_order || 0) - (a.sort_order || 0));
+          .filter(d => DOCUMENT_ITEM_TYPES.has(d.type))
+          .sort(compareByLastEdited);
       } else {
         return null;
       }
@@ -1941,7 +1962,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
         const buildFiltered = (parentId: string | null): TreeNode[] => {
           return documents
             .filter(d => d.type === 'folder' && d.parent_id === parentId && !excludedIds.has(d.id) && d.id !== moveDialog.docId)
-            .sort((a, b) => (a.title || '').localeCompare(b.title || ''))
+            .sort(compareFolderTitle)
             .map(f => ({ id: f.id, title: f.title || '无标题', children: buildFiltered(f.id) }));
         };
         const pickerTree = buildFiltered(null);

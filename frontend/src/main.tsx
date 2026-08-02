@@ -15,10 +15,10 @@ import { syncThemeChrome } from './utils/themeChrome.ts'
     const saved = (() => { try { return JSON.parse(localStorage.getItem('outline-font-settings') || '{}'); } catch { return {}; } })();
     document.documentElement.dataset.markdownStyle = saved.markdownStyle || 'default';
 
-    // 明确主题优先；system 才跟随设备。
-    if (saved.theme && saved.theme !== 'system') {
-      const dark = saved.theme === 'dark';
-      document.documentElement.dataset.theme = saved.theme;
+    // 只保留默认设计体系；dark 表示强制夜间，其他历史主题值归一为 system。
+    if (saved.theme === 'dark') {
+      const dark = true;
+      document.documentElement.dataset.theme = 'dark';
       document.documentElement.classList.toggle('dark', dark);
       syncThemeChrome(dark);
       return;
@@ -39,9 +39,9 @@ import { syncThemeChrome } from './utils/themeChrome.ts'
   function initialApply() {
     const saved = (() => { try { return JSON.parse(localStorage.getItem('outline-font-settings') || '{}'); } catch { return {}; } })();
     document.documentElement.dataset.markdownStyle = saved.markdownStyle || 'default';
-    if (saved.theme && saved.theme !== 'system') {
-      const dark = saved.theme === 'dark';
-      document.documentElement.dataset.theme = saved.theme;
+    if (saved.theme === 'dark') {
+      const dark = true;
+      document.documentElement.dataset.theme = 'dark';
       document.documentElement.classList.toggle('dark', dark);
       syncThemeChrome(dark);
       return;

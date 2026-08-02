@@ -41,48 +41,6 @@
   --markdown-markamd-selection: rgba(250, 179, 135, 0.22);
 }
 
-:root[data-theme="minimal"]:not(.dark) {
-  --markdown-markamd-bg: #ffffff;
-  --markdown-markamd-bg-solid: #ffffff;
-  --markdown-markamd-fg: #111111;
-  --markdown-markamd-muted: #6f6f6f;
-  --markdown-markamd-border: #d9d9d9;
-  --markdown-markamd-accent: #111111;
-  --markdown-markamd-surface: #f5f5f5;
-  --markdown-markamd-surface-hover: #ececec;
-  --markdown-markamd-code-bg: #f5f5f5;
-  --markdown-markamd-code-header: #eeeeee;
-  --markdown-markamd-selection: rgba(17, 17, 17, 0.14);
-}
-
-:root[data-theme="warm"]:not(.dark) {
-  --markdown-markamd-bg: #f7f4e9;
-  --markdown-markamd-bg-solid: #fffdf7;
-  --markdown-markamd-fg: #2d3624;
-  --markdown-markamd-muted: #7d8670;
-  --markdown-markamd-border: #dad6c4;
-  --markdown-markamd-accent: #7b9a4e;
-  --markdown-markamd-surface: #ede9d8;
-  --markdown-markamd-surface-hover: #e3dcc4;
-  --markdown-markamd-code-bg: #efead8;
-  --markdown-markamd-code-header: #e8e1cc;
-  --markdown-markamd-selection: rgba(123, 154, 78, 0.2);
-}
-
-:root[data-theme="geek"]:not(.dark) {
-  --markdown-markamd-bg: #ffffff;
-  --markdown-markamd-bg-solid: #ffffff;
-  --markdown-markamd-fg: #202124;
-  --markdown-markamd-muted: #6f737a;
-  --markdown-markamd-border: #dadce0;
-  --markdown-markamd-accent: #1a73e8;
-  --markdown-markamd-surface: #f8fafd;
-  --markdown-markamd-surface-hover: #edf4ff;
-  --markdown-markamd-code-bg: #f3f7fd;
-  --markdown-markamd-code-header: #edf4ff;
-  --markdown-markamd-selection: rgba(26, 115, 232, 0.18);
-}
-
 :root[data-markdown-style="markamd"] .memo-content {
   color: var(--markdown-markamd-fg) !important;
   font-family: var(--markdown-markamd-font-ui);
@@ -263,7 +221,7 @@
 :root[data-markdown-style="markamd"] .memo-content .markdown-code-block {
   border: 1px solid var(--markdown-markamd-block-code-border) !important;
   border-radius: var(--markdown-markamd-radius-md) !important;
-  background: var(--markdown-markamd-block-code-bg) !important;
+  background: transparent !important;
   box-shadow: none !important;
 }
 
@@ -310,7 +268,8 @@
   margin: 1.2em 0;
   width: auto;
   max-width: 100%;
-  font-size: 0.95em;
+  font-size: 0.82em !important;
+  line-height: 1.48;
 }
 
 :root[data-markdown-style="markamd"] .memo-content th,
@@ -319,6 +278,12 @@
   padding: 6px 10px;
   text-align: left;
   vertical-align: top;
+  font-size: inherit !important;
+}
+
+:root[data-markdown-style="markamd"] .memo-content th *,
+:root[data-markdown-style="markamd"] .memo-content td * {
+  font-size: inherit !important;
 }
 
 :root[data-markdown-style="markamd"] .memo-content th {

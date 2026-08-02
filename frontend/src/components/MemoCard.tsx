@@ -50,7 +50,7 @@ SyntaxHighlighter.registerLanguage('yaml', yaml);
 import { MoreVertical, Pencil, Trash2, Pin, PinOff, X, Check, Copy, CheckCheck, Image, Paperclip, FileText, Download, Archive, ArchiveRestore, ArrowUpRight, Globe, Maximize2, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Memo, Document, LinkPreview } from '../api/data';
-import { uploadFile, getMemoTags, updateMemoColor, getThumbnailUrl, fetchLinkPreview, retryLinkPreview } from '../api/data';
+import { uploadFile, getMemoTags, getThumbnailUrl, fetchLinkPreview, retryLinkPreview } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import LinkPreviewCard from './LinkPreviewCard';
 import MarkdownEditor from './MarkdownEditor';
@@ -65,7 +65,7 @@ import MemoToDocDialog from './MemoToDocDialog';
 import AudioPlayer from './AudioPlayer';
 import AIChatPanel from './AIChatPanel';
 import { useIsDark } from '../hooks/useIsDark';
-import { getMemoPalette, getMemoPaletteStyle, MEMO_COLOR_OPTIONS, MEMO_TAG_COLORS, type MemoCardPalette } from './memoCardTheme';
+import { getMemoPalette, getMemoPaletteStyle, MEMO_TAG_COLORS, type MemoCardPalette } from './memoCardTheme';
 import { getPasteMarkdown } from '../utils/htmlToMarkdown';
 import { localizeMarkdownImages } from '../utils/markdownImageUpload';
 
@@ -86,7 +86,6 @@ interface MemoCardProps {
   onTogglePublic?: (id: string, is_public: boolean) => Promise<void>;
   onToggleAI?: (id: string, ai_excluded: boolean) => Promise<void>;
   onTagClick: (tag: string) => void;
-  onColorChange?: (id: string, color: string | null) => void;
   isHighlighted?: boolean;
   documents?: Document[];
   readOnly?: boolean;
@@ -119,7 +118,7 @@ const CodeBlock = memo(function CodeBlock({ className, children, palette, compac
   if (isBlock) {
     const useHighlight = language && language !== 'markdown' && language !== 'text';
     return (
-      <div className="markdown-code-block relative rounded-lg overflow-hidden border" style={{ borderColor: palette.codeBorder ?? palette.surfaceBorder }}>
+      <div className="markdown-code-block markdown-code-block-root relative rounded-lg overflow-hidden border" style={{ borderColor: palette.codeBorder ?? palette.surfaceBorder }}>
         <div
           className={`markdown-code-header flex items-center justify-between border-b ${compact ? 'px-2 py-1' : 'px-3 py-1.5'}`}
           style={{ background: palette.codeHeaderBackground ?? palette.surface, borderColor: palette.codeBorder ?? palette.surfaceBorder }}
@@ -504,7 +503,7 @@ const markdownComponents = (
   };
 };
 
-const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, onToggleArchive, onTogglePublic, onToggleAI, onTagClick, onColorChange, isHighlighted, documents, readOnly, compact = false }: MemoCardProps) {
+const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, onToggleArchive, onTogglePublic, onToggleAI, onTagClick, isHighlighted, documents, readOnly, compact = false }: MemoCardProps) {
   const isDark = useIsDark();
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
@@ -824,12 +823,6 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
     }
   }, [memo.id, onDelete]);
 
-  const handleColorChange = useCallback((color: string | null) => {
-    setShowMenu(false);
-    onColorChange?.(memo.id, color);
-    updateMemoColor(memo.id, color).catch(e => console.error('Failed to update color', e));
-  }, [memo.id, onColorChange]);
-
   const handleContentDoubleClick = useCallback(() => {
     setIsEditing(true);
     setEditContent(memo.content);
@@ -1128,9 +1121,9 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
         const hasMore = count > (compact ? 2 : 4);
         const scrollbarStyle = { scrollbarWidth: 'thin' as const, scrollbarColor: isDark ? '#4b5563 transparent' : '#d1d5db transparent' };
         return (
-          <div className="mt-3 rounded-lg overflow-hidden border" style={{ borderColor: palette.codeBorder ?? palette.surfaceBorder }}>
+          <div className="memo-media-block memo-image-block mt-3 rounded-lg overflow-hidden border" style={{ borderColor: palette.codeBorder ?? palette.surfaceBorder }}>
             <div
-              className="px-3 py-1.5 text-xs border-b"
+              className="memo-media-header px-3 py-1.5 text-xs border-b"
               style={{
                 color: palette.codeMutedText ?? palette.mutedText,
                 background: palette.codeHeaderBackground ?? palette.surface,
@@ -1142,7 +1135,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
             {hasMore ? (
               // >4张：横向滚动，每张大小和4张一致
               <div
-                className="flex"
+                className="memo-media-body flex"
                 style={{ gap: '5px', padding: '5px', overflowX: 'auto', background: palette.codeBlockBackground ?? palette.surfaceStrong, ...scrollbarStyle }}
               >
                 {images.map((img, i) => (
@@ -1150,7 +1143,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
                     key={i}
                     src={getThumbnailUrl(img.url)}
                     alt={img.alt}
-                    className="flex-shrink-0 aspect-square object-cover border cursor-pointer hover:opacity-80 transition-opacity"
+                    className="memo-gallery-image flex-shrink-0 aspect-square object-cover border cursor-pointer hover:opacity-80 transition-opacity"
                     style={{ width: compact ? 'calc((100% - 5px) / 2)' : 'calc((100% - 15px) / 4)', borderRadius: 0, borderColor: palette.codeBorder ?? palette.surfaceBorder }}
                     onClick={() => setPreviewImage(img.url)}
                   />
@@ -1159,6 +1152,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
             ) : (
               // ≤4张：Grid 均分
               <div
+                className="memo-media-body"
                 style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '5px', padding: '5px', background: palette.codeBlockBackground ?? palette.surfaceStrong }}
               >
                 {images.map((img, i) => (
@@ -1166,7 +1160,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
                     key={i}
                     src={getThumbnailUrl(img.url)}
                     alt={img.alt}
-                    className={`w-full object-cover border cursor-pointer hover:opacity-80 transition-opacity ${count === 1 ? 'max-h-80' : 'aspect-square'}`}
+                    className={`memo-gallery-image w-full object-cover border cursor-pointer hover:opacity-80 transition-opacity ${count === 1 ? 'max-h-80' : 'aspect-square'}`}
                     style={{ borderRadius: 0, borderColor: palette.codeBorder ?? palette.surfaceBorder }}
                     onClick={() => setPreviewImage(img.url)}
                   />
@@ -1179,9 +1173,9 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
 
       {/* 附件列表 */}
       {fileLinks.length > 0 && (
-        <div className="mt-3 rounded-lg overflow-hidden border" style={{ borderColor: palette.codeBorder ?? palette.surfaceBorder }}>
+        <div className="memo-media-block memo-attachment-block mt-3 rounded-lg overflow-hidden border" style={{ borderColor: palette.codeBorder ?? palette.surfaceBorder }}>
           <div
-            className="px-3 py-1.5 text-xs border-b"
+            className="memo-media-header px-3 py-1.5 text-xs border-b"
             style={{
               color: palette.codeMutedText ?? palette.mutedText,
               background: palette.codeHeaderBackground ?? palette.surface,
@@ -1190,14 +1184,14 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
           >
             附件 ({fileLinks.length})
           </div>
-          <div className="flex flex-col gap-1 p-3" style={{ background: palette.codeBlockBackground ?? palette.surfaceStrong }}>
+          <div className="memo-media-body flex flex-col gap-1 p-3" style={{ background: palette.codeBlockBackground ?? palette.surfaceStrong }}>
             {fileLinks.map((file, i) => (
               <a
                 key={i}
                 href={file.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg transition-opacity hover:opacity-80 min-w-0"
+                className="memo-attachment-link flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg transition-opacity hover:opacity-80 min-w-0"
                 style={{
                   color: palette.codeText ?? palette.text,
                   background: palette.plainCodeBlockBackground ?? palette.surface,
@@ -1336,26 +1330,6 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
             <Sparkles className={`w-3.5 h-3.5 ${memo.ai_excluded ? 'text-gray-400' : 'text-blue-500'}`} />
             {memo.ai_excluded ? '取消不参与 AI' : '不参与 AI'}
           </button>
-          <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
-          <div className="px-3 py-2">
-            <div className="flex items-center gap-1.5">
-              {MEMO_COLOR_OPTIONS.map(c => (
-                <button
-                  key={c.value}
-                  onClick={() => handleColorChange(memo.color === c.value ? null : c.value)}
-                  className={`w-5 h-5 rounded-full border transition-transform hover:scale-110 ${
-                    memo.color === c.value
-                      ? 'ring-2 ring-offset-1 ring-gray-500 dark:ring-gray-300 dark:ring-offset-gray-800'
-                      : c.value === '#ffffff'
-                        ? 'border-gray-400 dark:border-gray-500'
-                        : 'border-white/20 dark:border-white/10'
-                  }`}
-                  style={{ backgroundColor: (isDark ? c.dark : c.light).background }}
-                  title={c.name}
-                />
-              ))}
-            </div>
-          </div>
           <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
           <button
             onClick={() => { setShowMenu(false); setShowConvertDialog(true); }}

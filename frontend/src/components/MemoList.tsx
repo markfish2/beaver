@@ -13,7 +13,6 @@ interface MemoListProps {
   onTogglePublic?: (id: string, is_public: boolean) => Promise<void>;
   onToggleAI?: (id: string, ai_excluded: boolean) => Promise<void>;
   onTagClick: (tag: string) => void;
-  onColorChange?: (id: string, color: string | null) => void;
   onLoadMore: () => Promise<void>;
   hasMore: boolean;
   highlightId?: string | null;
@@ -71,7 +70,7 @@ function LoadMoreSentinel({ onLoadMore, hasMore }: { onLoadMore: () => Promise<v
   );
 }
 
-const MemoList = memo(function MemoList({ memos, columns, onEdit, onDelete, onTogglePin, onToggleArchive, onTogglePublic, onToggleAI, onTagClick, onColorChange, onLoadMore, hasMore, highlightId, documents }: MemoListProps) {
+const MemoList = memo(function MemoList({ memos, columns, onEdit, onDelete, onTogglePin, onToggleArchive, onTogglePublic, onToggleAI, onTagClick, onLoadMore, hasMore, highlightId, documents }: MemoListProps) {
   const { leftCol, rightCol } = useMemo(() => {
     if (columns !== 2) return { leftCol: [], rightCol: [] };
     const left: Memo[] = [];
@@ -108,14 +107,14 @@ const MemoList = memo(function MemoList({ memos, columns, onEdit, onDelete, onTo
           <div className="space-y-3" style={{ contain: 'layout' }}>
             {leftCol.map(memo => (
               <div key={memo.id} id={`memo-${memo.id}`}>
-                <MemoCard memo={memo} onEdit={onEdit} onDelete={onDelete} onTogglePin={onTogglePin} onToggleArchive={onToggleArchive} onTogglePublic={onTogglePublic} onToggleAI={onToggleAI} onTagClick={onTagClick} onColorChange={onColorChange} isHighlighted={highlightId === memo.id} documents={documents} compact />
+                <MemoCard memo={memo} onEdit={onEdit} onDelete={onDelete} onTogglePin={onTogglePin} onToggleArchive={onToggleArchive} onTogglePublic={onTogglePublic} onToggleAI={onToggleAI} onTagClick={onTagClick} isHighlighted={highlightId === memo.id} documents={documents} compact />
               </div>
             ))}
           </div>
           <div className="space-y-3" style={{ contain: 'layout' }}>
             {rightCol.map(memo => (
               <div key={memo.id} id={`memo-${memo.id}`}>
-                <MemoCard memo={memo} onEdit={onEdit} onDelete={onDelete} onTogglePin={onTogglePin} onToggleArchive={onToggleArchive} onTogglePublic={onTogglePublic} onToggleAI={onToggleAI} onTagClick={onTagClick} onColorChange={onColorChange} isHighlighted={highlightId === memo.id} documents={documents} compact />
+                <MemoCard memo={memo} onEdit={onEdit} onDelete={onDelete} onTogglePin={onTogglePin} onToggleArchive={onToggleArchive} onTogglePublic={onTogglePublic} onToggleAI={onToggleAI} onTagClick={onTagClick} isHighlighted={highlightId === memo.id} documents={documents} compact />
               </div>
             ))}
           </div>
@@ -138,7 +137,6 @@ const MemoList = memo(function MemoList({ memos, columns, onEdit, onDelete, onTo
             onTogglePublic={onTogglePublic}
             onToggleAI={onToggleAI}
             onTagClick={onTagClick}
-            onColorChange={onColorChange}
             isHighlighted={highlightId === memo.id}
             documents={documents}
           />
