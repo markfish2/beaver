@@ -2,6 +2,16 @@
 @import "./styles/markdown-pie.css";
 @import "./styles/markdown-markamd.css";
 @import "./styles/markdown-lapis.css";
+@import "./styles/markdown-claude.css";
+
+@font-face {
+  font-family: "LXGW WenKai Lite";
+  src: url("/fonts/lxgw-wenkai-lite/LXGWWenKaiLite-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 @variant dark (&:where(.dark, .dark *));
 
 @theme {
@@ -424,6 +434,12 @@ body,
 .memo-content hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.5rem 0; }
 .dark .memo-content hr { border-top-color: #374151; }
 .memo-content span[role="checkbox"] { margin-right: 0.375rem; }
+.memo-content button[role="checkbox"] {
+  margin: 0 !important;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
 
 /* Memo 卡片使用语义色变量，避免彩色卡片继续套用全局灰阶。 */
 .memo-card-themed .memo-content,

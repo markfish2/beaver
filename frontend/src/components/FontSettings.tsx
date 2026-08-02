@@ -7,9 +7,9 @@ import { showToast } from '../utils/toast';
 import { syncThemeChrome } from '../utils/themeChrome';
 
 type FontSize = 'small' | 'medium' | 'large';
-type FontFamily = 'system' | 'sans' | 'serif' | 'mono';
+type FontFamily = 'system' | 'sans' | 'serif' | 'mono' | 'lxgw';
 type Theme = 'system' | 'dark';
-type MarkdownStyle = 'default' | 'pie' | 'markamd' | 'lapis';
+type MarkdownStyle = 'default' | 'pie' | 'markamd' | 'lapis' | 'claude';
 
 interface FontSettings {
   fontSize: FontSize;
@@ -28,7 +28,8 @@ const FONT_FAMILY_MAP: Record<FontFamily, string> = {
   system: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans CJK", "WenQuanYi Micro Hei", "Ubuntu", Arial, sans-serif',
   sans: '"Noto Sans CJK SC", "Noto Sans CJK", "Source Han Sans SC", "Source Han Sans CN", "WenQuanYi Micro Hei", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Heiti SC", "Droid Sans Fallback", Arial, sans-serif',
   serif: '"Noto Serif CJK SC", "Noto Serif CJK", "Source Han Serif SC", "Source Han Serif CN", "Songti SC", "STSong", "SimSun", "FangSong", "AR PL UMing CN", "AR PL SungtiL GB", "WenQuanYi Bitmap Song", serif',
-  mono: '"Sarasa Mono SC", "Sarasa Gothic SC", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK", "Source Han Mono SC", "Source Han Mono CN", "Microsoft YaHei Mono", "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace'
+  mono: '"Sarasa Mono SC", "Sarasa Gothic SC", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK", "Source Han Mono SC", "Source Han Mono CN", "Microsoft YaHei Mono", "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace',
+  lxgw: '"LXGW WenKai Lite", "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif'
 };
 
 const FONT_SIZE_LABELS: Record<FontSize, string> = {
@@ -41,21 +42,24 @@ const FONT_FAMILY_LABELS: Record<FontFamily, string> = {
   system: '系统默认',
   sans: '现代黑体',
   serif: '传统宋体',
-  mono: '等宽代码'
+  mono: '等宽代码',
+  lxgw: '霞鹜文楷 Lite'
 };
 
 const FONT_FAMILY_DESCRIPTIONS: Record<FontFamily, string> = {
   system: '跟随当前设备的默认界面字体',
   sans: '优先使用 Noto/思源/雅黑/苹方等清晰黑体',
   serif: '优先使用 Noto/思源/宋体等阅读衬线字体',
-  mono: '优先使用等宽字体，适合代码和结构化内容'
+  mono: '优先使用等宽字体，适合代码和结构化内容',
+  lxgw: '内置轻量文楷字体，各平台显示一致'
 };
 
 const FONT_FAMILY_PREVIEW_TEXT: Record<FontFamily, string> = {
   system: '系统 Aa 123',
   sans: '黑体 Aa 123',
   serif: '宋体 Aa 123',
-  mono: 'Mono Aa 123'
+  mono: 'Mono Aa 123',
+  lxgw: '文楷 Aa 123'
 };
 
 const MARKDOWN_STYLE_LABELS: Record<MarkdownStyle, { name: string; description: string; preview: string }> = {
@@ -79,6 +83,11 @@ const MARKDOWN_STYLE_LABELS: Record<MarkdownStyle, { name: string; description: 
     description: '参考 Typora Lapis：蓝灰衬线标题、浅色代码块与论文式排版',
     preview: 'La',
   },
+  claude: {
+    name: 'Claude Like',
+    description: '参考 Typora Claude-like：暖米色纸面、棕橙强调、柔和引用与浅色代码块',
+    preview: 'Cl',
+  },
 };
 
 const normalizeTheme = (theme: unknown): Theme => theme === 'dark' ? 'dark' : 'system';
@@ -94,6 +103,10 @@ const normalizeFontFamily = (fontFamily: unknown): FontFamily => {
       return 'serif';
     case 'mono':
       return 'mono';
+    case 'lxgw':
+    case 'wenkai':
+    case 'lxgw-wenkai-lite':
+      return 'lxgw';
     case 'yahei':
     case 'pingfang':
       return 'sans';

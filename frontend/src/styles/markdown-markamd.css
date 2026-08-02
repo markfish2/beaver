@@ -265,6 +265,8 @@
 
 :root[data-markdown-style="markamd"] .memo-content table {
   border-collapse: collapse;
+  border-top: 1px solid var(--markdown-markamd-border);
+  border-bottom: 1px solid var(--markdown-markamd-border);
   margin: 1.2em 0;
   width: auto;
   max-width: 100%;
@@ -272,9 +274,17 @@
   line-height: 1.48;
 }
 
+:root[data-markdown-style="markamd"] .memo-content tr {
+  border-bottom: 1px solid var(--markdown-markamd-border);
+}
+
+:root[data-markdown-style="markamd"] .memo-content tbody tr:last-child {
+  border-bottom: 0;
+}
+
 :root[data-markdown-style="markamd"] .memo-content th,
 :root[data-markdown-style="markamd"] .memo-content td {
-  border: 1px solid var(--markdown-markamd-border) !important;
+  border: 0 !important;
   padding: 6px 10px;
   text-align: left;
   vertical-align: top;

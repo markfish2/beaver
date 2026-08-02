@@ -306,6 +306,8 @@
   width: auto;
   table-layout: auto;
   margin: 0 0 20px;
+  border-top: 1px solid var(--markdown-lapis-block-border);
+  border-bottom: 1px solid var(--markdown-lapis-block-border);
   border-collapse: collapse;
   border-spacing: 0;
   overflow-x: auto;
@@ -319,12 +321,16 @@
 }
 
 :root[data-markdown-style="lapis"] .memo-content tr {
-  border-top: 1px solid #cccccc;
+  border-bottom: 1px solid var(--markdown-lapis-block-border);
+}
+
+:root[data-markdown-style="lapis"] .memo-content tbody tr:last-child {
+  border-bottom: 0;
 }
 
 :root[data-markdown-style="lapis"] .memo-content th,
 :root[data-markdown-style="lapis"] .memo-content td {
-  border: 1px solid var(--markdown-lapis-block-border) !important;
+  border: 0 !important;
   padding: 5px 10px;
   text-align: justify;
   vertical-align: top;

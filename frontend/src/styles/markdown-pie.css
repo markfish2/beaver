@@ -227,21 +227,21 @@
 }
 
 :root[data-markdown-style="pie"] .memo-content table {
-  border: 1px solid var(--markdown-pie-border);
-  border-collapse: separate;
+  border: 0;
+  border-top: 1px solid var(--markdown-pie-border);
+  border-bottom: 1px solid var(--markdown-pie-border);
+  border-collapse: collapse;
   border-spacing: 0;
-  border-radius: 0.55rem;
   width: 100%;
   margin: 1.2em 0;
   font-size: 0.82em !important;
   line-height: 1.48;
-  overflow: hidden;
+  overflow: visible;
 }
 
 :root[data-markdown-style="pie"] .memo-content th,
 :root[data-markdown-style="pie"] .memo-content td {
   border: 0 !important;
-  border-right: 1px solid var(--markdown-pie-border) !important;
   border-bottom: 1px solid var(--markdown-pie-border) !important;
   font-size: inherit !important;
   padding: 0.28em 1ch;
@@ -250,10 +250,6 @@
 :root[data-markdown-style="pie"] .memo-content th *,
 :root[data-markdown-style="pie"] .memo-content td * {
   font-size: inherit !important;
-}
-
-:root[data-markdown-style="pie"] .memo-content tr > :last-child {
-  border-right: 0 !important;
 }
 
 :root[data-markdown-style="pie"] .memo-content tbody tr:last-child > td,

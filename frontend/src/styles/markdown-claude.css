@@ -1,0 +1,468 @@
+:root {
+  --markdown-claude-text: #2b2621;
+  --markdown-claude-muted: #72695e;
+  --markdown-claude-heading: #1c1815;
+  --markdown-claude-accent: #bc6a3a;
+  --markdown-claude-accent-hover: #9d552d;
+  --markdown-claude-bg: #faf9f5;
+  --markdown-claude-surface: #fcfcfa;
+  --markdown-claude-surface-soft: #f6f3ed;
+  --markdown-claude-border: #ddd5ca;
+  --markdown-claude-border-strong: #cbb9a6;
+  --markdown-claude-selection: #e8ddd0;
+  --markdown-claude-quote-bg: #f3ede5;
+  --markdown-claude-quote-border: #d8cbbb;
+  --markdown-claude-quote-text: #625950;
+  --markdown-claude-table-row: rgba(114, 105, 94, 0.26);
+  --markdown-claude-table-hover: rgba(188, 106, 58, 0.05);
+  --markdown-claude-code-bg: #fcfcfa;
+  --markdown-claude-code-text: #1c1815;
+  --markdown-claude-code-border: #e9e2d8;
+  --markdown-claude-inline-code: #b14a40;
+  --markdown-claude-inline-code-bg: #f2eeea;
+  --markdown-claude-inline-code-border: #d7cec5;
+  --markdown-claude-highlight: #fff2bd;
+  --markdown-claude-font-serif: "Anthropic Serif", Georgia, "Times New Roman", "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", "PingFang SC", "Hiragino Sans GB", serif;
+  --markdown-claude-font-mono: Menlo, Monaco, "SF Mono", Consolas, "Sarasa Mono SC", "Cascadia Code", ui-monospace, monospace;
+}
+
+.dark,
+:root[data-theme="system-dark"] {
+  --markdown-claude-text: #ddd4ca;
+  --markdown-claude-muted: #a7998b;
+  --markdown-claude-heading: #f2e9df;
+  --markdown-claude-accent: #d59567;
+  --markdown-claude-accent-hover: #efb892;
+  --markdown-claude-bg: #151210;
+  --markdown-claude-surface: #1d1917;
+  --markdown-claude-surface-soft: #181512;
+  --markdown-claude-border: #2f2924;
+  --markdown-claude-border-strong: #5a4c41;
+  --markdown-claude-selection: #5a4234;
+  --markdown-claude-quote-bg: #1c1815;
+  --markdown-claude-quote-border: #4c4037;
+  --markdown-claude-quote-text: #d0c2b4;
+  --markdown-claude-table-row: rgba(232, 223, 213, 0.14);
+  --markdown-claude-table-hover: rgba(213, 149, 103, 0.06);
+  --markdown-claude-code-bg: #1d1917;
+  --markdown-claude-code-text: #e8dfd5;
+  --markdown-claude-code-border: #332b25;
+  --markdown-claude-inline-code: #e1a092;
+  --markdown-claude-inline-code-bg: #241d19;
+  --markdown-claude-inline-code-border: #3a3029;
+  --markdown-claude-highlight: rgba(188, 106, 58, 0.28);
+}
+
+:root[data-markdown-style="claude"] .memo-content {
+  color: var(--markdown-claude-text) !important;
+  font-family: var(--prose-font-family);
+  font-size: var(--prose-font-size);
+  line-height: 1.62;
+  letter-spacing: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  -webkit-font-smoothing: antialiased;
+}
+
+:root[data-markdown-style="claude"] .memo-content ::selection {
+  background: var(--markdown-claude-selection);
+}
+
+:root[data-markdown-style="claude"] .memo-content > * + * {
+  margin-top: 0.78em;
+}
+
+:root[data-markdown-style="claude"] .memo-content h1,
+:root[data-markdown-style="claude"] .memo-content h2,
+:root[data-markdown-style="claude"] .memo-content h3,
+:root[data-markdown-style="claude"] .memo-content h4,
+:root[data-markdown-style="claude"] .memo-content h5,
+:root[data-markdown-style="claude"] .memo-content h6 {
+  position: relative;
+  color: var(--markdown-claude-heading) !important;
+  font-family: var(--markdown-claude-font-serif);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0;
+  padding: 0;
+  border: 0 !important;
+}
+
+:root[data-markdown-style="claude"] .memo-content h1 {
+  font-size: calc(1.72em - 2px) !important;
+  line-height: 1.16;
+  margin: 0.35rem 0 0.8rem;
+}
+
+:root[data-markdown-style="claude"] .memo-content h2 {
+  font-size: calc(1.34em - 2px) !important;
+  line-height: 1.2;
+  margin: 1.25rem 0 0.65rem;
+}
+
+:root[data-markdown-style="claude"] .memo-content h3 {
+  font-size: calc(1.16em - 2px) !important;
+  margin: 1.1rem 0 0.55rem;
+}
+
+:root[data-markdown-style="claude"] .memo-content h4 {
+  font-size: calc(1.04em - 2px) !important;
+  margin: 0.95rem 0 0.5rem;
+}
+
+:root[data-markdown-style="claude"] .memo-content h5,
+:root[data-markdown-style="claude"] .memo-content h6 {
+  font-size: 0.96em !important;
+  margin: 0.85rem 0 0.45rem;
+}
+
+:root[data-markdown-style="claude"] .memo-content h6 {
+  color: var(--markdown-claude-muted) !important;
+}
+
+:root[data-markdown-style="claude"] .memo-content p {
+  color: var(--markdown-claude-text) !important;
+  line-height: 1.68;
+  margin: 0.72em 0;
+}
+
+:root[data-markdown-style="claude"] .memo-content a,
+:root[data-markdown-style="claude"] .memo-content .memo-document-link {
+  color: var(--markdown-claude-accent) !important;
+  background: transparent !important;
+  border: 0 !important;
+  text-decoration: none !important;
+  word-break: break-word;
+}
+
+:root[data-markdown-style="claude"] .memo-content a:hover,
+:root[data-markdown-style="claude"] .memo-content .memo-document-link:hover {
+  color: var(--markdown-claude-accent-hover) !important;
+  text-decoration: underline !important;
+  text-underline-offset: 3px;
+}
+
+:root[data-markdown-style="claude"] .memo-content strong,
+:root[data-markdown-style="claude"] .memo-content b {
+  color: var(--markdown-claude-heading) !important;
+  font-weight: 700;
+}
+
+:root[data-markdown-style="claude"] .memo-content em,
+:root[data-markdown-style="claude"] .memo-content i {
+  color: inherit !important;
+}
+
+:root[data-markdown-style="claude"] .memo-content del,
+:root[data-markdown-style="claude"] .memo-content s {
+  color: var(--markdown-claude-muted) !important;
+  text-decoration-thickness: 1.5px;
+}
+
+:root[data-markdown-style="claude"] .memo-content mark {
+  color: var(--markdown-claude-heading) !important;
+  background: var(--markdown-claude-highlight) !important;
+  border-radius: 4px;
+  padding: 0 0.22em;
+}
+
+:root[data-markdown-style="claude"] .memo-content ul,
+:root[data-markdown-style="claude"] .memo-content ol {
+  list-style-position: outside !important;
+  margin: 0.78em 0;
+  padding-left: 1.45rem;
+}
+
+:root[data-markdown-style="claude"] .memo-content ul {
+  list-style-type: disc !important;
+}
+
+:root[data-markdown-style="claude"] .memo-content ul ul {
+  list-style-type: circle !important;
+}
+
+:root[data-markdown-style="claude"] .memo-content ul ul ul {
+  list-style-type: square !important;
+}
+
+:root[data-markdown-style="claude"] .memo-content ol {
+  list-style-type: decimal !important;
+}
+
+:root[data-markdown-style="claude"] .memo-content li {
+  color: var(--markdown-claude-text) !important;
+  line-height: 1.66;
+  margin: 0.28rem 0;
+  padding-left: 0.15rem;
+}
+
+:root[data-markdown-style="claude"] .memo-content li::marker {
+  color: var(--markdown-claude-muted);
+}
+
+:root[data-markdown-style="claude"] .memo-content li > p {
+  margin: 0.2rem 0;
+}
+
+:root[data-markdown-style="claude"] .memo-content input[type="checkbox"] {
+  accent-color: var(--markdown-claude-accent);
+}
+
+:root[data-markdown-style="claude"] .memo-content button[role="checkbox"] {
+  width: 1em !important;
+  height: 1em !important;
+  min-width: 1em !important;
+  min-height: 1em !important;
+  margin: 0 !important;
+  border-color: var(--markdown-claude-border-strong) !important;
+  background: var(--markdown-claude-bg) !important;
+  color: var(--markdown-claude-accent) !important;
+  border-radius: 999px !important;
+  appearance: none;
+  flex: 0 0 auto;
+}
+
+:root[data-markdown-style="claude"] .memo-content button[role="checkbox"][aria-checked="true"] {
+  border-color: var(--markdown-claude-accent) !important;
+  background: var(--markdown-claude-accent) !important;
+  color: var(--markdown-claude-bg) !important;
+}
+
+:root[data-markdown-style="claude"] .memo-content button[role="checkbox"][aria-checked="true"] svg {
+  color: var(--markdown-claude-bg) !important;
+  stroke-width: 3;
+}
+
+:root[data-markdown-style="claude"] .memo-content blockquote:not([class*="callout"]) {
+  color: var(--markdown-claude-quote-text) !important;
+  border-left: 2px solid var(--markdown-claude-quote-border) !important;
+  background: var(--markdown-claude-quote-bg) !important;
+  padding: 0.55rem 1rem;
+  margin: 0.9rem 0;
+  border-radius: 10px;
+  font-style: normal;
+}
+
+:root[data-markdown-style="claude"] .memo-content blockquote:not([class*="callout"]) > :first-child {
+  margin-top: 0;
+}
+
+:root[data-markdown-style="claude"] .memo-content blockquote:not([class*="callout"]) > :last-child {
+  margin-bottom: 0;
+}
+
+:root[data-markdown-style="claude"] .memo-content code,
+:root[data-markdown-style="claude"] .memo-content pre,
+:root[data-markdown-style="claude"] .memo-content .markdown-code-block-root,
+:root[data-markdown-style="claude"] .memo-content .markdown-code-body,
+:root[data-markdown-style="claude"] .memo-content .markdown-code-language {
+  font-family: var(--markdown-claude-font-mono) !important;
+}
+
+:root[data-markdown-style="claude"] .memo-content code:not(pre code),
+:root[data-markdown-style="claude"] .memo-card-themed .memo-content code:not(pre code) {
+  color: var(--markdown-claude-inline-code) !important;
+  background: var(--markdown-claude-inline-code-bg) !important;
+  border: 1px solid var(--markdown-claude-inline-code-border) !important;
+  border-radius: 999px !important;
+  padding: 0.08em 0.42em 0.1em !important;
+  font-size: 0.9em !important;
+  font-weight: 400;
+  word-break: break-word;
+}
+
+:root[data-markdown-style="claude"] .memo-content .markdown-code-block {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 1rem 0;
+  overflow: hidden;
+  color: var(--markdown-claude-code-text) !important;
+  background: var(--markdown-claude-code-bg) !important;
+  border: 1px solid var(--markdown-claude-code-border) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 1px 0 rgba(43, 38, 33, 0.03) !important;
+}
+
+:root[data-markdown-style="claude"] .memo-content .markdown-code-header {
+  color: var(--markdown-claude-muted) !important;
+  background: var(--markdown-claude-surface-soft) !important;
+  border-bottom: 1px solid var(--markdown-claude-code-border) !important;
+}
+
+:root[data-markdown-style="claude"] .memo-content .markdown-code-language {
+  color: var(--markdown-claude-muted) !important;
+  font-size: 0.76em !important;
+}
+
+:root[data-markdown-style="claude"] .memo-content .markdown-code-body,
+:root[data-markdown-style="claude"] .memo-content .markdown-code-body pre {
+  color: var(--markdown-claude-code-text) !important;
+  background: var(--markdown-claude-code-bg) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  font-size: 0.9em !important;
+  line-height: 1.55 !important;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+:root[data-markdown-style="claude"] .memo-content .markdown-code-copy {
+  color: var(--markdown-claude-muted) !important;
+  background: var(--markdown-claude-bg) !important;
+  border-color: var(--markdown-claude-code-border) !important;
+  border-radius: 6px !important;
+}
+
+:root[data-markdown-style="claude"] .memo-content .markdown-code-copy:hover {
+  color: var(--markdown-claude-accent) !important;
+  border-color: var(--markdown-claude-accent) !important;
+}
+
+:root[data-markdown-style="claude"] .memo-content table {
+  display: table;
+  width: auto;
+  table-layout: auto;
+  margin: 0.9rem 0;
+  border-collapse: collapse;
+  border-top: 1px solid var(--markdown-claude-border-strong);
+  border-bottom: 1px solid var(--markdown-claude-border-strong);
+  background: transparent;
+  font-size: 0.82em !important;
+  line-height: 1.5;
+}
+
+:root[data-markdown-style="claude"] .memo-content tr {
+  border-bottom: 1px solid var(--markdown-claude-table-row);
+}
+
+:root[data-markdown-style="claude"] .memo-content tbody tr:last-child {
+  border-bottom: 0;
+}
+
+:root[data-markdown-style="claude"] .memo-content th,
+:root[data-markdown-style="claude"] .memo-content td {
+  border: 0 !important;
+  padding: 10px 18px 10px 0;
+  text-align: left;
+  vertical-align: top;
+  font-size: inherit !important;
+  line-height: 1.5;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+:root[data-markdown-style="claude"] .memo-content th *,
+:root[data-markdown-style="claude"] .memo-content td * {
+  font-size: inherit !important;
+}
+
+:root[data-markdown-style="claude"] .memo-content th {
+  color: var(--markdown-claude-heading) !important;
+  font-weight: 600;
+  vertical-align: bottom;
+}
+
+:root[data-markdown-style="claude"] .memo-content th:last-child,
+:root[data-markdown-style="claude"] .memo-content td:last-child {
+  padding-right: 0;
+}
+
+:root[data-markdown-style="claude"] .memo-content tbody tr:hover td {
+  background: var(--markdown-claude-table-hover) !important;
+}
+
+:root[data-markdown-style="claude"] .memo-content hr {
+  height: 1px;
+  border: 0 !important;
+  background: var(--markdown-claude-border);
+  margin: 1.4rem 0;
+}
+
+:root[data-markdown-style="claude"] .memo-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.9rem auto;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 8px;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+:root[data-markdown-style="claude"] .memo-media-block {
+  border-color: var(--markdown-claude-code-border) !important;
+  border-radius: 10px !important;
+  background: var(--markdown-claude-surface) !important;
+  overflow: hidden;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+:root[data-markdown-style="claude"] .memo-media-header {
+  color: var(--markdown-claude-muted) !important;
+  background: var(--markdown-claude-surface-soft) !important;
+  border-color: var(--markdown-claude-code-border) !important;
+  font-family: var(--prose-font-family);
+  font-weight: 600;
+}
+
+:root[data-markdown-style="claude"] .memo-media-body,
+:root[data-markdown-style="claude"] .memo-gallery-image {
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+:root[data-markdown-style="claude"] .memo-gallery-image {
+  border-color: var(--markdown-claude-code-border) !important;
+}
+
+:root[data-markdown-style="claude"] .memo-attachment-link {
+  color: var(--markdown-claude-text) !important;
+  background: var(--markdown-claude-surface) !important;
+  border: 1px solid var(--markdown-claude-code-border) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  font-family: var(--prose-font-family);
+}
+
+:root[data-markdown-style="claude"] .memo-attachment-link svg {
+  color: var(--markdown-claude-accent) !important;
+}
+
+:root[data-markdown-style="claude"] .memo-content video,
+:root[data-markdown-style="claude"] .memo-content audio {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 0.9rem 0;
+  border-radius: 10px;
+}
+
+:root[data-markdown-style="claude"] .memo-content video {
+  border: 1px solid var(--markdown-claude-code-border);
+  background: var(--markdown-claude-code-bg);
+}
+
+:root[data-markdown-style="claude"] .memo-content kbd {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.45em;
+  padding: 0 0.42em;
+  border: 1px solid var(--markdown-claude-inline-code-border);
+  border-radius: 6px;
+  background: var(--markdown-claude-inline-code-bg);
+  color: var(--markdown-claude-inline-code);
+  font-family: var(--markdown-claude-font-mono);
+  font-size: 0.82em;
+  box-shadow: inset 0 -1px 0 rgba(43, 38, 33, 0.08);
+}
+
+:root[data-markdown-style="claude"] .memo-content sup,
+:root[data-markdown-style="claude"] .memo-content sub {
+  line-height: 0;
+}

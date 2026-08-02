@@ -71,6 +71,7 @@ export default defineConfig({
       filename: 'sw-src.ts',
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff,woff2}', 'icons/**/*', 'beaver.png', 'apple-touch-icon.png', 'maskable-icon.png'],
+        globIgnores: ['fonts/lxgw-wenkai-lite/**'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
       devOptions: {
