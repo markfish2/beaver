@@ -20,12 +20,12 @@
 
 :root {
   --outline-font-size: 16px;
-  --outline-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --outline-font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans CJK", "WenQuanYi Micro Hei", "Ubuntu", Arial, sans-serif;
 
   /* 排版变量 (from markamd) */
   --writing-font-size: 14px;
   --writing-line-height: 1.55;
-  --prose-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --prose-font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans CJK", "WenQuanYi Micro Hei", "Ubuntu", Arial, sans-serif;
   --prose-font-size: 15px;
   --prose-line-height: 1.65;
   --reading-font-size: 16px;

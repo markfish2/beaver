@@ -7,7 +7,7 @@ import { showToast } from '../utils/toast';
 import { syncThemeChrome } from '../utils/themeChrome';
 
 type FontSize = 'small' | 'medium' | 'large';
-type FontFamily = 'system' | 'yahei' | 'pingfang' | 'kaiti' | 'fangsong' | 'syst';
+type FontFamily = 'system' | 'sans' | 'serif' | 'mono';
 type Theme = 'system' | 'dark';
 type MarkdownStyle = 'default' | 'pie' | 'markamd' | 'lapis';
 
@@ -25,12 +25,10 @@ const FONT_SIZE_MAP: Record<FontSize, string> = {
 };
 
 const FONT_FAMILY_MAP: Record<FontFamily, string> = {
-  system: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-  yahei: '"Microsoft YaHei", "微软雅黑", sans-serif',
-  pingfang: '"PingFang SC", "苹方", -apple-system, sans-serif',
-  kaiti: '"KaiTi", "楷体", "STKaiti", serif',
-  fangsong: '"FangSong", "仿宋", "STFangsong", serif',
-  syst: '"Source Han Serif CN", "思源宋体", "Noto Serif CJK SC", serif'
+  system: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans CJK", "WenQuanYi Micro Hei", "Ubuntu", Arial, sans-serif',
+  sans: '"Noto Sans CJK SC", "Noto Sans CJK", "Source Han Sans SC", "Source Han Sans CN", "WenQuanYi Micro Hei", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Heiti SC", "Droid Sans Fallback", Arial, sans-serif',
+  serif: '"Noto Serif CJK SC", "Noto Serif CJK", "Source Han Serif SC", "Source Han Serif CN", "Songti SC", "STSong", "SimSun", "FangSong", "AR PL UMing CN", "AR PL SungtiL GB", "WenQuanYi Bitmap Song", serif',
+  mono: '"Sarasa Mono SC", "Sarasa Gothic SC", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK", "Source Han Mono SC", "Source Han Mono CN", "Microsoft YaHei Mono", "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace'
 };
 
 const FONT_SIZE_LABELS: Record<FontSize, string> = {
@@ -41,11 +39,23 @@ const FONT_SIZE_LABELS: Record<FontSize, string> = {
 
 const FONT_FAMILY_LABELS: Record<FontFamily, string> = {
   system: '系统默认',
-  yahei: '微软雅黑',
-  pingfang: '苹方',
-  kaiti: '楷体',
-  fangsong: '仿宋',
-  syst: '思源宋体'
+  sans: '现代黑体',
+  serif: '传统宋体',
+  mono: '等宽代码'
+};
+
+const FONT_FAMILY_DESCRIPTIONS: Record<FontFamily, string> = {
+  system: '跟随当前设备的默认界面字体',
+  sans: '优先使用 Noto/思源/雅黑/苹方等清晰黑体',
+  serif: '优先使用 Noto/思源/宋体等阅读衬线字体',
+  mono: '优先使用等宽字体，适合代码和结构化内容'
+};
+
+const FONT_FAMILY_PREVIEW_TEXT: Record<FontFamily, string> = {
+  system: '系统 Aa 123',
+  sans: '黑体 Aa 123',
+  serif: '宋体 Aa 123',
+  mono: 'Mono Aa 123'
 };
 
 const MARKDOWN_STYLE_LABELS: Record<MarkdownStyle, { name: string; description: string; preview: string }> = {
@@ -72,6 +82,25 @@ const MARKDOWN_STYLE_LABELS: Record<MarkdownStyle, { name: string; description: 
 };
 
 const normalizeTheme = (theme: unknown): Theme => theme === 'dark' ? 'dark' : 'system';
+const normalizeFontFamily = (fontFamily: unknown): FontFamily => {
+  switch (fontFamily) {
+    case 'sans':
+    case 'system':
+      return fontFamily;
+    case 'serif':
+    case 'syst':
+    case 'fangsong':
+    case 'kaiti':
+      return 'serif';
+    case 'mono':
+      return 'mono';
+    case 'yahei':
+    case 'pingfang':
+      return 'sans';
+    default:
+      return 'system';
+  }
+};
 
 // 全局主题只保留默认设计体系；theme 仅表示跟随系统或强制夜间模式。
 const THEMES: Record<Theme, {
@@ -141,7 +170,7 @@ const AppearanceStateProvider = ({
         const theme = normalizeTheme(parsed.theme);
         return {
           fontSize: parsed.fontSize || 'medium',
-          fontFamily: parsed.fontFamily || 'system',
+          fontFamily: normalizeFontFamily(parsed.fontFamily),
           theme,
           markdownStyle: parsed.markdownStyle || 'default',
         };
@@ -216,6 +245,7 @@ const AppearanceStateProvider = ({
     // 应用字体设置
     root.style.setProperty('--outline-font-size', FONT_SIZE_MAP[settings.fontSize]);
     root.style.setProperty('--outline-font-family', FONT_FAMILY_MAP[settings.fontFamily]);
+    root.style.setProperty('--prose-font-family', FONT_FAMILY_MAP[settings.fontFamily]);
     root.dataset.markdownStyle = settings.markdownStyle;
 
     // 应用字体到 body
@@ -281,9 +311,20 @@ export const AppearanceProvider = ({ children }: { children: ReactNode }) => {
       });
   }, [applyUser, user?.theme]);
 
+  useEffect(() => {
+    if (!user?.font_family) return;
+    const normalized = normalizeFontFamily(user.font_family);
+    if (normalized === user.font_family) return;
+    void updateSettings({ font_family: normalized })
+      .then(applyUser)
+      .catch(() => {
+        // 本地会先按归一化字体渲染；账号同步失败时保留当前设备效果。
+      });
+  }, [applyUser, user?.font_family]);
+
   const accountSettings = user ? {
     theme: normalizeTheme(user.theme),
-    fontFamily: (user.font_family as FontFamily) || 'system',
+    fontFamily: normalizeFontFamily(user.font_family),
     fontSize: (user.font_size as FontSize) || 'medium',
     markdownStyle: (user.markdown_style as MarkdownStyle) || 'default',
   } : undefined;
@@ -430,7 +471,13 @@ export const FontSettingsPanel = ({
                 }`}
                 style={{ fontFamily: FONT_FAMILY_MAP[family] }}
               >
-                {FONT_FAMILY_LABELS[family]}
+                <span className="flex items-center justify-between gap-3">
+                  <span>
+                    <span className="block">{FONT_FAMILY_LABELS[family]}</span>
+                    <span className="block text-[11px] opacity-70 mt-0.5">{FONT_FAMILY_DESCRIPTIONS[family]}</span>
+                  </span>
+                  <span className="shrink-0 text-xs opacity-80">{FONT_FAMILY_PREVIEW_TEXT[family]}</span>
+                </span>
               </button>
             ))}
           </div>
@@ -501,7 +548,13 @@ export const FontSettingsPanel = ({
                     }`}
                     style={{ fontFamily: FONT_FAMILY_MAP[family] }}
                   >
-                    {FONT_FAMILY_LABELS[family]}
+                    <span className="flex items-center justify-between gap-3">
+                      <span>
+                        <span className="block">{FONT_FAMILY_LABELS[family]}</span>
+                        <span className="block text-[11px] opacity-70 mt-0.5">{FONT_FAMILY_DESCRIPTIONS[family]}</span>
+                      </span>
+                      <span className="shrink-0 text-xs opacity-80">{FONT_FAMILY_PREVIEW_TEXT[family]}</span>
+                    </span>
                   </button>
                 ))}
               </div>
