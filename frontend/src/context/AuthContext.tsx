@@ -40,7 +40,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setIsLoading(false);
         return;
       }
-    } catch {
+    } catch (error) {
       // checkSetupStatus 失败不阻止登录恢复
       console.warn('checkSetupStatus failed, trying token restore', error);
     }

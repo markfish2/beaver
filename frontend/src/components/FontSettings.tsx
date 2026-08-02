@@ -152,6 +152,84 @@ const THEMES: Record<Theme, {
 };
 
 const STORAGE_KEY = 'outline-font-settings';
+const PENDING_SYNC_KEY = 'outline-font-settings-pending-sync';
+const PENDING_SYNC_EVENT = 'appearance-pending-sync-change';
+
+type SettingsUpdate = Partial<{
+  theme: Theme;
+  font_family: FontFamily;
+  font_size: FontSize;
+  markdown_style: MarkdownStyle;
+}>;
+
+const normalizeMarkdownStyle = (markdownStyle: unknown): MarkdownStyle => {
+  switch (markdownStyle) {
+    case 'pie':
+    case 'markamd':
+    case 'lapis':
+    case 'claude':
+      return markdownStyle;
+    default:
+      return 'default';
+  }
+};
+
+const readPendingSync = (): SettingsUpdate => {
+  const raw = localStorage.getItem(PENDING_SYNC_KEY);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    const pending: SettingsUpdate = {};
+    if (parsed.theme) pending.theme = normalizeTheme(parsed.theme);
+    if (parsed.font_family) pending.font_family = normalizeFontFamily(parsed.font_family);
+    if (parsed.font_size === 'small' || parsed.font_size === 'medium' || parsed.font_size === 'large') {
+      pending.font_size = parsed.font_size;
+    }
+    if (parsed.markdown_style) pending.markdown_style = normalizeMarkdownStyle(parsed.markdown_style);
+    return pending;
+  } catch {
+    return {};
+  }
+};
+
+const emitPendingSyncChange = () => {
+  window.dispatchEvent(new Event(PENDING_SYNC_EVENT));
+};
+
+const writePendingSync = (next: SettingsUpdate) => {
+  const merged = { ...readPendingSync(), ...next };
+  localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(merged));
+  emitPendingSyncChange();
+};
+
+const clearPendingSync = (synced: SettingsUpdate) => {
+  const pending = readPendingSync();
+  (Object.keys(synced) as (keyof SettingsUpdate)[]).forEach((key) => {
+    delete pending[key];
+  });
+  if (Object.keys(pending).length === 0) {
+    localStorage.removeItem(PENDING_SYNC_KEY);
+  } else {
+    localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(pending));
+  }
+  emitPendingSyncChange();
+};
+
+const pendingToSettings = (pending: SettingsUpdate): Partial<FontSettings> => {
+  const settings: Partial<FontSettings> = {};
+  if (pending.theme) settings.theme = pending.theme;
+  if (pending.font_family) settings.fontFamily = pending.font_family;
+  if (pending.font_size) settings.fontSize = pending.font_size;
+  if (pending.markdown_style) settings.markdownStyle = pending.markdown_style;
+  return settings;
+};
+
+const updateConfirmedByUser = (next: SettingsUpdate, user: Awaited<ReturnType<typeof updateSettings>>) => (
+  (!next.theme || user.theme === next.theme)
+  && (!next.font_family || normalizeFontFamily(user.font_family) === next.font_family)
+  && (!next.font_size || user.font_size === next.font_size)
+  && (!next.markdown_style || normalizeMarkdownStyle(user.markdown_style) === next.markdown_style)
+);
 
 interface AppearanceContextValue {
   settings: FontSettings;
@@ -185,7 +263,7 @@ const AppearanceStateProvider = ({
           fontSize: parsed.fontSize || 'medium',
           fontFamily: normalizeFontFamily(parsed.fontFamily),
           theme,
-          markdownStyle: parsed.markdownStyle || 'default',
+          markdownStyle: normalizeMarkdownStyle(parsed.markdownStyle),
         };
       } catch {
         // fallback to default
@@ -272,8 +350,14 @@ const AppearanceStateProvider = ({
   }, [applyTheme, settings]);
 
   const persist = useCallback(async (next: Partial<{ theme: Theme; font_family: FontFamily; font_size: FontSize; markdown_style: MarkdownStyle }>) => {
+    writePendingSync(next);
     try {
       const updatedUser = await updateSettings(next);
+      if (updateConfirmedByUser(next, updatedUser)) {
+        clearPendingSync(next);
+      } else {
+        showToast('外观设置已保存在当前设备，账号同步待重试', 'error');
+      }
       onSettingsPersisted?.(updatedUser);
     } catch {
       showToast('外观设置同步失败，已保存在当前设备', 'error');
@@ -315,6 +399,14 @@ const AppearanceStateProvider = ({
 
 export const AppearanceProvider = ({ children }: { children: ReactNode }) => {
   const { user, applyUser } = useAuth();
+  const [pendingSync, setPendingSync] = useState<SettingsUpdate>(() => readPendingSync());
+
+  useEffect(() => {
+    const handler = () => setPendingSync(readPendingSync());
+    window.addEventListener(PENDING_SYNC_EVENT, handler);
+    return () => window.removeEventListener(PENDING_SYNC_EVENT, handler);
+  }, []);
+
   useEffect(() => {
     if (!user?.theme || user.theme === 'system' || user.theme === 'dark') return;
     void updateSettings({ theme: 'system' })
@@ -335,14 +427,32 @@ export const AppearanceProvider = ({ children }: { children: ReactNode }) => {
       });
   }, [applyUser, user?.font_family]);
 
-  const accountSettings = user ? {
+  useEffect(() => {
+    if (!user || Object.keys(pendingSync).length === 0) return;
+    void updateSettings(pendingSync)
+      .then((updatedUser) => {
+        if (updateConfirmedByUser(pendingSync, updatedUser)) {
+          clearPendingSync(pendingSync);
+        }
+        applyUser(updatedUser);
+      })
+      .catch(() => {
+        // 保留 pending；下次刷新或用户再次打开页面时继续重试。
+      });
+  }, [applyUser, pendingSync, user]);
+
+  const serverSettings = user ? {
     theme: normalizeTheme(user.theme),
     fontFamily: normalizeFontFamily(user.font_family),
     fontSize: (user.font_size as FontSize) || 'medium',
-    markdownStyle: (user.markdown_style as MarkdownStyle) || 'default',
+    markdownStyle: normalizeMarkdownStyle(user.markdown_style),
+  } : undefined;
+  const accountSettings = serverSettings ? {
+    ...serverSettings,
+    ...pendingToSettings(pendingSync),
   } : undefined;
   const accountKey = user
-    ? `${user.id}:${user.theme}:${user.font_family}:${user.font_size}:${user.markdown_style}`
+    ? `${user.id}:${user.theme}:${user.font_family}:${user.font_size}:${user.markdown_style}:${JSON.stringify(pendingSync)}`
     : 'local';
 
   return (
