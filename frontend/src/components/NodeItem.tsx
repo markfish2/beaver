@@ -10,8 +10,8 @@ import DeleteConfirmDialog from './DeleteConfirmDialog';
 import { isPhoneLayout } from '../utils/deviceLayout';
 
 interface NodeItemProps {
-  node: Node;
-  childrenNodes?: Node[];
+  node: NodeWithTreeMeta;
+  childrenNodes?: NodeWithTreeMeta[];
   documents?: Document[];
   onContentChange: (id: string, content: string) => void;
   onNoteChange: (id: string, note: string | null) => void;
@@ -32,6 +32,31 @@ interface NodeItemProps {
   onEndEditing?: (id: string) => void;
   onBlurToolbar?: () => void;
 }
+
+type NodeWithTreeMeta = Node & {
+  children?: NodeWithTreeMeta[];
+  subtreeVersion?: string;
+  subtreeNodeIds?: string[];
+};
+
+const selectedSignatureForSubtree = (selectedNodeIds: string[] | undefined, node: NodeWithTreeMeta): string => {
+  if (!selectedNodeIds || selectedNodeIds.length === 0) return '0';
+  const subtreeIds = node.subtreeNodeIds ?? [node.id];
+  const subtreeIdSet = new Set(subtreeIds);
+  const selectedInSubtree = selectedNodeIds.filter(id => subtreeIdSet.has(id));
+  return selectedInSubtree.length > 0 ? `${selectedNodeIds.length}:${selectedInSubtree.join(',')}` : '0';
+};
+
+const focusSignatureForNode = (
+  focusedNodeId: { id: string, field: 'content' | 'note' } | null | undefined,
+  nodeId: string
+): string => focusedNodeId?.id === nodeId ? focusedNodeId.field : '';
+
+const dragVisualSignatureForNode = (
+  selectedNodeIds: string[] | undefined,
+  nodeId: string,
+  isDragMoving: boolean | undefined
+): string => selectedNodeIds?.includes(nodeId) && isDragMoving ? 'dragging-selected' : '';
 
 const NodeItem = memo(({
   node,
@@ -522,7 +547,7 @@ const NodeItem = memo(({
       <div
          data-node-id={node.id}
          className={`group relative flex items-start py-0 rounded-sm transition-colors ${
-           isSelected ? 'bg-gray-100 dark:bg-gray-700' : ''
+           isSelected ? 'bg-blue-100/80 dark:bg-blue-900/45' : ''
          } ${isDragMoving && isSelected ? 'opacity-40' : ''}`}
          onClick={(e) => {
              e.stopPropagation();
@@ -1098,12 +1123,10 @@ const NodeItem = memo(({
     </div>
   );
 }, (prevProps, nextProps) => {
-  return prevProps.node === nextProps.node &&
-    prevProps.childrenNodes === nextProps.childrenNodes &&
-    prevProps.selectedNodeIds === nextProps.selectedNodeIds &&
-    prevProps.isDragMoving === nextProps.isDragMoving &&
-    prevProps.focusedNodeId?.id === nextProps.focusedNodeId?.id &&
-    prevProps.focusedNodeId?.field === nextProps.focusedNodeId?.field;
+  return prevProps.node.subtreeVersion === nextProps.node.subtreeVersion &&
+    selectedSignatureForSubtree(prevProps.selectedNodeIds, prevProps.node) === selectedSignatureForSubtree(nextProps.selectedNodeIds, nextProps.node) &&
+    dragVisualSignatureForNode(prevProps.selectedNodeIds, prevProps.node.id, prevProps.isDragMoving) === dragVisualSignatureForNode(nextProps.selectedNodeIds, nextProps.node.id, nextProps.isDragMoving) &&
+    focusSignatureForNode(prevProps.focusedNodeId, prevProps.node.id) === focusSignatureForNode(nextProps.focusedNodeId, nextProps.node.id);
 });
 
 export default NodeItem;

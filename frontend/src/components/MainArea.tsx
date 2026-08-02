@@ -53,14 +53,38 @@ interface SerializedNode {
   children: SerializedNode[];
 }
 
+type TreeNode = Node & { children: TreeNode[]; subtreeVersion: string; subtreeNodeIds: string[] };
+
+const getNodeOwnVersion = (node: Node): string => [
+  node.id,
+  node.document_id,
+  node.parent_node_id ?? '',
+  node.sort_order,
+  node.content,
+  node.note ?? '',
+  node.is_completed ? 1 : 0,
+  node.is_in_progress ? 1 : 0,
+  node.is_collapsed ? 1 : 0,
+  node.heading ?? '',
+  node.is_bold ? 1 : 0,
+  node.is_italic ? 1 : 0,
+  node.color ?? '',
+  node.highlight ?? '',
+  node.is_todo ? 1 : 0,
+  node.content_type ?? '',
+  node.file_path ?? '',
+  node.file_name ?? '',
+  node.version ?? '',
+].join('\u001f');
+
 // Helper to build tree from flat list for rendering
-const buildTree = (nodes: Node[]): (Node & { children: Node[] })[] => {
-  const nodeMap = new Map<string, Node & { children: Node[] }>();
-  const roots: (Node & { children: Node[] })[] = [];
+const buildTree = (nodes: Node[]): TreeNode[] => {
+  const nodeMap = new Map<string, TreeNode>();
+  const roots: TreeNode[] = [];
 
   // Initialize map
   nodes.forEach(node => {
-    nodeMap.set(node.id, { ...node, children: [] });
+    nodeMap.set(node.id, { ...node, children: [], subtreeVersion: getNodeOwnVersion(node), subtreeNodeIds: [node.id] });
   });
 
   // Build hierarchy
@@ -76,6 +100,14 @@ const buildTree = (nodes: Node[]): (Node & { children: Node[] })[] => {
     }
   });
 
+  const updateSubtreeVersion = (node: TreeNode): string => {
+    const childVersions = node.children.map(updateSubtreeVersion).join('\u001e');
+    node.subtreeNodeIds = [node.id, ...node.children.flatMap(child => child.subtreeNodeIds)];
+    node.subtreeVersion = childVersions ? `${node.subtreeVersion}\u001d${childVersions}` : node.subtreeVersion;
+    return node.subtreeVersion;
+  };
+  roots.forEach(updateSubtreeVersion);
+
   return roots;
 };
 
@@ -88,6 +120,94 @@ const getDescendants = (nodeId: string, allNodes: Node[]): Node[] => {
     descendants.push(...getDescendants(child.id, allNodes));
   });
   return descendants;
+};
+
+const computeHierarchicalRangeSelection = (anchorId: string, currentId: string, allNodes: Node[]): string[] => {
+  const nodeById = new Map(allNodes.map(node => [node.id, node]));
+  const anchorNode = nodeById.get(anchorId);
+  const currentNode = nodeById.get(currentId);
+  if (!anchorNode || !currentNode) return [];
+
+  const childrenByParent = new Map<string | null, Node[]>();
+  for (const node of allNodes) {
+    const parentId = node.parent_node_id && nodeById.has(node.parent_node_id) ? node.parent_node_id : null;
+    const siblings = childrenByParent.get(parentId);
+    if (siblings) {
+      siblings.push(node);
+    } else {
+      childrenByParent.set(parentId, [node]);
+    }
+  }
+  for (const siblings of childrenByParent.values()) {
+    siblings.sort((a, b) => a.sort_order - b.sort_order);
+  }
+
+  const getPath = (id: string): string[] => {
+    const path: string[] = [];
+    const seen = new Set<string>();
+    let node = nodeById.get(id);
+    while (node && !seen.has(node.id)) {
+      seen.add(node.id);
+      path.unshift(node.id);
+      node = node.parent_node_id ? nodeById.get(node.parent_node_id) : undefined;
+    }
+    return path;
+  };
+
+  const anchorPath = getPath(anchorId);
+  const currentPath = getPath(currentId);
+  const selected = new Set<string>();
+
+  const addSubtree = (id: string) => {
+    if (selected.has(id)) return;
+    selected.add(id);
+    for (const child of childrenByParent.get(id) ?? []) {
+      addSubtree(child.id);
+    }
+  };
+
+  if (anchorPath.includes(currentId)) {
+    addSubtree(currentId);
+  } else if (currentPath.includes(anchorId)) {
+    addSubtree(anchorId);
+  } else {
+    let commonLength = 0;
+    while (
+      commonLength < anchorPath.length &&
+      commonLength < currentPath.length &&
+      anchorPath[commonLength] === currentPath[commonLength]
+    ) {
+      commonLength += 1;
+    }
+
+    const lcaId = commonLength > 0 ? anchorPath[commonLength - 1] : null;
+    const anchorBranchId = anchorPath[commonLength];
+    const currentBranchId = currentPath[commonLength];
+    const siblings = childrenByParent.get(lcaId) ?? [];
+    const anchorIndex = siblings.findIndex(node => node.id === anchorBranchId);
+    const currentIndex = siblings.findIndex(node => node.id === currentBranchId);
+
+    if (anchorIndex === -1 || currentIndex === -1) {
+      addSubtree(anchorId);
+      addSubtree(currentId);
+    } else {
+      const from = Math.min(anchorIndex, currentIndex);
+      const to = Math.max(anchorIndex, currentIndex);
+      for (const sibling of siblings.slice(from, to + 1)) {
+        addSubtree(sibling.id);
+      }
+    }
+  }
+
+  const ordered: string[] = [];
+  const appendInDocumentOrder = (parentId: string | null) => {
+    for (const node of childrenByParent.get(parentId) ?? []) {
+      if (selected.has(node.id)) ordered.push(node.id);
+      appendInDocumentOrder(node.id);
+    }
+  };
+  appendInDocumentOrder(null);
+  return ordered;
 };
 
 // Helper: 将选中的节点转换为 Markdown 格式
@@ -373,6 +493,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       // 移动模式由容器的 onMouseUp 处理，这里跳过
       if (dragMoveRef.current.isMoving) return;
       dragSelectionRef.current.startNodeId = null;
+      dragSelectionRef.current.lastRangeStr = '';
       setTimeout(() => {
         dragSelectionRef.current.isDragging = false;
       }, 50);
@@ -1860,26 +1981,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     };
   }, [finishDragMove, isDragMoving]);
 
-  const getSelectionFromRange = (rangeIds: string[], allNodes: Node[]): string[] => {
-    // Workflowy 式多选：鼠标扫过的“可见连续行”是基础选区。
-    // 为了复制/拖动时保持层级结构，自动补充这些节点的祖先链；
-    // 但不自动补充未扫过的子孙或兄弟，避免跨多个分支时选区被扩大。
-    const selectedIds = new Set(rangeIds);
-    const nodeById = new Map(allNodes.map(node => [node.id, node]));
-
-    for (const id of rangeIds) {
-      let current = nodeById.get(id);
-      while (current?.parent_node_id) {
-        selectedIds.add(current.parent_node_id);
-        current = nodeById.get(current.parent_node_id);
-      }
-    }
-
-    return allNodes
-      .filter(node => selectedIds.has(node.id))
-      .map(node => node.id);
-  };
-
   const generateMarkdownPreview = (allNodes: Node[]): string => {
     const rootNodes = allNodes.filter(n => !n.parent_node_id)
       .sort((a, b) => a.sort_order - b.sort_order);
@@ -2679,8 +2780,10 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                   // 否则 → 进入框选模式
                   dragSelectionRef.current.startNodeId = nodeId;
                   dragSelectionRef.current.isDragging = false;
+                  dragSelectionRef.current.lastRangeStr = '';
                 } else {
                   updateSelectedNodeIds([]);
+                  dragSelectionRef.current.lastRangeStr = '';
                 }
               }}
               onMouseMove={(e) => {
@@ -2765,13 +2868,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                     const currentIdx = currentRow?.index ?? -1;
 
                     if (startIdx !== -1 && currentIdx !== -1) {
-                      const min = Math.min(startIdx, currentIdx);
-                      const max = Math.max(startIdx, currentIdx);
-                      const rangeIds = rowMetrics
-                        .filter(row => row.index >= min && row.index <= max)
-                        .map(row => row.id);
-
-                      const selectedArray = getSelectionFromRange(rangeIds, nodes);
+                      const selectedArray = computeHierarchicalRangeSelection(startNodeId, currentId, nodes);
                       const rangeStr = selectedArray.join(',');
                       if (dragSelectionRef.current.lastRangeStr !== rangeStr) {
                           updateSelectedNodeIds(selectedArray);
