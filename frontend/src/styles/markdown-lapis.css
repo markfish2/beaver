@@ -8,7 +8,6 @@
   --markdown-lapis-header-span: #4870ac;
   --markdown-lapis-block-bg: #f6f8fa;
   --markdown-lapis-block-border: #d9dfe4;
-  --markdown-lapis-img-shadow: rgba(163, 178, 202, 0.32);
   --markdown-lapis-quote-bg: #f6f8fa;
   --markdown-lapis-table-hover: #f6f8fa;
   --markdown-lapis-code-text: #4870ac;
@@ -31,7 +30,6 @@
   --markdown-lapis-header-span: #47556d;
   --markdown-lapis-block-bg: #080e1d;
   --markdown-lapis-block-border: #47556d;
-  --markdown-lapis-img-shadow: rgba(8, 14, 29, 0.8);
   --markdown-lapis-quote-bg: #2a2f3b;
   --markdown-lapis-table-hover: #181c24;
   --markdown-lapis-code-text: #abbad4;
@@ -364,19 +362,21 @@
   display: block;
   max-width: 100%;
   margin: 0 auto;
-  padding: 1rem;
+  padding: 0;
   border: 0 !important;
   border-radius: 0;
-  background: transparent;
-  filter: drop-shadow(var(--markdown-lapis-img-shadow) 0 6px 6px);
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
 }
 
 :root[data-markdown-style="lapis"] .memo-media-block {
   border-color: color-mix(in srgb, var(--markdown-lapis-block-border) 72%, transparent) !important;
   border-radius: var(--markdown-lapis-radius-md) !important;
-  background: var(--markdown-lapis-block-bg) !important;
+  background: transparent !important;
   overflow: hidden;
-  filter: drop-shadow(var(--markdown-lapis-img-shadow) 0 3px 3px);
+  box-shadow: none !important;
+  filter: none !important;
 }
 
 :root[data-markdown-style="lapis"] .memo-media-header {
@@ -388,13 +388,14 @@
 }
 
 :root[data-markdown-style="lapis"] .memo-media-body {
-  background: var(--markdown-lapis-block-bg) !important;
+  background: transparent !important;
 }
 
 :root[data-markdown-style="lapis"] .memo-gallery-image {
   border-color: color-mix(in srgb, var(--markdown-lapis-marker) 45%, transparent) !important;
-  background: var(--markdown-lapis-bg) !important;
-  filter: drop-shadow(var(--markdown-lapis-img-shadow) 0 4px 4px);
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
 }
 
 :root[data-markdown-style="lapis"] .memo-attachment-link {
