@@ -9,7 +9,7 @@ import { syncThemeChrome } from '../utils/themeChrome';
 type FontSize = 'small' | 'medium' | 'large';
 type FontFamily = 'system' | 'sans' | 'serif' | 'mono' | 'lxgw';
 type Theme = 'system' | 'dark';
-type MarkdownStyle = 'default' | 'pie' | 'markamd' | 'lapis' | 'claude';
+type MarkdownStyle = 'default' | 'pie' | 'markamd' | 'lapis' | 'claude' | 'border';
 
 interface FontSettings {
   fontSize: FontSize;
@@ -87,6 +87,11 @@ const MARKDOWN_STYLE_LABELS: Record<MarkdownStyle, { name: string; description: 
     name: 'Claude Like',
     description: '参考 Typora Claude-like：暖米色纸面、棕橙强调、柔和引用与浅色代码块',
     preview: 'Cl',
+  },
+  border: {
+    name: 'Border',
+    description: '参考 Obsidian Border：彩色标题引导线、点阵引用、虚线代码块',
+    preview: 'Bo',
   },
 };
 
@@ -168,6 +173,7 @@ const normalizeMarkdownStyle = (markdownStyle: unknown): MarkdownStyle => {
     case 'markamd':
     case 'lapis':
     case 'claude':
+    case 'border':
       return markdownStyle;
     default:
       return 'default';
@@ -485,9 +491,6 @@ const GlobalThemeInfo = () => (
       <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
         全局主题
       </label>
-    </div>
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-300">
-      系统默认主题。日间/夜间模式由系统或顶部切换按钮控制；Markdown 解析风格可单独选择。
     </div>
   </div>
 );

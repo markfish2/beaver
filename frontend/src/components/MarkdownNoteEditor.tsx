@@ -78,6 +78,7 @@ function preprocess(content: string): string {
 const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => ({
   margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: '0.95em',
   background: isDark ? '#282c34' : '#fbfbf8', border: 'none', padding: '16px',
+  overflowX: 'auto', whiteSpace: 'pre',
 });
 
 type MarkdownCodeProps = Parameters<NonNullable<Components['code']>>[0];
@@ -416,7 +417,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
             type="button"
             role="checkbox"
             aria-checked={checked}
-            className={`absolute left-0 top-[5px] z-20 inline-flex h-[14px] w-[14px] shrink-0 cursor-pointer items-center justify-center rounded-full border transition-colors ${
+            className={`absolute left-0 top-[0.22em] z-20 inline-flex h-[14px] w-[14px] shrink-0 cursor-pointer items-center justify-center rounded-full border transition-colors ${
               checked
                 ? 'border-[#3f587f] bg-[#3f587f]'
                 : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800'

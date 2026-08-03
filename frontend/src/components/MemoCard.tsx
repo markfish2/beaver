@@ -98,6 +98,8 @@ const codeBlockCustomStyle = (palette: MemoCardPalette): React.CSSProperties => 
   background: palette.codeBlockBackground ?? palette.surfaceStrong,
   border: 'none',
   padding: '16px',
+  overflowX: 'auto',
+  whiteSpace: 'pre',
 });
 
 type CodeBlockProps = React.ComponentPropsWithoutRef<'code'> & { palette: MemoCardPalette; compact?: boolean };
@@ -476,7 +478,7 @@ const markdownComponents = (
             type="button"
             role="checkbox"
             aria-checked={checked}
-            className={`absolute left-0 top-[5px] z-20 inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border cursor-pointer shrink-0 transition-colors ${
+            className={`absolute left-0 top-[0.22em] z-20 inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border cursor-pointer shrink-0 transition-colors ${
               checked
                 ? 'bg-[#3f587f] border-[#3f587f]'
                 : ''

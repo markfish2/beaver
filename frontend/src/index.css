@@ -3,6 +3,7 @@
 @import "./styles/markdown-markamd.css";
 @import "./styles/markdown-lapis.css";
 @import "./styles/markdown-claude.css";
+@import "./styles/markdown-border.css";
 
 @font-face {
   font-family: "LXGW WenKai Lite";
@@ -434,11 +435,43 @@ body,
 .memo-content hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.5rem 0; }
 .dark .memo-content hr { border-top-color: #374151; }
 .memo-content span[role="checkbox"] { margin-right: 0.375rem; }
-.memo-content button[role="checkbox"] {
+.memo-content button[role="checkbox"],
+:root[data-markdown-style] .memo-content button[role="checkbox"] {
   margin: 0 !important;
   align-items: center;
   justify-content: center;
   vertical-align: middle;
+  top: 0.22em !important;
+  line-height: 1 !important;
+  transform: none !important;
+}
+
+.memo-content .markdown-code-block,
+:root[data-markdown-style] .memo-content .markdown-code-block {
+  max-width: 100%;
+}
+
+.memo-content .markdown-code-body,
+.memo-content pre.markdown-code-body,
+:root[data-markdown-style] .memo-content .markdown-code-body,
+:root[data-markdown-style] .memo-content pre.markdown-code-body {
+  max-width: 100%;
+  overflow-x: auto !important;
+  overflow-y: hidden;
+  white-space: pre !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+}
+
+.memo-content .markdown-code-body pre,
+.memo-content .markdown-code-body code,
+.memo-content pre.markdown-code-body code,
+:root[data-markdown-style] .memo-content .markdown-code-body pre,
+:root[data-markdown-style] .memo-content .markdown-code-body code,
+:root[data-markdown-style] .memo-content pre.markdown-code-body code {
+  white-space: pre !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
 }
 
 /* Memo 卡片使用语义色变量，避免彩色卡片继续套用全局灰阶。 */
