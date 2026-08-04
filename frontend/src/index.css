@@ -40,6 +40,7 @@
   --prose-font-size: 15px;
   --prose-line-height: 1.65;
   --reading-font-size: 16px;
+  --markdown-block-code-font-size: calc(var(--outline-font-size, 16px) - 3px);
   --reading-content-width: 880px;
   --reading-prose-width: 720px;
 
@@ -402,7 +403,7 @@ body,
 .memo-content pre { border-radius: 0.5rem; overflow-x: auto; margin-bottom: 1em; max-width: 100%; }
 .memo-content pre code,
 .memo-content pre code span {
-  font-size: 0.85em !important;
+  font-size: inherit !important;
   line-height: 1.6 !important;
   font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
 }
@@ -456,11 +457,17 @@ body,
 :root[data-markdown-style] .memo-content .markdown-code-body,
 :root[data-markdown-style] .memo-content pre.markdown-code-body {
   max-width: 100%;
+  font-size: var(--markdown-block-code-font-size) !important;
   overflow-x: auto !important;
   overflow-y: hidden;
   white-space: pre !important;
   overflow-wrap: normal !important;
   word-break: normal !important;
+}
+
+.memo-content .markdown-code-body *,
+:root[data-markdown-style] .memo-content .markdown-code-body * {
+  font-size: inherit !important;
 }
 
 .memo-content .markdown-code-body pre,
@@ -469,6 +476,7 @@ body,
 :root[data-markdown-style] .memo-content .markdown-code-body pre,
 :root[data-markdown-style] .memo-content .markdown-code-body code,
 :root[data-markdown-style] .memo-content pre.markdown-code-body code {
+  font-size: inherit !important;
   white-space: pre !important;
   overflow-wrap: normal !important;
   word-break: normal !important;

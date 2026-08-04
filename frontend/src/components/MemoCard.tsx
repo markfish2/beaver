@@ -91,10 +91,13 @@ interface MemoCardProps {
   readOnly?: boolean;
   compact?: boolean;
 }
+
+const BLOCK_CODE_FONT_SIZE = 'var(--markdown-block-code-font-size)';
+
 const codeBlockCustomStyle = (palette: MemoCardPalette): React.CSSProperties => ({
   margin: 0,
   borderRadius: '0 0 0.5rem 0.5rem',
-  fontSize: '0.95em',
+  fontSize: BLOCK_CODE_FONT_SIZE,
   background: palette.codeBlockBackground ?? palette.surfaceStrong,
   border: 'none',
   padding: '16px',
@@ -102,13 +105,43 @@ const codeBlockCustomStyle = (palette: MemoCardPalette): React.CSSProperties => 
   whiteSpace: 'pre',
 });
 
+const codeLineNumberStyle = (palette: MemoCardPalette): React.CSSProperties => ({
+  minWidth: '2.25em',
+  paddingRight: '0.9em',
+  marginRight: '0.9em',
+  textAlign: 'right',
+  userSelect: 'none',
+  opacity: 0.58,
+  color: palette.codeMutedText ?? palette.mutedText,
+  borderRight: `1px solid ${palette.codeBorder ?? palette.surfaceBorder}`,
+});
+
 type CodeBlockProps = React.ComponentPropsWithoutRef<'code'> & { palette: MemoCardPalette; compact?: boolean };
+
+function PlainCodeWithLineNumbers({ code, palette, compact }: { code: string; palette: MemoCardPalette; compact: boolean }) {
+  const lineNumberStyle = codeLineNumberStyle(palette);
+  return (
+    <pre
+      className={`markdown-code-body ${compact ? 'p-2.5' : 'p-4'} overflow-x-auto font-mono`}
+      style={{ background: palette.plainCodeBlockBackground ?? palette.surfaceStrong, color: palette.codeText ?? palette.text, margin: 0, fontSize: BLOCK_CODE_FONT_SIZE }}
+    >
+      <code className="block min-w-max" style={{ color: palette.codeText ?? palette.text }}>
+        {code.split('\n').map((line, index) => (
+          <span key={index} className="flex whitespace-pre">
+            <span style={lineNumberStyle}>{index + 1}</span>
+            <span>{line || ' '}</span>
+          </span>
+        ))}
+      </code>
+    </pre>
+  );
+}
 
 const CodeBlock = memo(function CodeBlock({ className, children, palette, compact = false, ...props }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || '');
   const language = match ? match[1] : '';
-  const code = String(children).replace(/\n$/, '');
+  const code = String(children).replace(/\n+$/, '');
   const isBlock = code.includes('\n') || language;
 
   const handleCopy = useCallback(async () => {
@@ -145,14 +178,14 @@ const CodeBlock = memo(function CodeBlock({ className, children, palette, compac
             language={language}
             PreTag="div"
             className="markdown-code-body"
-            customStyle={{ ...codeBlockCustomStyle(palette), padding: compact ? '10px' : '16px', fontSize: compact ? '0.82em' : '0.95em' }}
+            customStyle={{ ...codeBlockCustomStyle(palette), padding: compact ? '10px' : '16px', fontSize: BLOCK_CODE_FONT_SIZE }}
+            showLineNumbers
+            lineNumberStyle={codeLineNumberStyle(palette)}
           >
             {code}
           </SyntaxHighlighter>
         ) : (
-          <pre className={`markdown-code-body ${compact ? 'p-2.5 text-xs' : 'p-4 text-sm'} overflow-x-auto font-mono`} style={{ background: palette.plainCodeBlockBackground ?? palette.surfaceStrong, color: palette.codeText ?? palette.text, margin: 0 }}>
-            <code style={{ color: palette.codeText ?? palette.text }}>{code}</code>
-          </pre>
+          <PlainCodeWithLineNumbers code={code} palette={palette} compact={compact} />
         )}
       </div>
     );

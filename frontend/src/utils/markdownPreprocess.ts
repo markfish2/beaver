@@ -106,9 +106,6 @@ export function normalizeCodeBlocks(content: string): string {
         inCodeBlock = true;
       } else {
         inCodeBlock = false;
-        if (result[result.length - 1]?.trim() !== '') {
-          result.push('');
-        }
         result.push(lines[i]);
         const next = lines[i + 1];
         if (next !== undefined && next.trim() !== '') {

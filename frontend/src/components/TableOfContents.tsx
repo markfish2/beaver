@@ -144,12 +144,12 @@ export default function TableOfContents({ nodes, documentId }: TableOfContentsPr
               <button
                 key={item.id}
                 onClick={() => scrollToHeading(item.id)}
-                className={`w-full text-left text-[13px] leading-snug py-1 px-2 transition-all duration-150 truncate border-l-2 ${
+                className={`w-full text-left leading-snug py-1 px-2 transition-all duration-150 truncate border-l-2 ${
                   isActive
                     ? 'text-blue-600 dark:text-blue-400 border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 font-medium'
                     : 'text-gray-400 dark:text-gray-500 border-transparent hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50/60 dark:hover:bg-gray-800/40'
                 }`}
-                style={{ paddingLeft: `${8 + LEVEL_INDENT[item.level]}px` }}
+                style={{ paddingLeft: `${8 + LEVEL_INDENT[item.level]}px`, fontSize: 'calc(var(--outline-font-size, 16px) - 2px)' }}
                 title={item.content}
               >
                 <span className="text-gray-300 dark:text-gray-600 mr-0.5 inline-block scale-x-[0.33]">{LEVEL_DASH[item.level]}</span>
