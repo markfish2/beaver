@@ -28,17 +28,6 @@ export function extractTitle(content: string): string {
 }
 
 /**
- * Check if content has list items (lines starting with - / * / + at any indentation).
- */
-function hasListItems(content: string): boolean {
-  const lines = content.split('\n');
-  for (const line of lines) {
-    if (/^\s*[-*+]\s+/.test(line)) return true;
-  }
-  return false;
-}
-
-/**
  * Parse indentation level: count leading spaces, each 2 spaces = 1 level.
  */
 function getIndentLevel(line: string): number {

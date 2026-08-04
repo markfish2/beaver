@@ -1,15 +1,28 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo, Component, Suspense } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
 import { Excalidraw, MainMenu, exportToBlob, exportToSvg } from "@excalidraw/excalidraw";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { AppState, BinaryFiles, ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from "@excalidraw/excalidraw/types";
 import { Download, Image, FileJson, FileText, Loader2, StickyNote } from 'lucide-react';
 import { getExcalidrawDataFresh, updateExcalidrawData, loadExcalidrawFiles, VersionConflictError } from '../api/excalidraw';
-import type { Document } from '../api/data';
 import NoteEmbedContent from './NoteEmbedContent';
 import NotePickerDialog from './NotePickerDialog';
+import { usePhoneLayout } from '../hooks/usePhoneLayout';
 
 // 模块级变量存储 Excalidraw API
 let _excalidrawApiInstance: ExcalidrawImperativeAPI | null = null;
+
+function omitViewportState<T extends Record<string, unknown>>(appState: T): T {
+  const result = { ...appState };
+  delete result.scrollX;
+  delete result.scrollY;
+  delete result.zoom;
+  return result;
+}
+
+function fingerprint(elements: ReadonlyArray<{ id: string; version: number }>): string {
+  const lastElement = elements[elements.length - 1];
+  return `${elements.length}:${lastElement?.id || ''}:${lastElement?.version || ''}`;
+}
 
 // Error boundary to catch Excalidraw rendering errors (React 19 compatibility)
 class ExcalidrawErrorBoundary extends Component<
@@ -49,9 +62,9 @@ class ExcalidrawErrorBoundary extends Component<
 import { SaveStatusIndicator } from './SaveStatusIndicator';
 
 // 简单的 debounce 实现（带 cancel 方法）
-const debounce = <T extends (...args: any[]) => any>(func: T, wait: number) => {
+const debounce = <TArgs extends unknown[]>(func: (...args: TArgs) => void, wait: number) => {
   let timeout: NodeJS.Timeout | null = null;
-  const debounced = (...args: Parameters<T>) => {
+  const debounced = (...args: TArgs) => {
     if (timeout) clearTimeout(timeout);
     timeout = setTimeout(() => func(...args), wait);
   };
@@ -70,6 +83,7 @@ import "@excalidraw/excalidraw/index.css";
 interface ExcalidrawEditorProps {
   documentId: string;
   readOnly?: boolean;
+  mobileViewOnly?: boolean;
   title?: string;
   onTitleChange?: (newTitle: string) => void;
 }
@@ -77,16 +91,24 @@ interface ExcalidrawEditorProps {
 export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   documentId,
   readOnly = false,
+  mobileViewOnly = false,
   title = '',
   onTitleChange,
 }) => {
   const excalidrawRef = useRef<ExcalidrawImperativeAPI>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [initialData, setInitialData] = useState<{ elements: any[]; appState: any; files?: any } | null>(null);
+  type SceneElements = ReturnType<ExcalidrawImperativeAPI['getSceneElements']>;
+  type SceneElement = SceneElements[number];
+  type SaveData = (elements: SceneElements, appState: AppState) => void;
+  type ScenePayload = { elements: SceneElements; appState: Partial<AppState>; files?: BinaryFiles };
+
+  const [initialData, setInitialData] = useState<ExcalidrawInitialDataState | null>(null);
+  const [mobilePreview, setMobilePreview] = useState<'idle' | 'ready' | 'error'>('idle');
+  const mobilePreviewRef = useRef<HTMLDivElement>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error' | 'conflict'>('idle');
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [localTitle, setLocalTitle] = useState(title);
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = usePhoneLayout();
   const [showNotePicker, setShowNotePicker] = useState(false);
   // 缓存已渲染的笔记引用，避免拖动时每帧重建 React 组件
   const embedCacheRef = useRef<Map<string, React.ReactNode>>(new Map());
@@ -96,12 +118,15 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   const versionRef = useRef<number>(0);
   // documentId ref（避免闭包捕获旧值）
   const documentIdRef = useRef(documentId);
-  documentIdRef.current = documentId;
+  useEffect(() => {
+    documentIdRef.current = documentId;
+  }, [documentId]);
   // saveData ref（用于在 effect 中访问最新的 debounce 函数）
-  const saveDataRef = useRef<any>(null);
+  const saveDataRef = useRef<SaveData | null>(null);
+  const reloadCanvasRef = useRef<() => Promise<void>>(async () => {});
 
   // renderEmbeddable: 渲染笔记引用
-  const renderEmbeddable = useCallback((element: any, appState: any) => {
+  const renderEmbeddable = useCallback((element: SceneElement) => {
     const link = element.link as string;
     if (!link || !link.startsWith('beaver://')) return null;
     const cacheKey = element.id;
@@ -123,6 +148,14 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
 
   // validateEmbeddable: 允许所有链接（禁用 Excalidraw 内置域名验证）
   const validateEmbeddable = useCallback(() => true, []);
+  const handleLinkOpen = useCallback((
+    element: { link: string | null },
+    event: CustomEvent,
+  ) => {
+    if (element.link?.startsWith('beaver://')) {
+      event.preventDefault();
+    }
+  }, []);
 
   // 插入笔记引用
   const handleInsertNote = useCallback((doc: { id: string; title: string; type: string }) => {
@@ -156,14 +189,14 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
       strokeStyle: 'solid' as const,
       roughness: 0 as const,
       opacity: 100,
-      angle: 0 as any,
+      angle: 0,
       groupIds: [],
       frameId: null,
       roundness: { type: 3 as const },
       seed: Math.floor(Math.random() * 2000000000),
       version: 1,
       versionNonce: Math.floor(Math.random() * 2000000000),
-      index: null as any,
+      index: null,
       isDeleted: false,
       boundElements: null,
       updated: Date.now(),
@@ -172,7 +205,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     };
 
     const elements = api.getSceneElements();
-    api.updateScene({ elements: [...elements, embeddableElement as any] });
+    api.updateScene({ elements: [...elements, embeddableElement] as unknown as SceneElements });
   }, []);
 
   // React Router 导航拦截：有未保存数据时弹窗确认
@@ -181,7 +214,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     const origReplace = window.history.replaceState;
 
     const intercept = (fn: typeof origPush) => {
-      return function (this: History, data: any, unused: string, url?: string | URL | null) {
+      return function (this: History, data: unknown, unused: string, url?: string | URL | null) {
         if (hasUnsavedChangesRef.current && url) {
           const current = window.location.pathname + window.location.search;
           const next = typeof url === 'string' ? url : url?.toString() || '';
@@ -209,16 +242,6 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     setLocalTitle(title);
   }, [title]);
 
-  // 检测移动端
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768 || 'ontouchstart' in window);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
   // 加载画布数据，设置 initialData 供 Excalidraw 首次渲染
   useEffect(() => {
     let cancelled = false;
@@ -244,13 +267,13 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           versionRef.current = data.version || 0;
           const sceneData = JSON.parse(data.scene_data);
           if (sceneData.elements?.length > 0) {
-            const { scrollX, scrollY, zoom, ...restAppState } = sceneData.appState || {};
+            const restAppState = omitViewportState(sceneData.appState || {});
 
             // 并行加载图片，与场景数据一起传入 initialData
             const files = await loadExcalidrawFiles(loadedDocId);
             if (cancelled || documentIdRef.current !== loadedDocId) return;
 
-            const scenePayload: any = { elements: sceneData.elements, appState: restAppState };
+            const scenePayload = { elements: sceneData.elements, appState: restAppState } as ExcalidrawInitialDataState;
             if (Object.keys(files).length > 0) {
               scenePayload.files = files;
               filesRef.current = files;
@@ -296,7 +319,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         e.preventDefault();
         e.returnValue = '画布有未保存的更改，确定要离开吗？';
         // 同时尝试保存
-        const payload: any = {
+        const payload: ScenePayload = {
           elements,
           appState: { viewBackgroundColor: appState?.viewBackgroundColor, gridSize: appState?.gridSize },
         };
@@ -319,7 +342,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
       const elements = pendingElementsRef.current;
       const appState = pendingAppStateRef.current;
       if (hasUnsavedChangesRef.current && elements && elements.length > 0) {
-        const payload: any = {
+        const payload: ScenePayload = {
           elements,
           appState: { viewBackgroundColor: appState?.viewBackgroundColor, gridSize: appState?.gridSize },
         };
@@ -368,10 +391,114 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   // 保存锁、files 缓存、待保存数据
   const isSavingRef = useRef(false);
   const saveCompleteRef = useRef<(() => void) | null>(null);
-  const filesRef = useRef<any>(null);
+  const filesRef = useRef<BinaryFiles | null>(null);
   const filesDirtyRef = useRef(false);
-  const pendingElementsRef = useRef<any[]>(null);
-  const pendingAppStateRef = useRef<any>(null);
+  const pendingElementsRef = useRef<SceneElements | null>(null);
+  const pendingAppStateRef = useRef<AppState | null>(null);
+
+  // 移动端只查看画布时生成隔离 SVG，不挂载完整 Excalidraw React UI。
+  // SVG 直接挂载到 DOM，避免 iOS/部分 Android WebView 无法解码 Blob SVG。
+  // Beaver 笔记引用会先转换为普通矢量卡片，防止导出器渲染成黑色 iframe 占位块。
+  useEffect(() => {
+    if (!mobileViewOnly || !initialData) return;
+    let cancelled = false;
+    const previewRoot = mobilePreviewRef.current;
+    setMobilePreview('idle');
+    previewRoot?.replaceChildren();
+
+    const renderPreview = async () => {
+      try {
+        const sourceElements = (initialData.elements ?? []).filter(element => !element.isDeleted);
+        const elements = sourceElements.flatMap(element => {
+          if (element.type !== 'embeddable' || !element.link?.startsWith('beaver://')) {
+            return [element];
+          }
+
+          let noteTitle = '笔记引用';
+          let noteType = '笔记';
+          try {
+            const url = new URL(element.link);
+            noteTitle = url.searchParams.get('title') || element.customData?.title as string || noteTitle;
+            const type = url.searchParams.get('type');
+            noteType = type === 'memo' ? '随想' : type === 'document' ? '大纲' : '笔记';
+          } catch {
+            // 链接损坏时仍显示可识别的引用卡片，不中断整张画布。
+          }
+
+          const fontSize = Math.max(14, Math.min(24, element.height / 7));
+          const card = {
+            ...element,
+            type: 'rectangle',
+            link: null,
+            strokeColor: '#94a3b8',
+            backgroundColor: '#f8fafc',
+            fillStyle: 'solid',
+            roughness: 0,
+          };
+          const label = {
+            ...element,
+            id: `${element.id}-mobile-label`,
+            type: 'text',
+            x: element.x + 16,
+            y: element.y + 16,
+            width: Math.max(1, element.width - 32),
+            height: fontSize * 2.6,
+            angle: 0,
+            link: null,
+            strokeColor: '#334155',
+            backgroundColor: 'transparent',
+            roundness: null,
+            boundElements: null,
+            containerId: null,
+            originalText: `${noteTitle}\n${noteType}`,
+            text: `${noteTitle}\n${noteType}`,
+            fontSize,
+            fontFamily: 5,
+            textAlign: 'left',
+            verticalAlign: 'top',
+            lineHeight: 1.3,
+            autoResize: false,
+          };
+          return [card, label];
+        }) as Parameters<typeof exportToSvg>[0]['elements'];
+
+        if (elements.length === 0) {
+          setMobilePreview('ready');
+          return;
+        }
+        const svg = await exportToSvg({
+          elements,
+          appState: {
+            ...(initialData.appState ?? {}),
+            exportBackground: true,
+          },
+          files: initialData.files ?? filesRef.current,
+          exportPadding: 24,
+        });
+        if (cancelled || !previewRoot) return;
+        svg.removeAttribute('width');
+        svg.removeAttribute('height');
+        svg.setAttribute('role', 'img');
+        svg.setAttribute('aria-label', title || '画布预览');
+        svg.style.display = 'block';
+        svg.style.width = '100%';
+        svg.style.height = '100%';
+        svg.style.maxWidth = '100%';
+        svg.style.maxHeight = '100%';
+        previewRoot.replaceChildren(svg);
+        setMobilePreview('ready');
+      } catch (error) {
+        console.error('Mobile canvas preview failed:', error);
+        if (!cancelled) setMobilePreview('error');
+      }
+    };
+
+    void renderPreview();
+    return () => {
+      cancelled = true;
+      previewRoot?.replaceChildren();
+    };
+  }, [initialData, mobileViewOnly, title]);
 
   // 立即保存（绕过 debounce，用于页面关闭/组件卸载）
   const flushSave = useCallback(async () => {
@@ -389,7 +516,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
 
     isSavingRef.current = true;
     try {
-      const payload: any = {
+      const payload: ScenePayload = {
         elements,
         appState: {
           viewBackgroundColor: appState?.viewBackgroundColor,
@@ -411,7 +538,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     } catch (error) {
       if (error instanceof VersionConflictError) {
         // 版本冲突：静默重新加载
-        await reloadCanvas();
+        await reloadCanvasRef.current();
       } else {
         console.error('Flush save failed:', error);
       }
@@ -423,7 +550,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         saveCompleteRef.current = null;
       }
     }
-  }, [documentId]);
+  }, []);
 
   // 重新加载画布数据（版本冲突时使用）
   const reloadCanvas = useCallback(async () => {
@@ -433,7 +560,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         const sceneData = JSON.parse(data.scene_data);
         versionRef.current = data.version || 0;
         filesDirtyRef.current = false;
-        const { scrollX, scrollY, zoom, ...restAppState } = sceneData.appState || {};
+        const restAppState = omitViewportState(sceneData.appState || {});
         // 用 updateScene 更新已挂载的 Excalidraw
         if (excalidrawRef.current) {
           excalidrawRef.current.updateScene({
@@ -458,16 +585,18 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     }
   }, [documentId]);
 
+  useEffect(() => {
+    reloadCanvasRef.current = reloadCanvas;
+  }, [reloadCanvas]);
+
   // 未保存数据标记（用于离开拦截）
   const hasUnsavedChangesRef = useRef(false);
   // 上次保存时的 elements 指纹（用于判断是否真正有变化）
   const savedFingerprintRef = useRef<string>('');
-  const fingerprint = (els: any[]) => `${els.length}:${els[els.length - 1]?.id || ''}:${els[els.length - 1]?.version || ''}`;
-
   // 防抖保存
   const saveData = useMemo(
     () =>
-      debounce(async (elements: any[], appState: any) => {
+      debounce(async (elements: SceneElements, appState: AppState) => {
         if (!elements || elements.length === 0) return;
         if (isSavingRef.current) return;
 
@@ -484,7 +613,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         }, 30000);
 
         try {
-          const payload: any = {
+          const payload: ScenePayload = {
             elements,
             appState: {
               viewBackgroundColor: appState.viewBackgroundColor,
@@ -525,13 +654,13 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           // 图片保存成功后，将 pending 状态的图片元素更新为 saved
           if (filesWereSaved && excalidrawRef.current) {
             const currentElements = excalidrawRef.current.getSceneElements();
-            const updatedElements = currentElements.map((el: any) => {
+            const updatedElements = currentElements.map((el) => {
               if (el.type === 'image' && el.status === 'pending' && el.fileId) {
                 return { ...el, status: 'saved' };
               }
               return el;
             });
-            const hasChanges = updatedElements.some((el: any, i: number) => el !== currentElements[i]);
+            const hasChanges = updatedElements.some((el, i: number) => el !== currentElements[i]);
             if (hasChanges) {
               excalidrawRef.current.updateScene({ elements: updatedElements });
             }
@@ -583,11 +712,13 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   }, [documentId, reloadCanvas]);
 
   // 监听变化（用 ref 保存最新的 saveData，避免 Excalidraw 缓存旧回调）
-  saveDataRef.current = saveData;
   const flushSaveRef = useRef(flushSave);
-  flushSaveRef.current = flushSave;
+  useEffect(() => {
+    saveDataRef.current = saveData;
+    flushSaveRef.current = flushSave;
+  }, [saveData, flushSave]);
   const handleChange = useCallback(
-    (elements: any[], appState: any, files: any) => {
+    (elements: SceneElements, appState: AppState, files: BinaryFiles) => {
       if (elements && elements.length > 0) {
         // 记录最新数据（用于页面关闭时立即保存）
         pendingElementsRef.current = elements;
@@ -605,7 +736,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         }
       }
     },
-    [isLoading, readOnly, saveData]
+    []
   );
 
   // 导出功能
@@ -616,7 +747,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     setShowExportMenu(false);
 
     switch (format) {
-      case 'png':
+      case 'png': {
         const pngBlob = await exportToBlob({
           elements: api.getSceneElements(),
           appState: api.getAppState(),
@@ -626,8 +757,9 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         });
         downloadBlob(pngBlob, `canvas-${Date.now()}.png`);
         break;
+      }
 
-      case 'svg':
+      case 'svg': {
         const svg = await exportToSvg({
           elements: api.getSceneElements(),
           appState: api.getAppState(),
@@ -635,14 +767,16 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         const svgBlob = new Blob([svg.outerHTML], { type: 'image/svg+xml' });
         downloadBlob(svgBlob, `canvas-${Date.now()}.svg`);
         break;
+      }
 
-      case 'json':
+      case 'json': {
         const elements = api.getSceneElements();
         const appState = api.getAppState();
         const jsonData = JSON.stringify({ elements, appState }, null, 2);
         const jsonBlob = new Blob([jsonData], { type: 'application/json' });
         downloadBlob(jsonBlob, `canvas-${Date.now()}.excalidraw`);
         break;
+      }
     }
   };
 
@@ -662,6 +796,28 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-gray-100 mx-auto mb-4"></div>
           <p className="text-gray-500 dark:text-gray-400">加载画布中...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (mobileViewOnly) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center overflow-auto bg-white dark:bg-gray-900 p-3">
+        <div
+          ref={mobilePreviewRef}
+          className="absolute inset-3 flex items-center justify-center"
+          aria-hidden={mobilePreview !== 'ready'}
+        />
+        {mobilePreview === 'error' ? (
+          <div className="flex flex-col items-center gap-2 px-6 text-center">
+            <p className="text-sm text-gray-600 dark:text-gray-300">画布预览生成失败</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">请稍后重试，或在桌面端打开此画布</p>
+          </div>
+        ) : mobilePreview === 'idle' && initialData?.elements?.length ? (
+          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        ) : mobilePreview === 'ready' && !initialData?.elements?.length ? (
+          <p className="text-sm text-gray-400 dark:text-gray-500">这是一个空画布</p>
+        ) : null}
       </div>
     );
   }
@@ -744,12 +900,13 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
             _excalidrawApiInstance = api;
           }}
           initialData={initialData || undefined}
-          onChange={handleChange}
+          onChange={readOnly ? undefined : handleChange}
           viewModeEnabled={readOnly}
           theme="light"
           langCode="zh-CN"
           validateEmbeddable={validateEmbeddable}
           renderEmbeddable={renderEmbeddable}
+          onLinkOpen={handleLinkOpen}
           UIOptions={{
             canvasActions: {
               changeViewBackgroundColor: true,
@@ -789,6 +946,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
       </div>
 
       <NotePickerDialog
+        key={`${documentId}-${showNotePicker}`}
         isOpen={showNotePicker}
         onSelect={handleInsertNote}
         onClose={() => setShowNotePicker(false)}

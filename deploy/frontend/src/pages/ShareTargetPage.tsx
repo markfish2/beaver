@@ -73,23 +73,29 @@ function escapeRegex(s: string): string {
 export default function ShareTargetPage() {
   const [searchParams] = useSearchParams();
   const { isAuthenticated, isLoading } = useAuth();
-  const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'login'>('loading');
+  const [operationStatus, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('正在保存...');
 
   const title = searchParams.get('title') || '';
   const text = searchParams.get('text') || '';
   const url = searchParams.get('url') || '';
+  const hasSharedContent = Boolean(title || text || url);
+  const status: 'loading' | 'success' | 'error' | 'login' = isLoading
+    ? 'loading'
+    : !isAuthenticated
+      ? 'login'
+      : hasSharedContent
+        ? operationStatus
+        : 'success';
 
   useEffect(() => {
     if (isLoading) return;
 
     if (!isAuthenticated) {
-      setStatus('login');
       return;
     }
 
     if (!title && !text && !url) {
-      setStatus('success');
       return;
     }
 
@@ -97,7 +103,6 @@ export default function ShareTargetPage() {
 
     if (isXUrl) {
       // X 链接：客户端提取（手机有 VPN 可访问 x.com）
-      setMessage('正在提取推文内容...');
       extractXContent(url).then(extracted => {
         setMessage('正在保存...');
         return shareContent({
@@ -116,7 +121,6 @@ export default function ShareTargetPage() {
       });
     } else {
       // 普通 URL：后端抓取
-      setMessage('正在抓取文章内容...');
       shareContent({
         url: url || undefined,
         title: title || undefined,

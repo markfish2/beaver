@@ -36,6 +36,8 @@ def update_user_settings(db: Session, user_id: uuid.UUID, settings: schemas.User
         db_user.font_family = settings.font_family
     if settings.font_size:
         db_user.font_size = settings.font_size
+    if settings.markdown_style:
+        db_user.markdown_style = settings.markdown_style
     if settings.memo_columns is not None:
         db_user.memo_columns = settings.memo_columns
     db.commit()
@@ -620,6 +622,10 @@ def batch_update_node_properties(db: Session, updates: list[schemas.NodeBatchPro
     return updated_nodes
 
 def batch_save_operations(db: Session, operations: list[schemas.BatchSaveOperation]):
+    allowed_node_properties = {
+        'is_completed', 'is_in_progress', 'is_collapsed', 'heading',
+        'is_bold', 'is_italic', 'color', 'highlight', 'is_todo',
+    }
     # Pre-fetch all referenced nodes in a single query
     node_id_set = set()
     for operation in operations:
@@ -690,12 +696,12 @@ def batch_save_operations(db: Session, operations: list[schemas.BatchSaveOperati
                     if db_node:
                         property_name = data.get('property')
                         new_value = data.get('newValue')
-                        if property_name and new_value is not None:
+                        if property_name in allowed_node_properties and new_value is not None:
                             setattr(db_node, property_name, new_value)
                             touched_doc_ids.add(db_node.document_id)
                             results.append({'id': operation.id, 'status': 'success'})
                         else:
-                            results.append({'id': operation.id, 'status': 'skipped', 'reason': 'missing property or value'})
+                            results.append({'id': operation.id, 'status': 'skipped', 'reason': 'invalid property or value'})
                     else:
                         results.append({'id': operation.id, 'status': 'failed', 'reason': 'node not found'})
                 else:
@@ -849,6 +855,39 @@ def get_or_create_monthly_diary(db: Session, year: int, month: int):
     nodes = db.query(models.Node).filter(models.Node.document_id == doc.id).order_by(models.Node.sort_order).all()
     return doc, nodes, is_new
 
+def _dedupe_diary_day_nodes(db: Session, doc_id, date_content: str):
+    """Keep one top-level diary date node and merge duplicate children safely."""
+    duplicates = db.query(models.Node).filter(
+        models.Node.document_id == doc_id,
+        models.Node.parent_node_id.is_(None),
+        models.Node.content == date_content
+    ).order_by(models.Node.sort_order.asc(), models.Node.id.asc()).all()
+
+    if len(duplicates) <= 1:
+        return (duplicates[0] if duplicates else None), False
+
+    keeper = duplicates[0]
+    existing_empty_todo = db.query(models.Node).filter(
+        models.Node.document_id == doc_id,
+        models.Node.parent_node_id == keeper.id,
+        models.Node.is_todo.is_(True),
+        models.Node.content == ""
+    ).first()
+
+    for duplicate in duplicates[1:]:
+        children = db.query(models.Node).filter(models.Node.parent_node_id == duplicate.id).all()
+        for child in children:
+            if child.is_todo and child.content == "" and existing_empty_todo:
+                db.delete(child)
+            else:
+                child.parent_node_id = keeper.id
+                if child.is_todo and child.content == "":
+                    existing_empty_todo = child
+        db.delete(duplicate)
+
+    db.flush()
+    return keeper, True
+
 def get_or_create_day_node(db: Session, doc_id, year: int, month: int, day: int):
     """Find or create a date node (e.g. '2026年5月26日 星期一') in the monthly doc."""
     dt = date(year, month, day)
@@ -856,11 +895,7 @@ def get_or_create_day_node(db: Session, doc_id, year: int, month: int, day: int)
     date_content = f"{year}年{month}月{day}日 {weekday}"
 
     # Find existing date node
-    node = db.query(models.Node).filter(
-        models.Node.document_id == doc_id,
-        models.Node.parent_node_id.is_(None),  # top-level only
-        models.Node.content == date_content
-    ).first()
+    node, deduped = _dedupe_diary_day_nodes(db, doc_id, date_content)
 
     is_new = False
     child_node = None
@@ -888,6 +923,8 @@ def get_or_create_day_node(db: Session, doc_id, year: int, month: int, day: int)
         db.commit()
         db.refresh(node)
         db.refresh(child_node)
+    elif deduped:
+        db.commit()
 
     return node, is_new, child_node
 

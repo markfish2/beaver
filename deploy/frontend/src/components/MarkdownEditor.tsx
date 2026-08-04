@@ -62,7 +62,13 @@ function buildTheme(isDark: boolean, scrollable: boolean, compact: boolean) {
   return EditorView.theme({
     '&': { backgroundColor: bg, color: fg, ...rootStyle },
     '.cm-scroller': { fontFamily: 'inherit', lineHeight: '1.75', ...scrollerStyle },
-    '.cm-content': { caretColor: accent, fontFamily: 'inherit', fontSize: 'inherit', paddingLeft: '10px' },
+    '.cm-content': {
+      caretColor: accent,
+      fontFamily: 'inherit',
+      fontSize: 'inherit',
+      paddingLeft: '10px',
+      paddingBottom: compact ? undefined : '33vh',
+    },
     '.cm-cursor, .cm-dropCursor': { borderLeftColor: accent, borderLeftWidth: '2px' },
     '.cm-activeLine': { backgroundColor: activeLineBg },
     '&.cm-focused': { outline: 'none' },
@@ -153,7 +159,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.theme === 'dark') return true;
-        if (parsed.theme && parsed.theme !== 'dark') return false;
+        if (parsed.theme && parsed.theme !== 'system') return false;
       }
     } catch { /* ignore */ }
     return document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;

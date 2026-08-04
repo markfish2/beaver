@@ -3,10 +3,17 @@
  */
 import type { Root } from 'hast';
 
+interface MutableHastNode {
+  type: string;
+  tagName?: string;
+  value?: string;
+  children?: MutableHastNode[];
+}
+
 export function safeRehypeRaw() {
   return (tree: Root) => {
     // 递归处理，跳过 pre/code 节点内的 raw HTML
-    function walk(node: any, inPre = false) {
+    function walk(node: MutableHastNode, inPre = false) {
       if (node.type === 'raw' && inPre) {
         // 在 pre/code 内的 raw HTML 转为文本节点
         node.type = 'text';
@@ -21,6 +28,6 @@ export function safeRehypeRaw() {
         }
       }
     }
-    walk(tree);
+    walk(tree as unknown as MutableHastNode);
   };
 }

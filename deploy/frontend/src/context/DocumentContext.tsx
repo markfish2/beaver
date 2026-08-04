@@ -21,15 +21,6 @@ export const DocumentProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(false);
   const { isAuthenticated } = useAuth();
 
-  // Re-fetch documents when authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      refreshDocuments();
-    } else {
-      setDocuments([]);
-    }
-  }, [isAuthenticated]);
-
   const refreshDocuments = useCallback(async (search?: string) => {
     setIsLoading(true);
     try {
@@ -41,6 +32,15 @@ export const DocumentProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(false);
     }
   }, []);
+
+  // Re-fetch documents when authenticated
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (isAuthenticated) void refreshDocuments();
+      else setDocuments([]);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [isAuthenticated, refreshDocuments]);
 
   const updateDocumentTitle = useCallback((id: string, newTitle: string) => {
     setDocuments(prev => prev.map(d => d.id === id ? { ...d, title: newTitle } : d));

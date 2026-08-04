@@ -128,23 +128,25 @@ export const parseMarkdown = (text: string): ParsedNode[] => {
 };
 
 // Flatten the tree for batch insertion, preserving order and parent links
+interface FlattenedNode {
+  id: string;
+  document_id: string;
+  parent_node_id: string | null;
+  content: string;
+  note: string | null;
+  sort_order: number;
+  is_completed: boolean;
+  is_in_progress: boolean;
+  is_collapsed: boolean;
+}
+
 export const flattenParsedNodes = (
   nodes: ParsedNode[], 
   documentId: string, 
   rootParentId: string | null, 
   startSortOrder: number
-): {
-  id: string,
-  document_id: string,
-  parent_node_id: string | null,
-  content: string,
-  note: string | null,
-  sort_order: number,
-  is_completed: boolean,
-  is_in_progress: boolean,
-  is_collapsed: boolean
-}[] => {
-  const result: any[] = [];
+): FlattenedNode[] => {
+  const result: FlattenedNode[] = [];
 
   let currentSortOrder = startSortOrder;
 
@@ -186,7 +188,7 @@ export const nodesToMarkdown = (nodes: Node[], selectedIds: string[]): string =>
       const indent = '  '.repeat(depth);
       const bullet = '- ';
       const check = node.is_completed ? '[x] ' : node.is_in_progress ? '[-] ' : '';
-      let line = `${indent}${bullet}${check}${node.content}`;
+      const line = `${indent}${bullet}${check}${node.content}`;
       
       // Add note if exists
       let noteLine = '';

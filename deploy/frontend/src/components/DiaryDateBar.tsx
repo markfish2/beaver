@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useMemo } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
@@ -13,20 +13,15 @@ interface DiaryDateBarProps {
   diaryDays: Set<number>;
   onDayClick: (day: number) => void;
   onMonthNavigate: (year: number, month: number) => void;
+  showMonthArrows?: boolean;
 }
 
-export default function DiaryDateBar({ docYear, docMonth, diaryDays, onDayClick, onMonthNavigate }: DiaryDateBarProps) {
-  const today = new Date();
-  const [viewYear, setViewYear] = useState(docYear);
-  const [viewMonth, setViewMonth] = useState(docMonth);
+export default function DiaryDateBar({ docYear, docMonth, diaryDays, onDayClick, onMonthNavigate, showMonthArrows = false }: DiaryDateBarProps) {
+  const today = useMemo(() => new Date(), []);
+  const viewYear = docYear;
+  const viewMonth = docMonth;
   const scrollRef = useRef<HTMLDivElement>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
-
-  // Sync view month with document month when document changes
-  useEffect(() => {
-    setViewYear(docYear);
-    setViewMonth(docMonth);
-  }, [docYear, docMonth]);
 
   // Scroll to today element with retry (ensures DOM is ready)
   const scrollToToday = useCallback((behavior: ScrollBehavior = 'smooth') => {
@@ -53,7 +48,7 @@ export default function DiaryDateBar({ docYear, docMonth, diaryDays, onDayClick,
       }, 50);
       return () => clearTimeout(t1);
     }
-  }, [viewYear, viewMonth, scrollToToday]);
+  }, [viewYear, viewMonth, today, scrollToToday]);
 
   const isViewingDocMonth = viewYear === docYear && viewMonth === docMonth;
   const isCurrentMonth = viewYear === today.getFullYear() && viewMonth === today.getMonth() + 1;
@@ -70,8 +65,6 @@ export default function DiaryDateBar({ docYear, docMonth, diaryDays, onDayClick,
   const goToToday = useCallback(() => {
     const ty = today.getFullYear();
     const tm = today.getMonth() + 1;
-    setViewYear(ty);
-    setViewMonth(tm);
     if (ty !== docYear || tm !== docMonth) {
       onMonthNavigate(ty, tm);
     } else {
@@ -82,7 +75,12 @@ export default function DiaryDateBar({ docYear, docMonth, diaryDays, onDayClick,
         }
       }, 50);
     }
-  }, [docYear, docMonth, onMonthNavigate, scrollToToday]);
+  }, [today, docYear, docMonth, onMonthNavigate, scrollToToday]);
+
+  const navigateMonth = useCallback((direction: -1 | 1) => {
+    const date = new Date(viewYear, viewMonth - 1 + direction, 1);
+    onMonthNavigate(date.getFullYear(), date.getMonth() + 1);
+  }, [viewYear, viewMonth, onMonthNavigate]);
 
   // Touch swipe handling — swipe to change month
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -131,9 +129,29 @@ export default function DiaryDateBar({ docYear, docMonth, diaryDays, onDayClick,
     >
       {/* Month header */}
       <div className="flex items-center justify-center gap-2 mb-2 px-1">
+        {showMonthArrows && (
+          <button
+            type="button"
+            onClick={() => navigateMonth(-1)}
+            aria-label="上一个月"
+            className="p-1 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+        )}
         <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
           {viewYear}年{viewMonth}月
         </span>
+        {showMonthArrows && (
+          <button
+            type="button"
+            onClick={() => navigateMonth(1)}
+            aria-label="下一个月"
+            className="p-1 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        )}
         <button
           onClick={goToToday}
           className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${

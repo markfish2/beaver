@@ -9,6 +9,7 @@ const turndown = new TurndownService({
   emDelimiter: '*',
   strongDelimiter: '**',
 });
+const headingLevels = new WeakMap<Node, number>();
 
 // 启用 GFM 插件（表格、删除线、任务列表）
 turndown.use(gfm);
@@ -61,18 +62,17 @@ turndown.addRule('headingClass', {
     const cls = (el.getAttribute('class') || '').toLowerCase();
     const match = cls.match(/\bh([1-6])\b/);
     if (match) {
-      (el as any).__headingLevel = parseInt(match[1]);
+      headingLevels.set(node, parseInt(match[1], 10));
       return true;
     }
     if (/\b(heading|title)\b/.test(cls) && /^(DIV|P|SPAN|SECTION)$/.test(node.nodeName)) {
-      (el as any).__headingLevel = 2;
+      headingLevels.set(node, 2);
       return true;
     }
     return false;
   },
   replacement(content, node) {
-    const el = node as unknown as HTMLElement;
-    const level = (el as any).__headingLevel || 2;
+    const level = headingLevels.get(node) ?? 2;
     const prefix = '#'.repeat(level);
     return `\n\n${prefix} ${content.trim()}\n\n`;
   },
@@ -297,20 +297,4 @@ export function getPasteMarkdown(clipboardData: DataTransfer): string | null {
   if (!html) return null;
   const md = htmlToMarkdown(html);
   return md || null;
-}
-
-/**
- * 从 Markdown 中提取所有外部图片 URL（排除已经是本地 /uploads/ 的）
- */
-export function extractExternalImageUrls(markdown: string): string[] {
-  const urls: string[] = [];
-  const regex = /!\[([^\]]*)\]\(([^)]+)\)/g;
-  let match;
-  while ((match = regex.exec(markdown)) !== null) {
-    const url = match[2];
-    if (url && !url.startsWith('/uploads/') && !url.startsWith('data:')) {
-      urls.push(url);
-    }
-  }
-  return [...new Set(urls)];
 }

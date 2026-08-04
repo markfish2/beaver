@@ -98,13 +98,6 @@ const DEPTH_BAR_COLORS = [
   '#C45A8A', // depth 3 - pink (darker)
   '#8A5AC4', // depth 4 - purple (darker)
 ];
-const DEPTH_BORDER_COLORS = [
-  '#F5D0A9', // depth 0
-  '#A9C8F5', // depth 1
-  '#A9F5C4', // depth 2
-  '#F5A9C8', // depth 3
-  '#C8A9F5', // depth 4
-];
 const DONE_COLOR = '#F3F4F6';
 
 // ==================== Component ====================

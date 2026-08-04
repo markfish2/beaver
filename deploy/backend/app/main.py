@@ -39,6 +39,16 @@ if not os.path.exists(THUMB_DIR):
 
 logger = logging.getLogger(__name__)
 
+
+class SafeUploadStaticFiles(StaticFiles):
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        if path.lower().endswith(".svg"):
+            response.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
+            response.headers["Content-Disposition"] = "attachment"
+        return response
+
 @app.on_event("startup")
 def generate_missing_thumbnails():
     """Generate thumbnails for existing images that don't have one yet."""
@@ -75,230 +85,15 @@ def generate_missing_thumbnails():
         logger.warning("Pillow 未安装，跳过缩略图生成")
 
 @app.on_event("startup")
-def migrate_database():
-    """Add missing columns to existing tables."""
-    import sqlite3
+def run_database_migrations():
+    from .migrations import migrate_database
     db_path = os.path.join(os.path.dirname(__file__), "..", "data", "app.db")
-    if not os.path.exists(db_path):
-        return
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        # Check if is_public column exists in memos table
-        cursor.execute("PRAGMA table_info(memos)")
-        columns = [row[1] for row in cursor.fetchall()]
-        if 'is_public' not in columns:
-            cursor.execute("ALTER TABLE memos ADD COLUMN is_public BOOLEAN DEFAULT 0")
-            conn.commit()
-            logger.info("已添加 memos.is_public 列")
-        # Create todos table if not exists
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS todos (
-                id TEXT PRIMARY KEY,
-                content TEXT DEFAULT '',
-                is_completed BOOLEAN DEFAULT 0,
-                sort_order REAL DEFAULT 0.0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        conn.commit()
-        logger.info("已确 todos 表存在")
-        # Create api_tokens table if not exists
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS api_tokens (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                name TEXT DEFAULT 'API Token',
-                token_hash TEXT UNIQUE NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_used_at TIMESTAMP
-            )
-        """)
-        conn.commit()
-        logger.info("已确认 api_tokens 表存在")
-        # Create habits table if not exists
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS habits (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                icon TEXT DEFAULT '📌',
-                sort_order REAL DEFAULT 0.0,
-                is_archived BOOLEAN DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        # Create habit_records table if not exists
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS habit_records (
-                id TEXT PRIMARY KEY,
-                habit_id TEXT NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
-                record_date TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_habit_records_habit_id ON habit_records(habit_id)")
-        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_habit_records_unique ON habit_records(habit_id, record_date)")
-        conn.commit()
-        logger.info("已确认 habits / habit_records 表存在")
-        # Add updated_at column to documents table if not exists
-        cursor.execute("PRAGMA table_info(documents)")
-        doc_columns = [row[1] for row in cursor.fetchall()]
-        if 'updated_at' not in doc_columns:
-            cursor.execute("ALTER TABLE documents ADD COLUMN updated_at TIMESTAMP")
-            cursor.execute("UPDATE documents SET updated_at = datetime('now')")
-            conn.commit()
-            logger.info("已添加 documents.updated_at 列")
-        # Add user profile fields if not exists
-        cursor.execute("PRAGMA table_info(users)")
-        user_columns = [row[1] for row in cursor.fetchall()]
-        for col_name, col_def in [
-            ('nickname', "VARCHAR(50)"),
-            ('email', "VARCHAR(100)"),
-            ('phone', "VARCHAR(20)"),
-            ('bio', "VARCHAR(200)"),
-            ('avatar_path', "VARCHAR(500)"),
-        ]:
-            if col_name not in user_columns:
-                cursor.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_def}")
-                conn.commit()
-                logger.info(f"已添加 users.{col_name} 列")
-        # Add ai_excluded to documents and memos
-        for table in ['documents', 'memos']:
-            cursor.execute(f"PRAGMA table_info({table})")
-            columns = [row[1] for row in cursor.fetchall()]
-            if 'ai_excluded' not in columns:
-                cursor.execute(f"ALTER TABLE {table} ADD COLUMN ai_excluded BOOLEAN DEFAULT 0")
-                conn.commit()
-                logger.info(f"已添加 {table}.ai_excluded 列")
-        # Create AI conversation tables
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS ai_conversations (
-                id TEXT PRIMARY KEY,
-                title VARCHAR(200),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS ai_messages (
-                id TEXT PRIMARY KEY,
-                conversation_id TEXT NOT NULL REFERENCES ai_conversations(id) ON DELETE CASCADE,
-                role VARCHAR(20) NOT NULL,
-                content TEXT NOT NULL,
-                sources TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_ai_messages_conversation ON ai_messages(conversation_id)")
+    migrate_database(db_path)
 
-        # 性能优化索引
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_documents_sort_order ON documents(sort_order)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_nodes_document_sort ON nodes(document_id, sort_order)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_memos_created_at_desc ON memos(created_at DESC)")
-
-        # 项目管理表
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS projects (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL DEFAULT '',
-                sort_order REAL DEFAULT 0.0,
-                is_archived INTEGER DEFAULT 0,
-                is_deleted INTEGER DEFAULT 0,
-                deleted_at TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS tasks (
-                id TEXT PRIMARY KEY,
-                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-                parent_id TEXT REFERENCES tasks(id) ON DELETE CASCADE,
-                title TEXT DEFAULT '',
-                start_date TEXT NOT NULL,
-                end_date TEXT NOT NULL,
-                is_done INTEGER DEFAULT 0,
-                sort_order REAL DEFAULT 0.0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_tasks_project_id ON tasks(project_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_tasks_parent_id ON tasks(parent_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_projects_archived ON projects(is_archived)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_projects_deleted ON projects(is_deleted)")
-
-        # 项目管理表
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS projects (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL DEFAULT '',
-                sort_order REAL DEFAULT 0.0,
-                is_archived INTEGER DEFAULT 0,
-                is_deleted INTEGER DEFAULT 0,
-                deleted_at TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS tasks (
-                id TEXT PRIMARY KEY,
-                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-                parent_id TEXT REFERENCES tasks(id) ON DELETE CASCADE,
-                title TEXT DEFAULT '',
-                start_date TEXT NOT NULL,
-                end_date TEXT NOT NULL,
-                is_done INTEGER DEFAULT 0,
-                sort_order REAL DEFAULT 0.0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_tasks_project_id ON tasks(project_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_tasks_parent_id ON tasks(parent_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_projects_archived ON projects(is_archived)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_projects_deleted ON projects(is_deleted)")
-
-        # 项目管理表
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS projects (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL DEFAULT '',
-                sort_order REAL DEFAULT 0.0,
-                is_archived INTEGER DEFAULT 0,
-                is_deleted INTEGER DEFAULT 0,
-                deleted_at TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS tasks (
-                id TEXT PRIMARY KEY,
-                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-                parent_id TEXT REFERENCES tasks(id) ON DELETE CASCADE,
-                title TEXT DEFAULT '',
-                start_date TEXT NOT NULL,
-                end_date TEXT NOT NULL,
-                is_done INTEGER DEFAULT 0,
-                sort_order REAL DEFAULT 0.0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_tasks_project_id ON tasks(project_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_tasks_parent_id ON tasks(parent_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_projects_archived ON projects(is_archived)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS ix_projects_deleted ON projects(is_deleted)")
-
-        conn.commit()
-        logger.info("已确认 ai_conversations / ai_messages 表存在")
-        conn.close()
-    except Exception as e:
-        logger.warning(f"数据库迁移失败: {e}")
 
 @app.on_event("startup")
 def migrate_excalidraw_to_files():
-    """将画布数据从 SQLite 迁移到文件系统。"""
+    """将旧画布数据安全迁移到文件系统，不覆盖已存在的场景。"""
     import sqlite3
     import json as json_mod
     from . import excalidraw_storage as ex_storage
@@ -313,25 +108,41 @@ def migrate_excalidraw_to_files():
         conn.close()
         if not rows:
             return
-        count = 0
+        migrated_ids = []
         for doc_id, scene_data_str in rows:
             try:
+                if ex_storage.read_scene(doc_id) is not None:
+                    # 文件系统版本已存在，应视为权威数据，仅清理旧 SQLite 副本。
+                    migrated_ids.append(doc_id)
+                    continue
                 scene_obj = json_mod.loads(scene_data_str)
                 files = scene_obj.pop("files", None)
                 ex_storage.write_scene(doc_id, scene_obj)
-                if files:
-                    ex_storage.write_files(doc_id, files)
-                count += 1
+                if isinstance(files, dict):
+                    meta = {}
+                    for file_id, file_info in files.items():
+                        if not isinstance(file_info, dict):
+                            continue
+                        data_url = file_info.get("dataURL") or file_info.get("dataUrl")
+                        if data_url:
+                            meta[file_id] = ex_storage.write_image_file(doc_id, file_id, data_url)
+                    if meta:
+                        ex_storage.write_files_meta(doc_id, meta)
+                migrated_ids.append(doc_id)
             except Exception as e:
                 logger.warning(f"迁移画布数据失败: {doc_id}, {e}")
-        if count > 0:
-            # 清空 SQLite 中的 scene_data
+        if migrated_ids:
+            # 只清空已经成功迁移或确认存在文件系统版本的记录。
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
-            cursor.execute("UPDATE excalidraw_data SET scene_data = NULL WHERE scene_data IS NOT NULL")
+            placeholders = ",".join("?" for _ in migrated_ids)
+            cursor.execute(
+                f"UPDATE excalidraw_data SET scene_data = NULL WHERE document_id IN ({placeholders})",
+                migrated_ids,
+            )
             conn.commit()
             conn.close()
-            logger.info(f"已迁移 {count} 个画布数据到文件系统")
+            logger.info(f"已处理 {len(migrated_ids)} 个旧画布数据")
     except Exception as e:
         logger.warning(f"画布数据迁移失败: {e}")
 
@@ -361,7 +172,7 @@ app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 
 # Mount static files for uploads (must be after API routes)
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+app.mount("/uploads", SafeUploadStaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 @app.get("/")
 def read_root():

@@ -6,8 +6,9 @@ WORKDIR /app
 # 使用阿里云镜像源加速
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
-# Copy package files first for better layer caching
+# postinstall 需要补丁脚本，和依赖清单一起复制以保留依赖层缓存
 COPY package.json package-lock.json* ./
+COPY scripts ./scripts
 
 # 使用淘宝 npm 镜像加速
 RUN npm install --registry=https://registry.npmmirror.com

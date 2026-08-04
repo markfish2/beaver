@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { RotateCcw, Trash2, Loader2, ListTree, FileText, StickyNote, Folder, PenTool } from 'lucide-react';
 import { getTrash, restoreFromTrash, permanentDelete, emptyTrash } from '../api/data';
-import type { TrashItem, TrashResponse } from '../api/data';
+import type { TrashResponse } from '../api/data';
 import { showToast } from '../utils/toast';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -51,8 +51,13 @@ export default function TrashPanel() {
   }, []);
 
   useEffect(() => {
-    fetchTrash();
-  }, [fetchTrash]);
+    let active = true;
+    getTrash()
+      .then(data => { if (active) setTrash(data); })
+      .catch(error => console.error('Failed to fetch trash:', error))
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
 
   const handleRestore = async (type: 'document' | 'memo', id: string) => {
     try {

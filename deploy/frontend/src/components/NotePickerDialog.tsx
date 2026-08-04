@@ -1,7 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, FileText, ListTree, StickyNote, X } from 'lucide-react';
 import { getDocuments, getMemos } from '../api/data';
-import type { Document, Memo } from '../api/data';
 
 interface NoteItem {
   id: string;
@@ -22,22 +21,7 @@ export default function NotePickerDialog({ isOpen, onSelect, onClose }: NotePick
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      setQuery('');
-      setSelectedIndex(0);
-      loadDocs('');
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const timer = setTimeout(() => loadDocs(query), 200);
-    return () => clearTimeout(timer);
-  }, [query, isOpen]);
-
-  const loadDocs = async (search: string) => {
+  const loadDocs = useCallback(async (search: string) => {
     setLoading(true);
     try {
       // 并行获取文档和 memo
@@ -53,16 +37,28 @@ export default function NotePickerDialog({ isOpen, onSelect, onClose }: NotePick
       }
       // 添加 memo
       for (const m of memoRes.memos) {
-        const preview = (m.content || '').replace(/[#*`\[\]>~\-]/g, '').trim().slice(0, 40);
+        const preview = (m.content || '').replace(/[#*`[\]>~-]/g, '').trim().slice(0, 40);
         items.push({ id: m.id, title: preview || '空随想', type: 'memo' });
       }
-      setDocuments(items as any);
+      setDocuments(items);
     } catch {
       setDocuments([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setTimeout(() => void loadDocs(query), 200);
+    return () => clearTimeout(timer);
+  }, [query, isOpen, loadDocs]);
 
   const filteredDocs = documents.filter(d =>
     !query || d.title.toLowerCase().includes(query.toLowerCase())

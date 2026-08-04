@@ -4,12 +4,19 @@
  */
 import type { Root } from 'hast';
 
+interface MutableHastNode {
+  type: string;
+  tagName?: string;
+  value?: string;
+  children?: MutableHastNode[];
+}
+
 export function preserveCodeBlocks() {
   return (tree: Root) => {
-    function walk(node: any) {
+    function walk(node: MutableHastNode) {
       if (node.type === 'element' && node.tagName === 'pre') {
         // 找到 <pre> 元素，提取纯文本内容
-        const codeEl = node.children?.find((c: any) => c.type === 'element' && c.tagName === 'code');
+        const codeEl = node.children?.find(c => c.type === 'element' && c.tagName === 'code');
         if (codeEl) {
           // 收集所有文本内容
           const text = collectText(codeEl);
@@ -23,15 +30,15 @@ export function preserveCodeBlocks() {
         }
       }
     }
-    walk(tree);
+    walk(tree as unknown as MutableHastNode);
   };
 }
 
-function collectText(node: any): string {
+function collectText(node: MutableHastNode): string {
   if (node.type === 'text') return node.value || '';
   if (node.type === 'raw') return node.value || '';
   if (node.children) {
-    return node.children.map((c: any) => collectText(c)).join('');
+    return node.children.map(collectText).join('');
   }
   return '';
 }

@@ -7,9 +7,10 @@ services:
     restart: unless-stopped
     platform: linux/amd64
     volumes:
-      - ./data:/app/data
+      - ./backend/data:/app/data
     environment:
       - DATABASE_URL=sqlite:///app/data/app.db
+      - SECRET_KEY=REDACTED_SECRET_REMOVED
     networks:
       - miniflowy-network
     healthcheck:

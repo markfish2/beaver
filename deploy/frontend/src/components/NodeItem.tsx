@@ -7,10 +7,11 @@ import { nodesToMemoMarkdown } from '../utils/convertNode';
 import MentionDropdown from './MentionDropdown';
 import ImageViewer from './ImageViewer';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
+import { isPhoneLayout } from '../utils/deviceLayout';
 
 interface NodeItemProps {
-  node: Node;
-  childrenNodes?: Node[];
+  node: NodeWithTreeMeta;
+  childrenNodes?: NodeWithTreeMeta[];
   documents?: Document[];
   onContentChange: (id: string, content: string) => void;
   onNoteChange: (id: string, note: string | null) => void;
@@ -31,6 +32,31 @@ interface NodeItemProps {
   onEndEditing?: (id: string) => void;
   onBlurToolbar?: () => void;
 }
+
+type NodeWithTreeMeta = Node & {
+  children?: NodeWithTreeMeta[];
+  subtreeVersion?: string;
+  subtreeNodeIds?: string[];
+};
+
+const selectedSignatureForSubtree = (selectedNodeIds: string[] | undefined, node: NodeWithTreeMeta): string => {
+  if (!selectedNodeIds || selectedNodeIds.length === 0) return '0';
+  const subtreeIds = node.subtreeNodeIds ?? [node.id];
+  const subtreeIdSet = new Set(subtreeIds);
+  const selectedInSubtree = selectedNodeIds.filter(id => subtreeIdSet.has(id));
+  return selectedInSubtree.length > 0 ? `${selectedNodeIds.length}:${selectedInSubtree.join(',')}` : '0';
+};
+
+const focusSignatureForNode = (
+  focusedNodeId: { id: string, field: 'content' | 'note' } | null | undefined,
+  nodeId: string
+): string => focusedNodeId?.id === nodeId ? focusedNodeId.field : '';
+
+const dragVisualSignatureForNode = (
+  selectedNodeIds: string[] | undefined,
+  nodeId: string,
+  isDragMoving: boolean | undefined
+): string => selectedNodeIds?.includes(nodeId) && isDragMoving ? 'dragging-selected' : '';
 
 const NodeItem = memo(({
   node,
@@ -221,7 +247,7 @@ const NodeItem = memo(({
   }, [shouldFocus, node.id]);
 
   const scrollIntoViewSafe = (el: HTMLElement) => {
-    const isMobile = window.innerWidth < 768;
+    const isMobile = isPhoneLayout();
     if (!isMobile) return;
     
     const toolbarHeight = 48;
@@ -287,7 +313,7 @@ const NodeItem = memo(({
     }, 500);
   }, [node.id, onContentChange]);
 
-  const handleNoteInput = useCallback((e: React.FormEvent<HTMLDivElement>) => {
+  const handleNoteInput = useCallback((_e: React.FormEvent<HTMLDivElement>) => {
     // 不在这里调用 onNoteChange，避免触发重新渲染导致光标跳转
     // 只在 blur 时保存
   }, []);
@@ -462,6 +488,12 @@ const NodeItem = memo(({
   // Check if this node is part of a multi-selection
   const isInMultiSelection = selectedNodeIds.length > 1 && selectedNodeIds.includes(node.id);
 
+  useEffect(() => {
+    if (isInMultiSelection) {
+      setShowToolbar(false);
+    }
+  }, [isInMultiSelection]);
+
   const handleStyleChange = (styles: Partial<Node>) => {
     if (isInMultiSelection) {
       selectedNodeIds.forEach(id => onStyleChange?.(id, styles));
@@ -515,7 +547,7 @@ const NodeItem = memo(({
       <div
          data-node-id={node.id}
          className={`group relative flex items-start py-0 rounded-sm transition-colors ${
-           isSelected ? 'bg-gray-100 dark:bg-gray-700' : ''
+           isSelected ? 'bg-blue-100/80 dark:bg-blue-900/45' : ''
          } ${isDragMoving && isSelected ? 'opacity-40' : ''}`}
          onClick={(e) => {
              e.stopPropagation();
@@ -547,25 +579,27 @@ const NodeItem = memo(({
         {/* Bullet wrapper - relative 定位使按钮居中仅对齐内容行，不受备注高度影响 */}
         <div className={`relative flex-shrink-0 ${getBulletMarginTop()} ${!hasChildren ? 'ml-0' : ''}`}>
           {/* Edit Button - 悬停时显示 */}
-          <button
-            ref={triggerRef}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!showToolbar && triggerRef.current) {
-                const rect = triggerRef.current.getBoundingClientRect();
-                setToolbarPos({ top: rect.bottom + 4, left: rect.left });
-              }
-              setShowToolbar(!showToolbar);
-            }}
-            className={`absolute -left-10 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center z-10 transition-opacity cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded ${
-              showToolbar ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-            }`}
-            title="编辑样式"
-          >
-            <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-            </svg>
-          </button>
+          {!isInMultiSelection && (
+            <button
+              ref={triggerRef}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!showToolbar && triggerRef.current) {
+                  const rect = triggerRef.current.getBoundingClientRect();
+                  setToolbarPos({ top: rect.bottom + 4, left: rect.left });
+                }
+                setShowToolbar(!showToolbar);
+              }}
+              className={`absolute -left-10 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center z-10 transition-opacity cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded ${
+                showToolbar ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+              }`}
+              title="编辑样式"
+            >
+              <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
+          )}
 
           {/* Drag Handle - 悬停时显示，拖拽移动单个节点 */}
           <div
@@ -633,17 +667,23 @@ const NodeItem = memo(({
           <div className="relative">
             {/* 待办复选框 - 当节点是待办状态时显示，absolute 定位在第一行中心 */}
             {node.is_todo && (
-              <span
+              <button
+                type="button"
                 role="checkbox"
                 aria-checked={node.is_completed || false}
-                className={`absolute left-0 top-[5px] inline-flex items-center justify-center w-4 h-4 rounded-full border cursor-pointer shrink-0 transition-colors ${
+                className={`absolute left-0 top-[5px] z-20 inline-flex items-center justify-center w-4 h-4 rounded-full border cursor-pointer shrink-0 transition-colors ${
                   (node.is_completed || false)
                     ? 'bg-emerald-500 border-emerald-500'
                     : (node.is_in_progress || false)
                       ? 'bg-white dark:bg-gray-700 border-blue-400'
                       : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-500'
                 }`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 onClick={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
                   // 三态循环：未完成 → 进行中 → 已完成 → 未完成
                   if (node.is_completed) {
@@ -662,7 +702,7 @@ const NodeItem = memo(({
                 ) : (node.is_in_progress || false) ? (
                   <span className="w-2 h-0.5 bg-blue-400 rounded-full"></span>
                 ) : null}
-              </span>
+              </button>
             )}
 
             {/* 内容区域 - 支持文字+图片/附件同时显示 */}
@@ -1032,12 +1072,12 @@ const NodeItem = memo(({
       {/* Children Container (Recursive) - 折叠时不渲染子节点，彻底从 DOM 移除 */}
       {hasChildren && !localCollapsed && (
         <div>
-          <div className={`ml-[7px] pl-[25px] border-l ${isDateNode ? 'mt-[10px]' : ''}`} style={{ borderColor: 'var(--outline-guide-color, #e5e7eb)' }}>
+          <div className={`ml-[0.625rem] pl-[1.375rem] border-l ${isDateNode ? 'mt-[10px]' : ''}`} style={{ borderColor: 'var(--outline-guide-color, #e5e7eb)' }}>
              {childrenNodes.map(child => (
                <NodeItem
                  key={child.id}
                  node={child}
-                 childrenNodes={(child as any).children}
+                 childrenNodes={'children' in child ? child.children : []}
                  documents={documents}
                  onContentChange={onContentChange}
                  onNoteChange={onNoteChange}
@@ -1062,6 +1102,7 @@ const NodeItem = memo(({
 
       {/* Image Viewer */}
       <ImageViewer
+        key={`${imageViewer.src}-${imageViewer.isOpen}`}
         src={imageViewer.src}
         alt={imageViewer.alt}
         isOpen={imageViewer.isOpen}
@@ -1082,12 +1123,10 @@ const NodeItem = memo(({
     </div>
   );
 }, (prevProps, nextProps) => {
-  return prevProps.node === nextProps.node &&
-    prevProps.childrenNodes === nextProps.childrenNodes &&
-    prevProps.selectedNodeIds === nextProps.selectedNodeIds &&
-    prevProps.isDragMoving === nextProps.isDragMoving &&
-    prevProps.focusedNodeId?.id === nextProps.focusedNodeId?.id &&
-    prevProps.focusedNodeId?.field === nextProps.focusedNodeId?.field;
+  return prevProps.node.subtreeVersion === nextProps.node.subtreeVersion &&
+    selectedSignatureForSubtree(prevProps.selectedNodeIds, prevProps.node) === selectedSignatureForSubtree(nextProps.selectedNodeIds, nextProps.node) &&
+    dragVisualSignatureForNode(prevProps.selectedNodeIds, prevProps.node.id, prevProps.isDragMoving) === dragVisualSignatureForNode(nextProps.selectedNodeIds, nextProps.node.id, nextProps.isDragMoving) &&
+    focusSignatureForNode(prevProps.focusedNodeId, prevProps.node.id) === focusSignatureForNode(nextProps.focusedNodeId, nextProps.node.id);
 });
 
 export default NodeItem;

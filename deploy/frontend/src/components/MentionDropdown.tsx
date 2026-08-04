@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import type { SetStateAction } from 'react';
 import { FileText, ListTree } from 'lucide-react';
 import type { Document } from '../api/data';
 
@@ -21,13 +22,23 @@ const MentionDropdown: React.FC<MentionDropdownProps> = ({
   onSearchChange,
   zIndex = 50
 }) => {
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selection, setSelection] = useState({ query: '', index: 0 });
   const [localSearchText, setLocalSearchText] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // 合并外部搜索文本和本地搜索文本
   const effectiveSearchText = localSearchText || searchText;
+  const selectedIndex = selection.query === effectiveSearchText ? selection.index : 0;
+  const setSelectedIndex = useCallback((action: SetStateAction<number>) => {
+    setSelection(previous => {
+      const current = previous.query === effectiveSearchText ? previous.index : 0;
+      return {
+        query: effectiveSearchText,
+        index: typeof action === 'function' ? action(current) : action,
+      };
+    });
+  }, [effectiveSearchText]);
 
   const filteredDocs = useMemo(() => {
     if (!documents || documents.length === 0) return [];
@@ -44,10 +55,6 @@ const MentionDropdown: React.FC<MentionDropdownProps> = ({
 
 
   // 不自动聚焦搜索框，避免从 textarea 偷走焦点导致编辑模式关闭
-
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [effectiveSearchText]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -92,7 +99,7 @@ const MentionDropdown: React.FC<MentionDropdownProps> = ({
     return () => {
       document.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [filteredDocs, selectedIndex, onSelect, onClose]);
+  }, [filteredDocs, selectedIndex, onSelect, onClose, setSelectedIndex]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

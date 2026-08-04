@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Loader2, BookmarkPlus, Database, Globe, Wand2, StickyNote, FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import remarkMath from 'remark-math';
@@ -32,6 +33,9 @@ interface AIChatMainViewProps {
   onConversationCreated?: (convId: string) => void;
   onNavigate?: (type: string, id: string) => void;
 }
+
+type MarkdownCodeProps = Parameters<NonNullable<Components['code']>>[0];
+type MarkdownLinkProps = Parameters<NonNullable<Components['a']>>[0];
 
 export default function AIChatMainView({ conversationId, onConversationCreated, onNavigate }: AIChatMainViewProps) {
   const { addDocument } = useDocuments();
@@ -241,7 +245,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
   const isEmpty = messages.length === 0 && !loadingConv;
 
   return (
-    <div className={`flex-1 flex flex-col h-full bg-[#FAFAF5] dark:bg-gray-900 ${isEmpty ? 'items-center justify-center' : ''}`}>
+    <div className={`flex-1 flex flex-col h-full bg-[var(--app-canvas)] ${isEmpty ? 'items-center justify-center' : ''}`}>
       {/* Messages */}
       <div className={`${isEmpty ? 'hidden' : 'flex-1 overflow-y-auto'}`}>
         <div className="max-w-[700px] mx-auto px-4 pb-4 space-y-4" style={{ paddingTop: `max(calc(env(safe-area-inset-top, 0px) + 58px), 1rem)` }}>
@@ -265,14 +269,14 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
                     remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
                     rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]}
                     components={{
-                      code: (props: any) => {
+                      code: (props: MarkdownCodeProps) => {
                         const match = /language-(\w+)/.exec(props.className || '');
                         if (match && match[1] === 'mermaid') {
                           return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
                         }
                         return <code {...props} />;
                       },
-                      a: ({ href, children, ...props }: any) => {
+                      a: ({ href, children, ...props }: MarkdownLinkProps) => {
                         if (href && href.startsWith('/d/')) {
                           return (
                             <a

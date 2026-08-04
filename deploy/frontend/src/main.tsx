@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { syncThemeChrome } from './utils/themeChrome.ts'
 
 // 系统暗色模式检测 + 监听系统主题变化
 // iOS PWA standalone 模式下首次加载 prefers-color-scheme 可能返回错误值
@@ -12,26 +13,24 @@ import App from './App.tsx'
 
   function applyTheme() {
     const saved = (() => { try { return JSON.parse(localStorage.getItem('outline-font-settings') || '{}'); } catch { return {}; } })();
+    document.documentElement.dataset.markdownStyle = saved.markdownStyle || 'default';
 
-    // 如果用户明确选择了主题（非 system/跟随系统），尊重用户选择
-    if (saved.theme === 'dark' || saved.theme === 'light') {
-      const dark = saved.theme === 'dark';
+    // 只保留默认设计体系；dark 表示强制夜间，其他历史主题值归一为 system。
+    if (saved.theme === 'dark') {
+      const dark = true;
+      document.documentElement.dataset.theme = 'dark';
       document.documentElement.classList.toggle('dark', dark);
-      document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
-        meta.setAttribute('content', dark ? '#111827' : '#ffffff');
-        meta.removeAttribute('media');
-      });
+      syncThemeChrome(dark);
       return;
     }
 
     // 没有明确选择或选择"跟随系统"→ 跟随系统
     const dark = mq.matches;
+    document.documentElement.dataset.theme = dark ? 'system-dark' : 'system-light';
     if (dark !== lastDark) {
       lastDark = dark;
       document.documentElement.classList.toggle('dark', dark);
-      document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
-        meta.setAttribute('content', dark ? '#111827' : '#ffffff');
-      });
+      syncThemeChrome(dark);
       window.dispatchEvent(new Event('theme-change'));
     }
   }
@@ -39,20 +38,19 @@ import App from './App.tsx'
   // 初始应用
   function initialApply() {
     const saved = (() => { try { return JSON.parse(localStorage.getItem('outline-font-settings') || '{}'); } catch { return {}; } })();
-    if (saved.theme === 'dark' || saved.theme === 'light') {
-      const dark = saved.theme === 'dark';
+    document.documentElement.dataset.markdownStyle = saved.markdownStyle || 'default';
+    if (saved.theme === 'dark') {
+      const dark = true;
+      document.documentElement.dataset.theme = 'dark';
       document.documentElement.classList.toggle('dark', dark);
-      document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
-        meta.setAttribute('content', dark ? '#111827' : '#ffffff');
-      });
+      syncThemeChrome(dark);
       return;
     }
     const dark = mq.matches;
+    document.documentElement.dataset.theme = dark ? 'system-dark' : 'system-light';
     lastDark = dark;
     document.documentElement.classList.toggle('dark', dark);
-    document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
-      meta.setAttribute('content', dark ? '#111827' : '#ffffff');
-    });
+    syncThemeChrome(dark);
   }
 
   initialApply();
@@ -69,8 +67,40 @@ import App from './App.tsx'
   mq.addEventListener('change', applyTheme);
 })();
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+const DEV_SW_RESET_KEY = 'beaver-dev-sw-reset';
+
+async function clearDevelopmentServiceWorker(): Promise<boolean> {
+  if (!import.meta.env.DEV || !('serviceWorker' in navigator)) return true;
+
+  try {
+    const controlled = navigator.serviceWorker.controller !== null;
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map(registration => registration.unregister()));
+
+    if ('caches' in window) {
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
+    }
+
+    // 已被旧开发 SW 控制的页面需要刷新一次，刷新后才会真正脱离控制。
+    if (controlled && sessionStorage.getItem(DEV_SW_RESET_KEY) !== 'done') {
+      sessionStorage.setItem(DEV_SW_RESET_KEY, 'done');
+      window.location.reload();
+      return false;
+    }
+    sessionStorage.removeItem(DEV_SW_RESET_KEY);
+  } catch (error) {
+    console.warn('清理开发 Service Worker 失败，继续启动应用', error);
+  }
+
+  return true;
+}
+
+void clearDevelopmentServiceWorker().then(shouldRender => {
+  if (!shouldRender) return;
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+});

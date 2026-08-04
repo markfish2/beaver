@@ -25,11 +25,13 @@ export default function ConflictResolver() {
   const handleUseLocal = async () => {
     try {
       if (conflict.entityType === 'document') {
-        const { expected_version, ...rest } = conflict.localData as any;
+        const { expected_version: _expectedVersion, ...rest } = conflict.localData;
+        void _expectedVersion;
         await updateDocument(conflict.entityId, { ...rest, expected_version: conflict.serverVersion });
         updateDocumentLocal(conflict.entityId, rest);
       } else if (conflict.entityType === 'node') {
-        const { expected_version, ...rest } = conflict.localData as any;
+        const { expected_version: _expectedVersion, ...rest } = conflict.localData;
+        void _expectedVersion;
         await updateNode(conflict.entityId, { ...rest, expected_version: conflict.serverVersion });
       }
       setConflict(null);

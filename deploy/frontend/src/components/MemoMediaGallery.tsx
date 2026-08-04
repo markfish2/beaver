@@ -47,7 +47,7 @@ function extractUrls(content: string): string[] {
   }
   // Bare URLs (outside markdown links)
   const stripped = content.replace(/\[([^\]]*)\]\([^)]+\)/g, '');
-  const bareUrlRegex = /(?<!\()(https?:\/\/[^\s<>\)\]]+)/g;
+  const bareUrlRegex = /(?<!\()(https?:\/\/[^\s<>)\]]+)/g;
   while ((m = bareUrlRegex.exec(stripped)) !== null) {
     urls.add(m[1].replace(/[.,;:!?]+$/, ''));
   }

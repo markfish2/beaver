@@ -6,6 +6,44 @@ export function normalizeTaskLists(content: string): string {
   return content.replace(/^(\s*)[-*+]\s*\[([ xX*])\] /gm, '$1- [$2] ');
 }
 
+export function isMarkdownTaskLine(trimmedLine: string): boolean {
+  return /^[-*+]\s*\[[ xX*-]\]\s/.test(trimmedLine);
+}
+
+export function getMarkdownTaskOrdinalAtLine(content: string, oneBasedLine: number | null): number | null {
+  if (oneBasedLine == null) return null;
+  const lines = content.split('\n');
+  let ordinal = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (!isMarkdownTaskLine(lines[i].trimStart())) continue;
+    if (i + 1 === oneBasedLine) return ordinal;
+    ordinal++;
+  }
+  return null;
+}
+
+export function toggleMarkdownTaskByOrdinal(content: string, taskIndex: number): string {
+  const lines = content.split('\n');
+  let taskCount = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trimStart();
+    if (!isMarkdownTaskLine(trimmed)) continue;
+    if (taskCount === taskIndex) {
+      const line = lines[i];
+      const indentLength = line.length - trimmed.length;
+      const indent = line.slice(0, indentLength);
+      const marker = trimmed[0];
+      const rest = trimmed.slice(trimmed.indexOf(']') + 2);
+      const currentMark = trimmed.slice(trimmed.indexOf('['), trimmed.indexOf(']') + 1).toLowerCase();
+      const nextMark = currentMark === '[ ]' ? '[x]' : '[ ]';
+      lines[i] = `${indent}${marker} ${nextMark} ${rest}`;
+      return lines.join('\n');
+    }
+    taskCount++;
+  }
+  return content;
+}
+
 
 export function normalizeHighlight(content: string): string {
   const lines = content.split('\n');
@@ -33,12 +71,17 @@ export function normalizeListSeparators(content: string): string {
     const cur = lines[i];
     const isListItem = /^\s*[-*+]\s/.test(cur) || /^\s*\d+\.\s/.test(cur);
     const isBlockquote = cur.trimStart().startsWith('>');
-    if (!isListItem && !isBlockquote) continue;
     const nextTrimmed = next.trimStart();
     const nextIsListItem = /^\s*[-*+]\s/.test(next) || /^\s*\d+\.\s/.test(next);
     const nextIsBlank = nextTrimmed === '';
     const nextIsIndented = /^\s{2,}/.test(next) || /^\t/.test(next);
     const nextIsBlockquote = nextTrimmed.startsWith('>');
+    if (!isListItem && !isBlockquote) {
+      if (!nextIsBlank && nextIsListItem && nextIsIndented && cur.trim() !== '') {
+        result.push('');
+      }
+      continue;
+    }
     if (isListItem && !nextIsListItem && !nextIsBlank && !nextIsIndented && !nextIsBlockquote) {
       result.push('');
     }
@@ -63,9 +106,6 @@ export function normalizeCodeBlocks(content: string): string {
         inCodeBlock = true;
       } else {
         inCodeBlock = false;
-        if (result[result.length - 1]?.trim() !== '') {
-          result.push('');
-        }
         result.push(lines[i]);
         const next = lines[i + 1];
         if (next !== undefined && next.trim() !== '') {
@@ -114,24 +154,36 @@ export function normalizeCallouts(content: string): string {
   };
 
   const defaultIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>';
-  const labels: Record<string, string> = {
-    note: '注意', tip: '提示', warning: '警告', danger: '危险',
-    info: '信息', question: '问题', quote: '引用',
-  };
+  const lines = content.split('\n');
+  const result: string[] = [];
 
-  return content.replace(
-    /^>\s*\[!(\w+)\]\s*(.*?)\n((?:>.*\n?)*)/gm,
-    (_match, type: string, title: string, body: string) => {
-      const lowerType = type.toLowerCase();
-      const icon = icons[lowerType] || defaultIcon;
-      const cleanBody = body
-        .split('\n')
-        .map((line: string) => line.replace(/^>\s?/, ''))
-        .join('\n')
-        .trim();
-      return `<div class="callout callout-${lowerType}"><span class="callout-icon">${icon}</span><div class="callout-body"><div class="callout-content">${cleanBody}</div></div></div>\n`;
+  for (let i = 0; i < lines.length; i++) {
+    const header = lines[i].match(/^ {0,3}>\s*\[!(\w+)\]\s*(.*?)\s*$/);
+    if (!header) {
+      result.push(lines[i]);
+      continue;
     }
-  );
+
+    const [, type, title] = header;
+    const bodyLines: string[] = [];
+    let j = i + 1;
+    while (j < lines.length) {
+      const body = lines[j].match(/^ {0,3}>\s?(.*)$/);
+      if (!body) break;
+      bodyLines.push(body[1]);
+      j++;
+    }
+
+    const lowerType = type.toLowerCase();
+    const icon = icons[lowerType] || defaultIcon;
+    const cleanBody = bodyLines.join('\n').trim();
+    const contentHtml = cleanBody || title.trim();
+    result.push(`<div class="callout callout-${lowerType}"><span class="callout-icon">${icon}</span><div class="callout-body"><div class="callout-content">${contentHtml}</div></div></div>`);
+    result.push('');
+    i = j - 1;
+  }
+
+  return result.join('\n');
 }
 
 /** Full preprocessing pipeline: strip tags/attachments, then normalize lists/highlights/code blocks/callouts. */
@@ -146,5 +198,5 @@ export function escapeCodeBlockHtml(content: string): string {
 }
 
 export function preprocessMarkdown(content: string): string {
-  return escapeCodeBlockHtml(escapeFullWidthColon(normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(stripAttachments(stripTags(normalizeCallouts(content)))))))));
+  return escapeCodeBlockHtml(normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(stripAttachments(stripTags(normalizeCallouts(content))))))));
 }

@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, FileText, Folder, ListTree, PenTool, MoreHorizontal, Star, Copy, Trash2, Pencil } from 'lucide-react';
 import { useDocuments } from '../../context/DocumentContext';
 import { deleteDocument, updateDocument, copyDocument } from '../../api/data';
 import DeleteConfirmDialog from '../DeleteConfirmDialog';
 import type { Document } from '../../api/data';
+import { createMobileDocumentState } from '../../utils/mobileNavigation';
 
 interface FileTreeViewProps {
   starredOnly?: boolean;
@@ -23,6 +24,7 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
   const { documents, refreshDocuments } = useDocuments();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ docId: string; x: number; y: number } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
@@ -44,7 +46,9 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
     if (doc.type === 'folder') {
       handleToggleFolder(doc.id);
     } else {
-      navigate(`/d/${doc.id}`);
+      navigate(`/d/${doc.id}`, {
+        state: createMobileDocumentState('/', 'files'),
+      });
     }
   };
 
@@ -57,6 +61,15 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
       x: Math.min(rect.left, window.innerWidth - 160),
       y: rect.bottom + 4,
     });
+  };
+
+  const stopMenuEvent = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const stopMenuPointer = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
   };
 
   const handleStar = async (docId: string) => {
@@ -107,12 +120,13 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
   // Close context menu on outside click
   useEffect(() => {
     if (!contextMenu) return;
-    const handleClick = () => setContextMenu(null);
-    document.addEventListener('click', handleClick);
-    document.addEventListener('touchstart', handleClick);
+    const handlePointerDown = (event: PointerEvent) => {
+      if (contextMenuRef.current?.contains(event.target as Node)) return;
+      setContextMenu(null);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
     return () => {
-      document.removeEventListener('click', handleClick);
-      document.removeEventListener('touchstart', handleClick);
+      document.removeEventListener('pointerdown', handlePointerDown);
     };
   }, [contextMenu]);
 
@@ -167,7 +181,12 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
 
           {/* 3-dot menu - always visible on mobile */}
           <button
+            type="button"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+            }}
             onClick={(e) => {
+              e.preventDefault();
               e.stopPropagation();
               setContextMenu({ docId: doc.id, x: e.currentTarget.getBoundingClientRect().right - 160, y: e.currentTarget.getBoundingClientRect().bottom + 4 });
             }}
@@ -232,25 +251,28 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
         if (!doc) return null;
         return (
           <div
-            className="fixed z-50 w-40 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1"
+            ref={contextMenuRef}
+            className="fixed z-[1000] w-40 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1"
             style={{ left: contextMenu.x, top: contextMenu.y }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
           >
             {doc.type !== 'folder' && (
-              <button onClick={() => handleStar(contextMenu.docId)} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+              <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); void handleStar(contextMenu.docId); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
                 <Star className={`w-4 h-4 ${doc.is_starred ? 'fill-yellow-500 text-yellow-500' : ''}`} />
                 {doc.is_starred ? '取消收藏' : '收藏'}
               </button>
             )}
-            <button onClick={() => handleRename(contextMenu.docId)} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+            <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); handleRename(contextMenu.docId); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
               <Pencil className="w-4 h-4" />
               重命名
             </button>
-            <button onClick={() => handleCopy(contextMenu.docId)} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+            <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); void handleCopy(contextMenu.docId); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
               <Copy className="w-4 h-4" />
               复制
             </button>
-            <button onClick={() => handleDeleteClick(contextMenu.docId)} className="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2">
+            <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); handleDeleteClick(contextMenu.docId); }} className="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2">
               <Trash2 className="w-4 h-4" />
               删除
             </button>

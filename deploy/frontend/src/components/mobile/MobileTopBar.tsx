@@ -1,12 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, X, ArrowLeft, LogOut, Key, Trash, User, Sparkles, Lock, Sun, Moon } from 'lucide-react';
+import { Search, X, ArrowLeft, LogOut, Key, Trash, User, Sparkles, Lock, Sun, Moon, Palette } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import UserProfileEditor from '../UserProfileEditor';
 import TokenPanel from '../TokenPanel';
 import AISettingsPanel from '../AISettingsPanel';
 import TrashPanel from '../TrashPanel';
 import PasswordPanel from '../PasswordPanel';
+import { useFontSettings } from '../FontSettings';
+import { useIsDark } from '../../hooks/useIsDark';
+import AppearanceSettingsPage from '../AppearanceSettingsPage';
 
 interface MobileTopBarProps {
   title: string;
@@ -23,60 +26,13 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
   const [searchQuery, setSearchQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
-
-  // 暗色模式状态
-  const [isDark, setIsDark] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
-      if (saved.theme === 'dark') return true;
-      if (saved.theme && saved.theme !== 'dark') return false;
-    } catch { /* ignore */ }
-    return document.documentElement.classList.contains('dark') ||
-      window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
-
-  // 监听主题变化
-  useEffect(() => {
-    const onThemeChange = () => {
-      try {
-        const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
-        if (saved.theme === 'dark') { setIsDark(true); return; }
-        if (saved.theme && saved.theme !== 'dark') { setIsDark(false); return; }
-      } catch { /* ignore */ }
-      setIsDark(document.documentElement.classList.contains('dark'));
-    };
-    window.addEventListener('theme-change', onThemeChange);
-    const mql = window.matchMedia('(prefers-color-scheme: dark)');
-    mql.addEventListener('change', onThemeChange);
-    return () => {
-      window.removeEventListener('theme-change', onThemeChange);
-      mql.removeEventListener('change', onThemeChange);
-    };
-  }, []);
+  const { setTheme } = useFontSettings();
+  const isDark = useIsDark();
 
   // 切换暗色/亮色
   const toggleDark = useCallback(() => {
-    const newDark = !isDark;
-    setIsDark(newDark);
-    document.documentElement.classList.toggle('dark', newDark);
-    // 更新 localStorage
-    try {
-      const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
-      saved.theme = newDark ? 'dark' : 'minimal';
-      localStorage.setItem('outline-font-settings', JSON.stringify(saved));
-      // 保存非暗色主题以便恢复
-      if (newDark) {
-        localStorage.setItem('outline-restored-theme', saved.theme === 'dark' ? 'minimal' : 'minimal');
-      }
-    } catch { /* ignore */ }
-    // 更新 theme-color meta，移除 media 查询
-    document.querySelectorAll('meta[name="theme-color"], meta[name="hw-theme-color"]').forEach(meta => {
-      meta.setAttribute('content', newDark ? '#111827' : '#ffffff');
-      meta.removeAttribute('media');
-    });
-    // 派发事件通知其他组件
-    window.dispatchEvent(new CustomEvent('theme-change'));
-  }, [isDark]);
+    setTheme(isDark ? 'system' : 'dark');
+  }, [isDark, setTheme]);
 
   useEffect(() => {
     if (showSearch && searchRef.current) {
@@ -159,6 +115,9 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
                   </div>
                   <button onClick={() => openDialog('profile')} className="w-full px-3 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center gap-2.5">
                     <User className="w-4 h-4 text-gray-400" /><span>个人资料</span>
+                  </button>
+                  <button onClick={() => openDialog('appearance')} className="w-full px-3 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center gap-2.5">
+                    <Palette className="w-4 h-4 text-gray-400" /><span>外观与主题</span>
                   </button>
                   <button onClick={() => openDialog('token')} className="w-full px-3 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center gap-2.5">
                     <Key className="w-4 h-4 text-gray-400" /><span>API Token</span>
@@ -276,6 +235,7 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
                style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)', height: 'calc(env(safe-area-inset-top, 0px) + 44px)' }}>
             <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
               {activeDialog === 'profile' && '个人资料'}
+              {activeDialog === 'appearance' && '外观与主题'}
               {activeDialog === 'token' && 'API Token'}
               {activeDialog === 'ai' && 'AI 设置'}
               {activeDialog === 'trash' && '回收站'}
@@ -287,6 +247,7 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
           </div>
           <div className="flex-1 min-h-0 overflow-hidden">
             {activeDialog === 'profile' && <UserProfileEditor />}
+            {activeDialog === 'appearance' && <AppearanceSettingsPage />}
             {activeDialog === 'token' && <TokenPanel />}
             {activeDialog === 'ai' && <AISettingsPanel />}
             {activeDialog === 'trash' && <TrashPanel />}

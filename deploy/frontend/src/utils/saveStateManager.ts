@@ -1,4 +1,42 @@
+import type { Node } from '../api/data';
+
 type OperationStatus = 'pending' | 'saving' | 'saved' | 'error';
+
+type NodeBooleanProperty = 'is_completed' | 'is_in_progress' | 'is_collapsed' | 'is_todo';
+
+interface OfflineMove {
+  id: string;
+  oldParent: string | null;
+  oldOrder: number;
+  newParent: string | null;
+  newOrder: number;
+}
+
+interface OfflineCommandPayload {
+  type?: string;
+  id: string;
+  nodeId: string;
+  oldContent: string;
+  newContent: string;
+  oldNote: string;
+  newNote: string;
+  property: NodeBooleanProperty;
+  newValue: boolean;
+  ids: string[];
+  updates: OfflineMove[];
+  nodeData: {
+    document_id: string;
+    content: string;
+    parent_node_id: string | null;
+    sort_order: number;
+    note?: string;
+    is_completed?: boolean;
+    is_collapsed?: boolean;
+    is_todo?: boolean;
+  };
+  allDeletedNodes?: Node[];
+  allNodes?: Node[];
+}
 
 interface PendingOperation {
   id: string;
@@ -12,6 +50,46 @@ interface PendingOperation {
 
 const STORAGE_KEY = 'miniflowy_pending_operations';
 const OFFLINE_QUEUE_KEY = 'miniflowy_offline_queue';
+
+interface BatchSaveOperation {
+  id: string;
+  type: string;
+  data: Record<string, unknown>;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' ? value as Record<string, unknown> : {};
+}
+
+function getCoalesceKey(operation: PendingOperation): string | null {
+  const data = asRecord(operation.data);
+  const type = typeof data.type === 'string' ? data.type : operation.operationType;
+  const id = typeof data.id === 'string' ? data.id : null;
+  if (!type || !id) return null;
+  if (type === 'updateContent' || type === 'undoUpdateContent') return `content:${id}`;
+  if (type === 'updateNote' || type === 'undoUpdateNote') return `note:${id}`;
+  if (type === 'moveNode' || type === 'undoMoveNode') return `move:${id}`;
+  if ((type === 'toggleProperty' || type === 'undoToggleProperty') && typeof data.property === 'string') {
+    return `property:${id}:${data.property}`;
+  }
+  return null;
+}
+
+export function sendBatchSaveRequest(operations: BatchSaveOperation[]): void {
+  if (operations.length === 0) return;
+  const token = localStorage.getItem('token');
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  void fetch('/api/nodes/batch/save', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ operations }),
+    keepalive: true,
+  }).catch((error) => {
+    console.error('Failed to send final batch save:', error);
+  });
+}
 
 class SaveStateManager {
   private operations: Map<string, PendingOperation> = new Map();
@@ -55,6 +133,12 @@ class SaveStateManager {
     this.operations.set(id, operation);
     
     if (!this.online) {
+      const coalesceKey = getCoalesceKey(operation);
+      if (coalesceKey) {
+        const replaced = this.offlineQueue.find(item => getCoalesceKey(item) === coalesceKey);
+        if (replaced) this.operations.delete(replaced.id);
+        this.offlineQueue = this.offlineQueue.filter(item => getCoalesceKey(item) !== coalesceKey);
+      }
       this.offlineQueue.push(operation);
       this.saveOfflineQueue();
     }
@@ -82,6 +166,11 @@ class SaveStateManager {
     if (operation) {
       operation.status = 'error';
       operation.error = error;
+      if (!navigator.onLine && !this.offlineQueue.some(item => item.id === id)) {
+        this.online = false;
+        this.offlineQueue.push(operation);
+        this.saveOfflineQueue();
+      }
       this.saveToLocal();
       this.notifyListeners();
     }
@@ -265,6 +354,66 @@ class SaveStateManager {
 
     try {
       const data = await import('../api/data');
+      const payload = op.data as OfflineCommandPayload;
+      const commandType = payload.type;
+
+      // Command-mode operations store their operation type inside the payload.
+      if (commandType === 'updateContent') {
+        await data.updateNode(payload.id, { content: payload.newContent });
+        return;
+      } else if (commandType === 'undoUpdateContent') {
+        await data.updateNode(payload.id, { content: payload.oldContent });
+        return;
+      } else if (commandType === 'updateNote') {
+        await data.updateNode(payload.id, { note: payload.newNote });
+        return;
+      } else if (commandType === 'undoUpdateNote') {
+        await data.updateNode(payload.id, { note: payload.oldNote });
+        return;
+      } else if (commandType === 'toggleProperty') {
+        await data.updateNode(payload.id, { [payload.property]: payload.newValue });
+        return;
+      } else if (commandType === 'undoToggleProperty') {
+        await data.updateNode(payload.id, { [payload.property]: !payload.newValue });
+        return;
+      } else if (commandType === 'batchToggleProperty' || commandType === 'undoBatchToggleProperty') {
+        const value = commandType === 'batchToggleProperty' ? payload.newValue : !payload.newValue;
+        await data.batchUpdateNodes(payload.ids.map((id: string) => ({ id, [payload.property]: value })));
+        return;
+      } else if (commandType === 'moveNode') {
+        await data.moveNode(payload.id, payload.newParent, payload.newOrder);
+        return;
+      } else if (commandType === 'undoMoveNode') {
+        await data.moveNode(payload.id, payload.oldParent, payload.oldOrder);
+        return;
+      } else if (commandType === 'batchMove' || commandType === 'undoBatchMove') {
+        const undo = commandType === 'undoBatchMove';
+        await data.batchMoveNodes(payload.updates.map((item) => ({
+          id: item.id,
+          parent_node_id: undo ? item.oldParent : item.newParent,
+          sort_order: undo ? item.oldOrder : item.newOrder,
+        })));
+        return;
+      } else if (commandType === 'deleteNode' || commandType === 'undoCreateNode') {
+        await data.deleteNode(payload.nodeId);
+        return;
+      } else if (commandType === 'batchDelete') {
+        await data.batchDeleteNodes(payload.ids);
+        return;
+      } else if (commandType === 'createNode') {
+        await data.createNode(payload.nodeData.document_id, payload.nodeData.content, payload.nodeData.parent_node_id, {
+          ...payload.nodeData,
+          id: payload.nodeId,
+        });
+        return;
+      } else if (commandType === 'undoDeleteNode' || commandType === 'undoBatchDelete') {
+        const nodes = payload.allDeletedNodes || payload.allNodes || [];
+        await data.createNodesBatch(nodes);
+        return;
+      } else if (commandType === 'composite' || commandType === 'undoComposite') {
+        // Child commands are queued independently; the wrapper has no server mutation.
+        return;
+      }
 
       // Node operations
       if (op.operationType === 'update' && op.data.nodeId && op.data.updates) {
@@ -306,7 +455,7 @@ class SaveStateManager {
       } else if (op.operationType === 'toggleMemoPublic' && op.data.memoId) {
         await data.toggleMemoPublic(op.data.memoId, op.data.is_public);
       } else {
-        console.warn('Unknown operation type or missing data:', op.operationType, op.data);
+        throw new Error(`Unknown offline operation: ${op.operationType || commandType || 'missing type'}`);
       }
     } catch (error) {
       if (retryCount < maxRetries) {
@@ -323,25 +472,11 @@ class SaveStateManager {
     const pendingOps = Array.from(this.operations.values());
     if (pendingOps.length === 0) return;
     
-    const payload = {
-      operations: pendingOps.map(op => ({
-        id: op.id,
-        type: op.data?.type || 'unknown',
-        data: op.data
-      }))
-    };
-    
-    const url = '/api/nodes/batch/save';
-    const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-    
-    if (navigator.sendBeacon) {
-      navigator.sendBeacon(url, blob);
-    } else {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', url, false);
-      xhr.setRequestHeader('Content-Type', 'application/json');
-      xhr.send(JSON.stringify(payload));
-    }
+    sendBatchSaveRequest(pendingOps.map(op => ({
+      id: op.id,
+      type: (op.data as { type?: string })?.type || 'unknown',
+      data: op.data as Record<string, unknown>,
+    })));
     
     this.saveToLocal();
   }

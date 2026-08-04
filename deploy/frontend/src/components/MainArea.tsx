@@ -1,11 +1,9 @@
-import { useState, useEffect, useMemo, Fragment, useRef, useCallback } from 'react';
-import { Menu, ChevronUp, ChevronDown } from 'lucide-react';
-import Breadcrumbs from './Breadcrumbs';
+import { useState, useEffect, useMemo, Fragment, useRef, useCallback, lazy } from 'react';
+import type { SetStateAction } from 'react';
+import { Menu } from 'lucide-react';
 import NodeItem from './NodeItem';
 import MobileToolbar from './MobileToolbar';
 import { useMobileToolbar } from '../context/MobileToolbarContext';
-import { useFontSettings } from './FontSettings';
-import MindMapView from './MindMapView';
 import LoadingSkeleton from './LoadingSkeleton';
 import { SaveStatusIndicator } from './SaveStatusIndicator';
 import RecoveryDialog from './RecoveryDialog';
@@ -13,17 +11,14 @@ import DropIndicator from './DropIndicator';
 import TableOfContents from './TableOfContents';
 import DocumentSettingsMenu from './DocumentSettingsMenu';
 import DiaryDateBar from './DiaryDateBar';
-import MarkdownNoteEditor from './MarkdownNoteEditor';
-import { ExcalidrawEditor } from './ExcalidrawEditor';
-import MemoHome from './MemoHome';
 import UserProfileEditor from './UserProfileEditor';
+import AppearanceSettingsPage from './AppearanceSettingsPage';
 import TokenPanel from './TokenPanel';
 import TrashPanel from './TrashPanel';
 import PasswordPanel from './PasswordPanel';
 import AISettingsPanel from './AISettingsPanel';
-import AIChatMainView from './AIChatMainView';
-import ProjectView from './ProjectView';
 import { useUserView } from '../context/UserViewContext';
+import type { UserSubView } from '../context/UserViewContext';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { getNodes, getDocument, updateNode, updateDocument, deleteNode, createNode, createNodesBatch, uploadFile, batchUpdateNodes, batchMoveNodes, batchDeleteNodes, moveNode, getDiaryDayDates, getOrCreateDayNode, getMonthlyDiary } from '../api/data';
 import type { Node, Document } from '../api/data';
@@ -33,19 +28,63 @@ import { useDiary } from '../context/DiaryContext';
 import { useHistory } from '../hooks/useHistory';
 import { useSaveManager } from '../hooks/useSaveManager';
 import { useKeyboardScroll } from '../hooks/useKeyboardScroll';
+import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { createCommandFactory } from '../commands/implementations';
 
-import { saveStateManager, PendingOperation } from '../utils/saveStateManager';
+import { saveStateManager, sendBatchSaveRequest, PendingOperation } from '../utils/saveStateManager';
 import { saveViewState, saveScrollPosition, loadScrollPosition } from '../utils/pwaState';
+import { getErrorMessage } from '../utils/errors';
+import { flattenParsedNodes, parseMarkdown } from './mainAreaClipboard';
+import type { ParsedNode } from './mainAreaClipboard';
+
+const MindMapView = lazy(() => import('./MindMapView'));
+const MarkdownNoteEditor = lazy(() => import('./MarkdownNoteEditor'));
+const ExcalidrawEditor = lazy(() => import('./ExcalidrawEditor').then(module => ({ default: module.ExcalidrawEditor })));
+const AIChatMainView = lazy(() => import('./AIChatMainView'));
+const ProjectView = lazy(() => import('./ProjectView'));
+const MemoHome = lazy(() => import('./MemoHome'));
+
+interface SerializedNode {
+  content: string;
+  note?: string;
+  is_completed?: boolean;
+  is_todo?: boolean;
+  color?: string | null;
+  children: SerializedNode[];
+}
+
+type TreeNode = Node & { children: TreeNode[]; subtreeVersion: string; subtreeNodeIds: string[] };
+
+const getNodeOwnVersion = (node: Node): string => [
+  node.id,
+  node.document_id,
+  node.parent_node_id ?? '',
+  node.sort_order,
+  node.content,
+  node.note ?? '',
+  node.is_completed ? 1 : 0,
+  node.is_in_progress ? 1 : 0,
+  node.is_collapsed ? 1 : 0,
+  node.heading ?? '',
+  node.is_bold ? 1 : 0,
+  node.is_italic ? 1 : 0,
+  node.color ?? '',
+  node.highlight ?? '',
+  node.is_todo ? 1 : 0,
+  node.content_type ?? '',
+  node.file_path ?? '',
+  node.file_name ?? '',
+  node.version ?? '',
+].join('\u001f');
 
 // Helper to build tree from flat list for rendering
-const buildTree = (nodes: Node[]): (Node & { children: Node[] })[] => {
-  const nodeMap = new Map<string, Node & { children: Node[] }>();
-  const roots: (Node & { children: Node[] })[] = [];
+const buildTree = (nodes: Node[]): TreeNode[] => {
+  const nodeMap = new Map<string, TreeNode>();
+  const roots: TreeNode[] = [];
 
   // Initialize map
   nodes.forEach(node => {
-    nodeMap.set(node.id, { ...node, children: [] });
+    nodeMap.set(node.id, { ...node, children: [], subtreeVersion: getNodeOwnVersion(node), subtreeNodeIds: [node.id] });
   });
 
   // Build hierarchy
@@ -61,6 +100,14 @@ const buildTree = (nodes: Node[]): (Node & { children: Node[] })[] => {
     }
   });
 
+  const updateSubtreeVersion = (node: TreeNode): string => {
+    const childVersions = node.children.map(updateSubtreeVersion).join('\u001e');
+    node.subtreeNodeIds = [node.id, ...node.children.flatMap(child => child.subtreeNodeIds)];
+    node.subtreeVersion = childVersions ? `${node.subtreeVersion}\u001d${childVersions}` : node.subtreeVersion;
+    return node.subtreeVersion;
+  };
+  roots.forEach(updateSubtreeVersion);
+
   return roots;
 };
 
@@ -73,6 +120,94 @@ const getDescendants = (nodeId: string, allNodes: Node[]): Node[] => {
     descendants.push(...getDescendants(child.id, allNodes));
   });
   return descendants;
+};
+
+const computeHierarchicalRangeSelection = (anchorId: string, currentId: string, allNodes: Node[]): string[] => {
+  const nodeById = new Map(allNodes.map(node => [node.id, node]));
+  const anchorNode = nodeById.get(anchorId);
+  const currentNode = nodeById.get(currentId);
+  if (!anchorNode || !currentNode) return [];
+
+  const childrenByParent = new Map<string | null, Node[]>();
+  for (const node of allNodes) {
+    const parentId = node.parent_node_id && nodeById.has(node.parent_node_id) ? node.parent_node_id : null;
+    const siblings = childrenByParent.get(parentId);
+    if (siblings) {
+      siblings.push(node);
+    } else {
+      childrenByParent.set(parentId, [node]);
+    }
+  }
+  for (const siblings of childrenByParent.values()) {
+    siblings.sort((a, b) => a.sort_order - b.sort_order);
+  }
+
+  const getPath = (id: string): string[] => {
+    const path: string[] = [];
+    const seen = new Set<string>();
+    let node = nodeById.get(id);
+    while (node && !seen.has(node.id)) {
+      seen.add(node.id);
+      path.unshift(node.id);
+      node = node.parent_node_id ? nodeById.get(node.parent_node_id) : undefined;
+    }
+    return path;
+  };
+
+  const anchorPath = getPath(anchorId);
+  const currentPath = getPath(currentId);
+  const selected = new Set<string>();
+
+  const addSubtree = (id: string) => {
+    if (selected.has(id)) return;
+    selected.add(id);
+    for (const child of childrenByParent.get(id) ?? []) {
+      addSubtree(child.id);
+    }
+  };
+
+  if (anchorPath.includes(currentId)) {
+    addSubtree(currentId);
+  } else if (currentPath.includes(anchorId)) {
+    addSubtree(anchorId);
+  } else {
+    let commonLength = 0;
+    while (
+      commonLength < anchorPath.length &&
+      commonLength < currentPath.length &&
+      anchorPath[commonLength] === currentPath[commonLength]
+    ) {
+      commonLength += 1;
+    }
+
+    const lcaId = commonLength > 0 ? anchorPath[commonLength - 1] : null;
+    const anchorBranchId = anchorPath[commonLength];
+    const currentBranchId = currentPath[commonLength];
+    const siblings = childrenByParent.get(lcaId) ?? [];
+    const anchorIndex = siblings.findIndex(node => node.id === anchorBranchId);
+    const currentIndex = siblings.findIndex(node => node.id === currentBranchId);
+
+    if (anchorIndex === -1 || currentIndex === -1) {
+      addSubtree(anchorId);
+      addSubtree(currentId);
+    } else {
+      const from = Math.min(anchorIndex, currentIndex);
+      const to = Math.max(anchorIndex, currentIndex);
+      for (const sibling of siblings.slice(from, to + 1)) {
+        addSubtree(sibling.id);
+      }
+    }
+  }
+
+  const ordered: string[] = [];
+  const appendInDocumentOrder = (parentId: string | null) => {
+    for (const node of childrenByParent.get(parentId) ?? []) {
+      if (selected.has(node.id)) ordered.push(node.id);
+      appendInDocumentOrder(node.id);
+    }
+  };
+  appendInDocumentOrder(null);
+  return ordered;
 };
 
 // Helper: 将选中的节点转换为 Markdown 格式
@@ -103,14 +238,14 @@ const nodesToMarkdown = (allNodes: Node[], selectedIds: string[]): string => {
 
 // 剪贴板寄存器
 const clipboardRegister = {
-  data: null as any[] | null,
+  data: null as SerializedNode[] | null,
   // 标记：是否刚由应用内部触发了复制
   isInternalCopy: false,
-  saveSerializedRows(data: any[]) {
+  saveSerializedRows(data: SerializedNode[]) {
     this.data = data;
     this.isInternalCopy = true;
   },
-  getSerializedRows(): any[] | null {
+  getSerializedRows(): SerializedNode[] | null {
     return this.data;
   },
   clear() {
@@ -120,10 +255,10 @@ const clipboardRegister = {
 };
 
 // Helper: 序列化节点为树结构（用于内部粘贴）
-const serializeNodesToTree = (allNodes: Node[], selectedIds: string[]): any[] => {
+const serializeNodesToTree = (allNodes: Node[], selectedIds: string[]): SerializedNode[] => {
   const selectedNodes = allNodes.filter(n => selectedIds.includes(n.id));
   
-  const processNode = (node: Node): any => {
+  const processNode = (node: Node): SerializedNode => {
     const children = allNodes.filter(n => n.parent_node_id === node.id && selectedIds.includes(n.id));
     return {
       content: node.content,
@@ -141,130 +276,6 @@ const serializeNodesToTree = (allNodes: Node[], selectedIds: string[]): any[] =>
     .map(node => processNode(node));
 };
 
-// Helper: 解析 Markdown 文本为树状结构
-interface ParsedNode {
-  content: string;
-  note?: string;
-  is_completed?: boolean;
-  is_todo?: boolean;
-  children: ParsedNode[];
-}
-
-const parseMarkdown = (text: string): ParsedNode[] => {
-  const lines = text.split('\n');
-  const root: ParsedNode[] = [];
-  const stack: { node: ParsedNode; indent: number }[] = [];
-
-  lines.forEach(line => {
-    if (!line.trim()) return;
-
-    // 精确计算物理缩进。将 1 个制表符(\t)视为 4 个空格
-    // 这完美兼容了 Obsidian 的默认复制格式，也兼容内部的 2 空格格式
-    const match = line.match(/^(\s*)/);
-    const whitespace = match ? match[1] : '';
-    const indentLength = whitespace.replace(/\t/g, '    ').length;
-
-    const trimmedLine = line.trim();
-    let content = trimmedLine;
-    let is_completed = false;
-    let is_todo = false;
-
-    // 识别引用的备注块（支持内部多节点复制时带出的备注）
-    if (trimmedLine.startsWith('>')) {
-      const noteContent = trimmedLine.replace(/^>\s*/, '');
-      if (stack.length > 0) {
-         const parent = stack[stack.length - 1].node;
-         parent.note = parent.note ? parent.note + '\n' + noteContent : noteContent;
-      }
-      return; // 备注直接附加到父节点，不作为独立节点压栈
-    }
-
-    // 匹配 checkbox 格式: - [ ] 或 - [x]
-    const checkboxMatch = trimmedLine.match(/^[-*]\s+\[([ xX])\]\s*(.*)$/);
-    if (checkboxMatch) {
-      is_todo = true;
-      is_completed = checkboxMatch[1].toLowerCase() === 'x';
-      content = checkboxMatch[2];
-    } else {
-      // 匹配普通列表格式: - 或 *
-      const listMatch = trimmedLine.match(/^[-*]\s+(.*)$/);
-      if (listMatch) {
-        content = listMatch[1];
-      } else {
-        // 匹配标题格式: # ## ### 等
-        const headingMatch = trimmedLine.match(/^(#{1,6})\s+(.*)$/);
-        if (headingMatch) {
-          content = headingMatch[2];
-        }
-      }
-    }
-
-    const newNode: ParsedNode = {
-      content: content.trim(),
-      is_completed,
-      is_todo,
-      children: []
-    };
-
-    // 基于绝对缩进长度（indentLength）寻找父节点
-    // 只要栈顶节点的缩进"大于或等于"当前行，就一直出栈，直到找到真正包含它的父级
-    while (stack.length > 0 && stack[stack.length - 1].indent >= indentLength) {
-      stack.pop();
-    }
-
-    if (stack.length === 0) {
-      root.push(newNode);
-    } else {
-      stack[stack.length - 1].node.children.push(newNode);
-    }
-
-    stack.push({ node: newNode, indent: indentLength });
-  });
-
-  return root;
-};
-
-// Helper: 将解析后的树展平为节点数组
-const flattenParsedNodes = (
-  parsedNodes: ParsedNode[],
-  documentId: string,
-  parentId: string | null,
-  startOrder: number
-): Partial<Node>[] => {
-  const result: Partial<Node>[] = [];
-  let currentOrder = startOrder;
-
-  const processNode = (node: ParsedNode, parentId: string | null) => {
-    const newNode: Partial<Node> = {
-      id: crypto.randomUUID(),
-      document_id: documentId,
-      content: node.content,
-      note: node.note,
-      parent_node_id: parentId,
-      sort_order: currentOrder,
-      is_completed: node.is_completed || false,
-      is_todo: node.is_todo || false,
-      color: null,
-      is_collapsed: false,
-    };
-    result.push(newNode);
-    currentOrder += 10000;
-
-    // 递归处理子节点
-    node.children.forEach(child => {
-      processNode(child, newNode.id as string);
-    });
-  };
-
-  parsedNodes.forEach(parsedNode => {
-    processNode(parsedNode, parentId);
-  });
-
-  return result;
-};
-
-type UserSubView = 'profile' | 'token' | 'ai' | 'trash' | 'password';
-
 interface MainAreaProps {
   diaryDocId?: string | null;
   onDiaryDocChange?: (docId: string) => void;
@@ -272,9 +283,12 @@ interface MainAreaProps {
   activeConvId?: string | null;
 }
 
+const createSortOrder = () => Date.now();
+
 const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, activeConvId = null }: MainAreaProps = {}) => {
-  const { setActiveConvId, refreshConvList, setUserSubView, selectedProjectId, setSelectedProjectId } = useUserView();
+  const { setActiveConvId, refreshConvList, selectedProjectId, setSelectedProjectId } = useUserView();
   const [showArchivedProjects, setShowArchivedProjects] = useState(false);
+  const [archivedProjectsReloadKey, setArchivedProjectsReloadKey] = useState(0);
   const { documentId: urlDocumentId } = useParams();
   const navigate = useNavigate();
   const documentId = diaryDocId || urlDocumentId;
@@ -286,20 +300,84 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const [nodes, setNodes] = useState<Node[]>([]);
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
-  const [currentDoc, setCurrentDoc] = useState<Document | null>(null);
+  const [loadedDoc, setCurrentDoc] = useState<Document | null>(null);
+
+  useEffect(() => {
+    const openArchivedProjects = () => {
+      setSelectedProjectId(null);
+      setShowArchivedProjects(true);
+      setArchivedProjectsReloadKey(prev => prev + 1);
+    };
+    const closeArchivedProjects = () => {
+      setShowArchivedProjects(false);
+    };
+    window.addEventListener('projects-open-archived', openArchivedProjects);
+    window.addEventListener('projects-close-archived', closeArchivedProjects);
+    return () => {
+      window.removeEventListener('projects-open-archived', openArchivedProjects);
+      window.removeEventListener('projects-close-archived', closeArchivedProjects);
+    };
+  }, [setSelectedProjectId]);
+  const currentDoc = useMemo(() => {
+    if (!documentId) return null;
+    const normalizedId = documentId.replace(/-/g, '');
+    const contextDoc = documents.find(doc => doc.id.replace(/-/g, '') === normalizedId);
+    const loadedMatches = loadedDoc?.id.replace(/-/g, '') === normalizedId;
+    const baseDoc = loadedMatches ? loadedDoc : contextDoc;
+    if (!baseDoc) return null;
+    return contextDoc && contextDoc.title !== baseDoc.title
+      ? { ...baseDoc, title: contextDoc.title }
+      : baseDoc;
+  }, [documentId, documents, loadedDoc]);
   const [isLoading, setIsLoading] = useState(false);
-  const { saveStatus, pendingCount, hasUnsavedChanges, isOnline, offlineQueueCount } = useSaveManager();
+  const { saveStatus, pendingCount, isOnline, offlineQueueCount } = useSaveManager();
   // Mobile state
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = usePhoneLayout();
   const { scrollToElement } = useKeyboardScroll({ enabled: isMobile });
+  const focusNode = useCallback((nodeId: string, field: 'content' | 'note' = 'content') => {
+    const applyFocus = () => {
+      const el = document.getElementById(`${field}-${nodeId}`);
+      if (!el) {
+        window.setTimeout(applyFocus, 50);
+        return;
+      }
+
+      el.focus({ preventScroll: true });
+      if (field === 'content') {
+        const selection = window.getSelection();
+        if (selection) {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          range.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      }
+      scrollToElement(nodeId, field);
+    };
+    applyFocus();
+  }, [scrollToElement]);
   const [focusedNodeId, setFocusedNodeId] = useState<{ id: string, field: 'content' | 'note' } | null>(null);
 
   const [zoomedNodeId, setZoomedNodeId] = useState<string | null>(null);
-  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [tagFilterState, setTagFilterState] = useState<{ documentId: string | null; value: string | null }>({ documentId, value: null });
+  const tagFilter = tagFilterState.documentId === documentId ? tagFilterState.value : null;
+  const setTagFilter = useCallback((action: SetStateAction<string | null>) => {
+    setTagFilterState(previous => {
+      const current = previous.documentId === documentId ? previous.value : null;
+      const value = typeof action === 'function' ? action(current) : action;
+      return { documentId: documentId ?? null, value };
+    });
+  }, [documentId]);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const selectedNodeIdsRef = useRef(selectedNodeIds);
   useEffect(() => { selectedNodeIdsRef.current = selectedNodeIds; }, [selectedNodeIds]);
   const [batchEditPosition, setBatchEditPosition] = useState<{ x: number; y: number } | null>(null);
+  const [batchEditButtonPosition, setBatchEditButtonPosition] = useState<{ x: number; y: number } | null>(null);
+  const updateSelectedNodeIds = useCallback((action: SetStateAction<string[]>) => {
+    setBatchEditPosition(null);
+    setSelectedNodeIds(action);
+  }, []);
   const [confirmDialog, setConfirmDialog] = useState<{
     show: boolean;
     nodeId: string;
@@ -309,11 +387,13 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const dragSelectionRef = useRef({ isDragging: false, startNodeId: null as string | null, lastRangeStr: '' });
   const [isDragMoving, setIsDragMoving] = useState(false);
   const [dropTarget, setDropTarget] = useState<{ nodeId: string; position: 'before' | 'after' | 'child' } | null>(null);
-  const dragMoveRef = useRef({ isMoving: false, startNodeId: null as string | null });
+  const dropTargetRef = useRef<{ nodeId: string; position: 'before' | 'after' | 'child' } | null>(null);
+  const dragMoveRef = useRef({ isMoving: false, startNodeId: null as string | null, selectedIds: [] as string[] });
   const ghostAnchorRef = useRef<HTMLInputElement>(null);
   const nodeIdFromUrl = searchParams.get('nodeId');
   // Diary state
   const { diaryDays, setDiaryDays, register: registerDiaryHandler, unregister: unregisterDiaryHandler, registerAddNode, unregisterAddNode } = diaryCtx;
+  const pendingDiaryDayClicksRef = useRef<Set<string>>(new Set());
   const isDiaryDoc = !!(currentDoc?.diary_date);
   const diaryYear = useMemo(() => {
     const m = currentDoc?.diary_date?.match(/^(\d{4})-(\d{2})$/);
@@ -325,8 +405,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   }, [currentDoc?.diary_date]);
   const diaryMonthMatch = diaryYear !== null && diaryMonth !== null;
   
-  const [showRecoveryDialog, setShowRecoveryDialog] = useState(false);
-  const [recoveryOperations, setRecoveryOperations] = useState<PendingOperation[]>([]);
+  const [recoveryOperations, setRecoveryOperations] = useState<PendingOperation[]>(() => saveStateManager.getPendingOperations());
+  const [showRecoveryDialog, setShowRecoveryDialog] = useState(() => recoveryOperations.length > 0);
   const [isRecovering, setIsRecovering] = useState(false);
   const [editingNodes, setEditingNodes] = useState<Set<string>>(new Set());
   const editingNodesRef = useRef(editingNodes);
@@ -339,7 +419,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   // Mobile toolbar context - publish handlers to parent layout
   const { publish: publishToolbar, isInsideProvider: hasToolbarProvider } = useMobileToolbar();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [headerCollapsed, setHeaderCollapsed] = useState(true);
 
   const markEditing = useCallback((nodeId: string) => {
     setEditingNodes(prev => new Set(prev).add(nodeId));
@@ -353,6 +432,52 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     });
   }, []);
 
+  const updateBatchEditButtonPosition = useCallback(() => {
+    if (selectedNodeIdsRef.current.length <= 1 || dragMoveRef.current.isMoving) {
+      setBatchEditButtonPosition(null);
+      return;
+    }
+
+    const selectedSet = new Set(selectedNodeIdsRef.current);
+    const selectedRows = Array.from(document.querySelectorAll<HTMLElement>('[data-node-id]'))
+      .filter(row => {
+        const nodeId = row.getAttribute('data-node-id');
+        return !!nodeId && selectedSet.has(nodeId);
+      });
+
+    if (selectedRows.length === 0) {
+      setBatchEditButtonPosition(null);
+      return;
+    }
+
+    const rects = selectedRows.map(row => row.getBoundingClientRect());
+    const top = Math.min(...rects.map(rect => rect.top));
+    const bottom = Math.max(...rects.map(rect => rect.bottom));
+    const left = Math.min(...rects.map(rect => rect.left));
+
+    setBatchEditButtonPosition({
+      x: Math.max(12, left - 42),
+      y: top + (bottom - top) / 2,
+    });
+  }, []);
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(updateBatchEditButtonPosition);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [selectedNodeIds, nodes, updateBatchEditButtonPosition]);
+
+  useEffect(() => {
+    if (selectedNodeIds.length <= 1) return;
+
+    const handleViewportChange = () => updateBatchEditButtonPosition();
+    window.addEventListener('scroll', handleViewportChange, true);
+    window.addEventListener('resize', handleViewportChange);
+    return () => {
+      window.removeEventListener('scroll', handleViewportChange, true);
+      window.removeEventListener('resize', handleViewportChange);
+    };
+  }, [selectedNodeIds.length, updateBatchEditButtonPosition]);
+
   // 监听全局鼠标松开和点击，拦截拖拽后的点击事件，防止选区消失
   useEffect(() => {
     const handleClickCapture = (e: MouseEvent) => {
@@ -364,13 +489,11 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       }
     };
 
-    const handleMouseUp = (e: MouseEvent) => {
+    const handleMouseUp = () => {
       // 移动模式由容器的 onMouseUp 处理，这里跳过
       if (dragMoveRef.current.isMoving) return;
-      if (dragSelectionRef.current.isDragging && selectedNodeIds.length > 1) {
-        setBatchEditPosition({ x: e.clientX, y: e.clientY });
-      }
       dragSelectionRef.current.startNodeId = null;
+      dragSelectionRef.current.lastRangeStr = '';
       setTimeout(() => {
         dragSelectionRef.current.isDragging = false;
       }, 50);
@@ -404,10 +527,19 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           return { id: nodeId, content, note };
         }).filter(Boolean);
 
-        if (pendingData.length > 0) {
-          const blob = new Blob([JSON.stringify({ operations: pendingData })], { type: 'application/json' });
-          navigator.sendBeacon('/api/nodes/batch/save', blob);
-        }
+        const operations = pendingData.flatMap(node => node ? [
+          {
+            id: `final-content-${node.id}`,
+            type: 'updateContent',
+            data: { id: node.id, newContent: node.content },
+          },
+          {
+            id: `final-note-${node.id}`,
+            type: 'updateNote',
+            data: { id: node.id, newNote: node.note },
+          },
+        ] : []);
+        sendBatchSaveRequest(operations);
       }
 
       if (saveStateManager.hasUnsavedChanges()) {
@@ -477,23 +609,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     };
   }, []);
 
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  useEffect(() => {
-    const pendingOps = saveStateManager.getPendingOperations();
-    if (pendingOps && pendingOps.length > 0) {
-      setShowRecoveryDialog(true);
-      setRecoveryOperations(pendingOps);
-    }
-  }, []);
-
   const handleRecover = async () => {
     setIsRecovering(true);
     try {
@@ -536,7 +651,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
               
             case 'batchMove':
               if (op.data.updates) {
-                const payload = op.data.updates.map((u: any) => ({ 
+                const payload = op.data.updates.map((u: { id: string; newParent: string | null; newOrder: number }) => ({
                   id: u.id, 
                   parent_node_id: u.newParent, 
                   sort_order: u.newOrder 
@@ -612,9 +727,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       setShowRecoveryDialog(false);
       setRecoveryOperations([]);
       
-      if (documentId) {
-        fetchData(documentId);
-      }
+      // 当前节点状态已由命令的乐观更新保留；文档切换时会由加载 effect 重新拉取。
     } catch (error) {
       console.error('Recovery failed:', error);
       alert('恢复失败，部分操作可能未成功。请手动检查并重新编辑。');
@@ -644,11 +757,12 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const { execute, undo, redo } = useHistory();
   const commands = useMemo(() => createCommandFactory(setNodes), []);
 
-  // Font Settings Hook
-  const fontSettings = useFontSettings();
-
   // View Mode State - 'outline' or 'mindmap'
-  const [viewMode, setViewMode] = useState<'outline' | 'mindmap'>('outline');
+  const [viewModeState, setViewModeState] = useState<{ documentId: string | null; value: 'outline' | 'mindmap' }>({ documentId, value: 'outline' });
+  const viewMode = viewModeState.documentId === documentId ? viewModeState.value : 'outline';
+  const setViewMode = useCallback((value: 'outline' | 'mindmap') => {
+    setViewModeState({ documentId: documentId ?? null, value });
+  }, [documentId]);
 
   const handleMindMapNodeUpdate = async (nodeId: string, content: string) => {
     const node = nodes.find(n => n.id === nodeId);
@@ -743,7 +857,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         if (mainContent) mainContent.scrollTop = scrollTop;
       });
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // 监听文章链接点击，导航到目标文章
   useEffect(() => {
@@ -768,49 +882,12 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     };
     window.addEventListener('tag-click', handleTagClick);
     return () => window.removeEventListener('tag-click', handleTagClick);
-  }, []);
-
-  useEffect(() => {
-    setTagFilter(null);
-    setViewMode('outline');
-    if (documentId) {
-      const id = ++fetchIdRef.current;
-      fetchData(documentId, id);
-    } else {
-      fetchIdRef.current++;
-      setNodes([]);
-      setCurrentDoc(null);
-      setIsLoading(false);
-    }
-  }, [documentId]);
-
-  // 当 documents 加载完成后，如果 currentDoc 为 null 但有匹配的文档，更新 currentDoc
-  useEffect(() => {
-    if (documentId && !currentDoc && documents.length > 0) {
-      // Normalize: compare without hyphens
-      const normalizedId = documentId.replace(/-/g, '');
-      const foundDoc = documents.find(d => d.id.replace(/-/g, '') === normalizedId);
-      if (foundDoc) {
-        setCurrentDoc(foundDoc);
-      }
-    }
-  }, [documents, documentId, currentDoc]);
-
-  // 侧边栏重命名 → 同步标题到 currentDoc（只更新 title，不覆盖其他本地状态）
-  useEffect(() => {
-    if (!currentDoc || !documentId) return;
-    // Normalize: compare without hyphens
-    const normalizedId = documentId.replace(/-/g, '');
-    const ctxDoc = documents.find(d => d.id.replace(/-/g, '') === normalizedId);
-    if (ctxDoc && ctxDoc.title !== currentDoc.title) {
-      setCurrentDoc(prev => prev ? { ...prev, title: ctxDoc.title } : prev);
-    }
-  }, [documents, documentId]);
+  }, [setTagFilter]);
 
   // 注意：不再在 sidebarClose 时重新 fetchData，
   // documentId 变化时 useEffect 已自动加载数据
 
-  const fetchData = async (id: string, fetchId?: number) => {
+  const fetchData = useCallback(async (id: string, fetchId?: number) => {
     setIsLoading(true);
     try {
       const nodesData = await getNodes(id);
@@ -818,8 +895,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       // Check if this fetch is still current
       if (fetchId !== undefined && fetchId !== fetchIdRef.current) return;
 
-      let processedNodes = [...nodesData];
-      let ancestorsToExpand: string[] = [];
+      const processedNodes = [...nodesData];
+      const ancestorsToExpand: string[] = [];
 
       if (nodeIdFromUrl) {
         let current = processedNodes.find(n => n.id === nodeIdFromUrl);
@@ -843,7 +920,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       if (!foundDoc) {
         try {
           foundDoc = await getDocument(id);
-        } catch {}
+        } catch {
+          // 文档可能已删除；保留节点结果并让空状态处理。
+        }
       }
 
       // Check again after async operations
@@ -896,20 +975,33 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         setIsLoading(false);
       }
     }
-  };
+  }, [commands, documents, execute, nodeIdFromUrl, setSearchParams]);
+
+  useEffect(() => {
+    if (documentId) {
+      const id = ++fetchIdRef.current;
+      void fetchData(documentId, id);
+    } else {
+      fetchIdRef.current++;
+    }
+  }, [documentId, fetchData]);
 
   // Fetch diary days when document changes
   useEffect(() => {
     if (isDiaryDoc && diaryYear !== null && diaryMonth !== null) {
       getDiaryDayDates(diaryYear, diaryMonth).then(days => setDiaryDays(new Set(days))).catch(() => setDiaryDays(new Set()));
-    } else {
-      setDiaryDays(new Set());
+      return;
     }
-  }, [currentDoc?.diary_date]);
+    const timer = window.setTimeout(() => setDiaryDays(new Set()), 0);
+    return () => window.clearTimeout(timer);
+  }, [currentDoc?.diary_date, diaryMonth, diaryYear, isDiaryDoc, setDiaryDays]);
 
   // Handle clicking a day in the diary date bar (returns true if handled)
   const handleDiaryDayClick = useCallback(async (day: number): Promise<boolean> => {
     if (diaryYear === null || diaryMonth === null || !documentId) return false;
+    const pendingKey = `${diaryYear}-${diaryMonth}-${day}`;
+    if (pendingDiaryDayClicksRef.current.has(pendingKey)) return true;
+    pendingDiaryDayClicksRef.current.add(pendingKey);
     try {
       const result = await getOrCreateDayNode(diaryYear, diaryMonth, day);
 
@@ -937,7 +1029,18 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         if (result.child_node) {
           newNodes.push(result.child_node as Node);
         }
-        setNodes(prev => [...prev, ...newNodes]);
+        setNodes(prev => {
+          const existingDateNode = prev.find(n =>
+            n.parent_node_id === null
+            && n.heading === 'h1'
+            && n.content === dateContent
+          );
+          if (existingDateNode || prev.some(n => n.id === result.node_id)) {
+            return prev;
+          }
+          const existingIds = new Set(prev.map(n => n.id));
+          return [...prev, ...newNodes.filter(n => !existingIds.has(n.id))];
+        });
         // Update diary days
         setDiaryDays(prev => new Set([...prev, day]));
       }
@@ -959,8 +1062,10 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     } catch (e) {
       console.error('Failed to handle day click', e);
       return false;
+    } finally {
+      pendingDiaryDayClicksRef.current.delete(pendingKey);
     }
-  }, [diaryYear, diaryMonth, documentId]);
+  }, [diaryYear, diaryMonth, documentId, setDiaryDays]);
 
   // Register/unregister diary handler with context
   useEffect(() => {
@@ -1000,7 +1105,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     if (!node || node.content === content) return;
 
     // Undo 合并逻辑：同一节点在 500ms 内的连续编辑合并为一条命令
-    const now = Date.now();
+    const now = createSortOrder();
     if (lastEditRef.current?.nodeId === id && now - lastEditRef.current.timestamp < 500) {
       lastEditRef.current = { nodeId: id, timestamp: now, oldContent: lastEditRef.current.oldContent };
       // 不创建新命令，让 saveTimeout 处理最终保存
@@ -1022,75 +1127,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const isDescendantOf = (sourceId: string, targetId: string, allNodes: Node[]): boolean => {
     const descendants = getDescendants(sourceId, allNodes);
     return descendants.some(d => d.id === targetId);
-  };
-
-  // 小黑点按住 → 只记录起点，不选节点（避免干扰容器的框选逻辑）
-  const executeMultiNodeMove = (targetNodeId: string, position: 'before' | 'after' | 'child') => {
-    const selectedSet = new Set(selectedNodeIds);
-    // 筛选顶层选中节点（父节点未被选中的）
-    const topLevelSelected = sortedNodes
-      .filter(n => selectedSet.has(n.id) && (!n.parent_node_id || !selectedSet.has(n.parent_node_id)));
-
-    if (topLevelSelected.length === 0) return;
-
-    // 防止移动到自身或子孙节点下
-    for (const sel of topLevelSelected) {
-      if (sel.id === targetNodeId || isDescendantOf(sel.id, targetNodeId, nodes)) {
-        return;
-      }
-    }
-
-    const targetNode = nodes.find(n => n.id === targetNodeId);
-    if (!targetNode) return;
-
-    const moveUpdates: { id: string; oldParent: string | null; oldOrder: number; newParent: string | null; newOrder: number }[] = [];
-
-    if (position === 'child') {
-      // 变成目标节点的子节点，追加到末尾
-      const existingChildren = nodes.filter(n => n.parent_node_id === targetNodeId);
-      let baseOrder = existingChildren.length > 0
-        ? Math.max(...existingChildren.map(n => n.sort_order))
-        : 0;
-      topLevelSelected.forEach((node, i) => {
-        moveUpdates.push({
-          id: node.id,
-          oldParent: node.parent_node_id,
-          oldOrder: node.sort_order,
-          newParent: targetNodeId,
-          newOrder: baseOrder + (i + 1) * 1000,
-        });
-      });
-    } else {
-      // 插入到目标节点之前/之后，与目标同级
-      const newParent = targetNode.parent_node_id;
-      if (position === 'before') {
-        // 在目标之前，逆序插入使第一个选中节点紧贴目标前面
-        topLevelSelected.forEach((node, i) => {
-          moveUpdates.push({
-            id: node.id,
-            oldParent: node.parent_node_id,
-            oldOrder: node.sort_order,
-            newParent,
-            newOrder: targetNode.sort_order - (topLevelSelected.length - i) * 1000,
-          });
-        });
-      } else {
-        // 在目标之后
-        topLevelSelected.forEach((node, i) => {
-          moveUpdates.push({
-            id: node.id,
-            oldParent: node.parent_node_id,
-            oldOrder: node.sort_order,
-            newParent,
-            newOrder: targetNode.sort_order + (i + 1) * 1000,
-          });
-        });
-      }
-    }
-
-    execute(commands.createBatchMoveCommand(moveUpdates));
-    setSelectedNodeIds([]);
-    setDropTarget(null);
   };
 
   const handleDelete = async (id: string) => {
@@ -1193,9 +1229,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
               });
               setNodes(prev => [...prev, newNode]);
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             console.error('图片上传失败', error);
-            const errorMessage = error?.response?.data?.detail || error?.message || '未知错误';
+            const errorMessage = getErrorMessage(error, '未知错误');
             alert(`图片上传失败: ${errorMessage}`);
           }
         }
@@ -1242,9 +1278,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
               });
               setNodes(prev => [...prev, newNode]);
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             console.error('附件上传失败', error);
-            const errorMessage = error?.response?.data?.detail || error?.message || '未知错误';
+            const errorMessage = getErrorMessage(error, '未知错误');
             alert(`附件上传失败: ${errorMessage}`);
           }
         }
@@ -1267,7 +1303,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     // 2. 尝试从系统剪贴板读取自定义 MIME 类型
     if (!parsedTree) {
       try {
-        const types = (e.clipboardData as any).types;
+        const types = Array.from(e.clipboardData.types);
         if (types?.includes?.('application/x-miniflowy-nodes') || Array.isArray(types) && types.includes('application/x-miniflowy-nodes')) {
           const raw = e.clipboardData.getData('application/x-miniflowy-nodes');
           if (raw) parsedTree = JSON.parse(raw);
@@ -1308,7 +1344,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     if (hasChildren && !targetNode.is_collapsed) {
        newParentId = targetNode.id;
        const children = nodes.filter(n => n.parent_node_id === id).sort((a, b) => a.sort_order - b.sort_order);
-       startOrder = children.length > 0 ? children[0].sort_order - 10000 : Date.now();
+       startOrder = children.length > 0 ? children[0].sort_order - 10000 : createSortOrder();
     } else {
        const siblings = nodes.filter(n => n.parent_node_id === targetNode.parent_node_id).sort((a, b) => a.sort_order - b.sort_order);
        const targetIdx = siblings.findIndex(n => n.id === id);
@@ -1351,110 +1387,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     }
   };
 
-  // ----- 光标位置精确保存与恢复工具函数 -----
-  const cursorPositionRef = useRef<{ nodeId: string; offset: number } | null>(null);
   const lastEditRef = useRef<{ nodeId: string; timestamp: number; oldContent: string } | null>(null);
-
-  const saveCursorPosition = useCallback(() => {
-    const sel = window.getSelection();
-    if (!sel || !sel.rangeCount || !sel.anchorNode) {
-      cursorPositionRef.current = null;
-      return;
-    }
-
-    let el: HTMLElement | null = sel.anchorNode instanceof Element
-      ? sel.anchorNode
-      : sel.anchorNode.parentElement;
-    while (el && !el.hasAttribute('data-node-id')) {
-      el = el.parentElement;
-    }
-    if (!el) {
-      cursorPositionRef.current = null;
-      return;
-    }
-
-    const contentEl = document.getElementById(`node-${el.getAttribute('data-node-id')}`);
-    if (!contentEl) {
-      cursorPositionRef.current = null;
-      return;
-    }
-
-    const range = sel.getRangeAt(0).cloneRange();
-    range.selectNodeContents(contentEl);
-    range.setEnd(sel.anchorNode, sel.anchorOffset);
-    const textOffset = range.toString().length;
-
-    cursorPositionRef.current = {
-      nodeId: el.getAttribute('data-node-id')!,
-      offset: textOffset
-    };
-  }, []);
-
-  const restoreCursorPosition = useCallback(() => {
-    const pos = cursorPositionRef.current;
-    if (!pos) return;
-
-    const el = document.getElementById(`node-${pos.nodeId}`);
-    if (!el) return;
-
-    el.focus({ preventScroll: true });
-    const safeOffset = Math.min(pos.offset, (el.textContent || '').length);
-
-    const sel = window.getSelection();
-    if (!sel) return;
-
-    const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    let accumulated = 0;
-    let targetNode: Text | null = null;
-    let targetOffset = 0;
-
-    while (tw.nextNode()) {
-      const textNode = tw.currentNode as Text;
-      const len = textNode.length;
-      if (accumulated + len >= safeOffset) {
-        targetNode = textNode;
-        targetOffset = safeOffset - accumulated;
-        break;
-      }
-      accumulated += len;
-    }
-
-    if (targetNode) {
-      const range = document.createRange();
-      range.setStart(targetNode, targetOffset);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    } else {
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      range.collapse(false);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    }
-  }, []);
-
-  const focusNode = (nodeId: string, field: 'content' | 'note' = 'content') => {
-    const el = document.getElementById(`${field}-${nodeId}`);
-    if (!el) {
-      setTimeout(() => focusNode(nodeId, field), 50);
-      return;
-    }
-
-    el.focus({ preventScroll: true });
-    if (field === 'content') {
-      const sel = window.getSelection();
-      if (sel) {
-        const range = document.createRange();
-        range.selectNodeContents(el);
-        range.collapse(false);
-        sel.removeAllRanges();
-        sel.addRange(range);
-      }
-    }
-
-    scrollToElement(nodeId, field);
-  };
 
   const handleKeyDown = async (e: React.KeyboardEvent, currentNode: Node, type: 'content' | 'note') => { 
     // 拦截输入法组合状态
@@ -1466,7 +1399,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       e.preventDefault();
       const currentIndex = sortedNodes.findIndex(n => n.id === currentNode.id);
       if (currentIndex !== -1) {
-        let targetIndex = e.key === 'ArrowUp' ? currentIndex - 1 : currentIndex + 1;
+        const targetIndex = e.key === 'ArrowUp' ? currentIndex - 1 : currentIndex + 1;
         if (targetIndex >= 0 && targetIndex < sortedNodes.length) {
             const targetNode = sortedNodes[targetIndex];
             setFocusedNodeId({ id: targetNode.id, field: 'content' });
@@ -1506,7 +1439,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                 e.stopPropagation();
                 if (currentDoc) {
                   const cmd = commands.createCreateNodeCommand({
-                    document_id: currentDoc.id, content: '', parent_node_id: null, sort_order: Date.now()
+                    document_id: currentDoc.id, content: '', parent_node_id: null, sort_order: createSortOrder()
                   });
                   execute(cmd);
                   if (cmd.nodeId) setFocusedNodeId({ id: cmd.nodeId, field: 'content' });
@@ -1639,7 +1572,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           const children = nodes.filter(n => n.parent_node_id === currentNode.id)
                                 .sort((a, b) => a.sort_order - b.sort_order);
           const firstChild = children[0];
-          newSortOrder = firstChild ? firstChild.sort_order - 1000 : Date.now();
+          newSortOrder = firstChild ? firstChild.sort_order - 1000 : createSortOrder();
         } else {
           const siblings = nodes.filter(n => n.parent_node_id === newParentId)
                                 .sort((a, b) => a.sort_order - b.sort_order);
@@ -1712,7 +1645,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           const children = nodes.filter(n => n.parent_node_id === currentNode.id)
                                 .sort((a, b) => a.sort_order - b.sort_order);
           const firstChild = children[0];
-          newSortOrder = firstChild ? firstChild.sort_order - 1000 : Date.now();
+          newSortOrder = firstChild ? firstChild.sort_order - 1000 : createSortOrder();
       } 
       else {
           newParentId = currentNode.parent_node_id;
@@ -1752,8 +1685,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         }
       }
       
-      const currentIndex = sortedNodes.findIndex(n => n.id === currentNode.id);
-
       if (e.shiftKey) {
         // Outdent
         if (currentNode.parent_node_id) {
@@ -1799,7 +1730,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           const existingChildren = nodes.filter(n => n.parent_node_id === newParentId)
                                         .sort((a, b) => a.sort_order - b.sort_order);
           const lastChild = existingChildren.length > 0 ? existingChildren[existingChildren.length - 1] : null;
-          let newSortOrder = lastChild ? lastChild.sort_order + 1000 : Date.now();
+          const newSortOrder = lastChild ? lastChild.sort_order + 1000 : createSortOrder();
 
           execute(commands.createBatchMoveCommand([{
               id: currentNode.id,
@@ -1829,7 +1760,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     execute(commands.createTogglePropertyCommand(id, 'is_collapsed', is_collapsed));
   };
 
-  const handleStyleChange = (id: string, styles: Partial<Node>) => {
+  const handleStyleChange = useCallback((id: string, styles: Partial<Node>) => {
     setNodes(prev => {
       const node = prev.find(n => n.id === id);
       if (!node) return prev;
@@ -1839,9 +1770,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     updateNode(id, styles).catch((error) => {
       console.error('Failed to update node styles', error);
     });
-  };
+  }, []);
 
-  const getSortedNodes = (allNodes: Node[]) => {
+  const getSortedNodes = useCallback((allNodes: Node[]) => {
     // 预建索引：parentId → children (O(n) 构建，避免每次 filter 扫描全量)
     const childrenMap = new Map<string | null, Node[]>();
     for (const node of allNodes) {
@@ -1946,70 +1877,109 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     };
 
     return buildFilteredTree(null);
-  };
+  }, [currentDoc?.title, searchQuery, tagFilter, zoomedNodeId]);
 
-  const getSelectionFromRange = (rangeIds: string[], allNodes: Node[]): string[] => {
-    const selectedIds = new Set<string>();
-    const rangeSet = new Set(rangeIds);
+  // 小黑点按住 → 只记录起点，不选节点（避免干扰容器的框选逻辑）
+  const executeMultiNodeMove = useCallback((targetNodeId: string, position: 'before' | 'after' | 'child', movingIds = selectedNodeIds) => {
+    const selectedSet = new Set(movingIds);
+    // 筛选顶层选中节点（父节点未被选中的）
+    const topLevelSelected = getSortedNodes(nodes)
+      .filter(n => selectedSet.has(n.id) && (!n.parent_node_id || !selectedSet.has(n.parent_node_id)));
 
-    // Helper to collect all descendants into selectedIds
-    const collectDescendants = (id: string) => {
-      const children = allNodes.filter(n => n.parent_node_id === id);
-      children.forEach(child => {
-        selectedIds.add(child.id);
-        collectDescendants(child.id);
-      });
-    };
+    if (topLevelSelected.length === 0) return;
 
-    rangeIds.forEach(id => {
-      selectedIds.add(id);
-      collectDescendants(id);
-    });
-    
-    const isAncestorOf = (ancestorId: string, descendantId: string): boolean => {
-      const node = allNodes.find(n => n.id === descendantId);
-      if (!node || !node.parent_node_id) return false;
-      if (node.parent_node_id === ancestorId) return true;
-      return isAncestorOf(ancestorId, node.parent_node_id);
-    };
-    
-    const rootNodesInRange: string[] = [];
-    rangeIds.forEach(id => {
-      const hasAncestorInRange = rangeIds.some(otherId => otherId !== id && isAncestorOf(otherId, id));
-      if (!hasAncestorInRange) {
-        rootNodesInRange.push(id);
+    // 防止移动到自身或子孙节点下
+    for (const sel of topLevelSelected) {
+      if (sel.id === targetNodeId || isDescendantOf(sel.id, targetNodeId, nodes)) {
+        return;
       }
-    });
-    
-    if (rootNodesInRange.length <= 1) {
-      return Array.from(selectedIds);
     }
-    
-    rangeIds.forEach(id => {
-      let currentId = id;
-      while (true) {
-        const node = allNodes.find(n => n.id === currentId);
-        if (!node || !node.parent_node_id) break;
-        
-        const parentId = node.parent_node_id;
-        const siblings = allNodes.filter(n => n.parent_node_id === parentId && n.id !== currentId);
-        const hasSelectedSibling = siblings.some(s => selectedIds.has(s.id));
-        
-        if (hasSelectedSibling) break;
-        
-        selectedIds.add(parentId);
-        const parentSiblings = allNodes.filter(n => n.parent_node_id === parentId);
-        parentSiblings.forEach(sibling => {
-          selectedIds.add(sibling.id);
-          getDescendants(sibling.id);
+
+    const targetNode = nodes.find(n => n.id === targetNodeId);
+    if (!targetNode) return;
+
+    const moveUpdates: { id: string; oldParent: string | null; oldOrder: number; newParent: string | null; newOrder: number }[] = [];
+
+    if (position === 'child') {
+      // 变成目标节点的子节点，追加到末尾
+      const existingChildren = nodes.filter(n => n.parent_node_id === targetNodeId);
+      const baseOrder = existingChildren.length > 0
+        ? Math.max(...existingChildren.map(n => n.sort_order))
+        : 0;
+      topLevelSelected.forEach((node, i) => {
+        moveUpdates.push({
+          id: node.id,
+          oldParent: node.parent_node_id,
+          oldOrder: node.sort_order,
+          newParent: targetNodeId,
+          newOrder: baseOrder + (i + 1) * 1000,
         });
-        
-        currentId = parentId;
+      });
+    } else {
+      // 插入到目标节点之前/之后，与目标同级
+      const newParent = targetNode.parent_node_id;
+      if (position === 'before') {
+        // 在目标之前，逆序插入使第一个选中节点紧贴目标前面
+        topLevelSelected.forEach((node, i) => {
+          moveUpdates.push({
+            id: node.id,
+            oldParent: node.parent_node_id,
+            oldOrder: node.sort_order,
+            newParent,
+            newOrder: targetNode.sort_order - (topLevelSelected.length - i) * 1000,
+          });
+        });
+      } else {
+        // 在目标之后
+        topLevelSelected.forEach((node, i) => {
+          moveUpdates.push({
+            id: node.id,
+            oldParent: node.parent_node_id,
+            oldOrder: node.sort_order,
+            newParent,
+            newOrder: targetNode.sort_order + (i + 1) * 1000,
+          });
+        });
       }
+    }
+
+    execute(commands.createBatchMoveCommand(moveUpdates));
+    updateSelectedNodeIds([]);
+    dropTargetRef.current = null;
+    setDropTarget(null);
+  }, [commands, execute, getSortedNodes, nodes, selectedNodeIds, updateSelectedNodeIds]);
+
+  const updateDropTarget = useCallback((next: { nodeId: string; position: 'before' | 'after' | 'child' } | null) => {
+    dropTargetRef.current = next;
+    setDropTarget(prev => {
+      if (prev?.nodeId === next?.nodeId && prev?.position === next?.position) return prev;
+      return next;
     });
-    
-    return Array.from(selectedIds);
-  };
+  }, []);
+
+  const finishDragMove = useCallback(() => {
+    if (!dragMoveRef.current.isMoving) return;
+    const currentDropTarget = dropTargetRef.current;
+    const movingIds = dragMoveRef.current.selectedIds;
+    if (currentDropTarget && movingIds.length > 0) {
+      executeMultiNodeMove(currentDropTarget.nodeId, currentDropTarget.position, movingIds);
+    }
+    dragMoveRef.current = { isMoving: false, startNodeId: null, selectedIds: [] };
+    setIsDragMoving(false);
+    updateDropTarget(null);
+  }, [executeMultiNodeMove, updateDropTarget]);
+
+  useEffect(() => {
+    if (!isDragMoving) return;
+    const handleWindowMouseUp = () => finishDragMove();
+    const handleWindowBlur = () => finishDragMove();
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    window.addEventListener('blur', handleWindowBlur);
+    return () => {
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+      window.removeEventListener('blur', handleWindowBlur);
+    };
+  }, [finishDragMove, isDragMoving]);
 
   const generateMarkdownPreview = (allNodes: Node[]): string => {
     const rootNodes = allNodes.filter(n => !n.parent_node_id)
@@ -2037,8 +2007,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     return rootNodes.map(r => serialize(r, 0)).join('\n');
   };
 
-  const sortedNodes = useMemo(() => getSortedNodes(nodes), [nodes, zoomedNodeId, searchQuery, tagFilter, currentDoc?.title]);
-  const treeNodes = useMemo(() => buildTree(sortedNodes), [sortedNodes]);
+  const sortedNodes = getSortedNodes(nodes);
+  const treeNodes = buildTree(sortedNodes);
 
   // 幽灵锚点：用于保持移动端键盘打开
   const focusToGhostAnchor = useCallback(() => {
@@ -2048,7 +2018,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   }, []);
 
   // Mobile toolbar handlers - useCallback with refs to avoid re-creating on every render
-  const handleMobileMoveUp = useCallback(async () => {
+  const handleMobileMoveUp = async () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
     if (!nodeId) return;
     const allNodes = nodesRef.current;
@@ -2066,9 +2036,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       }]));
       setTimeout(() => focusNode(nodeId), 100);
     }
-  }, [execute, commands]);
+  };
 
-  const handleMobileMoveDown = useCallback(async () => {
+  const handleMobileMoveDown = async () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
     if (!nodeId) return;
     const allNodes = nodesRef.current;
@@ -2086,21 +2056,21 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       }]));
       setTimeout(() => focusNode(nodeId), 100);
     }
-  }, [execute, commands]);
+  };
 
-  const handleMobileToggleComplete = useCallback(() => {
+  const handleMobileToggleComplete = () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
     if (!nodeId) return;
     const node = nodesRef.current.find(n => n.id === nodeId);
     if (node) handleStyleChange(nodeId, { is_todo: !node.is_todo });
-  }, [handleStyleChange]);
+  };
 
-  const handleMobileAddNote = useCallback(() => {
+  const handleMobileAddNote = () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
     if (nodeId) setFocusedNodeId({ id: nodeId, field: 'note' });
-  }, []);
+  };
 
-  const handleMobileDelete = useCallback(async () => {
+  const handleMobileDelete = async () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
     if (!nodeId) return;
     const allNodes = nodesRef.current;
@@ -2129,9 +2099,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     } else {
       setFocusedNodeIdForToolbar(null);
     }
-  }, [execute, commands, getSortedNodes]);
+  };
 
-  const handleMobileIndent = useCallback(async () => {
+  const handleMobileIndent = async () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
     if (!nodeId) return;
     const allNodes = nodesRef.current;
@@ -2145,7 +2115,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       const children = allNodes.filter(n => n.parent_node_id === prevSibling.id)
                            .sort((a, b) => a.sort_order - b.sort_order);
       const lastChild = children[children.length - 1];
-      const newSortOrder = lastChild ? lastChild.sort_order + 1000 : Date.now();
+      const newSortOrder = lastChild ? lastChild.sort_order + 1000 : createSortOrder();
       focusToGhostAnchor();
       execute(commands.createBatchMoveCommand([{
         id: currentNode.id, oldParent: currentNode.parent_node_id, oldOrder: currentNode.sort_order,
@@ -2153,9 +2123,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       }]));
       setTimeout(() => focusNode(nodeId), 100);
     }
-  }, [execute, commands]);
+  };
 
-  const handleMobileOutdent = useCallback(async () => {
+  const handleMobileOutdent = async () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
     if (!nodeId) return;
     const allNodes = nodesRef.current;
@@ -2179,40 +2149,59 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       newParent: parentNode.parent_node_id, newOrder: newSortOrder
     }]));
     setTimeout(() => focusNode(nodeId), 100);
-  }, [execute, commands]);
+  };
 
-  const handleMobileZoom = useCallback(() => {
+  const handleMobileZoom = () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
     if (nodeId) setZoomedNodeId(nodeId);
-  }, []);
+  };
 
-  const handleMobileUndo = useCallback(async () => {
+  const handleMobileUndo = async () => {
     focusToGhostAnchor();
     await undo();
-  }, [undo]);
+  };
 
-  // Publish toolbar handlers to MobileToolbarContext for MobileLayout to render
-  const toolbarHandlersRef = useRef<any>(null);
-  if (!toolbarHandlersRef.current) {
-    toolbarHandlersRef.current = {};
-  }
-  // 每次更新已有对象的属性（引用不变）
-  Object.assign(toolbarHandlersRef.current, {
-    onIndent: handleMobileIndent,
-    onOutdent: handleMobileOutdent,
-    onToggleTodo: handleMobileToggleComplete,
-    onAddNote: handleMobileAddNote,
-    onMoveUp: handleMobileMoveUp,
-    onMoveDown: handleMobileMoveDown,
-    onZoom: handleMobileZoom,
-    onUndo: handleMobileUndo,
-    onDelete: handleMobileDelete,
+  // 用 effect 同步实现，向 Context 暴露的包装函数保持稳定，避免发布状态造成渲染循环。
+  const mobileActionsRef = useRef({
+    indent: handleMobileIndent,
+    outdent: handleMobileOutdent,
+    toggleTodo: handleMobileToggleComplete,
+    addNote: handleMobileAddNote,
+    moveUp: handleMobileMoveUp,
+    moveDown: handleMobileMoveDown,
+    zoom: handleMobileZoom,
+    undo: handleMobileUndo,
+    deleteNode: handleMobileDelete,
   });
+  useEffect(() => {
+    mobileActionsRef.current = {
+      indent: handleMobileIndent,
+      outdent: handleMobileOutdent,
+      toggleTodo: handleMobileToggleComplete,
+      addNote: handleMobileAddNote,
+      moveUp: handleMobileMoveUp,
+      moveDown: handleMobileMoveDown,
+      zoom: handleMobileZoom,
+      undo: handleMobileUndo,
+      deleteNode: handleMobileDelete,
+    };
+  });
+  const toolbarHandlers = useMemo(() => ({
+    onIndent: () => mobileActionsRef.current.indent(),
+    onOutdent: () => mobileActionsRef.current.outdent(),
+    onToggleTodo: () => mobileActionsRef.current.toggleTodo(),
+    onAddNote: () => mobileActionsRef.current.addNote(),
+    onMoveUp: () => mobileActionsRef.current.moveUp(),
+    onMoveDown: () => mobileActionsRef.current.moveDown(),
+    onZoom: () => mobileActionsRef.current.zoom(),
+    onUndo: () => mobileActionsRef.current.undo(),
+    onDelete: () => mobileActionsRef.current.deleteNode(),
+  }), []);
 
   useEffect(() => {
     if (!isMobile) return;
-    publishToolbar(!!focusedNodeIdForToolbar, toolbarHandlersRef.current);
-  }, [isMobile, focusedNodeIdForToolbar, publishToolbar]);
+    publishToolbar(!!focusedNodeIdForToolbar, toolbarHandlers);
+  }, [isMobile, focusedNodeIdForToolbar, publishToolbar, toolbarHandlers]);
 
   // 当窗口失焦或非应用复制时，清除内部剪贴板缓存
   // 避免从外部复制文字后粘贴仍使用旧的内部节点数据
@@ -2270,7 +2259,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           });
           const uniqueDescendants = allDescendants.filter(d => !selectedNodeIds.includes(d.id));
           execute(commands.createBatchDeleteCommand(nodesToDelete, uniqueDescendants));
-          setSelectedNodeIds([]);
+          updateSelectedNodeIds([]);
           return;
         }
 
@@ -2311,7 +2300,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             execute(commands.createBatchDeleteCommand(nodesToDelete, uniqueDescendants));
           }
           
-          setSelectedNodeIds([]);
+          updateSelectedNodeIds([]);
           return;
         }
 
@@ -2399,7 +2388,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                     const existingChildren = nodes.filter(n => n.parent_node_id === newParentId)
                                                   .sort((a, b) => a.sort_order - b.sort_order);
                     const lastChild = existingChildren.length > 0 ? existingChildren[existingChildren.length - 1] : null;
-                    newSortOrder = lastChild ? lastChild.sort_order + 1000 : Date.now();
+                    newSortOrder = lastChild ? lastChild.sort_order + 1000 : createSortOrder();
                 }
                 
                 parentNextOrderMap.set(newParentId, newSortOrder);
@@ -2423,7 +2412,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
 
         // 4. Escape 清除选择
         if (e.key === 'Escape') {
-          setSelectedNodeIds([]);
+          updateSelectedNodeIds([]);
           return;
         }
       }
@@ -2431,12 +2420,14 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       // --- 下面保留原有的 Undo/Redo 逻辑 --- 
       
       // Undo/Redo (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z)
-      // Only let browser handle native undo in textarea/input; contentEditable nodes still use custom undo
+      // 表单和 CodeMirror 使用各自的原生历史；大纲 contentEditable 节点仍使用命令历史。
       const target = e.target as HTMLElement;
       const isTextField = target.tagName === 'TEXTAREA' || target.tagName === 'INPUT';
+      const isCodeMirror = target.closest('.cm-editor') !== null;
+      const usesEditorHistory = isTextField || isCodeMirror;
 
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
-        if (isTextField) return;
+        if (usesEditorHistory) return;
         e.preventDefault();
         e.stopPropagation();
 
@@ -2449,7 +2440,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       }
 
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') {
-        if (isTextField) return;
+        if (usesEditorHistory) return;
         e.preventDefault();
         e.stopPropagation();
         await redo();
@@ -2460,7 +2451,23 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     // Use capture phase to intercept shortcuts before they reach editing elements
     window.addEventListener('keydown', handleGlobalKey, { capture: true });
     return () => window.removeEventListener('keydown', handleGlobalKey, { capture: true });
-  }, [undo, redo, commands, execute]);
+  }, [undo, redo, commands, execute, updateSelectedNodeIds]);
+
+  const getSelectedNodes = useCallback(() => {
+    const selectedSet = new Set(selectedNodeIds);
+    return nodes.filter(node => selectedSet.has(node.id));
+  }, [nodes, selectedNodeIds]);
+
+  const selectionAllMatch = useCallback(<K extends keyof Node>(key: K, value: Node[K]) => {
+    const selectedNodes = getSelectedNodes();
+    return selectedNodes.length > 0 && selectedNodes.every(node => node[key] === value);
+  }, [getSelectedNodes]);
+
+  const applyBatchStyleToggle = useCallback(<K extends keyof Node>(key: K, activeValue: Node[K], inactiveValue: Node[K]) => {
+    const nextValue = selectionAllMatch(key, activeValue) ? inactiveValue : activeValue;
+    selectedNodeIds.forEach(id => handleStyleChange(id, { [key]: nextValue } as Partial<Node>));
+    setBatchEditPosition(null);
+  }, [handleStyleChange, selectedNodeIds, selectionAllMatch]);
 
   // Project view rendering (also handles archived projects view when no project selected)
   if (selectedProjectId || showArchivedProjects) {
@@ -2469,6 +2476,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         <ProjectView
           projectId={selectedProjectId}
           showArchived={showArchivedProjects}
+          archivedReloadKey={archivedProjectsReloadKey}
           onToggleArchived={setShowArchivedProjects}
           onDeselectProject={() => setSelectedProjectId(null)}
         />
@@ -2481,6 +2489,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     return (
       <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
         {userSubView === 'profile' && <UserProfileEditor />}
+        {userSubView === 'appearance' && <AppearanceSettingsPage />}
         {userSubView === 'token' && <TokenPanel />}
         {userSubView === 'ai' && <AISettingsPanel />}
         {userSubView === 'trash' && <TrashPanel />}
@@ -2510,26 +2519,13 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     return <LoadingSkeleton />;
   }
 
-  const breadcrumbs = [
-    { id: 'root', title: 'memo' },
-    ...(currentDoc ? [{ id: currentDoc.id, title: currentDoc.title }] : [])
-  ];
-
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans h-screen">
-      {!document.documentElement.dataset.mobileLayout && (
-        <>
-          {/* 导航栏展开/收起按钮 — 始终可见 */}
-          <button
-            onClick={() => setHeaderCollapsed(prev => !prev)}
-            className="absolute top-0 left-1/2 -translate-x-1/2 z-10 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200/80 dark:hover:bg-gray-700/80 transition-colors"
-            style={{ paddingTop: isMobile ? 'calc(env(safe-area-inset-top, 0px) + 2px)' : '2px' }}
-            title={headerCollapsed ? '展开导航栏' : '收起导航栏'}
-          >
-            {headerCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-          </button>
-
-          {!headerCollapsed && (
+      {!document.documentElement.dataset.mobileLayout
+        && currentDoc?.type !== 'note'
+        && currentDoc?.type !== 'excalidraw'
+        && !isDiaryDoc
+        && (
           <div className="flex items-center justify-between px-6 bg-gray-50/80 dark:bg-gray-800/50" style={{ minHeight: '3rem', paddingTop: isMobile ? 'env(safe-area-inset-top)' : undefined, boxShadow: '0 2px 8px -3px rgba(0,0,0,0.08)' }}>
             <div className="flex items-center flex-wrap gap-1">
           {/* 移动端菜单按钮 */}
@@ -2545,19 +2541,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
               <Menu size={16} />
             </button>
           )}
-          
-          <Breadcrumbs items={breadcrumbs} onNavigate={(id) => {
-            if (id === 'root') {
-              setSearchQuery('');
-              setZoomedNodeId(null);
-              setTagFilter(null);
-              navigate('/');
-            } else if (currentDoc && id === currentDoc.id) {
-              setZoomedNodeId(null);
-              setTagFilter(null);
-            }
-          }} />
-          
           {/* 聚焦层级面包屑 */}
           {zoomedNodeId && (() => {
             const getAncestors = (nodeId: string): Node[] => {
@@ -2580,9 +2563,11 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             
             return ancestors.map((ancestor, index) => (
               <Fragment key={ancestor.id}>
-                <span className="text-sm text-gray-400 dark:text-gray-500 mx-1">
-                  {'>'}
-                </span>
+                {index > 0 && (
+                  <span className="text-sm text-gray-400 dark:text-gray-500 mx-1">
+                    {'>'}
+                  </span>
+                )}
                 <span 
                   className={`text-sm cursor-pointer ${
                     index === ancestors.length - 1 
@@ -2652,13 +2637,10 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             nodes={nodes}
             currentDoc={currentDoc}
             generateMarkdownPreview={generateMarkdownPreview}
-            fontSettings={fontSettings}
           />
           <SaveStatusIndicator status={saveStatus} pendingCount={pendingCount} offlineQueueCount={offlineQueueCount} />
         </div>
       </div>
-          )}
-        </>
       )}
 
       {!isOnline && (
@@ -2685,18 +2667,13 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       {/* Excalidraw View - Canvas editor */}
       {currentDoc?.type === 'excalidraw' && (
         <div className="main-content-area flex-1" style={{ minHeight: 0, position: 'relative' }}>
-          {isMobile ? (
-            <div className="flex-1 flex flex-col items-center justify-center gap-4 text-gray-500 p-8">
-              <p className="text-center text-sm">画布编辑器暂不支持移动端</p>
-              <p className="text-center text-xs text-gray-400">请在 PC 端浏览器中查看和编辑画布</p>
-            </div>
-          ) : (
-            <ExcalidrawEditor
-              documentId={documentId!}
-              title={currentDoc?.title}
-              onTitleChange={handleTitleChange}
-            />
-          )}
+          <ExcalidrawEditor
+            documentId={documentId!}
+            title={currentDoc?.title}
+            onTitleChange={isMobile ? undefined : handleTitleChange}
+            readOnly={isMobile}
+            mobileViewOnly={isMobile}
+          />
         </div>
       )}
 
@@ -2705,10 +2682,10 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         <>
         <div
           className="main-content-area flex-1 overflow-y-auto px-8 py-8 custom-scrollbar"
-          onClick={() => setSelectedNodeIds([])}
+          onClick={() => updateSelectedNodeIds([])}
         >
           <div className="max-w-[900px] ml-auto mr-auto md:ml-16 md:mr-auto">
-            {currentDoc && !diaryDocId && (
+            {currentDoc && !isDiaryDoc && (
               <h1
                 className="text-4xl font-semibold mb-8 text-gray-800 dark:text-gray-100 outline-none leading-tight"
                 contentEditable
@@ -2740,6 +2717,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                   docMonth={diaryMonth!}
                   diaryDays={diaryDays}
                   onDayClick={handleDiaryDayClick}
+                  showMonthArrows={isMobile}
                   onMonthNavigate={async (y, m) => {
                     try {
                       const data = await getMonthlyDiary(y, m);
@@ -2782,8 +2760,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                 if (handleEl) {
                   e.preventDefault();
                   const dragNodeId = handleEl.getAttribute('data-drag-handle')!;
-                  setSelectedNodeIds([dragNodeId]);
-                  dragMoveRef.current = { isMoving: true, startNodeId: dragNodeId };
+                  updateSelectedNodeIds([dragNodeId]);
+                  dragMoveRef.current = { isMoving: true, startNodeId: dragNodeId, selectedIds: [dragNodeId] };
                   setIsDragMoving(true);
                   return;
                 }
@@ -2795,15 +2773,17 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                   // 如果点击的节点已选中 → 进入移动模式
                   if (nodeId && selectedNodeIds.includes(nodeId) && selectedNodeIds.length > 0) {
                     e.preventDefault();
-                    dragMoveRef.current = { isMoving: true, startNodeId: nodeId };
+                    dragMoveRef.current = { isMoving: true, startNodeId: nodeId, selectedIds: [...selectedNodeIds] };
                     setIsDragMoving(true);
                     return;
                   }
                   // 否则 → 进入框选模式
                   dragSelectionRef.current.startNodeId = nodeId;
                   dragSelectionRef.current.isDragging = false;
+                  dragSelectionRef.current.lastRangeStr = '';
                 } else {
-                  setSelectedNodeIds([]);
+                  updateSelectedNodeIds([]);
+                  dragSelectionRef.current.lastRangeStr = '';
                 }
               }}
               onMouseMove={(e) => {
@@ -2830,7 +2810,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                     }
                   }
 
-                  if (targetNodeId && !selectedNodeIds.includes(targetNodeId)) {
+                  if (targetNodeId && !dragMoveRef.current.selectedIds.includes(targetNodeId)) {
                     // 计算放置位置（上1/4 → before，下1/4 → after，中间1/2 → child）
                     const targetEl = document.querySelector(`[data-node-id="${targetNodeId}"]`);
                     if (targetEl) {
@@ -2844,45 +2824,38 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                       } else {
                         position = 'child';
                       }
-                      const newTarget = { nodeId: targetNodeId, position };
-                      setDropTarget(prev => {
-                        if (prev && prev.nodeId === newTarget.nodeId && prev.position === newTarget.position) return prev;
-                        return newTarget;
-                      });
+                      updateDropTarget({ nodeId: targetNodeId, position });
                     }
                   } else {
-                    setDropTarget(prev => prev ? null : prev);
+                    updateDropTarget(null);
                   }
                   return;
                 }
 
-                // 框选模式：原有逻辑
+                // 框选模式：按行中心点和鼠标 Y 坐标计算范围，避免快速滑过节点时漏选
                 const { startNodeId } = dragSelectionRef.current;
                 if (!startNodeId) return;
 
-                let currentId: string | null = null;
-                const target = e.target as HTMLElement;
-                const nodeEl = target.closest('[data-node-id]') as HTMLElement;
+                const allRows = Array.from(document.querySelectorAll<HTMLElement>('[data-node-id]'));
+                const rowMetrics = allRows
+                  .map((row, index) => {
+                    const rect = row.getBoundingClientRect();
+                    return {
+                      id: row.getAttribute('data-node-id'),
+                      index,
+                      top: rect.top,
+                      bottom: rect.bottom,
+                      center: rect.top + rect.height / 2,
+                    };
+                  })
+                  .filter((item): item is { id: string; index: number; top: number; bottom: number; center: number } => !!item.id);
 
-                const allRows = Array.from(document.querySelectorAll('[data-node-id]'));
-
-                if (nodeEl) {
-                  currentId = nodeEl.getAttribute('data-node-id');
-                } else {
-                  let minDistance = Infinity;
-                  for (const row of allRows) {
-                      const rect = row.getBoundingClientRect();
-                      if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
-                          currentId = row.getAttribute('data-node-id');
-                          break;
-                      }
-                      const dist = Math.min(Math.abs(e.clientY - rect.top), Math.abs(e.clientY - rect.bottom));
-                      if (dist < minDistance) {
-                          minDistance = dist;
-                          currentId = row.getAttribute('data-node-id');
-                      }
-                  }
-                }
+                const currentRow = rowMetrics.find(row => e.clientY >= row.top && e.clientY <= row.bottom)
+                  ?? rowMetrics.reduce<{ id: string; index: number; top: number; bottom: number; center: number } | null>((nearest, row) => {
+                    if (!nearest) return row;
+                    return Math.abs(e.clientY - row.center) < Math.abs(e.clientY - nearest.center) ? row : nearest;
+                  }, null);
+                const currentId = currentRow?.id ?? null;
 
                 if (currentId && currentId !== startNodeId) {
                     dragSelectionRef.current.isDragging = true;
@@ -2891,32 +2864,23 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                       document.activeElement.blur();
                     }
 
-                    const startIdx = allRows.findIndex(row => row.getAttribute('data-node-id') === startNodeId);
-                    const currentIdx = allRows.findIndex(row => row.getAttribute('data-node-id') === currentId);
+                    const startIdx = rowMetrics.find(row => row.id === startNodeId)?.index ?? -1;
+                    const currentIdx = currentRow?.index ?? -1;
 
                     if (startIdx !== -1 && currentIdx !== -1) {
-                      const min = Math.min(startIdx, currentIdx);
-                      const max = Math.max(startIdx, currentIdx);
-                      const rangeIds = allRows.slice(min, max + 1).map(row => row.getAttribute('data-node-id') as string);
-
-                      const selectedArray = getSelectionFromRange(rangeIds, nodes);
+                      const selectedArray = computeHierarchicalRangeSelection(startNodeId, currentId, nodes);
                       const rangeStr = selectedArray.join(',');
                       if (dragSelectionRef.current.lastRangeStr !== rangeStr) {
-                          setSelectedNodeIds(selectedArray);
+                          updateSelectedNodeIds(selectedArray);
                           dragSelectionRef.current.lastRangeStr = rangeStr;
                       }
                     }
                 }
               }}
-              onMouseUp={(e) => {
+              onMouseUp={() => {
                 // 移动模式：执行移动
                 if (dragMoveRef.current.isMoving) {
-                  if (dropTarget) {
-                    executeMultiNodeMove(dropTarget.nodeId, dropTarget.position);
-                  }
-                  dragMoveRef.current = { isMoving: false, startNodeId: null };
-                  setIsDragMoving(false);
-                  setDropTarget(null);
+                  finishDragMove();
                   return;
                 }
               }}
@@ -2945,12 +2909,12 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                         selectedNodeIds={selectedNodeIds}
                         onSelect={(id, multi) => {
                           if (multi) {
-                            setSelectedNodeIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+                            updateSelectedNodeIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
                           } else {
-                            setSelectedNodeIds([id]);
+                            updateSelectedNodeIds([id]);
                           }
                         }}
-                        clearSelection={() => setSelectedNodeIds([])}
+                        clearSelection={() => updateSelectedNodeIds([])}
                         isDragMoving={isDragMoving}
                         onStartEditing={markEditing}
                         onEndEditing={markSaved}
@@ -2968,7 +2932,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                         document_id: currentDoc.id,
                         content: '',
                         parent_node_id: null,
-                        sort_order: Date.now()
+                        sort_order: createSortOrder()
                       });
                       execute(command);
                       if (command.nodeId) setFocusedNodeId({ id: command.nodeId, field: 'content' });
@@ -2994,6 +2958,35 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         <DropIndicator targetNodeId={dropTarget.nodeId} position={dropTarget.position} />
       )}
 
+      {/* Batch Edit Entry Button */}
+      {batchEditButtonPosition && !batchEditPosition && selectedNodeIds.length > 1 && !isDragMoving && (
+        <button
+          type="button"
+          className="fixed z-[145] h-8 px-2.5 rounded-full bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-700 shadow-lg text-xs font-medium text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/40 transition-colors"
+          style={{
+            left: `${batchEditButtonPosition.x}px`,
+            top: `${batchEditButtonPosition.y}px`,
+            transform: 'translateY(-50%)',
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setBatchEditPosition({
+              x: batchEditButtonPosition.x + 44,
+              y: batchEditButtonPosition.y,
+            });
+          }}
+          title="打开批量编辑"
+          aria-label={`打开 ${selectedNodeIds.length} 个节点的批量编辑菜单`}
+        >
+          编辑
+        </button>
+      )}
+
       {/* Mobile Toolbar - inline only when not inside MobileToolbarProvider */}
       {isMobile && !hasToolbarProvider && (
         <MobileToolbar
@@ -3016,8 +3009,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           className="fixed z-[150] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-2"
           style={{ 
             left: `${batchEditPosition.x}px`, 
-            top: `${batchEditPosition.y + 10}px`,
-            transform: 'translateX(-50%)'
+            top: `${batchEditPosition.y}px`,
+            transform: 'translateY(-50%)'
           }}
         >
           <div className="flex items-center gap-1">
@@ -3026,56 +3019,38 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             </span>
             <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { is_bold: true }));
-                setBatchEditPosition(null);
-              }}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm font-bold"
+              onClick={() => applyBatchStyleToggle('is_bold', true, false)}
+              className={`p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm font-bold ${selectionAllMatch('is_bold', true) ? 'bg-blue-500 text-white hover:bg-blue-600' : ''}`}
               title="加粗"
             >
               B
             </button>
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { is_italic: true }));
-                setBatchEditPosition(null);
-              }}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm italic"
+              onClick={() => applyBatchStyleToggle('is_italic', true, false)}
+              className={`p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm italic ${selectionAllMatch('is_italic', true) ? 'bg-blue-500 text-white hover:bg-blue-600' : ''}`}
               title="斜体"
             >
               I
             </button>
             <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { color: 'red' }));
-                setBatchEditPosition(null);
-              }}
-              className="w-5 h-5 rounded-full bg-red-500 hover:ring-2 ring-red-300"
+              onClick={() => applyBatchStyleToggle('color', 'red', null)}
+              className={`w-5 h-5 rounded-full bg-red-500 hover:ring-2 ring-red-300 ${selectionAllMatch('color', 'red') ? 'ring-2 ring-offset-2 ring-red-500' : ''}`}
               title="红色"
             />
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { color: 'blue' }));
-                setBatchEditPosition(null);
-              }}
-              className="w-5 h-5 rounded-full bg-blue-500 hover:ring-2 ring-blue-300"
+              onClick={() => applyBatchStyleToggle('color', 'blue', null)}
+              className={`w-5 h-5 rounded-full bg-blue-500 hover:ring-2 ring-blue-300 ${selectionAllMatch('color', 'blue') ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
               title="蓝色"
             />
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { color: 'green' }));
-                setBatchEditPosition(null);
-              }}
-              className="w-5 h-5 rounded-full bg-green-500 hover:ring-2 ring-green-300"
+              onClick={() => applyBatchStyleToggle('color', 'green', null)}
+              className={`w-5 h-5 rounded-full bg-green-500 hover:ring-2 ring-green-300 ${selectionAllMatch('color', 'green') ? 'ring-2 ring-offset-2 ring-green-500' : ''}`}
               title="绿色"
             />
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { color: 'purple' }));
-                setBatchEditPosition(null);
-              }}
-              className="w-5 h-5 rounded-full bg-purple-500 hover:ring-2 ring-purple-300"
+              onClick={() => applyBatchStyleToggle('color', 'purple', null)}
+              className={`w-5 h-5 rounded-full bg-purple-500 hover:ring-2 ring-purple-300 ${selectionAllMatch('color', 'purple') ? 'ring-2 ring-offset-2 ring-purple-500' : ''}`}
               title="紫色"
             />
             <button
@@ -3090,11 +3065,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             </button>
             <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { highlight: 'yellow' }));
-                setBatchEditPosition(null);
-              }}
-              className="w-5 h-5 rounded bg-yellow-200 hover:ring-2 ring-yellow-300"
+              onClick={() => applyBatchStyleToggle('highlight', 'yellow', null)}
+              className={`w-5 h-5 rounded bg-yellow-200 hover:ring-2 ring-yellow-300 ${selectionAllMatch('highlight', 'yellow') ? 'ring-2 ring-offset-2 ring-yellow-400' : ''}`}
               title="黄色高亮"
             />
             <button
@@ -3109,41 +3081,29 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             </button>
             <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { is_todo: true }));
-                setBatchEditPosition(null);
-              }}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm"
+              onClick={() => applyBatchStyleToggle('is_todo', true, false)}
+              className={`p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm ${selectionAllMatch('is_todo', true) ? 'bg-blue-500 text-white hover:bg-blue-600' : ''}`}
               title="设为待办"
             >
               ☑️
             </button>
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { heading: 'h1' }));
-                setBatchEditPosition(null);
-              }}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm font-bold"
+              onClick={() => applyBatchStyleToggle('heading', 'h1', null)}
+              className={`p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm font-bold ${selectionAllMatch('heading', 'h1') ? 'bg-blue-500 text-white hover:bg-blue-600' : ''}`}
               title="一级标题"
             >
               H1
             </button>
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { heading: 'h2' }));
-                setBatchEditPosition(null);
-              }}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm font-bold"
+              onClick={() => applyBatchStyleToggle('heading', 'h2', null)}
+              className={`p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm font-bold ${selectionAllMatch('heading', 'h2') ? 'bg-blue-500 text-white hover:bg-blue-600' : ''}`}
               title="二级标题"
             >
               H2
             </button>
             <button
-              onClick={() => {
-                selectedNodeIds.forEach(id => handleStyleChange(id, { heading: 'h3' }));
-                setBatchEditPosition(null);
-              }}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm font-bold"
+              onClick={() => applyBatchStyleToggle('heading', 'h3', null)}
+              className={`p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm font-bold ${selectionAllMatch('heading', 'h3') ? 'bg-blue-500 text-white hover:bg-blue-600' : ''}`}
               title="三级标题"
             >
               H3
@@ -3162,7 +3122,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             <button
               onClick={() => {
                 setBatchEditPosition(null);
-                setSelectedNodeIds([]);
+                updateSelectedNodeIds([]);
               }}
               className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500 dark:text-gray-400"
               title="关闭"

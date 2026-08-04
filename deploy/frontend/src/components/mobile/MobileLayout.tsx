@@ -11,6 +11,7 @@ import AIChatSidebar from '../AIChatSidebar';
 import { useUserView } from '../../context/UserViewContext';
 import { MessageSquare } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { createMobileDocumentState, getMobileTabFromState, resolveMobileBackTarget } from '../../utils/mobileNavigation';
 
 const FileTreeView = lazy(() => import('./FileTreeView'));
 const MobileTodos = lazy(() => import('./MobileTodos'));
@@ -48,7 +49,9 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { activeConvId, setActiveConvId, refreshConvList } = useUserView();
-  const [activeTab, setActiveTab] = useState<MobileTab>('memos');
+  const [activeTab, setActiveTab] = useState<MobileTab>(
+    () => getMobileTabFromState(location.state) ?? 'memos',
+  );
   const [showNewMenu, setShowNewMenu] = useState(false);
   const [showAIHistory, setShowAIHistory] = useState(false);
   const prevTabRef = useRef<MobileTab>('memos');
@@ -117,9 +120,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
 
   const prevEditingRef = useRef(false);
   useEffect(() => {
-    console.log('[Mobile] isEditing effect', { isEditing, activeTab, prevEditing: prevEditingRef.current, path: location.pathname });
     if (prevEditingRef.current && !isEditing) {
-      console.log('[Mobile] exiting editor, restoring tab:', prevTabRef.current);
       setActiveTab(prevTabRef.current);
     }
     if (isEditing) {
@@ -129,42 +130,54 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   }, [isEditing, activeTab]);
 
   const handleTabChange = useCallback((tab: MobileTab) => {
-    console.log('[Mobile] handleTabChange', { tab, isEditing, activeTab, path: location.pathname });
     if (tab === 'new') {
       setShowNewMenu(true);
       return;
     }
     setActiveTab(tab);
     if (isEditing && tab !== 'diary') {
-      console.log('[Mobile] switching from editor to tab, navigating to /');
       navigate('/', { replace: true });
     }
-  }, [isEditing, navigate, activeTab, location.pathname]);
+  }, [isEditing, navigate]);
 
-  // location.key === "default" 表示用户直接通过 URL 打开（历史栈无上一页）
-  // 否则用 navigate(-1) 返回应用内上一页
   const handleBack = useCallback(() => {
-    window.history.back();
-  }, []);
+    const target = resolveMobileBackTarget(location.key, location.state, window.history.length);
+    if (target.kind === 'history') {
+      navigate(-1);
+      return;
+    }
+    if (target.tab) {
+      setActiveTab(target.tab);
+    }
+    navigate(target.to, {
+      replace: true,
+      state: target.tab ? { mobileReturnTab: target.tab } : undefined,
+    });
+  }, [location.key, location.state, navigate]);
 
   const handleSearch = useCallback((query: string) => {
-    navigate(`/search?q=${encodeURIComponent(query)}`);
-  }, [navigate]);
+    navigate(`/search?q=${encodeURIComponent(query)}`, {
+      state: createMobileDocumentState(
+        `${location.pathname}${location.search}`,
+        activeTab,
+      ),
+    });
+  }, [activeTab, location.pathname, location.search, navigate]);
 
   const handleNewMenuClose = useCallback(() => {
     setShowNewMenu(false);
   }, []);
 
   const handleDocumentCreated = useCallback((id: string, type: string) => {
-    console.log('[Mobile] handleDocumentCreated', { id, type });
     setShowNewMenu(false);
     if (type === 'folder') {
       setActiveTab('files');
       return;
     }
-    // React 19 延迟 navigate()，用 window.location.href 立即跳转
-    window.location.href = `/d/${id}`;
-  }, []);
+    navigate(`/d/${id}`, {
+      state: createMobileDocumentState('/', activeTab),
+    });
+  }, [activeTab, navigate]);
 
   // Determine top bar title
   const getTopBarTitle = () => {
@@ -246,7 +259,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
             {showAIHistory && (
               <>
                 <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowAIHistory(false)} />
-                <div className="fixed top-0 right-0 bottom-0 w-72 bg-[#FAFAF5] dark:bg-gray-800 z-50 shadow-xl flex flex-col">
+                <div className="fixed top-0 right-0 bottom-0 w-72 bg-[var(--app-surface)] z-50 shadow-xl flex flex-col">
                   <AIChatSidebar
                     activeConvId={activeConvId}
                     onSelectConversation={(convId) => {

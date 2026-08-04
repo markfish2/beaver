@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { X } from 'lucide-react';
 
 interface NewFolderDialogProps {
@@ -14,12 +14,6 @@ interface NewFolderDialogProps {
 
 const NewFolderDialog = ({ isOpen, onConfirm, onCancel, isSubmitting = false, dialogTitle = '新建文件夹', label = '文件夹名称', placeholder = '输入文件夹名称', defaultValue = '新文件夹' }: NewFolderDialogProps) => {
   const [title, setTitle] = useState(defaultValue);
-
-  useEffect(() => {
-    if (isOpen) {
-      setTitle(defaultValue);
-    }
-  }, [isOpen]);
 
   if (!isOpen) return null;
 

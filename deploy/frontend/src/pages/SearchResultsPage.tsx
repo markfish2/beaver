@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { search } from '../api/data';
 import type { SearchResultItem } from '../api/data';
 import { FileText, CalendarDays, StickyNote, X, ArrowLeft } from 'lucide-react';
+import { createMobileDocumentState, resolveMobileBackTarget } from '../utils/mobileNavigation';
 
 const highlightText = (text: string, query: string) => {
   if (!query.trim()) return text;
@@ -18,51 +19,66 @@ const highlightText = (text: string, query: string) => {
 const SearchResultsPage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const query = searchParams.get('q') || '';
-  const [inputValue, setInputValue] = useState(query);
-  const [results, setResults] = useState<SearchResultItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    setInputValue(query);
-  }, [query]);
+  const [inputState, setInputState] = useState({ query, value: query });
+  const inputValue = inputState.query === query ? inputState.value : query;
+  const setInputValue = (value: string) => setInputState({ query, value });
+  const [searchState, setSearchState] = useState<{ query: string; results: SearchResultItem[]; loading: boolean }>({
+    query,
+    results: [],
+    loading: Boolean(query.trim()),
+  });
+  const results = searchState.query === query ? searchState.results : [];
+  const isLoading = Boolean(query.trim()) && (searchState.query !== query || searchState.loading);
 
   useEffect(() => {
     if (!query.trim()) {
-      setResults([]);
       return;
     }
-    const fetchResults = async () => {
-      setIsLoading(true);
-      try {
-        const response = await search(query);
-        setResults(response.results);
-      } catch (error) {
+    let active = true;
+    search(query)
+      .then(response => {
+        if (active) setSearchState({ query, results: response.results, loading: false });
+      })
+      .catch(error => {
         console.error('Search failed', error);
-        setResults([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchResults();
+        if (active) setSearchState({ query, results: [], loading: false });
+      });
+    return () => { active = false; };
   }, [query]);
 
   const handleResultClick = (result: SearchResultItem) => {
+    const documentState = createMobileDocumentState(
+      `${location.pathname}${location.search}`,
+    );
     switch (result.result_type) {
       case 'document':
       case 'document_title':
         if (result.node_id) {
-          navigate(`/d/${result.entity_id}?nodeId=${result.node_id}`);
+          navigate(`/d/${result.entity_id}?nodeId=${result.node_id}`, { state: documentState });
         } else {
-          navigate(`/d/${result.entity_id}`);
+          navigate(`/d/${result.entity_id}`, { state: documentState });
         }
         break;
       case 'diary':
-        navigate(`/d/${result.entity_id}`);
+        navigate(`/d/${result.entity_id}`, { state: documentState });
         break;
       case 'memo':
         navigate(`/?search=${encodeURIComponent(query)}&highlight=${result.entity_id}`);
         break;
+    }
+  };
+
+  const handleBack = () => {
+    const target = resolveMobileBackTarget(location.key, location.state, window.history.length);
+    if (target.kind === 'history') {
+      navigate(-1);
+    } else {
+      navigate(target.to, {
+        replace: true,
+        state: target.tab ? { mobileReturnTab: target.tab } : undefined,
+      });
     }
   };
 
@@ -118,7 +134,7 @@ const SearchResultsPage = () => {
       >
         {/* 左侧：返回按钮 */}
         <button
-          onClick={() => navigate(-1)}
+          onClick={handleBack}
           className="flex items-center justify-center w-[36px] h-[36px] rounded-full
                      bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
                      shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]
@@ -140,7 +156,7 @@ const SearchResultsPage = () => {
 
         {/* 右侧：关闭按钮 */}
         <button
-          onClick={() => navigate(-1)}
+          onClick={handleBack}
           className="flex items-center justify-center w-[36px] h-[36px] rounded-full
                      bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
                      shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]

@@ -92,11 +92,12 @@ const MobileToolbar = memo(function MobileToolbar({
     const viewport = window.visualViewport;
     if (!viewport) return;
 
-    updatePosition();
+    const frame = window.requestAnimationFrame(updatePosition);
     viewport.addEventListener('resize', updatePosition);
     viewport.addEventListener('scroll', updatePosition);
 
     return () => {
+      window.cancelAnimationFrame(frame);
       viewport.removeEventListener('resize', updatePosition);
       viewport.removeEventListener('scroll', updatePosition);
       window.dispatchEvent(new CustomEvent('keyboard-change', { detail: { open: false } }));

@@ -14,7 +14,7 @@ import { parseTodoDueDate } from '../utils/todoDueDate';
 import { useDocuments } from '../context/DocumentContext';
 import { useAuth } from '../context/AuthContext';
 import { updateSettings } from '../api/auth';
-import { saveViewState, loadViewState, saveMemosCache, loadMemosCache } from '../utils/pwaState';
+import { saveViewState, loadViewState, saveMemosCache, loadMemosCache, clearMemosCache } from '../utils/pwaState';
 
 interface MemoHomeProps {
   sidebarOpen: boolean;
@@ -30,10 +30,12 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   // Memo state
   const [memos, setMemos] = useState<Memo[]>([]);
   const memosRef = useRef(memos);
-  memosRef.current = memos;
   const [memoPage, setMemoPage] = useState(1);
   const [memoTotal, setMemoTotal] = useState(0);
-  const [memoColumns, setMemoColumns] = useState<1 | 2>(1);
+  const [memoColumnsOverride, setMemoColumnsOverride] = useState<1 | 2 | null>(null);
+  const savedMemoColumns: 1 | 2 = memoColumnsOverride ?? (user?.memo_columns === 2 ? 2 : 1);
+  // 移动端始终单栏，避免卡片正文、代码和附件被压缩到不可读宽度。
+  const memoColumns: 1 | 2 = isMobile ? 1 : savedMemoColumns;
   const [memoView, setMemoView] = useState<'active' | 'archived' | 'public' | 'wanderer' | 'media'>(() => {
     const saved = loadViewState();
     return saved.memoView || 'active';
@@ -55,13 +57,18 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
 
   // Refs
   const memoPageRef = useRef(memoPage);
-  memoPageRef.current = memoPage;
   const memoViewRef = useRef(memoView);
-  memoViewRef.current = memoView;
   const tagFilterRef = useRef(tagFilter);
-  tagFilterRef.current = tagFilter;
   const searchFilterRef = useRef(searchFilter);
-  searchFilterRef.current = searchFilter;
+  const fetchMemosSeqRef = useRef(0);
+
+  useEffect(() => {
+    memosRef.current = memos;
+    memoPageRef.current = memoPage;
+    memoViewRef.current = memoView;
+    tagFilterRef.current = tagFilter;
+    searchFilterRef.current = searchFilter;
+  }, [memos, memoPage, memoView, tagFilter, searchFilter]);
 
   // 监听侧边栏的 memo 视图切换事件
   useEffect(() => {
@@ -83,17 +90,10 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
     window.dispatchEvent(new CustomEvent('memo-view-change', { detail: { view: memoView, tag: tagFilter, source: 'memoHome' } }));
   }, [memoView, tagFilter]);
 
-  // 从用户设置初始化 memoColumns
-  useEffect(() => {
-    if (user?.memo_columns === 2) {
-      setMemoColumns(2);
-    }
-  }, [user]);
-
   // 切换单双栏并同步到后端
   const toggleMemoColumns = useCallback(async () => {
     const next: 1 | 2 = memoColumns === 1 ? 2 : 1;
-    setMemoColumns(next);
+    setMemoColumnsOverride(next);
     try {
       await updateSettings({ memo_columns: next });
     } catch (e) {
@@ -134,14 +134,17 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   // 首页随想数据（根据 memoView 切换活跃/归档，支持标签/搜索筛选）
   useEffect(() => {
     const fetchMemos = async () => {
+      const seq = ++fetchMemosSeqRef.current;
       try {
         const isArchived = memoView === 'archived';
         const isPublic = memoView === 'public';
         const data = await getMemos(1, 20, isArchived, tagFilter || undefined, searchFilter || undefined, isPublic);
+        if (seq !== fetchMemosSeqRef.current) return;
         setMemos(data.memos);
         setMemoTotal(data.total);
         setMemoPage(1);
       } catch (e) {
+        if (seq !== fetchMemosSeqRef.current) return;
         console.error('Failed to fetch memos', e);
       }
     };
@@ -150,25 +153,25 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
 
   // 从搜索结果页或知识图谱跳转过来时，同步 URL 参数到状态并清理
   useEffect(() => {
-    console.log('MemoHome: URL params - search:', searchFromUrl, 'highlight:', highlightFromUrl, 'view:', viewFromUrl, 'memoId:', memoIdFromUrl);
     if (searchFromUrl || highlightFromUrl || viewFromUrl || memoIdFromUrl) {
-      if (searchFromUrl) {
-        setSearchFilter(searchFromUrl);
-        setTagFilter(null);
-      }
-      if (highlightFromUrl) setHighlightMemoId(highlightFromUrl);
-      if (memoIdFromUrl) {
-        setHighlightMemoId(memoIdFromUrl);
-        if (viewFromUrl === 'wanderer') {
-          setMemoView('wanderer');
+      const timer = window.setTimeout(() => {
+        if (searchFromUrl) {
+          setSearchFilter(searchFromUrl);
+          setTagFilter(null);
         }
-      }
-      const params = new URLSearchParams(searchParams);
-      params.delete('search');
-      params.delete('highlight');
-      params.delete('view');
-      params.delete('memoId');
-      setSearchParams(params, { replace: true });
+        if (highlightFromUrl) setHighlightMemoId(highlightFromUrl);
+        if (memoIdFromUrl) {
+          setHighlightMemoId(memoIdFromUrl);
+          if (viewFromUrl === 'wanderer') setMemoView('wanderer');
+        }
+        const params = new URLSearchParams(searchParams);
+        params.delete('search');
+        params.delete('highlight');
+        params.delete('view');
+        params.delete('memoId');
+        setSearchParams(params, { replace: true });
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
   }, [searchFromUrl, highlightFromUrl, viewFromUrl, memoIdFromUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -270,6 +273,16 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
 
   // 随想 handlers
   const handleMemoCreated = useCallback((memo: Memo) => {
+    fetchMemosSeqRef.current += 1;
+    setMemoView('active');
+    setTagFilter(null);
+    setSearchFilter(null);
+    void clearMemosCache();
+    saveViewState({ memoView: 'active', tagFilter: null });
+    try {
+      localStorage.setItem('miniflowy-memo-view', 'active');
+      localStorage.removeItem('miniflowy-memo-tag');
+    } catch {}
     setMemos(prev => {
       const firstNonPinned = prev.findIndex(m => !m.is_pinned);
       if (firstNonPinned === -1) return [memo, ...prev];
@@ -322,10 +335,6 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
     setTagFilter(prev => prev === tag ? null : tag);
   }, []);
 
-  const handleMemoColorChange = useCallback((id: string, color: string | null) => {
-    setMemos(prev => prev.map(m => m.id === id ? { ...m, color } : m));
-  }, []);
-
   const handleMemoTogglePublic = useCallback(async (id: string, is_public: boolean) => {
     setMemos(prev => prev.map(m => m.id === id ? { ...m, is_public } : m));
     try {
@@ -358,7 +367,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   }, []);
 
   return (
-    <div className={`overflow-y-auto bg-[#faf9f5] dark:bg-gray-900 custom-scrollbar ${document.documentElement.dataset.mobileLayout ? 'flex-1' : 'flex-1 h-screen'}`}
+    <div className={`overflow-y-auto bg-[var(--app-canvas)] custom-scrollbar ${document.documentElement.dataset.mobileLayout ? 'flex-1' : 'flex-1 h-screen'}`}
       style={document.documentElement.dataset.mobileLayout ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 44px)', paddingBottom: '52px' } : undefined}
     >
       {/* 移动端菜单按钮 (hidden when MobileLayout is active) */}
@@ -376,7 +385,12 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
         </button>
       )}
 
-      <div className="flex flex-row max-w-[670px] mx-auto px-4 pb-20 gap-6" style={{ paddingTop: document.documentElement.dataset.mobileLayout ? '24px' : 'calc(env(safe-area-inset-top, 0px) + 24px)' }}>
+      <div
+        className={`flex flex-row mx-auto px-4 pb-20 gap-6 transition-[max-width] ${
+          memoColumns === 2 ? 'max-w-[960px]' : 'max-w-[670px]'
+        }`}
+        style={{ paddingTop: document.documentElement.dataset.mobileLayout ? '24px' : 'calc(env(safe-area-inset-top, 0px) + 24px)' }}
+      >
         {/* 左栏：输入框 + 待办 + 随想 */}
         <div className="flex-1 min-w-0">
           {memoView === 'active' && <MemoInput onMemoCreated={handleMemoCreated} documents={documents} />}
@@ -385,7 +399,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
           {memoView === 'active' && allPendingTasks.length > 0 && (
             <div className="mb-6">
               <h2 className="text-sm font-semibold text-gray-400 dark:text-gray-500 mb-3 uppercase tracking-wider">未完成事项</h2>
-              <div className="bg-white dark:bg-gray-800/50 rounded-xl p-4 border border-[#dad9d4] dark:border-gray-700/40 ">
+              <div className="bg-[#ffffff] dark:bg-gray-800/50 rounded-xl p-4 border border-[#dad9d4] dark:border-gray-700/40 ">
                 <div>
                   {/* 构建 document_id → diary_date 映射 */}
                   {(() => {
@@ -521,7 +535,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
                   {memoView === 'archived' ? '已归档' : memoView === 'public' ? '已公开' : memoView === 'wanderer' ? '随机漫游' : memoView === 'media' ? '图片文件' : '随想记录'}
                 </h2>
               </div>
-              {memoView !== 'media' && (
+              {memoView !== 'media' && !isMobile && (
               <button
                 onClick={toggleMemoColumns}
                 className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
@@ -579,7 +593,6 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
                 onTogglePublic={handleMemoTogglePublic}
                 onToggleAI={handleMemoToggleAI}
                 onTagClick={handleMemoTagClick}
-                onColorChange={handleMemoColorChange}
                 onLoadMore={handleLoadMoreMemos}
                 hasMore={memos.length < memoTotal}
                 highlightId={highlightMemoId}

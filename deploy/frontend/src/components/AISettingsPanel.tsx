@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Check, Loader2, Sparkles, Database } from 'lucide-react';
+import { Plus, Loader2, Sparkles, Database } from 'lucide-react';
 import { getAIConfigs, createAIConfig, updateAIConfig, deleteAIConfig, testAIConfig, reindexEmbeddings, getReindexStatus, type AIConfig, type AIConfigCreate, type ReindexStatus } from '../api/data';
 import { showToast } from '../utils/toast';
 
@@ -49,7 +49,14 @@ export default function AISettingsPanel() {
     }
   }, []);
 
-  useEffect(() => { fetchConfigs(); }, [fetchConfigs]);
+  useEffect(() => {
+    let active = true;
+    getAIConfigs()
+      .then(data => { if (active) setConfigs(data); })
+      .catch(error => console.error('获取 AI 配置失败', error))
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
 
   // 检测每个配置的 embedding 支持
   const checkEmbedding = useCallback(async (configId: string) => {

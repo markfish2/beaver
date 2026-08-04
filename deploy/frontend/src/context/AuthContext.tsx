@@ -1,7 +1,7 @@
-import { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef, ReactNode } from 'react';
 import { checkSetupStatus, getMe, login as apiLogin, setupAdmin as apiSetupAdmin } from '../api/auth';
 import type { User } from '../api/auth';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 interface AuthContextType {
   user: User | null;
@@ -13,6 +13,7 @@ interface AuthContextType {
   logout: () => void;
   checkStatus: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  applyUser: (user: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,13 +23,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSetupRequired, setIsSetupRequired] = useState<boolean | null>(null);
+  const initialCheckStartedRef = useRef(false);
 
   const navigate = useNavigate();
-  const location = useLocation();
-
-  useEffect(() => {
-    checkStatus();
-  }, []);
 
   const checkStatus = useCallback(async () => {
     setIsLoading(true);
@@ -37,7 +34,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsSetupRequired(status.setup_required);
 
       if (status.setup_required) {
-        if (location.pathname !== '/setup') {
+        if (window.location.pathname !== '/setup') {
           navigate('/setup');
         }
         setIsLoading(false);
@@ -56,13 +53,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(userData);
         setIsAuthenticated(true);
       }
-    } catch (error) {
+    } catch {
       localStorage.removeItem('token');
       setIsAuthenticated(false);
     } finally {
       setIsLoading(false);
     }
-  }, [location.pathname, navigate]);
+  }, [navigate]);
+
+  useEffect(() => {
+    if (initialCheckStartedRef.current) return;
+    initialCheckStartedRef.current = true;
+    void checkStatus();
+  }, [checkStatus]);
 
   const login = useCallback(async (username: string, password: string) => {
     const data = await apiLogin(username, password);
@@ -77,7 +80,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await apiSetupAdmin(username, password);
     await login(username, password);
     setIsSetupRequired(false);
-  }, [login, navigate]);
+  }, [login]);
 
   const logout = useCallback(() => {
     localStorage.removeItem('token');
@@ -95,9 +98,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
+  const applyUser = useCallback((nextUser: User) => {
+    setUser(nextUser);
+    setIsAuthenticated(true);
+  }, []);
+
   const value = useMemo(() => ({
-    user, isAuthenticated, isLoading, isSetupRequired, login, setup, logout, checkStatus, refreshUser
-  }), [user, isAuthenticated, isLoading, isSetupRequired, login, setup, logout, checkStatus, refreshUser]);
+    user, isAuthenticated, isLoading, isSetupRequired, login, setup, logout, checkStatus, refreshUser, applyUser
+  }), [user, isAuthenticated, isLoading, isSetupRequired, login, setup, logout, checkStatus, refreshUser, applyUser]);
 
   return (
     <AuthContext.Provider value={value}>

@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "postinstall": "node scripts/patch-excalidraw-link-icon.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.1",
@@ -19,7 +21,7 @@
     "@codemirror/search": "^6.7.1",
     "@codemirror/state": "^6.7.1",
     "@codemirror/view": "^6.43.6",
-    "@excalidraw/excalidraw": "^0.18.1",
+    "@excalidraw/excalidraw": "0.18.1",
     "@lezer/highlight": "^1.2.3",
     "@mermaid-js/layout-elk": "^0.2.2",
     "@tailwindcss/postcss": "^4.2.1",

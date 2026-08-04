@@ -1,6 +1,11 @@
 import api from './client';
 import { dataCache } from './cache';
 import { emitConflict } from '../utils/conflictResolver';
+import axios from 'axios';
+
+interface ConflictDetail extends Record<string, unknown> {
+  current_version?: number;
+}
 
 export interface Document {
   id: string;
@@ -98,8 +103,8 @@ export const updateDocument = async (id: string, data: Partial<Document> & { exp
     const response = await api.put<Document>(`/documents/${id}`, data);
     dataCache.invalidate('documents:');
     return response.data;
-  } catch (error: any) {
-    if (error?.response?.status === 409) {
+  } catch (error: unknown) {
+    if (axios.isAxiosError<{ detail?: ConflictDetail }>(error) && error.response?.status === 409) {
       const detail = error.response.data?.detail;
       emitConflict({
         entityType: 'document',
@@ -167,8 +172,8 @@ export const updateNode = async (id: string, data: Partial<Node> & { expected_ve
     dataCache.invalidate(`nodes:${response.data.document_id}`);
     dataCache.invalidate('diary:');
     return response.data;
-  } catch (error: any) {
-    if (error?.response?.status === 409) {
+  } catch (error: unknown) {
+    if (axios.isAxiosError<{ detail?: ConflictDetail }>(error) && error.response?.status === 409) {
       const detail = error.response.data?.detail;
       emitConflict({
         entityType: 'node',
@@ -387,7 +392,7 @@ export const getMemos = async (page: number = 1, pageSize: number = 20, archived
   const cached = dataCache.get<MemoListResponse>(cacheKey);
   if (cached) return cached;
 
-  const params: Record<string, any> = { page, page_size: pageSize, archived };
+  const params: Record<string, string | number | boolean> = { page, page_size: pageSize, archived };
   if (publicOnly) params.public = true;
   if (tag) params.tag = tag;
   if (search) params.search = search;

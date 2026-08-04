@@ -23,20 +23,20 @@ function openDB(): Promise<IDBDatabase | null> {
   });
 }
 
-async function idbGet(key: string): Promise<CacheItem<any> | null> {
+async function idbGet<T = unknown>(key: string): Promise<CacheItem<T> | null> {
   const db = await openDB();
   if (!db) return null;
   return new Promise((resolve) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
     const store = tx.objectStore(STORE_NAME);
     const req = store.get(key);
-    req.onsuccess = () => resolve(req.result || null);
+    req.onsuccess = () => resolve((req.result as CacheItem<T> | undefined) ?? null);
     req.onerror = () => resolve(null);
     tx.oncomplete = () => db.close();
   });
 }
 
-async function idbSet(key: string, item: CacheItem<any>): Promise<void> {
+async function idbSet<T>(key: string, item: CacheItem<T>): Promise<void> {
   const db = await openDB();
   if (!db) return;
   return new Promise((resolve) => {
@@ -81,7 +81,7 @@ async function idbClear(): Promise<void> {
 }
 
 class DataCache {
-  private cache = new Map<string, CacheItem<any>>();
+  private cache = new Map<string, CacheItem<unknown>>();
   private pendingWrites = new Map<string, ReturnType<typeof setTimeout>>();
   // Epoch counter incremented on invalidate/clear to prevent stale idbGet promotions
   private epoch = 0;
@@ -94,7 +94,7 @@ class DataCache {
         idbDeletePattern(key);
         return null;
       }
-      return item.data;
+      return item.data as T;
     }
     // Memory miss — try IndexedDB asynchronously, promote to memory
     // Capture epoch to detect if invalidation happens before the async read completes

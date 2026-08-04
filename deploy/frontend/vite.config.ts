@@ -8,11 +8,8 @@ export default defineConfig({
       output: {
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-markdown': ['react-markdown', 'remark-gfm', 'remark-breaks', 'rehype-raw'],
           'vendor-lucide': ['lucide-react'],
           'vendor-axios': ['axios'],
-          'vendor-excalidraw': ['@excalidraw/excalidraw'],
-          'vendor-codemirror': ['codemirror', '@codemirror/lang-markdown', '@codemirror/language', '@codemirror/state', '@codemirror/view', '@codemirror/commands', '@codemirror/search', '@lezer/highlight'],
         }
       }
     }
@@ -74,10 +71,12 @@ export default defineConfig({
       filename: 'sw-src.ts',
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff,woff2}', 'icons/**/*', 'beaver.png', 'apple-touch-icon.png', 'maskable-icon.png'],
+        globIgnores: ['fonts/lxgw-wenkai-lite/**'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
       devOptions: {
-        enabled: true
+        // 开发模块由 Vite/HMR 管理，Service Worker 缓存会造成切回标签页后加载到旧模块。
+        enabled: false
       }
     })
   ],

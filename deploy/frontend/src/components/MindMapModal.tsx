@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import type { Node } from '../api/data';
+import type MindMap from 'simple-mind-map';
 
 interface MindMapModalProps {
   isOpen: boolean;
@@ -18,7 +19,7 @@ interface MindMapNodeData {
   data: {
     text: string;
     id?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   children?: MindMapNodeData[];
 }
@@ -29,7 +30,7 @@ interface LineStyleConfig {
   name: string;
   description: string;
   previewIcon: string;
-  theme: any;
+  theme: Record<string, unknown>;
 }
 
 // 5种导线样式配置 - 重点突出连线样式的差异
@@ -339,7 +340,7 @@ const MindMapModal = ({
   onNodeMove
 }: MindMapModalProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mindMapRef = useRef<any>(null);
+  const mindMapRef = useRef<MindMap | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [currentLineStyle, setCurrentLineStyle] = useState<LineStyleKey>(getStoredLineStyle);
   const [showStyleMenu, setShowStyleMenu] = useState(false);
@@ -396,7 +397,7 @@ const MindMapModal = ({
           children: buildChildren(node.id)
         }))
     };
-  }, [documentTitle, nodes]);
+  }, [documentTitle]);
 
   const applyLineStyle = useCallback((styleKey: LineStyleKey) => {
     if (!mindMapRef.current) return;
@@ -430,7 +431,7 @@ const MindMapModal = ({
       await new Promise(resolve => setTimeout(resolve, 100));
 
       const styleConfig = LINE_STYLES[currentLineStyle];
-      mindMapRef.current = new (MindMap as any)({
+      mindMapRef.current = new MindMap({
         el: container,
         data: data,
         layout: 'logicalStructure',
@@ -442,7 +443,7 @@ const MindMapModal = ({
 
       container.style.backgroundColor = styleConfig.theme.backgroundColor;
 
-      mindMapRef.current.on('node_dblclick', (_: any, node: any) => {
+      mindMapRef.current.on('node_dblclick', (_, node) => {
         const nodeData = node.getData();
         const nodeId = nodeData?.id;
         mindMapRef.current?.renderer.startTextEdit(node, '', (newText: string) => {
@@ -452,7 +453,7 @@ const MindMapModal = ({
         });
       });
 
-      mindMapRef.current.on('node_contextmenu', (e: MouseEvent, node: any) => {
+      mindMapRef.current.on('node_contextmenu', (e: MouseEvent, node) => {
         e.preventDefault();
         const nodeData = node.getData();
         const nodeId = nodeData?.id;
@@ -520,7 +521,7 @@ const MindMapModal = ({
         setTimeout(() => document.addEventListener('click', closeMenu), 0);
       });
 
-      mindMapRef.current.on('node_dragend', (_: any, node: any) => {
+      mindMapRef.current.on('node_dragend', (_, node) => {
         const nodeData = node.getData();
         const nodeId = nodeData?.id;
         const parentNode = node.getParent();

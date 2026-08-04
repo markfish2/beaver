@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { getErrorMessage } from '../utils/errors';
 
 const SetupPage = () => {
   const [username, setUsername] = useState('');
@@ -27,15 +28,15 @@ const SetupPage = () => {
 
     try {
       await setup(username, password);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || '初始化失败，请重试');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, '初始化失败，请重试'));
     }
   };
 
   if (isLoading) return <div className="h-screen flex items-center justify-center text-gray-400">Loading...</div>;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#fbfbf9] dark:bg-gray-900 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--app-canvas)] px-4">
       <div className="w-full max-w-sm">
         {/* Logo & Title */}
         <div className="flex flex-col items-center mb-8">

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import type { Command } from '../commands/types';
 
 export const useHistory = () => {
@@ -10,9 +10,11 @@ export const useHistory = () => {
   const futureRef = useRef(future);
   const isProcessingRef = useRef(false);
   
-  // Keep refs in sync with state
-  pastRef.current = past;
-  futureRef.current = future;
+  // Keep refs in sync after commits so render stays pure.
+  useEffect(() => {
+    pastRef.current = past;
+    futureRef.current = future;
+  }, [past, future]);
 
   const execute = useCallback((command: Command) => {
     // 🚀 核心修复：移除 isProcessingRef 检查，让所有命令都能立即执行

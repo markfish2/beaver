@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Layers, ChevronDown } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import type { Node } from '../api/data';
-import { uploadFile, getFileUrl, getThumbnailUrl } from '../api/data';
+import { getThumbnailUrl } from '../api/data';
+import type MindMap from 'simple-mind-map';
+import { ColorThemePreview, LineStylePreview } from './MindMapStylePreview';
+import type { ColorThemeKey, LineStyleKey } from './MindMapStylePreview';
 
 interface MindMapViewProps {
   nodes: Node[];
@@ -19,18 +20,15 @@ interface MindMapNodeData {
   data: {
     text: string;
     id?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   children?: MindMapNodeData[];
 }
 
-type LineStyleKey = 'curve' | 'straight' | 'direct' | 'dashed' | 'rounded';
-type ColorThemeKey = 'classic' | 'colorful' | 'dark';
-
 interface LineStyleConfig {
   name: string;
   description: string;
-  theme: any;
+  theme: Record<string, unknown>;
 }
 
 // 彩色主题的分支调色板
@@ -50,9 +48,9 @@ interface ColorThemeConfig {
   description: string;
   backgroundColor: string;
   lineColor: string;
-  root: Record<string, any>;
-  second: Record<string, any>;
-  node: Record<string, any>;
+  root: Record<string, unknown>;
+  second: Record<string, unknown>;
+  node: Record<string, unknown>;
 }
 
 const COLOR_THEMES: Record<ColorThemeKey, ColorThemeConfig> = {
@@ -181,82 +179,6 @@ const setStoredColorTheme = (theme: ColorThemeKey) => {
   } catch {}
 };
 
-const LineStylePreview = ({ style, isActive }: { style: LineStyleKey; isActive: boolean }) => {
-  const baseClass = "w-10 h-6 border-2 rounded flex items-center justify-center";
-  const activeClass = isActive ? "border-blue-500 bg-blue-50" : "border-gray-300 bg-white";
-  
-  const icons: Record<LineStyleKey, React.ReactNode> = {
-    curve: (
-      <div className={`${baseClass} ${activeClass}`}>
-        <svg width="24" height="14" viewBox="0 0 24 14">
-          <path d="M2,7 Q6,2 12,7 T22,7" fill="none" stroke={isActive ? "#3B82F6" : "#9CA3AF"} strokeWidth="2" />
-        </svg>
-      </div>
-    ),
-    straight: (
-      <div className={`${baseClass} ${activeClass}`}>
-        <svg width="24" height="14" viewBox="0 0 24 14">
-          <polyline points="2,7 10,7 10,3 22,3" fill="none" stroke={isActive ? "#757575" : "#9CA3AF"} strokeWidth="2" />
-        </svg>
-      </div>
-    ),
-    direct: (
-      <div className={`${baseClass} ${activeClass}`}>
-        <svg width="24" height="14" viewBox="0 0 24 14">
-          <line x1="2" y1="7" x2="22" y2="7" stroke={isActive ? "#059669" : "#9CA3AF"} strokeWidth="2" />
-        </svg>
-      </div>
-    ),
-    dashed: (
-      <div className={`${baseClass} ${activeClass}`}>
-        <svg width="24" height="14" viewBox="0 0 24 14">
-          <line x1="2" y1="7" x2="22" y2="7" stroke={isActive ? "#D4A574" : "#9CA3AF"} strokeWidth="2" strokeDasharray="4,2" />
-        </svg>
-      </div>
-    ),
-    rounded: (
-      <div className={`${baseClass} ${activeClass}`}>
-        <svg width="24" height="14" viewBox="0 0 24 14">
-          <path d="M2,7 L8,7 Q11,7 11,4 L11,3 Q11,1 14,1 L22,1" fill="none" stroke={isActive ? "#3182CE" : "#9CA3AF"} strokeWidth="2" />
-        </svg>
-      </div>
-    )
-  };
-  
-  return icons[style] || null;
-};
-
-const ColorThemePreview = ({ theme, isActive }: { theme: ColorThemeKey; isActive: boolean }) => {
-  const baseClass = "w-10 h-6 border-2 rounded flex items-center justify-center gap-0.5 px-1";
-  const activeClass = isActive ? "border-blue-500 bg-blue-50" : "border-gray-300 bg-white";
-
-  const previews: Record<ColorThemeKey, React.ReactNode> = {
-    classic: (
-      <div className={`${baseClass} ${activeClass}`}>
-        <div className="w-2 h-2 rounded-full bg-slate-600" />
-        <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-        <div className="w-1 h-1 rounded-full bg-slate-300" />
-      </div>
-    ),
-    colorful: (
-      <div className={`${baseClass} ${activeClass}`}>
-        <div className="w-2 h-2 rounded-full bg-blue-500" />
-        <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-        <div className="w-1 h-1 rounded-full bg-amber-500" />
-      </div>
-    ),
-    dark: (
-      <div className={`${baseClass} ${isActive ? 'border-blue-500 bg-slate-800' : 'border-gray-300 bg-slate-800'}`}>
-        <div className="w-2 h-2 rounded-full bg-slate-600 border border-slate-500" />
-        <div className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-        <div className="w-1 h-1 rounded-full bg-slate-400" />
-      </div>
-    ),
-  };
-
-  return previews[theme] || null;
-};
-
 function getMaxDepth(nodes: Node[]): number {
   const childrenMap = new Map<string | null, Node[]>();
   for (const n of nodes) {
@@ -282,7 +204,7 @@ function MindMapView({
   onBackToOutline
 }: MindMapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mindMapRef = useRef<any>(null);
+  const mindMapRef = useRef<MindMap | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [currentLineStyle, setCurrentLineStyle] = useState<LineStyleKey>(getStoredLineStyle);
   const [currentColorTheme, setCurrentColorTheme] = useState<ColorThemeKey>(getStoredColorTheme);
@@ -360,7 +282,7 @@ function MindMapView({
         }
 
         // 彩色主题：二级节点分配饱和色，三级+用浅色
-        let nodeStyle: Record<string, any> | undefined;
+        let nodeStyle: Record<string, unknown> | undefined;
         let noteColor: string;
         let tagBg: string;
 
@@ -494,7 +416,7 @@ function MindMapView({
           }
 
           // 彩色主题：多根节点时也分配颜色
-          let nodeStyle: Record<string, any> | undefined;
+          let nodeStyle: Record<string, unknown> | undefined;
           let noteColor: string;
           let tagBg: string;
 
@@ -530,7 +452,7 @@ function MindMapView({
           };
         })
     };
-  }, [documentTitle, nodes, currentColorTheme]);
+  }, [documentTitle, currentColorTheme]);
 
   const buildMergedTheme = useCallback((lineKey: LineStyleKey, colorKey: ColorThemeKey) => {
     const lineConfig = LINE_STYLES[lineKey];
@@ -571,15 +493,16 @@ function MindMapView({
       if (isDestroyed) return;
       
       // 注册插件（使用静态方法）
-      MindMap.usePlugin(Export);
-      MindMap.usePlugin(ExportPDF);
+      const registerPlugin = MindMap.usePlugin.bind(MindMap);
+      registerPlugin(Export);
+      registerPlugin(ExportPDF);
       // 注册移动端触控支持
-      MindMap.usePlugin(TouchEvent);
+      registerPlugin(TouchEvent);
       
       const data = convertNodesToMindMapData(nodes, collapseLevel);
       const mergedTheme = buildMergedTheme(currentLineStyle, currentColorTheme);
 
-      const mindMap = new (MindMap as any)({
+      const mindMap = new MindMap({
         el: container,
         data: data,
         layout: 'logicalStructure',
@@ -599,7 +522,7 @@ function MindMapView({
       container.style.backgroundColor = mergedTheme.backgroundColor;
 
       // 监听文本编辑完成事件
-      mindMap.on('hide_text_edit', async (_textEditNode: any, _activeNodeList: any, node: any) => {
+      mindMap.on('hide_text_edit', async (_textEditNode, _activeNodeList, node) => {
         if (!node) return;
         const nodeData = node.getData();
         const nodeId = nodeData?.id;
@@ -630,7 +553,7 @@ function MindMapView({
       });
 
       // 监听右键菜单事件
-      mindMap.on('node_contextmenu', (e: MouseEvent, node: any) => {
+      mindMap.on('node_contextmenu', (e: MouseEvent, node) => {
         e.preventDefault();
         e.stopPropagation();
         
@@ -716,7 +639,7 @@ function MindMapView({
       });
 
       // 监听节点拖拽结束事件
-      mindMap.on('node_dragend', (_: any, node: any) => {
+      mindMap.on('node_dragend', (_, node) => {
         const nodeData = node.getData();
         const nodeId = nodeData?.id;
         const parentNode = node.getParent();
@@ -740,7 +663,8 @@ function MindMapView({
         mindMapRef.current = null;
       }
     };
-  }, []);
+  // 引擎实例只创建一次；后续数据和主题由下方增量更新 effect 负责。
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 更新数据
   useEffect(() => {
@@ -762,10 +686,10 @@ function MindMapView({
 
     // 检测是否是文章切换（所有节点 ID 都变了）
     const prevNodesHash = (prevNodesRef.current || '|').split('|')[0];
-    let prevNodes: any[] = [];
+    let prevNodes: Array<{ id: string }> = [];
     try { prevNodes = JSON.parse(prevNodesHash || '[]'); } catch { prevNodes = []; }
     const currentIds = new Set(nodes.map(n => n.id));
-    const prevIds = new Set(prevNodes.map((n: any) => n.id));
+    const prevIds = new Set(prevNodes.map((n) => n.id));
 
     // 如果当前节点和之前的节点完全没有交集，说明是文章切换
     const hasIntersection = [...currentIds].some(id => prevIds.has(id));
@@ -792,14 +716,15 @@ function MindMapView({
           const ExportPDF = (await import('simple-mind-map/src/plugins/ExportPDF.js')).default;
           const TouchEvent = (await import('simple-mind-map/src/plugins/TouchEvent.js')).default;
 
-          MindMap.usePlugin(Export);
-          MindMap.usePlugin(ExportPDF);
-          MindMap.usePlugin(TouchEvent);
+          const registerPlugin = MindMap.usePlugin.bind(MindMap);
+          registerPlugin(Export);
+          registerPlugin(ExportPDF);
+          registerPlugin(TouchEvent);
 
           const data = convertNodesToMindMapData(nodes, collapseLevel);
           const mergedTheme = buildMergedTheme(currentLineStyle, currentColorTheme);
 
-          const mindMap = new (MindMap as any)({
+          const mindMap = new MindMap({
             el: container,
             data: data,
             layout: 'logicalStructure',
@@ -819,7 +744,7 @@ function MindMapView({
           container.style.backgroundColor = mergedTheme.backgroundColor;
 
           // 重新绑定事件
-          mindMap.on('hide_text_edit', async (_textEditNode: any, _activeNodeList: any, node: any) => {
+          mindMap.on('hide_text_edit', async (_textEditNode, _activeNodeList, node) => {
             if (!node) return;
             const nodeData = node.getData();
             const nodeId = nodeData?.id;
@@ -846,7 +771,7 @@ function MindMapView({
             }
           });
 
-          mindMap.on('node_active', (node: any) => {
+          mindMap.on('node_active', (node) => {
             if (node && node.getData()?.id) {
               window.dispatchEvent(new CustomEvent('mindmap-node-focus', {
                 detail: { nodeId: node.getData().id }
@@ -854,7 +779,7 @@ function MindMapView({
             }
           });
 
-          mindMap.on('node_click', (node: any, e: MouseEvent) => {
+          mindMap.on('node_click', (node, e: MouseEvent) => {
             if (e.shiftKey && node && node.getData()?.id) {
               window.dispatchEvent(new CustomEvent('mindmap-node-select', {
                 detail: { nodeId: node.getData().id }

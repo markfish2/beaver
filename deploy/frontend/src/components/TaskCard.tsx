@@ -5,39 +5,6 @@ import {
 import type { Task } from '../api/projects';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
 
-// ==================== Dark mode hook ====================
-
-function useIsDark() {
-  const [isDark, setIsDark] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
-      if (saved.theme === 'dark') return true;
-      if (saved.theme && saved.theme !== 'dark') return false;
-    } catch { /* ignore */ }
-    return document.documentElement.classList.contains('dark') ||
-      window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
-
-  useEffect(() => {
-    const onThemeChange = () => {
-      try {
-        const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
-        if (saved.theme === 'dark') { setIsDark(true); return; }
-        if (saved.theme && saved.theme !== 'dark') { setIsDark(false); return; }
-      } catch { /* ignore */ }
-      setIsDark(document.documentElement.classList.contains('dark'));
-    };
-    window.addEventListener('theme-change', onThemeChange);
-    const mql = window.matchMedia('(prefers-color-scheme: dark)');
-    mql.addEventListener('change', onThemeChange);
-    return () => {
-      window.removeEventListener('theme-change', onThemeChange);
-      mql.removeEventListener('change', onThemeChange);
-    };
-  }, []);
-
-  return isDark;
-}
 
 // ==================== Depth-based colors ====================
 
@@ -98,7 +65,8 @@ function InlineDate({ value, onChange, className }: { value: string; onChange: (
   const inputRef = useRef<HTMLInputElement>(null);
   const handleClick = () => {
     if (inputRef.current) {
-      inputRef.current.showPicker?.() || inputRef.current.click();
+      if (inputRef.current.showPicker) inputRef.current.showPicker();
+      else inputRef.current.click();
     }
   };
   return (
@@ -138,7 +106,6 @@ export default function TaskCard({
   isLastChild = true,
   parentTreeLines = [],
 }: TaskCardProps) {
-  const isDark = useIsDark();
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(task.title);
   const [collapsed, setCollapsed] = useState(false);
@@ -172,10 +139,6 @@ export default function TaskCard({
       inputRef.current.select();
     }
   }, [isEditing]);
-
-  useEffect(() => {
-    if (!isEditing) setEditTitle(task.title);
-  }, [task.title, isEditing]);
 
   const handleTitleClick = useCallback(() => {
     setIsEditing(true);
@@ -238,14 +201,14 @@ export default function TaskCard({
     onDragOver(task.id, position);
   }, [task.id, onDragOver]);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const draggedId = e.dataTransfer.getData('text/plain');
     if (draggedId && draggedId !== task.id && onMove && dragState?.dropPosition) {
       onMove(draggedId, task.id, dragState.dropPosition);
     }
     onDragEnd?.();
-  }, [task.id, onMove, onDragEnd, dragState?.dropPosition]);
+  };
 
   const handleDragEnd = useCallback(() => {
     onDragEnd?.();

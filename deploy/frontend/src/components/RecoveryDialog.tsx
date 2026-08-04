@@ -39,8 +39,9 @@ const RecoveryDialog: React.FC<RecoveryDialogProps> = ({
     });
   };
 
-  const getOperationTypeLabel = (data: any) => {
-    if (!data || !data.type) return '未知操作';
+  const getOperationTypeLabel = (value: unknown) => {
+    const data = value && typeof value === 'object' ? value as Record<string, unknown> : null;
+    if (!data || typeof data.type !== 'string') return '未知操作';
     
     const typeLabels: Record<string, string> = {
       'updateContent': '更新内容',
@@ -68,25 +69,27 @@ const RecoveryDialog: React.FC<RecoveryDialogProps> = ({
     return typeLabels[data.type] || '未知操作';
   };
 
-  const getOperationPreview = (data: any) => {
+  const getOperationPreview = (value: unknown) => {
+    const data = value && typeof value === 'object' ? value as Record<string, unknown> : null;
     if (!data) return '';
     
-    if (data.newContent !== undefined) {
+    if (typeof data.newContent === 'string') {
       return data.newContent.length > 30 
         ? `${data.newContent.substring(0, 30)}...` 
         : data.newContent;
     }
     
-    if (data.newNote !== undefined) {
+    if (typeof data.newNote === 'string') {
       return data.newNote.length > 30 
         ? `${data.newNote.substring(0, 30)}...` 
         : data.newNote;
     }
     
-    if (data.nodeData && data.nodeData.content) {
-      return data.nodeData.content.length > 30 
-        ? `${data.nodeData.content.substring(0, 30)}...` 
-        : data.nodeData.content;
+    const nodeData = data.nodeData && typeof data.nodeData === 'object' ? data.nodeData as Record<string, unknown> : null;
+    if (typeof nodeData?.content === 'string') {
+      return nodeData.content.length > 30
+        ? `${nodeData.content.substring(0, 30)}...`
+        : nodeData.content;
     }
     
     if (data.ids && Array.isArray(data.ids)) {
@@ -161,7 +164,7 @@ const RecoveryDialog: React.FC<RecoveryDialogProps> = ({
               <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">操作详情：</p>
                 <div className="space-y-2">
-                  {pendingOperations.map((op, index) => (
+                  {pendingOperations.map((op) => (
                     <div 
                       key={op.id}
                       className="text-xs bg-white dark:bg-gray-800 rounded p-2 border border-gray-200 dark:border-gray-700"

@@ -1,20 +1,19 @@
-import { Search, FileText, ChevronDown, Plus, Trash, Star, LogOut, ChevronLeft, ChevronRight, Folder, Edit2, CalendarDays, MoreHorizontal, Copy, ArrowUpRight, ListTree, FolderPlus, FilePlus, Move, Frame, StickyNote, Square, Key, Clock, Lock, Sparkles, User, Sun, Moon, FolderKanban, Archive } from 'lucide-react';
+import { Search, FileText, ChevronDown, Plus, Trash, Star, LogOut, ChevronLeft, ChevronRight, Folder, Edit2, CalendarDays, MoreHorizontal, Copy, ArrowUpRight, ListTree, FolderPlus, FilePlus, Move, Frame, StickyNote, Square, Key, Clock, Lock, Sparkles, User, Sun, Moon, FolderKanban, Archive, Palette } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createDocument, deleteDocument, updateDocument, copyDocument, getNodes, createMemo, uploadFile, search as apiSearch, getTodos, createTodo, updateTodo, getMonthlyDiary, getOrCreateDayNode } from '../api/data';
 import type { Document as DocType, SearchResultItem, Todo } from '../api/data';
-import { createExcalidrawDocument, getExcalidrawData, getExcalidrawDataFresh } from '../api/excalidraw';
-import { exportToBlob } from '@excalidraw/excalidraw';
+import { createExcalidrawDocument, getExcalidrawDataFresh } from '../api/excalidraw';
 import { saveStateManager } from '../utils/saveStateManager';
 import { nodesToMemoMarkdown } from '../utils/convertNode';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useDocuments } from '../context/DocumentContext';
 import { useSearch } from '../context/SearchContext';
 import { useUserView } from '../context/UserViewContext';
+import type { UserSubView } from '../context/UserViewContext';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
 import NewFolderDialog from './NewFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
-import FileIcon from './FileIcon';
 import FolderIcon from './FolderIcon';
 import DiaryCalendar from './DiaryCalendar';
 import TokenDialog from './TokenDialog';
@@ -25,6 +24,9 @@ import AISettings from './AISettings';
 import AIChatSidebar from './AIChatSidebar';
 import { getProjects, createProject, updateProject, deleteProject, archiveProject } from '../api/projects';
 import type { Project } from '../api/projects';
+import { formatRelativeTime, highlightSidebarText as highlightText } from './sidebarFormatting';
+import { useFontSettings } from './FontSettings';
+import { useIsDark } from '../hooks/useIsDark';
 
 interface SidebarProps {
   onDocumentSelect?: () => void;
@@ -32,121 +34,74 @@ interface SidebarProps {
   onUserSubViewChange?: (subView: UserSubView | null) => void;
 }
 
-const highlightText = (text: string, query: string) => {
-  if (!query.trim()) return text;
-  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(`(${escaped})`, 'gi');
-  const parts = text.split(regex);
-  return parts.map((part, i) =>
-    regex.test(part) ? (
-      <mark key={i} className="bg-yellow-200 dark:bg-yellow-600/50 px-0.5 rounded">{part}</mark>
-    ) : part
-  );
-};
-
-const SIDEBAR_EXPANDED_KEY = 'sidebar_content_expanded';
 const SIDEBAR_WIDTH_KEY = 'sidebar_width';
+const SIDEBAR_PANEL_STATE_KEY = 'sidebar_panel_state';
+const SIDEBAR_FOLDERS_STATE_KEY = 'sidebar_folders_state';
 const ICON_RAIL_WIDTH = 48;
 
-// 格式化相对时间
-function formatRelativeTime(dateStr: string | number): string {
-  const date = typeof dateStr === 'number' ? new Date(dateStr) : new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return '刚刚';
-  if (diffMin < 60) return `${diffMin}分钟前`;
-  const diffHour = Math.floor(diffMin / 60);
-  if (diffHour < 24) return `${diffHour}小时前`;
-  const diffDay = Math.floor(diffHour / 24);
-  if (diffDay < 7) return `${diffDay}天前`;
-  return `${date.getMonth() + 1}/${date.getDate()}`;
-}
 const DEFAULT_PANEL_WIDTH = 212;  // 260 - 48 = 212 (total visual width stays 260)
 const MIN_PANEL_WIDTH = 160;
 const MAX_PANEL_WIDTH = 460;
+const navigationNonce = () => Date.now();
+const DOCUMENT_ITEM_TYPES = new Set<DocType['type']>(['document', 'note', 'excalidraw']);
+
+const compareFolderTitle = (a: DocType, b: DocType) =>
+  (a.title || '').localeCompare(b.title || '', 'zh-CN', {
+    numeric: true,
+    sensitivity: 'base',
+  });
+
+const resolveDocumentSortTime = (doc: DocType) => {
+  const updatedAt = doc.updated_at ? Date.parse(doc.updated_at) : 0;
+  if (Number.isFinite(updatedAt) && updatedAt > 0) return updatedAt;
+  return doc.sort_order || 0;
+};
+
+const compareDocumentByLastEditedDesc = (sortTimes: Map<string, number>) => (a: DocType, b: DocType) => {
+  const timeDiff = (sortTimes.get(b.id) || 0) - (sortTimes.get(a.id) || 0);
+  if (timeDiff !== 0) return timeDiff;
+  return (b.sort_order || 0) - (a.sort_order || 0);
+};
+
+const compareFileMenuItem = (sortTimes: Map<string, number>) => (a: DocType, b: DocType) => {
+  const aIsFolder = a.type === 'folder';
+  const bIsFolder = b.type === 'folder';
+  if (aIsFolder !== bIsFolder) return aIsFolder ? -1 : 1;
+  if (aIsFolder && bIsFolder) return compareFolderTitle(a, b);
+  return compareDocumentByLastEditedDesc(sortTimes)(a, b);
+};
 
 type ViewMode = 'diary' | 'all' | 'starred' | 'recent' | 'memo' | 'user' | 'ai' | 'projects';
-type UserSubView = 'profile' | 'token' | 'ai' | 'trash' | 'password';
-
-const TabNav = ({ activeTab, onTabChange }: {
-  activeTab: ViewMode;
-  onTabChange: (tab: ViewMode) => void;
-}) => {
-  return (
-    <div className="px-2 pt-2">
-      <div className="flex items-end gap-0.5">
-        {/* Diary tab */}
-        <button
-          onClick={() => onTabChange('diary')}
-          className={`relative flex items-center justify-center gap-1.5 px-4 text-xs font-medium rounded-t-lg transition-all duration-200 border border-b-0 ${
-            activeTab === 'diary'
-              ? 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 border-gray-200 dark:border-gray-700 z-10 -mb-px py-2.5'
-              : 'bg-blue-50/60 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-transparent hover:bg-blue-100/70 dark:hover:bg-blue-900/30 py-1.5'
-          }`}
-        >
-          <CalendarDays className={`w-3 h-3 ${activeTab === 'diary' ? '' : 'text-blue-500'}`} />
-          <span>日记</span>
-        </button>
-        {/* All tab */}
-        <button
-          onClick={() => onTabChange('all')}
-          className={`relative flex items-center justify-center gap-1.5 px-4 text-xs font-medium rounded-t-lg transition-all duration-200 border border-b-0 ${
-            activeTab === 'all'
-              ? 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 border-gray-200 dark:border-gray-700 z-10 -mb-px py-2.5'
-              : 'bg-emerald-50/60 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-transparent hover:bg-emerald-100/70 dark:hover:bg-emerald-900/30 py-1.5'
-          }`}
-        >
-          <FileText className={`w-3 h-3 ${activeTab === 'all' ? '' : 'text-emerald-500'}`} />
-          <span>文件</span>
-        </button>
-        {/* Recent tab */}
-        <button
-          onClick={() => onTabChange('recent')}
-          className={`relative flex items-center justify-center gap-1.5 px-4 text-xs font-medium rounded-t-lg transition-all duration-200 border border-b-0 ${
-            activeTab === 'recent'
-              ? 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 border-gray-200 dark:border-gray-700 z-10 -mb-px py-2.5'
-              : 'bg-blue-50/60 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-transparent hover:bg-blue-100/70 dark:hover:bg-blue-900/30 py-1.5'
-          }`}
-        >
-          <Clock className={`w-3 h-3 ${activeTab === 'recent' ? 'text-blue-500' : 'text-blue-400'}`} />
-          <span>最近</span>
-        </button>
-        {/* Starred tab */}
-        <button
-          onClick={() => onTabChange('starred')}
-          className={`relative flex items-center justify-center gap-1.5 px-4 text-xs font-medium rounded-t-lg transition-all duration-200 border border-b-0 ${
-            activeTab === 'starred'
-              ? 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 border-gray-200 dark:border-gray-700 z-10 -mb-px py-2.5'
-              : 'bg-amber-50/60 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-transparent hover:bg-amber-100/70 dark:hover:bg-amber-900/30 py-1.5'
-          }`}
-        >
-          <Star className={`w-3 h-3 ${activeTab === 'starred' ? 'fill-current text-yellow-500' : 'text-amber-500'}`} />
-          <span>收藏</span>
-        </button>
-      </div>
-      {/* Divider line that connects tab to content */}
-      <div className="border-b border-gray-200 dark:border-gray-700" />
-    </div>
-  );
-};
+const VIEW_MODES: ViewMode[] = ['diary', 'all', 'starred', 'recent', 'memo', 'user', 'ai', 'projects'];
 
 const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: SidebarProps) => {
   const { documents, isLoading, refreshDocuments, updateDocumentLocal, moveDocument, addDocument, removeDocument } = useDocuments();
   const { searchQuery, setSearchQuery } = useSearch();
-  const [isExpanded, setIsExpanded] = useState<Record<string, boolean>>({});
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [contentExpanded, setContentExpanded] = useState(false); // 默认关闭
+  const [isExpanded, setIsExpanded] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(SIDEBAR_FOLDERS_STATE_KEY) || '{}');
+    } catch {
+      return {};
+    }
+  });
+  const [, setShowUserMenu] = useState(false);
+  const [contentExpanded, setContentExpanded] = useState(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(SIDEBAR_PANEL_STATE_KEY) || '{}').expanded === true;
+    } catch {
+      return false;
+    }
+  });
   const [isSearchMode, setIsSearchMode] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
+  const visibleSearchResults = isSearchMode && searchQuery.trim() ? searchResults : [];
   const [searchLoading, setSearchLoading] = useState(false);
   const [recentDocuments, setRecentDocuments] = useState<DocType[]>([]);
 
   // 防抖搜索 - 调用后端全文搜索 API
   useEffect(() => {
     if (!isSearchMode || !searchQuery.trim()) {
-      setSearchResults([]);
       return;
     }
     const timer = setTimeout(async () => {
@@ -164,61 +119,43 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   }, [searchQuery, isSearchMode]);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     try {
+      const savedMode: unknown = JSON.parse(sessionStorage.getItem(SIDEBAR_PANEL_STATE_KEY) || '{}').viewMode;
+      if (typeof savedMode === 'string' && VIEW_MODES.includes(savedMode as ViewMode)) {
+        return savedMode as ViewMode;
+      }
       return localStorage.getItem('selectedProjectId') ? 'projects' : 'diary';
-    } catch { return 'diary'; }
+    } catch {
+      return 'diary';
+    }
   });
   const { userSubView, setUserSubView: setUserSubViewContext, activeConvId, setActiveConvId, selectedProjectId, setSelectedProjectId } = useUserView();
   const [showNewMenu, setShowNewMenu] = useState(false);
 
-  // 暗色模式状态
-  const [isDark, setIsDark] = useState(() => {
+  useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
-      if (saved.theme === 'dark') return true;
-      if (saved.theme && saved.theme !== 'dark') return false;
-    } catch { /* ignore */ }
-    return document.documentElement.classList.contains('dark') ||
-      window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
+      sessionStorage.setItem(SIDEBAR_PANEL_STATE_KEY, JSON.stringify({
+        expanded: contentExpanded,
+        viewMode,
+      }));
+    } catch {
+      // 会话存储不可用时仍保持当前组件内状态
+    }
+  }, [contentExpanded, viewMode]);
 
   useEffect(() => {
-    const onThemeChange = () => {
-      try {
-        const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
-        if (saved.theme === 'dark') { setIsDark(true); return; }
-        if (saved.theme && saved.theme !== 'dark') { setIsDark(false); return; }
-      } catch { /* ignore */ }
-      setIsDark(document.documentElement.classList.contains('dark'));
-    };
-    window.addEventListener('theme-change', onThemeChange);
-    const mql = window.matchMedia('(prefers-color-scheme: dark)');
-    mql.addEventListener('change', onThemeChange);
-    return () => {
-      window.removeEventListener('theme-change', onThemeChange);
-      mql.removeEventListener('change', onThemeChange);
-    };
-  }, []);
+    try {
+      sessionStorage.setItem(SIDEBAR_FOLDERS_STATE_KEY, JSON.stringify(isExpanded));
+    } catch {
+      // 会话存储不可用时仍保持当前组件内状态
+    }
+  }, [isExpanded]);
+
+  const { setTheme } = useFontSettings();
+  const isDark = useIsDark();
 
   const toggleDark = useCallback(() => {
-    const newDark = !isDark;
-    setIsDark(newDark);
-    document.documentElement.classList.toggle('dark', newDark);
-    try {
-      const saved = JSON.parse(localStorage.getItem('outline-font-settings') || '{}');
-      saved.theme = newDark ? 'dark' : 'minimal';
-      localStorage.setItem('outline-font-settings', JSON.stringify(saved));
-      if (newDark) {
-        localStorage.setItem('outline-restored-theme', 'minimal');
-      }
-    } catch { /* ignore */ }
-    const color = newDark ? '#111827' : '#ffffff';
-    // 更新 theme-color：移除 media 查询，让浏览器使用手动设置的颜色
-    document.querySelectorAll('meta[name="theme-color"], meta[name="hw-theme-color"]').forEach(meta => {
-      meta.setAttribute('content', color);
-      meta.removeAttribute('media');
-    });
-    window.dispatchEvent(new CustomEvent('theme-change'));
-  }, [isDark]);
+    setTheme(isDark ? 'system' : 'dark');
+  }, [isDark, setTheme]);
 
   // Wrapper to update both context and notify parent
   const setUserSubView = useCallback((view: UserSubView) => {
@@ -241,8 +178,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       import('../api/data').then(mod => mod.getRecentDocuments(20)).then(setRecentDocuments).catch(() => {});
     }
   }, [viewMode]);
-  const [newMenuTarget, setNewMenuTarget] = useState<string | null>(null);
-  const [showFolderPicker, setShowFolderPicker] = useState(false);
+  const [newMenuTarget] = useState<string | null>(null);
   const newMenuRef = useRef<HTMLDivElement>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ show: boolean; id: string; title: string; type: 'document' | 'folder'; deleteMode?: 'move' | 'all' }>({ show: false, id: '', title: '', type: 'document' });
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
@@ -251,7 +187,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   const [draggedItem, setDraggedItem] = useState<{ id: string; type: 'document' | 'folder' } | null>(null);
   const draggedItemRef = useRef<{ id: string; type: 'document' | 'folder' } | null>(null);
   const [dragOverItem, setDragOverItem] = useState<string | null>(null);
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [, setSelectedFolderId] = useState<string | null>(null);
   const [clickedFolderId, setClickedFolderId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const stored = localStorage.getItem(SIDEBAR_WIDTH_KEY);
@@ -290,7 +226,11 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   const resizingRef = useRef(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { documentId } = useParams();
+  const location = useLocation();
+  const documentId = useMemo(() => {
+    const match = location.pathname.match(/^\/d\/([^/]+)$/);
+    return match ? decodeURIComponent(match[1]) : undefined;
+  }, [location.pathname]);
 
   // Fetch pending tasks when diary view is active
   const fetchPendingTasks = useCallback(async () => {
@@ -304,7 +244,8 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
 
   useEffect(() => {
     if (viewMode === 'diary' && contentExpanded) {
-      fetchPendingTasks();
+      const timer = window.setTimeout(() => void fetchPendingTasks(), 0);
+      return () => window.clearTimeout(timer);
     }
   }, [viewMode, contentExpanded, fetchPendingTasks]);
 
@@ -319,9 +260,37 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       getProjects().then(setProjects).catch(console.error);
     } else if (viewMode !== 'projects') {
       // 切换到非项目视图时，清除选中的项目，让 MainArea 显示正常内容
-      setSelectedProjectId(null);
+      const timer = window.setTimeout(() => setSelectedProjectId(null), 0);
+      return () => window.clearTimeout(timer);
     }
-  }, [viewMode, setSelectedProjectId]);
+  }, [viewMode, projects.length, setSelectedProjectId]);
+
+  useEffect(() => {
+    const refreshProjects = () => {
+      getProjects().then(setProjects).catch(console.error);
+    };
+    window.addEventListener('projects-refresh', refreshProjects);
+    return () => window.removeEventListener('projects-refresh', refreshProjects);
+  }, []);
+
+  const openArchivedProjects = useCallback(() => {
+    setIsSearchMode(false);
+    setUserSubViewContext(null);
+    setViewMode('projects');
+    setContentExpanded(true);
+    setSelectedProjectId(null);
+    window.dispatchEvent(new CustomEvent('projects-open-archived'));
+  }, [setSelectedProjectId, setUserSubViewContext]);
+
+  const closeArchivedProjects = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('projects-close-archived'));
+  }, []);
+
+  useEffect(() => {
+    if (viewMode !== 'projects') {
+      closeArchivedProjects();
+    }
+  }, [closeArchivedProjects, viewMode]);
 
   // 监听从其他组件（如近7天计划）切换到项目视图的事件
   useEffect(() => {
@@ -531,49 +500,29 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     return filtered;
   }, [documents, viewMode]);
 
+  const documentSortTimes = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const doc of documents) {
+      map.set(doc.id, resolveDocumentSortTime(doc));
+    }
+    return map;
+  }, [documents]);
+
+  const compareByLastEdited = useMemo(() => compareDocumentByLastEditedDesc(documentSortTimes), [documentSortTimes]);
+  const compareFileItem = useMemo(() => compareFileMenuItem(documentSortTimes), [documentSortTimes]);
+
   // 预排序的 children 索引，避免 renderFileTree 每次排序
   const sortedChildrenMap = useMemo(() => {
     const map = new Map<string | null, typeof filteredDocuments>();
-    const sortFn = (a: typeof filteredDocuments[0], b: typeof filteredDocuments[0]) => {
-      const aIsFolder = a.type === 'folder' ? 0 : 1;
-      const bIsFolder = b.type === 'folder' ? 0 : 1;
-      if (aIsFolder !== bIsFolder) return aIsFolder - bIsFolder;
-      if (a.type === 'folder' && b.type === 'folder') {
-        return (a.title || '').localeCompare(b.title || '', 'zh-CN', { numeric: true });
-      }
-      return (b.sort_order || 0) - (a.sort_order || 0);
-    };
     for (const doc of filteredDocuments) {
       const key = doc.parent_id || null;
       let arr = map.get(key);
       if (!arr) { arr = []; map.set(key, arr); }
       arr.push(doc);
     }
-    for (const arr of map.values()) arr.sort(sortFn);
+    for (const arr of map.values()) arr.sort(compareFileItem);
     return map;
-  }, [filteredDocuments]);
-
-  // Build folder tree for the new menu picker
-  const folderTree = useMemo(() => {
-    const folders = documents.filter(d => d.type === 'folder');
-    const map = new Map<string | null, typeof folders>();
-    for (const f of folders) {
-      const key = f.parent_id ?? null;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(f);
-    }
-    for (const arr of map.values()) {
-      arr.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-    }
-    interface TreeNode { id: string; title: string; children: TreeNode[]; }
-    const build = (parentId: string | null): TreeNode[] =>
-      (map.get(parentId) || []).map(f => ({
-        id: f.id,
-        title: f.title || '无标题',
-        children: build(f.id),
-      }));
-    return build(null);
-  }, [documents]);
+  }, [compareFileItem, filteredDocuments]);
 
   const localSearchResults = useMemo(() => {
     if (!searchQuery.trim()) {
@@ -581,35 +530,17 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     }
     
     const query = searchQuery.toLowerCase().trim();
-    return documents.filter(d =>
-      (d.type === 'document' || d.type === 'note') && d.title.toLowerCase().includes(query)
-    );
-  }, [documents, searchQuery]);
-
-  useEffect(() => {
-    if (searchQuery.trim() && localSearchResults && localSearchResults.length > 0) {
-      const parentIds = new Set<string>();
-      localSearchResults.forEach(doc => {
-        if (doc.parent_id) {
-          parentIds.add(doc.parent_id);
-        }
-      });
-      
-      setIsExpanded(prev => {
-        const newState = { ...prev };
-        parentIds.forEach(id => {
-          newState[id] = true;
-        });
-        return newState;
-      });
-    }
-  }, [searchQuery, localSearchResults]);
+    return documents
+      .filter(d => DOCUMENT_ITEM_TYPES.has(d.type) && d.title.toLowerCase().includes(query))
+      .sort(compareByLastEdited);
+  }, [compareByLastEdited, documents, searchQuery]);
 
   const handleCreateDocument = async (parentId?: string | null) => {
     try {
       const pid = parentId !== undefined ? parentId : newMenuTarget;
       const newDoc = await createDocument('新文章', 'document', pid, Date.now());
       addDocument(newDoc);
+      closeArchivedProjects();
       navigate(`/d/${newDoc.id}`);
       onDocumentSelect?.();
       window.dispatchEvent(new CustomEvent('sidebarClose'));
@@ -623,6 +554,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       const pid = parentId !== undefined ? parentId : newMenuTarget;
       const newDoc = await createDocument('新笔记', 'note', pid, Date.now());
       addDocument(newDoc);
+      closeArchivedProjects();
       navigate(`/d/${newDoc.id}`);
       onDocumentSelect?.();
       window.dispatchEvent(new CustomEvent('sidebarClose'));
@@ -657,6 +589,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       const pid = parentId !== undefined ? parentId : newMenuTarget;
       const newDoc = await createExcalidrawDocument('无标题画布', pid);
       addDocument(newDoc);
+      closeArchivedProjects();
       navigate(`/d/${newDoc.id}`);
       onDocumentSelect?.();
       window.dispatchEvent(new CustomEvent('sidebarClose'));
@@ -680,11 +613,6 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleDelete = async (e: React.MouseEvent, doc: any) => {
-    e.stopPropagation();
-    setDeleteDialog({ show: true, id: doc.id, title: doc.title, type: doc.type, deleteMode: 'move' });
   };
 
   const handleEditFolder = async (folderId: string, title: string) => {
@@ -750,31 +678,44 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   };
 
   const handleSearchResultClick = (result: SearchResultItem) => {
+    closeArchivedProjects();
     switch (result.result_type) {
       case 'document':
       case 'document_title':
         navigate(result.node_id
-          ? `/d/${result.entity_id}?nodeId=${result.node_id}&_t=${Date.now()}`
-          : `/d/${result.entity_id}?_t=${Date.now()}`);
+          ? `/d/${result.entity_id}?nodeId=${result.node_id}&_t=${navigationNonce()}`
+          : `/d/${result.entity_id}?_t=${navigationNonce()}`);
         break;
       case 'diary':
-        navigate(`/d/${result.entity_id}?_t=${Date.now()}`);
+        navigate(`/d/${result.entity_id}?_t=${navigationNonce()}`);
         break;
       case 'memo':
-        navigate(`/?search=${encodeURIComponent(searchQuery)}&highlight=${result.entity_id}&_t=${Date.now()}`);
+        navigate(`/?search=${encodeURIComponent(searchQuery)}&highlight=${result.entity_id}&_t=${navigationNonce()}`);
         break;
     }
     onDocumentSelect?.();
     if (isMobile) setContentExpanded(false);
   };
 
-  const docResults = searchResults.filter(r => r.result_type === 'document' || r.result_type === 'document_title');
-  const diaryResults = searchResults.filter(r => r.result_type === 'diary');
-  const memoResults = searchResults.filter(r => r.result_type === 'memo');
+  const toggleViewPanel = (nextView: ViewMode) => {
+    setIsSearchMode(false);
+    setUserSubViewContext(null);
+    if (viewMode === nextView && contentExpanded) {
+      setContentExpanded(false);
+      return;
+    }
+    setViewMode(nextView);
+    setContentExpanded(true);
+  };
+
+  const docResults = visibleSearchResults.filter(r => r.result_type === 'document' || r.result_type === 'document_title');
+  const diaryResults = visibleSearchResults.filter(r => r.result_type === 'diary');
+  const memoResults = visibleSearchResults.filter(r => r.result_type === 'memo');
 
   const handleSelect = (id: string, type: 'document' | 'folder' | 'note' | 'excalidraw') => {
     setContextMenu(null);
     if (type === 'document' || type === 'note' || type === 'excalidraw') {
+      closeArchivedProjects();
       navigate(`/d/${id}`);
       onDocumentSelect?.();
       setSelectedFolderId(null);
@@ -789,14 +730,14 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     }
   };
 
-  const handleDragStart = (e: React.DragEvent, doc: any) => {
+  const handleDragStart = (e: React.DragEvent, doc: DocType) => {
     e.dataTransfer.effectAllowed = 'move';
     const item = { id: doc.id, type: doc.type };
     draggedItemRef.current = item;
     setDraggedItem(item);
   };
 
-  const handleDragOver = (e: React.DragEvent, doc: any) => {
+  const handleDragOver = (e: React.DragEvent, doc: DocType) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     
@@ -809,7 +750,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     setDragOverItem(null);
   };
 
-  const handleDrop = async (e: React.DragEvent, targetDoc: any) => {
+  const handleDrop = async (e: React.DragEvent, targetDoc: DocType) => {
     e.preventDefault();
     setDragOverItem(null);
 
@@ -844,7 +785,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   };
 
   // Long-press for mobile context menu
-  const startLongPress = (e: React.TouchEvent, doc: any) => {
+  const startLongPress = (e: React.TouchEvent, doc: DocType) => {
     longPressTriggeredRef.current = false;
     const touch = e.touches[0];
     longPressTimerRef.current = setTimeout(() => {
@@ -924,23 +865,15 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
 
     if (searchQuery.trim() && localSearchResults) {
       if (parentId === null) {
-        children = localSearchResults.sort((a, b) => {
-          const aIsFolder = a.type === 'folder' ? 0 : 1;
-          const bIsFolder = b.type === 'folder' ? 0 : 1;
-          if (aIsFolder !== bIsFolder) return aIsFolder - bIsFolder;
-          if (a.type === 'folder' && b.type === 'folder') {
-            return (a.title || '').localeCompare(b.title || '', 'zh-CN', { numeric: true });
-          }
-          return (b.sort_order || 0) - (a.sort_order || 0);
-        });
+        children = localSearchResults;
       } else {
         return null;
       }
     } else if (viewMode === 'starred') {
       if (parentId === null) {
         children = filteredDocuments
-          .filter(d => d.type === 'document' || d.type === 'note' || d.type === 'excalidraw')
-          .sort((a, b) => (b.sort_order || 0) - (a.sort_order || 0));
+          .filter(d => DOCUMENT_ITEM_TYPES.has(d.type))
+          .sort(compareByLastEdited);
       } else {
         return null;
       }
@@ -1053,7 +986,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
               {!searchQuery.trim() && viewMode !== 'starred' && isFolder && isExpanded[doc.id] && (
                 <div
                   className="relative pl-2 border-l border-gray-200 dark:border-gray-600"
-                  style={{ marginLeft: `${level * 12 + 11}px` }}
+                  style={{ marginLeft: `calc(${level * 12 + 4}px + 0.4375rem)` }}
                 >
                   {renderFileTree(doc.id, level + 1)}
                 </div>
@@ -1166,7 +1099,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           <CalendarDays className="w-5 h-5" />
         </button>
         <button
-          onClick={() => { setIsSearchMode(false); setUserSubViewContext(null); viewMode === 'projects' && contentExpanded ? setContentExpanded(false) : (setViewMode('projects'), setContentExpanded(true)); }}
+          onClick={() => toggleViewPanel('projects')}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
             viewMode === 'projects' && contentExpanded && !isSearchMode
               ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
@@ -1177,7 +1110,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           <FolderKanban className="w-5 h-5" />
         </button>
         <button
-          onClick={() => { setIsSearchMode(false); setUserSubViewContext(null); viewMode === 'all' && contentExpanded ? setContentExpanded(false) : (setViewMode('all'), setContentExpanded(true)); }}
+          onClick={() => toggleViewPanel('all')}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
             viewMode === 'all' && contentExpanded && !isSearchMode
               ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
@@ -1188,7 +1121,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           <FileText className="w-5 h-5" />
         </button>
         <button
-          onClick={() => { setIsSearchMode(false); setUserSubViewContext(null); viewMode === 'recent' && contentExpanded ? setContentExpanded(false) : (setViewMode('recent'), setContentExpanded(true)); }}
+          onClick={() => toggleViewPanel('recent')}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
             viewMode === 'recent' && contentExpanded && !isSearchMode
               ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
@@ -1199,7 +1132,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           <Clock className={`w-5 h-5 ${viewMode === 'recent' && contentExpanded ? 'text-blue-500' : ''}`} />
         </button>
         <button
-          onClick={() => { setIsSearchMode(false); setUserSubViewContext(null); viewMode === 'starred' && contentExpanded ? setContentExpanded(false) : (setViewMode('starred'), setContentExpanded(true)); }}
+          onClick={() => toggleViewPanel('starred')}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
             viewMode === 'starred' && contentExpanded && !isSearchMode
               ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
@@ -1318,18 +1251,18 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           )}
           {contentExpanded && (
             <div
-              className="fixed inset-y-0 left-0 flex shadow-xl bg-[#FAFAF5] dark:bg-gray-800"
+              className="fixed inset-y-0 left-0 flex shadow-xl bg-[var(--app-surface)]"
               style={{ zIndex: 58, width: `calc(80vw)` }}
             >
               {/* 图标栏 */}
-              <div className={`h-full bg-[#F7F7F2] dark:bg-gray-900 flex flex-col items-center py-3 select-none shrink-0 border-r border-gray-200 dark:border-gray-700`}
+              <div className="h-full bg-[var(--app-icon-rail)] flex flex-col items-center py-3 select-none shrink-0 border-r border-gray-200 dark:border-gray-700"
                    style={{ width: ICON_RAIL_WIDTH }}>
                 {iconRailContent}
               </div>
               {/* 内容面板 */}
               <div
                 ref={sidebarRef}
-                className="flex-1 h-full bg-[#FAFAF5] dark:bg-gray-800 flex flex-col select-none text-sm relative overflow-hidden"
+                className="flex-1 h-full bg-[var(--app-surface)] flex flex-col select-none text-sm relative overflow-hidden"
               >
                 {isSearchMode ? (
                   /* 搜索模式 */
@@ -1355,10 +1288,10 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                       </div>
                     </div>
                     <div className="flex-1 overflow-y-auto px-2 pb-2 custom-scrollbar">
-                      {searchResults.length > 0 ? (
+                      {visibleSearchResults.length > 0 ? (
                         (() => {
-                          const grouped: Record<string, typeof searchResults> = {};
-                          searchResults.forEach(r => {
+                          const grouped: Record<string, typeof visibleSearchResults> = {};
+                          visibleSearchResults.forEach(r => {
                             const key = r.result_type === 'document' || r.result_type === 'document_title' ? '文档'
                               : r.result_type === 'diary' ? '日记'
                               : '随想';
@@ -1414,6 +1347,9 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                           <button onClick={() => { setUserSubView('profile'); onDocumentSelect?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
                             <User className="w-4 h-4 text-gray-400" /><span>个人资料</span>
                           </button>
+                          <button onClick={() => { setUserSubView('appearance'); onDocumentSelect?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
+                            <Palette className="w-4 h-4 text-gray-400" /><span>外观与主题</span>
+                          </button>
                           <button onClick={() => { setUserSubView('token'); onDocumentSelect?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
                             <Key className="w-4 h-4 text-gray-400" /><span>API Token</span>
                           </button>
@@ -1442,10 +1378,31 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                         />
                       ) : viewMode === 'projects' ? (
                         <div className="flex flex-col h-full">
+                          <div className="shrink-0 border-b border-gray-200 dark:border-gray-700 p-2 space-y-1">
+                            <button
+                              onClick={() => setShowNewProjectDialog(true)}
+                              className="w-full flex items-center gap-2 px-2 py-2 text-sm text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                            >
+                              <Plus className="w-4 h-4 text-gray-400" />
+                              <span>新建项目</span>
+                            </button>
+                            <button
+                              onClick={openArchivedProjects}
+                              className="w-full flex items-center gap-2 px-2 py-2 text-sm text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                            >
+                              <Archive className="w-4 h-4 text-gray-400" />
+                              <span>已归档项目</span>
+                            </button>
+                          </div>
                           <div className="flex-1 overflow-y-auto">
                             {projects.map(p => (
                               <div key={p.id}
-                                onClick={() => { if (editingProjectId !== p.id) setSelectedProjectId(p.id); }}
+                                onClick={() => {
+                                  if (editingProjectId !== p.id) {
+                                    closeArchivedProjects();
+                                    setSelectedProjectId(p.id);
+                                  }
+                                }}
                                 onContextMenu={(e) => {
                                   e.preventDefault();
                                   setProjectContextMenu({ id: p.id, name: p.name, x: e.clientX, y: e.clientY });
@@ -1530,7 +1487,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
         /* 桌面端：原有布局 */
         <>
           {/* 左侧图标栏 */}
-          <div className={`h-full bg-[#F7F7F2] dark:bg-gray-900 flex flex-col items-center py-3 select-none shrink-0 ${contentExpanded ? 'border-r border-gray-200 dark:border-gray-700' : ''}`}
+          <div className={`h-full bg-[var(--app-icon-rail)] flex flex-col items-center py-3 select-none shrink-0 ${contentExpanded ? 'border-r border-gray-200 dark:border-gray-700' : ''}`}
                style={{ width: ICON_RAIL_WIDTH }}>
             {iconRailContent}
           </div>
@@ -1538,7 +1495,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           {/* 内容面板 - 可折叠 */}
           <div
             ref={sidebarRef}
-            className={`h-full bg-[#FAFAF5] dark:bg-gray-800 flex flex-col select-none text-sm relative border-r border-gray-200 dark:border-gray-700 ${
+            className={`h-full bg-[var(--app-surface)] flex flex-col select-none text-sm relative border-r border-gray-200 dark:border-gray-700 ${
               isResizing ? '' : 'transition-all duration-300 ease-in-out'
             } ${!contentExpanded ? 'overflow-hidden' : ''}`}
             style={{
@@ -1584,7 +1541,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                         <div className="p-4 text-xs text-gray-400 text-center">搜索中...</div>
                       ) : !searchQuery.trim() ? (
                         <div className="p-4 text-xs text-gray-400 text-center">输入关键词搜索</div>
-                      ) : searchResults.length === 0 ? (
+                      ) : visibleSearchResults.length === 0 ? (
                         <div className="p-4 text-xs text-gray-400 text-center">未找到匹配内容</div>
                       ) : (
                         <div className="pt-1">
@@ -1632,7 +1589,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                               ))}
                             </div>
                           )}
-                          <div className="px-2 py-2 text-[10px] text-gray-400 text-center">共找到 {searchResults.length} 条结果</div>
+                          <div className="px-2 py-2 text-[10px] text-gray-400 text-center">共找到 {visibleSearchResults.length} 条结果</div>
                         </div>
                       )}
                     </div>
@@ -1647,7 +1604,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                         <ChevronLeft className="w-4 h-4" />
                       </button>
                     </div>
-                    <div className="flex-1 relative overflow-hidden bg-[#FAFAF5] dark:bg-gray-800">
+                    <div className="flex-1 relative overflow-hidden bg-[var(--app-surface)]">
                       <div ref={listRef} className="absolute inset-0 overflow-y-auto custom-scrollbar" onDragOver={(e) => e.preventDefault()} onDrop={handleRootDrop} onClick={() => setSelectedFolderId(null)}>
                         {viewMode === 'user' ? (
                           <div className="py-2">
@@ -1658,6 +1615,14 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                             >
                               <User className="w-4 h-4 text-gray-400" />
                               <span>个人资料</span>
+                            </button>
+                            {/* 外观与主题 */}
+                            <button
+                              onClick={() => { setUserSubView('appearance'); onDocumentSelect?.(); }}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors"
+                            >
+                              <Palette className="w-4 h-4 text-gray-400" />
+                              <span>外观与主题</span>
                             </button>
                             {/* API Token */}
                             <button
@@ -1710,10 +1675,31 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                           <div className="p-4 text-xs text-gray-400 text-center">加载中...</div>
                         ) : viewMode === 'projects' ? (
                           <div className="flex flex-col h-full">
+                            <div className="shrink-0 border-b border-gray-200 dark:border-gray-700 p-2 space-y-1">
+                              <button
+                                onClick={() => setShowNewProjectDialog(true)}
+                                className="w-full flex items-center gap-2 px-2 py-2 text-sm text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                              >
+                                <Plus className="w-4 h-4 text-gray-400" />
+                                <span>新建项目</span>
+                              </button>
+                              <button
+                                onClick={openArchivedProjects}
+                                className="w-full flex items-center gap-2 px-2 py-2 text-sm text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                              >
+                                <Archive className="w-4 h-4 text-gray-400" />
+                                <span>已归档项目</span>
+                              </button>
+                            </div>
                             <div className="flex-1 overflow-y-auto">
                               {projects.map(p => (
                                 <div key={p.id}
-                                  onClick={() => { if (editingProjectId !== p.id) setSelectedProjectId(p.id); }}
+                                  onClick={() => {
+                                    if (editingProjectId !== p.id) {
+                                      closeArchivedProjects();
+                                      setSelectedProjectId(p.id);
+                                    }
+                                  }}
                                   onContextMenu={(e) => {
                                     e.preventDefault();
                                     setProjectContextMenu({ id: p.id, name: p.name, x: e.clientX, y: e.clientY });
@@ -1884,6 +1870,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
 
 
       <NewFolderDialog
+        key={`folder-dialog-${showNewFolderDialog}`}
         isOpen={showNewFolderDialog}
         onConfirm={handleCreateFolder}
         onCancel={() => setShowNewFolderDialog(false)}
@@ -1891,6 +1878,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       />
 
       <NewFolderDialog
+        key={`project-dialog-${showNewProjectDialog}`}
         isOpen={showNewProjectDialog}
         dialogTitle="新建项目计划"
         label="项目名称"
@@ -1935,6 +1923,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       )}
 
       <EditFolderDialog
+        key={`${editFolderDialog.id}-${editFolderDialog.show}`}
         isOpen={editFolderDialog.show}
         folderId={editFolderDialog.id}
         initialTitle={editFolderDialog.title}
@@ -1970,11 +1959,10 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           return result;
         };
         const excludedIds = moveDialog.docType === 'folder' ? getDescendantIds(moveDialog.docId) : new Set<string>();
-        const filteredTree: TreeNode[] = [];
         const buildFiltered = (parentId: string | null): TreeNode[] => {
           return documents
             .filter(d => d.type === 'folder' && d.parent_id === parentId && !excludedIds.has(d.id) && d.id !== moveDialog.docId)
-            .sort((a, b) => (a.title || '').localeCompare(b.title || ''))
+            .sort(compareFolderTitle)
             .map(f => ({ id: f.id, title: f.title || '无标题', children: buildFiltered(f.id) }));
         };
         const pickerTree = buildFiltered(null);
@@ -2062,6 +2050,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
               try {
                 await archiveProject(id);
                 setProjects(prev => prev.filter(p => p.id !== id));
+                window.dispatchEvent(new CustomEvent('projects-open-archived'));
               } catch (err) { console.error('Failed to archive project:', err); }
             }}
             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -2148,6 +2137,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                           (el: { isDeleted?: boolean }) => !el.isDeleted
                         );
                         if (visibleElements.length > 0) {
+                          const { exportToBlob } = await import('@excalidraw/excalidraw');
                           const pngBlob = await exportToBlob({
                             elements: visibleElements,
                             appState: {},
@@ -2167,7 +2157,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                       // 大纲笔记和普通笔记：转换为 markdown
                       const nodes = await getNodes(contextMenu.docId);
                       const markdown = nodesToMemoMarkdown(nodes);
-                      const memo = await createMemo(markdown);
+                      await createMemo(markdown);
                       navigate('/');
                     }
                   } catch (error) {

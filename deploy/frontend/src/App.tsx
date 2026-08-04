@@ -1,8 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useState, useEffect, lazy, Suspense } from 'react';
-import Sidebar from './components/Sidebar';
-import MainArea from './components/MainArea';
-import MobileLayout from './components/mobile/MobileLayout';
+import { useEffect, lazy, Suspense, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DocumentProvider } from './context/DocumentContext';
 import { SearchProvider } from './context/SearchContext';
@@ -10,6 +7,8 @@ import { DiaryProvider } from './context/DiaryContext';
 import { UserViewProvider, useUserView } from './context/UserViewContext';
 import { useRetryFailedPreviews } from './hooks/useRetryFailedPreviews';
 import type { ReactNode } from 'react';
+import { AppearanceProvider } from './components/FontSettings';
+import { usePhoneLayout } from './hooks/usePhoneLayout';
 
 const SetupPage = lazy(() => import('./pages/SetupPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -18,48 +17,21 @@ const SharePage = lazy(() => import('./pages/SharePage'));
 const ShareTargetPage = lazy(() => import('./pages/ShareTargetPage'));
 const ReloadPrompt = lazy(() => import('./components/ReloadPrompt'));
 const ConflictResolver = lazy(() => import('./components/ConflictResolver'));
-
-// Protected Route Component
-const ProtectedRoute = ({ children }: { children: ReactNode }) => {
-  const { isAuthenticated, isLoading, isSetupRequired } = useAuth();
-  const location = useLocation();
-
-  if (isLoading) {
-    return <div className="h-screen flex items-center justify-center bg-white dark:bg-gray-900 text-gray-900 dark:text-white">Loading...</div>;
-  }
-
-  if (isSetupRequired) {
-    return <Navigate to="/setup" replace />;
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  return <>{children}</>;
-};
+const Sidebar = lazy(() => import('./components/Sidebar'));
+const MainArea = lazy(() => import('./components/MainArea'));
+const MobileLayout = lazy(() => import('./components/mobile/MobileLayout'));
 
 const AppLayout = ({ children }: { children: ReactNode }) => {
-  const [isMobile, setIsMobile] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const isMobile = usePhoneLayout();
+  const sidebarOpenRef = useRef(false);
 
   useEffect(() => {
     const handleToggleSidebar = () => {
-      setSidebarOpen(prev => {
-        const newState = !prev;
-        window.dispatchEvent(new CustomEvent(newState ? 'sidebarOpen' : 'sidebarClose'));
-        return newState;
-      });
+      sidebarOpenRef.current = !sidebarOpenRef.current;
+      window.dispatchEvent(new CustomEvent(sidebarOpenRef.current ? 'sidebarOpen' : 'sidebarClose'));
     };
-    const handleSidebarOpen = () => setSidebarOpen(true);
-    const handleSidebarClose = () => setSidebarOpen(false);
+    const handleSidebarOpen = () => { sidebarOpenRef.current = true; };
+    const handleSidebarClose = () => { sidebarOpenRef.current = false; };
     window.addEventListener('toggleSidebar', handleToggleSidebar);
     window.addEventListener('sidebarOpen', handleSidebarOpen);
     window.addEventListener('sidebarClose', handleSidebarClose);
@@ -91,7 +63,8 @@ function MainAreaWithUserView() {
 
 function AppRoutes() {
   useRetryFailedPreviews();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading, isSetupRequired } = useAuth();
+  const location = useLocation();
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -111,39 +84,46 @@ function AppRoutes() {
     }
   }, [isAuthenticated]);
 
+  const isPublicRoute = location.pathname === '/setup'
+    || location.pathname === '/login'
+    || location.pathname === '/share'
+    || location.pathname.startsWith('/s/');
+
+  if (isPublicRoute) {
+    return (
+      <Suspense fallback={<PageLoading />}>
+        <Routes>
+          <Route path="/setup" element={<SetupPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/s/:shareToken" element={<SharePage />} />
+          <Route path="/share" element={<ShareTargetPage />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
+  if (isLoading) {
+    return <PageLoading />;
+  }
+
+  if (isSetupRequired) {
+    return <Navigate to="/setup" replace />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
   return (
-    <Suspense fallback={<PageLoading />}>
-      <Routes>
-        <Route path="/setup" element={<SetupPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/s/:shareToken" element={<SharePage />} />
-        <Route path="/share" element={<ShareTargetPage />} />
-
-        <Route path="/" element={
-          <ProtectedRoute>
-            <AppLayout>
-              <MainAreaWithUserView />
-            </AppLayout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/d/:documentId" element={
-          <ProtectedRoute>
-            <AppLayout>
-              <MainAreaWithUserView />
-            </AppLayout>
-          </ProtectedRoute>
-        } />
-
-        <Route path="/search" element={
-          <ProtectedRoute>
-            <AppLayout>
-              <SearchResultsPage />
-            </AppLayout>
-          </ProtectedRoute>
-        } />
-      </Routes>
-    </Suspense>
+    <AppLayout>
+      <Suspense fallback={<PageLoading />}>
+        <Routes>
+          <Route index element={<MainAreaWithUserView />} />
+          <Route path="/d/:documentId" element={<MainAreaWithUserView />} />
+          <Route path="/search" element={<SearchResultsPage />} />
+        </Routes>
+      </Suspense>
+    </AppLayout>
   );
 }
 
@@ -151,19 +131,21 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <SearchProvider>
-          <DocumentProvider>
-            <DiaryProvider>
-              <UserViewProvider>
-                <AppRoutes />
-                <Suspense fallback={null}>
-                  <ReloadPrompt />
-                  <ConflictResolver />
-                </Suspense>
-              </UserViewProvider>
-            </DiaryProvider>
-          </DocumentProvider>
-        </SearchProvider>
+        <AppearanceProvider>
+          <SearchProvider>
+            <DocumentProvider>
+              <DiaryProvider>
+                <UserViewProvider>
+                  <AppRoutes />
+                  <Suspense fallback={null}>
+                    <ReloadPrompt />
+                    <ConflictResolver />
+                  </Suspense>
+                </UserViewProvider>
+              </DiaryProvider>
+            </DocumentProvider>
+          </SearchProvider>
+        </AppearanceProvider>
       </AuthProvider>
     </Router>
   );

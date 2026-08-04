@@ -1,4 +1,4 @@
-import { updateNode, moveNode, batchMoveNodes, deleteNode, createNode, batchDeleteNodes, batchUpdateNodes } from '../api/data';
+import { updateNode, moveNode, batchMoveNodes, deleteNode, createNode, createNodesBatch, batchDeleteNodes, batchUpdateNodes } from '../api/data';
 import type { Node } from '../api/data';
 import type { Command } from './types';
 import { saveStateManager } from '../utils/saveStateManager';
@@ -14,7 +14,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
       saveStateManager.markPending(operationId, { type: 'updateContent', id, oldContent, newContent });
       
       setNodes(nodes => nodes.map(n => n.id === id ? { ...n, content: newContent } : n));
-      
+      if (!saveStateManager.isOnline) return Promise.resolve();
       saveStateManager.markSaving(operationId);
       return updateNode(id, { content: newContent })
         .then(() => {
@@ -32,7 +32,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
       saveStateManager.markPending(operationId, { type: 'undoUpdateContent', id, oldContent, newContent });
       
       setNodes(nodes => nodes.map(n => n.id === id ? { ...n, content: oldContent } : n));
-      
+      if (!saveStateManager.isOnline) return Promise.resolve();
       saveStateManager.markSaving(operationId);
       return updateNode(id, { content: oldContent })
         .then(() => {
@@ -54,7 +54,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
       saveStateManager.markPending(operationId, { type: 'updateNote', id, oldNote, newNote });
       
       setNodes(nodes => nodes.map(n => n.id === id ? { ...n, note: newNote } : n));
-      
+      if (!saveStateManager.isOnline) return Promise.resolve();
       saveStateManager.markSaving(operationId);
       return updateNode(id, { note: newNote })
         .then(() => {
@@ -72,7 +72,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
       saveStateManager.markPending(operationId, { type: 'undoUpdateNote', id, oldNote, newNote });
       
       setNodes(nodes => nodes.map(n => n.id === id ? { ...n, note: oldNote } : n));
-      
+      if (!saveStateManager.isOnline) return Promise.resolve();
       saveStateManager.markSaving(operationId);
       return updateNode(id, { note: oldNote })
         .then(() => {
@@ -94,7 +94,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
       saveStateManager.markPending(operationId, { type: 'toggleProperty', id, property, newValue });
       
       setNodes(nodes => nodes.map(n => n.id === id ? { ...n, [property]: newValue } : n));
-      
+      if (!saveStateManager.isOnline) return Promise.resolve();
       saveStateManager.markSaving(operationId);
       return updateNode(id, { [property]: newValue })
         .then(() => {
@@ -112,7 +112,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
       saveStateManager.markPending(operationId, { type: 'undoToggleProperty', id, property, newValue });
       
       setNodes(nodes => nodes.map(n => n.id === id ? { ...n, [property]: !newValue } : n));
-      
+      if (!saveStateManager.isOnline) return Promise.resolve();
       saveStateManager.markSaving(operationId);
       return updateNode(id, { [property]: !newValue })
         .then(() => {
@@ -142,7 +142,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
         }
         return n;
       }));
-      
+      if (!saveStateManager.isOnline) return Promise.resolve();
       saveStateManager.markSaving(operationId);
       return batchUpdateNodes(ids.map(id => ({ id, [property]: newValue })))
         .then(() => {
@@ -173,7 +173,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
         }
         return n;
       }));
-      
+      if (!saveStateManager.isOnline) return Promise.resolve();
       saveStateManager.markSaving(operationId);
       return batchUpdateNodes(ids.map(id => ({ id, [property]: !newValue })))
         .then(() => {
@@ -200,7 +200,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
       saveStateManager.markPending(operationId, { type: 'moveNode', id, oldParent, oldOrder, newParent, newOrder });
       
       setNodes(nodes => nodes.map(n => n.id === id ? { ...n, parent_node_id: newParent, sort_order: newOrder } : n));
-      
+      if (!saveStateManager.isOnline) return Promise.resolve();
       saveStateManager.markSaving(operationId);
       return moveNode(id, newParent, newOrder)
         .then(() => {
@@ -218,7 +218,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
       saveStateManager.markPending(operationId, { type: 'undoMoveNode', id, oldParent, oldOrder, newParent, newOrder });
       
       setNodes(nodes => nodes.map(n => n.id === id ? { ...n, parent_node_id: oldParent, sort_order: oldOrder } : n));
-      
+      if (!saveStateManager.isOnline) return Promise.resolve();
       saveStateManager.markSaving(operationId);
       return moveNode(id, oldParent, oldOrder)
         .then(() => {
@@ -251,6 +251,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
       }));
       
       const payload = updates.map(u => ({ id: u.id, parent_node_id: u.newParent, sort_order: u.newOrder }));
+      if (!saveStateManager.isOnline) return Promise.resolve();
       saveStateManager.markSaving(operationId);
       return batchMoveNodes(payload)
         .then(() => {
@@ -285,6 +286,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
       }));
       
       const payload = updates.map(u => ({ id: u.id, parent_node_id: u.oldParent, sort_order: u.oldOrder }));
+      if (!saveStateManager.isOnline) return Promise.resolve();
       saveStateManager.markSaving(operationId);
       return batchMoveNodes(payload)
         .then(() => {
@@ -343,7 +345,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
         saveStateManager.markPending(operationId, { type: 'deleteNode', nodeId: node.id, allDeletedNodes });
         
         setNodes(nodes => nodes.filter(n => !idsToDelete.includes(n.id)));
-        
+        if (!saveStateManager.isOnline) return Promise.resolve();
         saveStateManager.markSaving(operationId);
         return deleteNode(node.id)
           .then(() => {
@@ -361,7 +363,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
         saveStateManager.markPending(operationId, { type: 'undoDeleteNode', nodeId: node.id, allDeletedNodes: sortedForRestore });
         
         setNodes(prev => [...prev, ...sortedForRestore]);
-        
+        if (!saveStateManager.isOnline) return Promise.resolve();
         saveStateManager.markSaving(operationId);
         const promises = sortedForRestore.map(n => 
           createNode(n.document_id, n.content, n.parent_node_id, {
@@ -419,27 +421,32 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
     return {
       description: 'Batch Insert',
       execute: () => {
+        const operationId = `cmd-batch-insert-${Date.now()}`;
+        saveStateManager.markPending(operationId, { nodes: sortedNodes }, 'batchCreate');
         setNodes(prev => [...prev, ...sortedNodes]);
-        const promises = sortedNodes.map(n => 
-          createNode(n.document_id, n.content, n.parent_node_id, {
-            id: n.id,
-            sort_order: n.sort_order,
-            note: n.note,
-            is_completed: n.is_completed,
-            is_collapsed: n.is_collapsed
-          }).catch(err => {
-            console.error('Failed to insert node:', err);
-            return null;
-          })
-        );
-        return Promise.all(promises);
+        if (!saveStateManager.isOnline) return Promise.resolve();
+        saveStateManager.markSaving(operationId);
+        return createNodesBatch(sortedNodes)
+          .then(() => saveStateManager.markSaved(operationId))
+          .catch(err => {
+            saveStateManager.markError(operationId, err instanceof Error ? err.message : '批量插入失败');
+            setNodes(prev => prev.filter(n => !sortedNodes.some(inserted => inserted.id === n.id)));
+            throw err;
+          });
       },
       undo: () => {
+        const operationId = `undo-batch-insert-${Date.now()}`;
+        saveStateManager.markPending(operationId, { ids: rootIds }, 'batchDelete');
         setNodes(prev => prev.filter(n => !nodesToInsert.some(inserted => inserted.id === n.id)));
-        return batchDeleteNodes(rootIds).catch(err => {
-          console.error('Failed to undo batch insert:', err);
-          throw err;
-        });
+        if (!saveStateManager.isOnline) return Promise.resolve();
+        saveStateManager.markSaving(operationId);
+        return batchDeleteNodes(rootIds)
+          .then(() => saveStateManager.markSaved(operationId))
+          .catch(err => {
+            saveStateManager.markError(operationId, err instanceof Error ? err.message : '撤销批量插入失败');
+            setNodes(prev => [...prev, ...sortedNodes]);
+            throw err;
+          });
       }
     };
   },
@@ -483,7 +490,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
         saveStateManager.markPending(operationId, { type: 'batchDelete', ids, allNodes });
         
         setNodes(prev => prev.filter(n => !allIds.includes(n.id)));
-        
+        if (!saveStateManager.isOnline) return Promise.resolve();
         saveStateManager.markSaving(operationId);
         return batchDeleteNodes(ids)
           .then(() => {
@@ -501,7 +508,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
         saveStateManager.markPending(operationId, { type: 'undoBatchDelete', allNodes: sortedForRestore });
         
         setNodes(prev => [...prev, ...sortedForRestore]);
-        
+        if (!saveStateManager.isOnline) return Promise.resolve();
         saveStateManager.markSaving(operationId);
         const promises = sortedForRestore.map(n => 
           createNode(n.document_id, n.content, n.parent_node_id, {
@@ -552,7 +559,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
         saveStateManager.markPending(operationId, { type: 'createNode', nodeId, nodeData });
 
         setNodes(prev => [...prev, newNode]);
-
+        if (!saveStateManager.isOnline) return Promise.resolve();
         saveStateManager.markSaving(operationId);
         return createNode(nodeData.document_id, nodeData.content, nodeData.parent_node_id, {
           id: nodeId,
@@ -561,7 +568,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
           is_completed: nodeData.is_completed,
           is_collapsed: nodeData.is_collapsed,
           is_todo: nodeData.is_todo
-        }).then(node => {
+        }).then(() => {
           saveStateManager.markSaved(operationId);
         }).catch(err => {
           console.error('Failed to create node:', err);
@@ -575,7 +582,7 @@ export const createCommandFactory = (setNodes: StateSetter) => ({
         saveStateManager.markPending(operationId, { type: 'undoCreateNode', nodeId });
         
         setNodes(prev => prev.filter(n => n.id !== nodeId));
-        
+        if (!saveStateManager.isOnline) return Promise.resolve();
         saveStateManager.markSaving(operationId);
         return deleteNode(nodeId)
           .then(() => {

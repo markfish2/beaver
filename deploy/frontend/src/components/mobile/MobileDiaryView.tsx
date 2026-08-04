@@ -99,6 +99,7 @@ export default function MobileDiaryView() {
           docMonth={docMonth}
           diaryDays={diaryDays}
           onDayClick={handleDayClick}
+          showMonthArrows
           onMonthNavigate={handleMonthNavigate}
         />
       </div>

@@ -7,14 +7,15 @@ import { showToast } from '../utils/toast';
 import { syncThemeChrome } from '../utils/themeChrome';
 
 type FontSize = 'small' | 'medium' | 'large';
-type FontFamily = 'system' | 'yahei' | 'pingfang' | 'kaiti' | 'fangsong' | 'syst';
-type Theme = 'system' | 'minimal' | 'warm' | 'dark' | 'geek';
-type SelectableTheme = Exclude<Theme, 'dark'>;
+type FontFamily = 'system' | 'sans' | 'serif' | 'mono' | 'lxgw';
+type Theme = 'system' | 'dark';
+type MarkdownStyle = 'default' | 'pie' | 'markamd' | 'lapis' | 'claude' | 'border';
 
 interface FontSettings {
   fontSize: FontSize;
   fontFamily: FontFamily;
   theme: Theme;
+  markdownStyle: MarkdownStyle;
 }
 
 const FONT_SIZE_MAP: Record<FontSize, string> = {
@@ -24,12 +25,11 @@ const FONT_SIZE_MAP: Record<FontSize, string> = {
 };
 
 const FONT_FAMILY_MAP: Record<FontFamily, string> = {
-  system: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-  yahei: '"Microsoft YaHei", "微软雅黑", sans-serif',
-  pingfang: '"PingFang SC", "苹方", -apple-system, sans-serif',
-  kaiti: '"KaiTi", "楷体", "STKaiti", serif',
-  fangsong: '"FangSong", "仿宋", "STFangsong", serif',
-  syst: '"Source Han Serif CN", "思源宋体", "Noto Serif CJK SC", serif'
+  system: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans CJK", "WenQuanYi Micro Hei", "Ubuntu", Arial, sans-serif',
+  sans: '"Noto Sans CJK SC", "Noto Sans CJK", "Source Han Sans SC", "Source Han Sans CN", "WenQuanYi Micro Hei", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Heiti SC", "Droid Sans Fallback", Arial, sans-serif',
+  serif: '"Noto Serif CJK SC", "Noto Serif CJK", "Source Han Serif SC", "Source Han Serif CN", "Songti SC", "STSong", "SimSun", "FangSong", "AR PL UMing CN", "AR PL SungtiL GB", "WenQuanYi Bitmap Song", serif',
+  mono: '"Sarasa Mono SC", "Sarasa Gothic SC", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK", "Source Han Mono SC", "Source Han Mono CN", "Microsoft YaHei Mono", "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace',
+  lxgw: '"LXGW WenKai Lite", "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif'
 };
 
 const FONT_SIZE_LABELS: Record<FontSize, string> = {
@@ -40,14 +40,87 @@ const FONT_SIZE_LABELS: Record<FontSize, string> = {
 
 const FONT_FAMILY_LABELS: Record<FontFamily, string> = {
   system: '系统默认',
-  yahei: '微软雅黑',
-  pingfang: '苹方',
-  kaiti: '楷体',
-  fangsong: '仿宋',
-  syst: '思源宋体'
+  sans: '现代黑体',
+  serif: '传统宋体',
+  mono: '等宽代码',
+  lxgw: '霞鹜文楷 Lite'
 };
 
-// 主题配置 - 4个精选主题
+const FONT_FAMILY_DESCRIPTIONS: Record<FontFamily, string> = {
+  system: '跟随当前设备的默认界面字体',
+  sans: '优先使用 Noto/思源/雅黑/苹方等清晰黑体',
+  serif: '优先使用 Noto/思源/宋体等阅读衬线字体',
+  mono: '优先使用等宽字体，适合代码和结构化内容',
+  lxgw: '内置轻量文楷字体，各平台显示一致'
+};
+
+const FONT_FAMILY_PREVIEW_TEXT: Record<FontFamily, string> = {
+  system: '系统 Aa 123',
+  sans: '黑体 Aa 123',
+  serif: '宋体 Aa 123',
+  mono: 'Mono Aa 123',
+  lxgw: '文楷 Aa 123'
+};
+
+const MARKDOWN_STYLE_LABELS: Record<MarkdownStyle, { name: string; description: string; preview: string }> = {
+  default: {
+    name: '默认',
+    description: '适合日常记录，和当前 Memo 风格一致',
+    preview: 'Aa',
+  },
+  pie: {
+    name: 'Pie 学术',
+    description: '参考 academic：衬线正文、红棕链接、论文式表格与引用',
+    preview: 'π',
+  },
+  markamd: {
+    name: 'Marka.md',
+    description: '参考 marka.md：清爽标题线、橙色强调、轻量代码与引用',
+    preview: 'Md',
+  },
+  lapis: {
+    name: 'Lapis',
+    description: '参考 Typora Lapis：蓝灰衬线标题、浅色代码块与论文式排版',
+    preview: 'La',
+  },
+  claude: {
+    name: 'Claude Like',
+    description: '参考 Typora Claude-like：暖米色纸面、棕橙强调、柔和引用与浅色代码块',
+    preview: 'Cl',
+  },
+  border: {
+    name: 'Border',
+    description: '参考 Obsidian Border：彩色标题引导线、点阵引用、虚线代码块',
+    preview: 'Bo',
+  },
+};
+
+const normalizeTheme = (theme: unknown): Theme => theme === 'dark' ? 'dark' : 'system';
+const normalizeFontFamily = (fontFamily: unknown): FontFamily => {
+  switch (fontFamily) {
+    case 'sans':
+    case 'system':
+      return fontFamily;
+    case 'serif':
+    case 'syst':
+    case 'fangsong':
+    case 'kaiti':
+      return 'serif';
+    case 'mono':
+      return 'mono';
+    case 'lxgw':
+    case 'wenkai':
+    case 'lxgw-wenkai-lite':
+      return 'lxgw';
+    case 'yahei':
+    case 'pingfang':
+      return 'sans';
+    default:
+      return 'system';
+  }
+};
+
+// 全局主题只保留默认设计体系；theme 仅表示跟随系统或强制夜间模式。
 const THEMES: Record<Theme, {
   name: string;
   bg: string;
@@ -60,7 +133,7 @@ const THEMES: Record<Theme, {
   isDark: boolean;
 }> = {
   system: {
-    name: '跟随系统',
+    name: '系统默认',
     bg: '#FAF9F5',
     text: '#111827',
     secondaryText: '#6B7280',
@@ -70,61 +143,106 @@ const THEMES: Record<Theme, {
     preview: 'bg-gradient-to-r from-white to-[#111827]',
     isDark: false
   },
-  minimal: {
-    name: '极简纯粹',
-    bg: '#FDFDFC',
-    text: '#333333',
-    secondaryText: '#888888',
-    accent: '#1A73E8',
-    guideColor: '#e5e7eb',
-    headingColor: '#111111',
-    preview: 'bg-[#FDFDFC]',
-    isDark: false
-  },
-  warm: {
-    name: '暖沙',
-    bg: '#F4EFE6',
-    text: '#3D352D',
-    secondaryText: '#817469',
-    accent: '#A95F3A',
-    guideColor: '#DCCFC0',
-    headingColor: '#302820',
-    preview: 'bg-[#F4EFE6]',
-    isDark: false
-  },
   dark: {
-    name: '深炭',
-    bg: '#262624',
-    text: '#E7E4DD',
-    secondaryText: '#AAA69E',
-    accent: '#E08A68',
-    guideColor: 'rgba(255,255,255,0.06)',
-    headingColor: '#F0F1F3',
-    preview: 'bg-[#1A1B1E]',
+    name: '系统默认 · 夜间',
+    bg: '#111827',
+    text: '#F3F4F6',
+    secondaryText: '#9CA3AF',
+    accent: '#8EA4BB',
+    guideColor: '#374151',
+    headingColor: '#FFFFFF',
+    preview: 'bg-[#111827]',
     isDark: true
-  },
-  geek: {
-    name: '雾蓝',
-    bg: '#F3F5F6',
-    text: '#273238',
-    secondaryText: '#65747C',
-    accent: '#527A8A',
-    guideColor: '#D7DEE1',
-    headingColor: '#1F292E',
-    preview: 'bg-[#F3F5F6]',
-    isDark: false
   }
 };
 
-const SELECTABLE_THEMES: SelectableTheme[] = ['system', 'minimal', 'warm', 'geek'];
-
 const STORAGE_KEY = 'outline-font-settings';
+const PENDING_SYNC_KEY = 'outline-font-settings-pending-sync';
+const PENDING_SYNC_EVENT = 'appearance-pending-sync-change';
+
+type SettingsUpdate = Partial<{
+  theme: Theme;
+  font_family: FontFamily;
+  font_size: FontSize;
+  markdown_style: MarkdownStyle;
+}>;
+
+const normalizeMarkdownStyle = (markdownStyle: unknown): MarkdownStyle => {
+  switch (markdownStyle) {
+    case 'pie':
+    case 'markamd':
+    case 'lapis':
+    case 'claude':
+    case 'border':
+      return markdownStyle;
+    default:
+      return 'default';
+  }
+};
+
+const readPendingSync = (): SettingsUpdate => {
+  const raw = localStorage.getItem(PENDING_SYNC_KEY);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    const pending: SettingsUpdate = {};
+    if (parsed.theme) pending.theme = normalizeTheme(parsed.theme);
+    if (parsed.font_family) pending.font_family = normalizeFontFamily(parsed.font_family);
+    if (parsed.font_size === 'small' || parsed.font_size === 'medium' || parsed.font_size === 'large') {
+      pending.font_size = parsed.font_size;
+    }
+    if (parsed.markdown_style) pending.markdown_style = normalizeMarkdownStyle(parsed.markdown_style);
+    return pending;
+  } catch {
+    return {};
+  }
+};
+
+const emitPendingSyncChange = () => {
+  window.dispatchEvent(new Event(PENDING_SYNC_EVENT));
+};
+
+const writePendingSync = (next: SettingsUpdate) => {
+  const merged = { ...readPendingSync(), ...next };
+  localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(merged));
+  emitPendingSyncChange();
+};
+
+const clearPendingSync = (synced: SettingsUpdate) => {
+  const pending = readPendingSync();
+  (Object.keys(synced) as (keyof SettingsUpdate)[]).forEach((key) => {
+    delete pending[key];
+  });
+  if (Object.keys(pending).length === 0) {
+    localStorage.removeItem(PENDING_SYNC_KEY);
+  } else {
+    localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(pending));
+  }
+  emitPendingSyncChange();
+};
+
+const pendingToSettings = (pending: SettingsUpdate): Partial<FontSettings> => {
+  const settings: Partial<FontSettings> = {};
+  if (pending.theme) settings.theme = pending.theme;
+  if (pending.font_family) settings.fontFamily = pending.font_family;
+  if (pending.font_size) settings.fontSize = pending.font_size;
+  if (pending.markdown_style) settings.markdownStyle = pending.markdown_style;
+  return settings;
+};
+
+const updateConfirmedByUser = (next: SettingsUpdate, user: Awaited<ReturnType<typeof updateSettings>>) => (
+  (!next.theme || user.theme === next.theme)
+  && (!next.font_family || normalizeFontFamily(user.font_family) === next.font_family)
+  && (!next.font_size || user.font_size === next.font_size)
+  && (!next.markdown_style || normalizeMarkdownStyle(user.markdown_style) === next.markdown_style)
+);
 
 interface AppearanceContextValue {
   settings: FontSettings;
   setFontSize: (fontSize: FontSize) => void;
   setFontFamily: (fontFamily: FontFamily) => void;
   setTheme: (theme: Theme) => void;
+  setMarkdownStyle: (style: MarkdownStyle) => void;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
 }
@@ -134,9 +252,11 @@ const AppearanceContext = createContext<AppearanceContextValue | null>(null);
 const AppearanceStateProvider = ({
   children,
   accountSettings,
+  onSettingsPersisted,
 }: {
   children: ReactNode;
   accountSettings?: FontSettings;
+  onSettingsPersisted?: (user: Awaited<ReturnType<typeof updateSettings>>) => void;
 }) => {
   const [settings, setSettings] = useState<FontSettings>(() => {
     if (accountSettings) return accountSettings;
@@ -144,14 +264,19 @@ const AppearanceStateProvider = ({
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        const theme: Theme = parsed.theme || 'system';
-        return { fontSize: parsed.fontSize || 'medium', fontFamily: parsed.fontFamily || 'system', theme };
+        const theme = normalizeTheme(parsed.theme);
+        return {
+          fontSize: parsed.fontSize || 'medium',
+          fontFamily: normalizeFontFamily(parsed.fontFamily),
+          theme,
+          markdownStyle: normalizeMarkdownStyle(parsed.markdownStyle),
+        };
       } catch {
         // fallback to default
       }
     }
     // 无保存设置时，检测系统暗色模式
-    return { fontSize: 'medium', fontFamily: 'system', theme: 'system' };
+    return { fontSize: 'medium', fontFamily: 'system', theme: 'system', markdownStyle: 'default' };
   });
 
   const [isOpen, setIsOpen] = useState(false);
@@ -217,6 +342,8 @@ const AppearanceStateProvider = ({
     // 应用字体设置
     root.style.setProperty('--outline-font-size', FONT_SIZE_MAP[settings.fontSize]);
     root.style.setProperty('--outline-font-family', FONT_FAMILY_MAP[settings.fontFamily]);
+    root.style.setProperty('--prose-font-family', FONT_FAMILY_MAP[settings.fontFamily]);
+    root.dataset.markdownStyle = settings.markdownStyle;
 
     // 应用字体到 body
     document.body.style.fontSize = FONT_SIZE_MAP[settings.fontSize];
@@ -228,13 +355,20 @@ const AppearanceStateProvider = ({
     applyTheme(settings.theme);
   }, [applyTheme, settings]);
 
-  const persist = useCallback(async (next: Partial<{ theme: Theme; font_family: FontFamily; font_size: FontSize }>) => {
+  const persist = useCallback(async (next: Partial<{ theme: Theme; font_family: FontFamily; font_size: FontSize; markdown_style: MarkdownStyle }>) => {
+    writePendingSync(next);
     try {
-      await updateSettings(next);
+      const updatedUser = await updateSettings(next);
+      if (updateConfirmedByUser(next, updatedUser)) {
+        clearPendingSync(next);
+      } else {
+        showToast('外观设置已保存在当前设备，账号同步待重试', 'error');
+      }
+      onSettingsPersisted?.(updatedUser);
     } catch {
       showToast('外观设置同步失败，已保存在当前设备', 'error');
     }
-  }, []);
+  }, [onSettingsPersisted]);
 
   const setFontSize = useCallback((fontSize: FontSize) => {
     setSettings(prev => ({ ...prev, fontSize }));
@@ -251,31 +385,84 @@ const AppearanceStateProvider = ({
     void persist({ theme });
   }, [persist]);
 
+  const setMarkdownStyle = useCallback((markdownStyle: MarkdownStyle) => {
+    setSettings(prev => ({ ...prev, markdownStyle }));
+    void persist({ markdown_style: markdownStyle });
+  }, [persist]);
+
   const value = useMemo(() => ({
     settings,
     setFontSize,
     setFontFamily,
     setTheme,
+    setMarkdownStyle,
     isOpen,
     setIsOpen
-  }), [isOpen, setFontFamily, setFontSize, setTheme, settings]);
+  }), [isOpen, setFontFamily, setFontSize, setMarkdownStyle, setTheme, settings]);
 
   return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>;
 };
 
 export const AppearanceProvider = ({ children }: { children: ReactNode }) => {
-  const { user } = useAuth();
-  const accountSettings = user ? {
-    theme: (user.theme as Theme) || 'system',
-    fontFamily: (user.font_family as FontFamily) || 'system',
+  const { user, applyUser } = useAuth();
+  const [pendingSync, setPendingSync] = useState<SettingsUpdate>(() => readPendingSync());
+
+  useEffect(() => {
+    const handler = () => setPendingSync(readPendingSync());
+    window.addEventListener(PENDING_SYNC_EVENT, handler);
+    return () => window.removeEventListener(PENDING_SYNC_EVENT, handler);
+  }, []);
+
+  useEffect(() => {
+    if (!user?.theme || user.theme === 'system' || user.theme === 'dark') return;
+    void updateSettings({ theme: 'system' })
+      .then(applyUser)
+      .catch(() => {
+        // 保留前端归一化结果；下次用户修改外观时会再次同步。
+      });
+  }, [applyUser, user?.theme]);
+
+  useEffect(() => {
+    if (!user?.font_family) return;
+    const normalized = normalizeFontFamily(user.font_family);
+    if (normalized === user.font_family) return;
+    void updateSettings({ font_family: normalized })
+      .then(applyUser)
+      .catch(() => {
+        // 本地会先按归一化字体渲染；账号同步失败时保留当前设备效果。
+      });
+  }, [applyUser, user?.font_family]);
+
+  useEffect(() => {
+    if (!user || Object.keys(pendingSync).length === 0) return;
+    void updateSettings(pendingSync)
+      .then((updatedUser) => {
+        if (updateConfirmedByUser(pendingSync, updatedUser)) {
+          clearPendingSync(pendingSync);
+        }
+        applyUser(updatedUser);
+      })
+      .catch(() => {
+        // 保留 pending；下次刷新或用户再次打开页面时继续重试。
+      });
+  }, [applyUser, pendingSync, user]);
+
+  const serverSettings = user ? {
+    theme: normalizeTheme(user.theme),
+    fontFamily: normalizeFontFamily(user.font_family),
     fontSize: (user.font_size as FontSize) || 'medium',
+    markdownStyle: normalizeMarkdownStyle(user.markdown_style),
+  } : undefined;
+  const accountSettings = serverSettings ? {
+    ...serverSettings,
+    ...pendingToSettings(pendingSync),
   } : undefined;
   const accountKey = user
-    ? `${user.id}:${user.theme}:${user.font_family}:${user.font_size}`
+    ? `${user.id}:${user.theme}:${user.font_family}:${user.font_size}:${user.markdown_style}:${JSON.stringify(pendingSync)}`
     : 'local';
 
   return (
-    <AppearanceStateProvider key={accountKey} accountSettings={accountSettings}>
+    <AppearanceStateProvider key={accountKey} accountSettings={accountSettings} onSettingsPersisted={applyUser}>
       {children}
     </AppearanceStateProvider>
   );
@@ -291,17 +478,74 @@ interface FontSettingsPanelProps {
   settings: FontSettings;
   setFontSize: (size: FontSize) => void;
   setFontFamily: (family: FontFamily) => void;
-  setTheme: (theme: Theme) => void;
+  setMarkdownStyle: (style: MarkdownStyle) => void;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   hideButton?: boolean;
 }
 
+const GlobalThemeInfo = () => (
+  <div className="mb-5">
+    <div className="flex items-center gap-2 mb-3">
+      <Palette className="w-4 h-4 text-gray-500" />
+      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        全局主题
+      </label>
+    </div>
+  </div>
+);
+
+const MarkdownStyleSection = ({
+  value,
+  onChange,
+}: {
+  value: MarkdownStyle;
+  onChange: (style: MarkdownStyle) => void;
+}) => (
+  <div className="mb-4">
+    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+      Markdown 解析风格
+    </label>
+    <div className="grid grid-cols-2 gap-2">
+      {(Object.keys(MARKDOWN_STYLE_LABELS) as MarkdownStyle[]).map((style) => {
+        const item = MARKDOWN_STYLE_LABELS[style];
+        return (
+          <button
+            key={style}
+            onClick={() => onChange(style)}
+            className={`flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all ${
+              value === style
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                : 'border-transparent bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-700'
+            }`}
+          >
+            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-lg ${
+              style === 'pie'
+                ? 'border-[#6f2d22]/30 bg-[#fbfaf6] font-serif text-[#9a1f12]'
+                : style === 'markamd'
+                  ? 'border-[#fe640b]/30 bg-[#eff1f5] font-mono text-[#fe640b] dark:border-[#fab387]/30 dark:bg-[#1e1e2e] dark:text-[#fab387]'
+                  : style === 'lapis'
+                    ? 'border-[#a2b6d4]/50 bg-[#f6f8fa] font-serif text-[#4870ac] dark:border-[#47556d] dark:bg-[#1e222a] dark:text-[#abbad4]'
+                    : 'border-gray-200 bg-white text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200'
+            }`}>
+              {item.preview}
+            </span>
+            <span className="min-w-0">
+              <span className="block text-xs font-medium text-gray-800 dark:text-gray-200">{item.name}</span>
+              <span className="mt-0.5 block text-[10px] leading-snug text-gray-500 dark:text-gray-400">{item.description}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  </div>
+);
+
 export const FontSettingsPanel = ({
   settings,
   setFontSize,
   setFontFamily,
-  setTheme,
+  setMarkdownStyle,
   isOpen,
   setIsOpen,
   hideButton = false,
@@ -310,39 +554,9 @@ export const FontSettingsPanel = ({
     // Render content only (for use inside other menus)
     return (
       <div>
-        {/* Theme Section */}
-        <div className="mb-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Palette className="w-4 h-4 text-gray-500" />
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              主题风格
-            </label>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {SELECTABLE_THEMES.map((theme) => (
-              <button
-                key={theme}
-                onClick={() => setTheme(theme)}
-                className={`flex flex-col items-start gap-2 p-3 rounded-lg border-2 transition-all text-left ${
-                  settings.theme === theme
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                    : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-              >
-                <div className={`w-full h-10 rounded-md border border-gray-200 ${THEMES[theme].preview}`} />
-                <div>
-                  <div className="text-xs font-medium text-gray-800 dark:text-gray-200">{THEMES[theme].name}</div>
-                  <div className="text-[10px] text-gray-500 mt-0.5">
-                    {theme === 'system' && '随设备自动切换'}
-                    {theme === 'minimal' && 'Workflowy 风格'}
-                    {theme === 'warm' && '低刺激的暖色阅读'}
-                    {theme === 'geek' && '清晰冷静的雾蓝层次'}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
+        <GlobalThemeInfo />
+
+        <MarkdownStyleSection value={settings.markdownStyle} onChange={setMarkdownStyle} />
 
         {/* Font Size Section */}
         <div className="mb-4">
@@ -383,7 +597,13 @@ export const FontSettingsPanel = ({
                 }`}
                 style={{ fontFamily: FONT_FAMILY_MAP[family] }}
               >
-                {FONT_FAMILY_LABELS[family]}
+                <span className="flex items-center justify-between gap-3">
+                  <span>
+                    <span className="block">{FONT_FAMILY_LABELS[family]}</span>
+                    <span className="block text-[11px] opacity-70 mt-0.5">{FONT_FAMILY_DESCRIPTIONS[family]}</span>
+                  </span>
+                  <span className="shrink-0 text-xs opacity-80">{FONT_FAMILY_PREVIEW_TEXT[family]}</span>
+                </span>
               </button>
             ))}
           </div>
@@ -409,41 +629,11 @@ export const FontSettingsPanel = ({
             onClick={() => setIsOpen(false)}
           />
           <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 p-4 max-h-[80vh] overflow-y-auto">
-            {/* Theme Section */}
-            <div className="mb-5">
-              <div className="flex items-center gap-2 mb-3">
-                <Palette className="w-4 h-4 text-gray-500" />
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  主题风格
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {SELECTABLE_THEMES.map((theme) => (
-                  <button
-                    key={theme}
-                    onClick={() => setTheme(theme)}
-                    className={`flex flex-col items-start gap-2 p-3 rounded-lg border-2 transition-all text-left ${
-                      settings.theme === theme
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                        : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    <div className={`w-full h-10 rounded-md border border-gray-200 ${THEMES[theme].preview}`} />
-                    <div>
-                      <div className="text-xs font-medium text-gray-800 dark:text-gray-200">{THEMES[theme].name}</div>
-                      <div className="text-[10px] text-gray-500 mt-0.5">
-                        {theme === 'system' && '随设备自动切换'}
-                        {theme === 'minimal' && '温和、克制的纸张感'}
-                        {theme === 'warm' && '低刺激的暖色阅读'}
-                        {theme === 'geek' && '清晰冷静的雾蓝层次'}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
+            <GlobalThemeInfo />
 
             <div className="border-t border-gray-200 dark:border-gray-700 my-4" />
+
+            <MarkdownStyleSection value={settings.markdownStyle} onChange={setMarkdownStyle} />
 
             {/* Font Size Section */}
             <div className="mb-4">
@@ -484,7 +674,13 @@ export const FontSettingsPanel = ({
                     }`}
                     style={{ fontFamily: FONT_FAMILY_MAP[family] }}
                   >
-                    {FONT_FAMILY_LABELS[family]}
+                    <span className="flex items-center justify-between gap-3">
+                      <span>
+                        <span className="block">{FONT_FAMILY_LABELS[family]}</span>
+                        <span className="block text-[11px] opacity-70 mt-0.5">{FONT_FAMILY_DESCRIPTIONS[family]}</span>
+                      </span>
+                      <span className="shrink-0 text-xs opacity-80">{FONT_FAMILY_PREVIEW_TEXT[family]}</span>
+                    </span>
                   </button>
                 ))}
               </div>

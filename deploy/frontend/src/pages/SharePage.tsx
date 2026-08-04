@@ -107,7 +107,6 @@ export default function SharePage() {
 
   useEffect(() => {
     if (!shareToken) return;
-    setLoading(true);
     getSharedDocument(shareToken)
       .then(data => {
         setTitle(data.title);

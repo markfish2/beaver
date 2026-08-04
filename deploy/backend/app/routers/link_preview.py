@@ -1,49 +1,19 @@
 import re
 import time
-import ipaddress
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 import httpx
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from ..schemas import LinkPreview
+from ..dependencies import get_current_user
+from ..url_safety import is_safe_http_url, is_safe_peer_response
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 # In-memory cache: url -> (timestamp, preview)
 _preview_cache: dict[str, tuple[float, LinkPreview]] = {}
 CACHE_TTL = 3600  # 1 hour
-
-# SSRF: private/reserved IP ranges
-_PRIVATE_NETWORKS = [
-    ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("169.254.0.0/16"),
-    ipaddress.ip_network("::1/128"),
-    ipaddress.ip_network("fc00::/7"),
-    ipaddress.ip_network("fe80::/10"),
-]
-
-
-def _is_safe_url(url: str) -> bool:
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        return False
-    hostname = parsed.hostname
-    if not hostname:
-        return False
-    try:
-        ip = ipaddress.ip_address(hostname)
-        for net in _PRIVATE_NETWORKS:
-            if ip in net:
-                return False
-    except ValueError:
-        # hostname is a domain name, not an IP — OK
-        pass
-    return True
-
 
 def _extract_meta(html: str, property_name: str) -> str | None:
     # og:meta: <meta property="og:title" content="...">
@@ -128,26 +98,47 @@ async def get_link_preview(url: str = Query(..., description="URL to preview")):
             del _preview_cache[url]
 
     # SSRF check
-    if not _is_safe_url(url):
+    if not is_safe_http_url(url):
         return _empty_preview(url)
 
     try:
         async with httpx.AsyncClient(
-            follow_redirects=True,
+            follow_redirects=False,
             timeout=httpx.Timeout(connect=5.0, read=10.0, write=5.0, pool=5.0),
             headers={"User-Agent": "Mozilla/5.0 (compatible; LinkPreview/1.0)"},
         ) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
+            current_url = url
+            for _ in range(6):
+                if not is_safe_http_url(current_url):
+                    return _empty_preview(url)
+                async with client.stream("GET", current_url) as resp:
+                    if not is_safe_peer_response(resp):
+                        return _empty_preview(url)
+                    if resp.is_redirect:
+                        location = resp.headers.get("location")
+                        if not location:
+                            return _empty_preview(url)
+                        current_url = urljoin(current_url, location)
+                        continue
+                    resp.raise_for_status()
 
-            # Only parse HTML
-            content_type = resp.headers.get("content-type", "")
-            if "html" not in content_type:
+                    # Only parse HTML and never buffer more than 512 KiB.
+                    content_type = resp.headers.get("content-type", "")
+                    if "html" not in content_type:
+                        return _empty_preview(url)
+                    body = bytearray()
+                    async for chunk in resp.aiter_bytes():
+                        body.extend(chunk)
+                        if len(body) >= 512 * 1024:
+                            del body[512 * 1024:]
+                            break
+                    encoding = resp.encoding or "utf-8"
+                    html = body.decode(encoding, errors="replace")
+                    preview = _parse_preview(current_url, html)
+                    preview.url = url
+                    break
+            else:
                 return _empty_preview(url)
-
-            # Read up to 512KB
-            html = resp.text[:512 * 1024]
-            preview = _parse_preview(url, html)
 
     except Exception:
         preview = _empty_preview(url)
