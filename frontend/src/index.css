@@ -693,3 +693,8 @@ body,
 .prose code {
   word-break: break-all;
 }
+
+/* 强制覆盖 SyntaxHighlighter 行号的斜体 */
+.react-syntax-highlighter-line-number {
+  font-style: normal !important;
+}

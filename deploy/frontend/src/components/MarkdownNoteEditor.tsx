@@ -95,6 +95,7 @@ const codeLineNumberStyle = (isDark: boolean): React.CSSProperties => ({
   textAlign: 'right',
   userSelect: 'none',
   opacity: 0.58,
+  fontStyle: 'normal',
   color: isDark ? '#8b949e' : '#8c959f',
   borderRight: `1px solid ${isDark ? 'rgba(139,148,158,0.28)' : 'rgba(140,149,159,0.28)'}`,
 });

@@ -119,6 +119,7 @@ const codeLineNumberStyle = (palette: MemoCardPalette): React.CSSProperties => (
   textAlign: 'right',
   userSelect: 'none',
   opacity: 0.58,
+  fontStyle: 'normal',
   color: palette.codeMutedText ?? palette.mutedText,
   borderRight: `1px solid ${palette.codeBorder ?? palette.surfaceBorder}`,
 });
