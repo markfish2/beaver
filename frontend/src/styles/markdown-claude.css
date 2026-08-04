@@ -276,49 +276,54 @@
   width: 100%;
   box-sizing: border-box;
   margin: 1rem 0;
+  position: relative;
   overflow: hidden;
   color: var(--markdown-claude-code-text) !important;
-  background: var(--markdown-claude-code-bg) !important;
+  background: var(--markdown-claude-surface) !important;
   border: 1px solid var(--markdown-claude-code-border) !important;
-  border-radius: 8px !important;
-  box-shadow: 0 1px 0 rgba(43, 38, 33, 0.03) !important;
+  border-radius: 16px !important;
+  box-shadow: none !important;
 }
 
 :root[data-markdown-style="claude"] .memo-content .markdown-code-header {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.65rem;
+  z-index: 2;
+  gap: 0.25rem;
+  padding: 0 !important;
   color: var(--markdown-claude-muted) !important;
-  background: var(--markdown-claude-surface-soft) !important;
-  border-bottom: 1px solid var(--markdown-claude-code-border) !important;
+  background: transparent !important;
+  border-bottom: 0 !important;
 }
 
 :root[data-markdown-style="claude"] .memo-content .markdown-code-language {
-  color: var(--markdown-claude-muted) !important;
-  font-size: 0.76em !important;
+  display: none !important;
 }
 
 :root[data-markdown-style="claude"] .memo-content .markdown-code-body,
 :root[data-markdown-style="claude"] .memo-content .markdown-code-body pre {
   color: var(--markdown-claude-code-text) !important;
-  background: var(--markdown-claude-code-bg) !important;
+  background: var(--markdown-claude-surface) !important;
   border: 0 !important;
-  border-radius: 0 !important;
+  border-radius: 16px !important;
   font-size: 0.9em !important;
-  line-height: 1.55 !important;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  line-height: 1.72 !important;
   box-sizing: border-box;
   max-width: 100%;
 }
 
 :root[data-markdown-style="claude"] .memo-content .markdown-code-copy {
   color: var(--markdown-claude-muted) !important;
-  background: var(--markdown-claude-bg) !important;
-  border-color: var(--markdown-claude-code-border) !important;
-  border-radius: 6px !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  border-radius: 8px !important;
 }
 
 :root[data-markdown-style="claude"] .memo-content .markdown-code-copy:hover {
   color: var(--markdown-claude-accent) !important;
-  border-color: var(--markdown-claude-accent) !important;
+  background: var(--markdown-claude-surface-soft) !important;
+  border-color: transparent !important;
 }
 
 :root[data-markdown-style="claude"] .memo-content table {

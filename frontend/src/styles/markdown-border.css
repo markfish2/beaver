@@ -19,6 +19,8 @@
   --markdown-border-pink: #d53984;
   --markdown-border-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4'%3E%3Cpath fill='%23000000' fill-opacity='0.10' d='M1 3h1v1H1V3zm2-2h1v1H3V1z'%3E%3C/path%3E%3C/svg%3E");
   --markdown-border-code-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4'%3E%3Cpath fill='%23000000' fill-opacity='0.08' d='M1 3h1v1H1V3zm2-2h1v1H3V1z'%3E%3C/path%3E%3C/svg%3E");
+  --markdown-border-code-bg: #fbfbfb;
+  --markdown-border-code-header: #f4f4f4;
   --markdown-border-font-mono: "Sarasa Mono SC", "Noto Sans Mono CJK SC", "Cascadia Mono", "SFMono-Regular", Menlo, Consolas, monospace;
   --markdown-border-radius-sm: 6px;
   --markdown-border-radius-md: 10px;
@@ -46,6 +48,8 @@
   --markdown-border-pink: #ef79b5;
   --markdown-border-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4'%3E%3Cpath fill='%23ffffff' fill-opacity='0.10' d='M1 3h1v1H1V3zm2-2h1v1H3V1z'%3E%3C/path%3E%3C/svg%3E");
   --markdown-border-code-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4'%3E%3Cpath fill='%23ffffff' fill-opacity='0.08' d='M1 3h1v1H1V3zm2-2h1v1H3V1z'%3E%3C/path%3E%3C/svg%3E");
+  --markdown-border-code-bg: #181818;
+  --markdown-border-code-header: #202020;
 }
 
 :root[data-markdown-style="border"] .memo-content {
@@ -336,50 +340,72 @@
   display: block;
   width: 100%;
   box-sizing: border-box;
-  margin: 1rem 0;
+  margin: 1.15rem 0;
   overflow: hidden;
   color: var(--markdown-border-muted) !important;
-  background: var(--markdown-border-code-pattern) !important;
-  border: 1px dashed var(--markdown-border-border) !important;
-  border-radius: var(--markdown-border-radius-sm) !important;
+  background: var(--markdown-border-code-bg) !important;
+  border: 1px solid color-mix(in srgb, var(--markdown-border-border) 72%, transparent) !important;
+  border-radius: 14px !important;
   box-shadow: none !important;
 }
 
 :root[data-markdown-style="border"] .memo-content .markdown-code-header {
   color: var(--markdown-border-muted) !important;
-  background: color-mix(in srgb, var(--markdown-border-surface) 72%, transparent) !important;
-  border-bottom: 1px dashed var(--markdown-border-border) !important;
+  background: var(--markdown-border-code-header) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--markdown-border-border) 68%, transparent) !important;
+  min-height: 26px;
+  padding: 0.32rem 0.85rem !important;
+}
+
+:root[data-markdown-style="border"] .memo-content .markdown-code-header::before {
+  width: 42px;
+  height: 12px;
+  flex: 0 0 auto;
+  content: "";
+  background:
+    radial-gradient(circle at 6px 6px, #ff5f57 0 5px, transparent 5.5px),
+    radial-gradient(circle at 21px 6px, #ffbd2e 0 5px, transparent 5.5px),
+    radial-gradient(circle at 36px 6px, #28c840 0 5px, transparent 5.5px);
 }
 
 :root[data-markdown-style="border"] .memo-content .markdown-code-language {
   color: var(--markdown-border-muted) !important;
+  margin-left: auto;
+  padding: 0.15rem 0.6rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--markdown-border-muted) 28%, transparent);
   font-size: 0.76em !important;
+  letter-spacing: 0.01em;
+  text-transform: capitalize;
 }
 
 :root[data-markdown-style="border"] .memo-content .markdown-code-body,
 :root[data-markdown-style="border"] .memo-content .markdown-code-body pre {
-  color: var(--markdown-border-muted) !important;
-  background: transparent !important;
+  color: var(--markdown-border-text) !important;
+  background: var(--markdown-border-code-bg) !important;
   border: 0 !important;
   border-radius: 0 !important;
-  font-size: 0.88em !important;
-  line-height: 1.56 !important;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  font-size: 0.9em !important;
+  line-height: 1.72 !important;
   box-sizing: border-box;
   max-width: 100%;
 }
 
 :root[data-markdown-style="border"] .memo-content .markdown-code-copy {
   color: var(--markdown-border-muted) !important;
-  background: var(--markdown-border-bg) !important;
-  border-color: var(--markdown-border-border) !important;
-  border-radius: var(--markdown-border-radius-sm) !important;
+  gap: 0.25rem;
+  background: transparent !important;
+  border-color: transparent !important;
+  border-radius: 8px !important;
+}
+
+:root[data-markdown-style="border"] .memo-content .markdown-code-copy::after {
+  content: none;
 }
 
 :root[data-markdown-style="border"] .memo-content .markdown-code-copy:hover {
   color: var(--markdown-border-accent) !important;
-  border-color: var(--markdown-border-accent) !important;
+  background: var(--markdown-border-accent-soft) !important;
+  border-color: transparent !important;
 }
 
 :root[data-markdown-style="border"] .memo-content table {

@@ -152,6 +152,13 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedRef = useRef('');
   const pendingSaveRef = useRef<string | null>(null);
+  const previousDocumentIdRef = useRef(documentId);
+
+  useEffect(() => {
+    if (previousDocumentIdRef.current === documentId) return;
+    previousDocumentIdRef.current = documentId;
+    setViewMode(isNew ? 'edit' : 'preview');
+  }, [documentId, isNew]);
 
   const handleDownload = useCallback(() => {
     const currentContent = editorRef.current?.getValue() ?? content;

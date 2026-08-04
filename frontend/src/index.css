@@ -474,6 +474,25 @@ body,
   word-break: normal !important;
 }
 
+.memo-content table th,
+:root[data-markdown-style] .memo-content table th {
+  vertical-align: middle !important;
+  text-align: center !important;
+  line-height: 1.35 !important;
+  white-space: normal !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+}
+
+.memo-content table th > *,
+:root[data-markdown-style] .memo-content table th > * {
+  vertical-align: middle !important;
+  line-height: inherit !important;
+  white-space: inherit !important;
+  word-break: inherit !important;
+  overflow-wrap: inherit !important;
+}
+
 /* Memo 卡片使用语义色变量，避免彩色卡片继续套用全局灰阶。 */
 .memo-card-themed .memo-content,
 .memo-card-themed .memo-content h1,
