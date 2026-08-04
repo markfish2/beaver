@@ -79,11 +79,14 @@ function preprocess(content: string): string {
 
 const BLOCK_CODE_FONT_SIZE = 'var(--markdown-block-code-font-size)';
 
-const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => ({
-  margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: BLOCK_CODE_FONT_SIZE,
-  background: isDark ? '#282c34' : '#fbfbf8', border: 'none', padding: '16px',
-  overflowX: 'auto', whiteSpace: 'pre',
-});
+const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => {
+  // markamd 主题暗色模式不设置内联背景，让 CSS 变量控制
+  const mdStyle = typeof document !== 'undefined' ? document.documentElement.dataset.markdownStyle : '';
+  if (mdStyle === 'markamd' && isDark) {
+    return { margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: BLOCK_CODE_FONT_SIZE, background: 'transparent', border: 'none', padding: '16px', overflowX: 'auto', whiteSpace: 'pre' };
+  }
+  return { margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: BLOCK_CODE_FONT_SIZE, background: isDark ? '#282c34' : '#fbfbf8', border: 'none', padding: '16px', overflowX: 'auto', whiteSpace: 'pre' };
+};
 
 const codeLineNumberStyle = (isDark: boolean): React.CSSProperties => ({
   minWidth: '2.25em',
@@ -113,8 +116,10 @@ function getNodeStartLine(node: unknown): number | null {
 
 function PlainCodeWithLineNumbers({ code, isDark }: { code: string; isDark: boolean }) {
   const lineNumberStyle = codeLineNumberStyle(isDark);
+  const mdStyle = typeof document !== 'undefined' ? document.documentElement.dataset.markdownStyle : '';
+  const plainBg = (mdStyle === 'markamd' && isDark) ? 'transparent' : (isDark ? '#1e1e1e' : '#fafafa');
   return (
-    <pre className="markdown-code-body p-4 overflow-x-auto font-mono" style={{ background: isDark ? '#1e1e1e' : '#fafafa', margin: 0, fontSize: BLOCK_CODE_FONT_SIZE, paddingLeft: '11px' }}>
+    <pre className="markdown-code-body p-4 overflow-x-auto font-mono" style={{ background: plainBg, margin: 0, fontSize: BLOCK_CODE_FONT_SIZE, paddingLeft: '11px' }}>
       <code className="block min-w-max">
         {code.split('\n').map((line, index) => (
           <span key={index} className="flex whitespace-pre">
@@ -304,9 +309,11 @@ const CodeBlock = memo(function CodeBlock({ className, children, ...props }: Mar
 
   if (isBlock) {
     const useHighlight = language && language !== 'markdown' && language !== 'text';
+    const mdStyle = typeof document !== 'undefined' ? document.documentElement.dataset.markdownStyle : '';
+    const headerBg = (mdStyle === 'markamd' && isDark) ? 'transparent' : (isDark ? '#282c34' : '#f6f5f0');
     return (
       <div className="markdown-code-block markdown-code-block-root relative rounded-lg overflow-hidden border border-[#dad9d4] dark:border-gray-700">
-        <div className="markdown-code-header flex items-center justify-between px-3 py-1.5 border-b border-[#dad9d4] dark:border-gray-700" style={{ background: isDark ? '#282c34' : '#f6f5f0' }}>
+        <div className="markdown-code-header flex items-center justify-between px-3 py-1.5 border-b border-[#dad9d4] dark:border-gray-700" style={{ background: headerBg }}>
           <span className={`markdown-code-language text-[11px] font-mono ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{language || 'text'}</span>
           <button onClick={handleCopy} className="markdown-code-copy flex items-center p-1 rounded-md bg-white/90 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-600 transition-all" title={copied ? '已复制' : '复制代码'}>
             {copied ? <CheckCheck className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
