@@ -1,0 +1,443 @@
+:root {
+  --markdown-lapis-text: #40464f;
+  --markdown-lapis-primary: #4870ac;
+  --markdown-lapis-bg: #ffffff;
+  --markdown-lapis-marker: #a2b6d4;
+  --markdown-lapis-source: #8f959d;
+  --markdown-lapis-highlight: rgba(255, 255, 181, 0.76);
+  --markdown-lapis-header-span: #4870ac;
+  --markdown-lapis-block-bg: #f6f8fa;
+  --markdown-lapis-block-border: #d9dfe4;
+  --markdown-lapis-quote-bg: #f6f8fa;
+  --markdown-lapis-table-hover: #f6f8fa;
+  --markdown-lapis-code-text: #4870ac;
+  --markdown-lapis-selection: rgba(72, 112, 172, 0.16);
+  --markdown-lapis-radius-sm: 4px;
+  --markdown-lapis-radius-md: 10px;
+  --markdown-lapis-font-serif: "Source Han Serif CN", "Noto Serif CJK SC", "Songti SC", "STSong", "SimSun", serif;
+  --markdown-lapis-font-body: "Cantarell", "Source Han Serif CN", "Noto Serif CJK SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --markdown-lapis-font-mono: "JetBrains Mono", "JetBrainsMono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.dark,
+:root[data-theme="system-dark"] {
+  --markdown-lapis-text: rgba(228, 228, 228, 0.9);
+  --markdown-lapis-primary: #8393ad;
+  --markdown-lapis-bg: #1e222a;
+  --markdown-lapis-marker: #7d8a9f;
+  --markdown-lapis-source: rgba(125, 138, 159, 0.78);
+  --markdown-lapis-highlight: rgba(255, 255, 181, 0.76);
+  --markdown-lapis-header-span: #47556d;
+  --markdown-lapis-block-bg: #080e1d;
+  --markdown-lapis-block-border: #47556d;
+  --markdown-lapis-quote-bg: #2a2f3b;
+  --markdown-lapis-table-hover: #181c24;
+  --markdown-lapis-code-text: #abbad4;
+  --markdown-lapis-selection: rgba(218, 227, 234, 0.18);
+}
+
+:root[data-markdown-style="lapis"] .memo-content {
+  color: var(--markdown-lapis-text) !important;
+  font-family: var(--markdown-lapis-font-body);
+  font-size: var(--prose-font-size);
+  line-height: 1.68;
+  letter-spacing: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  text-align: justify;
+}
+
+:root[data-markdown-style="lapis"] .memo-content ::selection {
+  background: var(--markdown-lapis-selection);
+}
+
+:root[data-markdown-style="lapis"] .memo-content > * + * {
+  margin-top: 0.95em;
+}
+
+:root[data-markdown-style="lapis"] .memo-content h1,
+:root[data-markdown-style="lapis"] .memo-content h2,
+:root[data-markdown-style="lapis"] .memo-content h3,
+:root[data-markdown-style="lapis"] .memo-content h4,
+:root[data-markdown-style="lapis"] .memo-content h5,
+:root[data-markdown-style="lapis"] .memo-content h6 {
+  color: var(--markdown-lapis-primary) !important;
+  font-family: var(--markdown-lapis-font-serif);
+  font-weight: 700;
+  line-height: 1.35;
+  padding: 0;
+  border: 0 !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-content h1 {
+  text-align: center;
+  font-size: calc(1.72em - 2px) !important;
+  margin: 0.9rem 0 2.3rem;
+}
+
+:root[data-markdown-style="lapis"] .memo-content h2 {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  color: var(--markdown-lapis-bg) !important;
+  background: var(--markdown-lapis-header-span) !important;
+  border-radius: var(--markdown-lapis-radius-sm);
+  padding: 1px 12.5px;
+  font-size: calc(1.34em - 2px) !important;
+  margin: 0.3em 0;
+}
+
+:root[data-markdown-style="lapis"] .memo-content h2 a,
+:root[data-markdown-style="lapis"] .memo-content h2 code,
+:root[data-markdown-style="lapis"] .memo-content h2 strong {
+  color: var(--markdown-lapis-bg) !important;
+  background: transparent !important;
+  border-color: var(--markdown-lapis-bg) !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-content h3 {
+  font-size: calc(1.16em - 2px) !important;
+  margin: 1em 0;
+}
+
+:root[data-markdown-style="lapis"] .memo-content h4 {
+  font-size: calc(1.04em - 2px) !important;
+  font-weight: 500;
+  margin: 0.8em 0;
+}
+
+:root[data-markdown-style="lapis"] .memo-content h5,
+:root[data-markdown-style="lapis"] .memo-content h6 {
+  font-size: 1.1em !important;
+  font-weight: 500;
+  margin: 0.6em 0;
+}
+
+:root[data-markdown-style="lapis"] .memo-content p {
+  color: var(--markdown-lapis-text) !important;
+  line-height: 1.8;
+  margin: 0.7em 0;
+  padding: 0.1rem 0;
+}
+
+:root[data-markdown-style="lapis"] .memo-content strong {
+  color: var(--markdown-lapis-primary) !important;
+  font-weight: 700;
+}
+
+:root[data-markdown-style="lapis"] .memo-content em {
+  padding-right: 3px;
+}
+
+:root[data-markdown-style="lapis"] .memo-content a,
+:root[data-markdown-style="lapis"] .memo-content .memo-document-link {
+  color: var(--markdown-lapis-primary) !important;
+  background: transparent !important;
+  text-decoration-line: underline !important;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  border: 0 !important;
+  word-break: break-word;
+}
+
+:root[data-markdown-style="lapis"] .memo-content a:hover,
+:root[data-markdown-style="lapis"] .memo-content .memo-document-link:hover {
+  color: color-mix(in srgb, var(--markdown-lapis-primary) 82%, #000000) !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-content mark {
+  color: inherit !important;
+  background: var(--markdown-lapis-highlight) !important;
+  border-radius: 1px;
+  padding: 1px 0.15rem;
+}
+
+:root[data-markdown-style="lapis"] .memo-content s,
+:root[data-markdown-style="lapis"] .memo-content del {
+  opacity: 0.72;
+  text-decoration-thickness: 1.5px;
+}
+
+:root[data-markdown-style="lapis"] .memo-content ul,
+:root[data-markdown-style="lapis"] .memo-content ol {
+  list-style-position: outside !important;
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+:root[data-markdown-style="lapis"] .memo-content ul {
+  list-style-type: disc !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-content ul ul {
+  list-style-type: square !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-content ol {
+  list-style-type: decimal !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-content li {
+  color: var(--markdown-lapis-text) !important;
+  line-height: 1.7;
+  margin: 0.4rem 0;
+  padding-left: 0.05rem;
+  text-align: justify;
+}
+
+:root[data-markdown-style="lapis"] .memo-content li::marker {
+  color: var(--markdown-lapis-marker);
+  font-weight: 700;
+}
+
+:root[data-markdown-style="lapis"] .memo-content li > p {
+  margin: 0.2rem 0;
+}
+
+:root[data-markdown-style="lapis"] .memo-content button[role="checkbox"] {
+  border-color: var(--markdown-lapis-marker) !important;
+  background: var(--markdown-lapis-bg) !important;
+  color: var(--markdown-lapis-primary) !important;
+  border-radius: 999px !important;
+  margin: 0;
+  appearance: none;
+}
+
+:root[data-markdown-style="lapis"] .memo-content button[role="checkbox"][aria-checked="true"] {
+  border-color: var(--markdown-lapis-primary) !important;
+  background: var(--markdown-lapis-bg) !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-content button[role="checkbox"][aria-checked="true"] svg {
+  color: var(--markdown-lapis-primary) !important;
+  stroke-width: 3;
+}
+
+:root[data-markdown-style="lapis"] .memo-content input[type="checkbox"] {
+  accent-color: var(--markdown-lapis-primary);
+}
+
+:root[data-markdown-style="lapis"] .memo-content blockquote {
+  display: block;
+  overflow: auto;
+  color: var(--markdown-lapis-text) !important;
+  border-left: 3px solid var(--markdown-lapis-primary) !important;
+  background: var(--markdown-lapis-quote-bg) !important;
+  padding: 15px 30px 15px 20px;
+  margin: 20px 0;
+  font-size: 0.92em;
+  font-style: normal;
+  border-radius: 0;
+}
+
+:root[data-markdown-style="lapis"] .memo-content blockquote > :first-child {
+  margin-top: 0;
+}
+
+:root[data-markdown-style="lapis"] .memo-content blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+:root[data-markdown-style="lapis"] .memo-content code,
+:root[data-markdown-style="lapis"] .memo-content .markdown-code-block-root,
+:root[data-markdown-style="lapis"] .memo-content .markdown-code-body,
+:root[data-markdown-style="lapis"] .memo-content .markdown-code-language {
+  font-family: var(--markdown-lapis-font-mono) !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-content code:not(pre code),
+:root[data-markdown-style="lapis"] .memo-card-themed .memo-content code:not(pre code) {
+  color: var(--markdown-lapis-code-text) !important;
+  background: var(--markdown-lapis-block-bg) !important;
+  border: 0 !important;
+  border-radius: 3px !important;
+  padding: 2px 4px !important;
+  margin: 0 2px;
+  font-size: 0.94em !important;
+  font-weight: 400;
+  word-break: break-word;
+}
+
+:root[data-markdown-style="lapis"] .memo-content .markdown-code-block {
+  background: transparent !important;
+  border: 1px solid color-mix(in srgb, var(--markdown-lapis-block-border) 72%, transparent) !important;
+  border-radius: var(--markdown-lapis-radius-md) !important;
+  overflow: hidden;
+  box-shadow: none !important;
+  margin: 1.5rem 0;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+:root[data-markdown-style="lapis"] .memo-content .markdown-code-header {
+  color: var(--markdown-lapis-primary) !important;
+  background: var(--markdown-lapis-block-bg) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--markdown-lapis-marker) 32%, transparent) !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-content .markdown-code-language {
+  color: var(--markdown-lapis-primary) !important;
+  font-size: 0.76em !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-content .markdown-code-body,
+:root[data-markdown-style="lapis"] .memo-content .markdown-code-body pre {
+  color: var(--markdown-lapis-text) !important;
+  background: var(--markdown-lapis-block-bg) !important;
+  border-radius: 0 0 var(--markdown-lapis-radius-md) var(--markdown-lapis-radius-md) !important;
+  font-size: 0.88em !important;
+  line-height: 1.6 !important;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+:root[data-markdown-style="lapis"] .memo-content .markdown-code-copy {
+  color: var(--markdown-lapis-primary) !important;
+  background: var(--markdown-lapis-bg) !important;
+  border-color: color-mix(in srgb, var(--markdown-lapis-marker) 45%, transparent) !important;
+  border-radius: var(--markdown-lapis-radius-sm) !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-content table {
+  display: table;
+  width: auto;
+  table-layout: auto;
+  margin: 0 0 20px;
+  border-top: 1px solid var(--markdown-lapis-block-border);
+  border-bottom: 1px solid var(--markdown-lapis-block-border);
+  border-collapse: collapse;
+  border-spacing: 0;
+  overflow-x: auto;
+  font-size: 0.82em !important;
+  line-height: 1.48;
+  text-align: justify;
+}
+
+:root[data-markdown-style="lapis"] .memo-content tbody {
+  border: 0;
+}
+
+:root[data-markdown-style="lapis"] .memo-content tr {
+  border-bottom: 1px solid var(--markdown-lapis-block-border);
+}
+
+:root[data-markdown-style="lapis"] .memo-content tbody tr:last-child {
+  border-bottom: 0;
+}
+
+:root[data-markdown-style="lapis"] .memo-content th,
+:root[data-markdown-style="lapis"] .memo-content td {
+  border: 0 !important;
+  padding: 5px 10px;
+  text-align: justify;
+  vertical-align: top;
+  min-width: 32px;
+  font-size: inherit !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-content th *,
+:root[data-markdown-style="lapis"] .memo-content td * {
+  font-size: inherit !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-content th {
+  color: var(--markdown-lapis-primary) !important;
+  background: transparent !important;
+  font-family: var(--markdown-lapis-font-serif);
+  font-weight: 700;
+  text-align: center;
+  min-width: 0;
+}
+
+:root[data-markdown-style="lapis"] .memo-content th:hover,
+:root[data-markdown-style="lapis"] .memo-content td:hover {
+  background: var(--markdown-lapis-table-hover) !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-content hr {
+  border: 0 !important;
+  border-top: 2px solid color-mix(in srgb, var(--markdown-lapis-marker) 30%, #ffffff) !important;
+  border-radius: 2px;
+  margin: 20px 0;
+}
+
+:root[data-markdown-style="lapis"] .memo-content img {
+  display: block;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-media-block {
+  border-color: color-mix(in srgb, var(--markdown-lapis-block-border) 72%, transparent) !important;
+  border-radius: var(--markdown-lapis-radius-md) !important;
+  background: transparent !important;
+  overflow: hidden;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-media-header {
+  color: var(--markdown-lapis-primary) !important;
+  background: var(--markdown-lapis-block-bg) !important;
+  border-color: color-mix(in srgb, var(--markdown-lapis-marker) 32%, transparent) !important;
+  font-family: var(--markdown-lapis-font-serif);
+  font-weight: 700;
+}
+
+:root[data-markdown-style="lapis"] .memo-media-body {
+  background: transparent !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-gallery-image {
+  border-color: color-mix(in srgb, var(--markdown-lapis-marker) 45%, transparent) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-attachment-link {
+  color: var(--markdown-lapis-text) !important;
+  background: var(--markdown-lapis-bg) !important;
+  border: 1px solid color-mix(in srgb, var(--markdown-lapis-block-border) 68%, transparent);
+  font-family: var(--markdown-lapis-font-body);
+}
+
+:root[data-markdown-style="lapis"] .memo-attachment-link svg {
+  color: var(--markdown-lapis-primary) !important;
+}
+
+:root[data-markdown-style="lapis"] .memo-content video,
+:root[data-markdown-style="lapis"] .memo-content audio {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 12px 0;
+  border-radius: var(--markdown-lapis-radius-md);
+}
+
+:root[data-markdown-style="lapis"] .memo-content video {
+  border: 1px solid var(--markdown-lapis-block-border);
+  background: var(--markdown-lapis-block-bg);
+}
+
+:root[data-markdown-style="lapis"] .memo-content kbd {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.45em;
+  padding: 0 0.42em;
+  border: 1px solid var(--markdown-lapis-block-border);
+  border-radius: var(--markdown-lapis-radius-sm);
+  background: var(--markdown-lapis-block-bg);
+  color: var(--markdown-lapis-primary);
+  font-family: var(--markdown-lapis-font-mono);
+  font-size: 0.82em;
+}

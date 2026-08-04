@@ -1,0 +1,292 @@
+:root {
+  --markdown-pie-bg: #fbfaf6;
+  --markdown-pie-text: #1b1b18;
+  --markdown-pie-muted: #55524c;
+  --markdown-pie-border: #333333;
+  --markdown-pie-soft-border: #a2a9b1;
+  --markdown-pie-link: #9a1f12;
+  --markdown-pie-link-hover: #6f120a;
+  --markdown-pie-mark: #fff387;
+  --markdown-pie-code-bg: #f8f8f3;
+  --markdown-pie-code-head: #efeee7;
+  --markdown-pie-code-border: #333333;
+  --markdown-pie-code-radius: 6px;
+  --markdown-pie-table-head: #575c61;
+  --markdown-pie-table-head-text: #f3f3f3;
+  --markdown-pie-selection: #575c61;
+  --markdown-pie-serif: "STIX Two Text", "STIX2Text", "Times New Roman", "Noto Serif CJK SC", "Source Han Serif CN", serif;
+  --markdown-pie-mono: "Latin Modern Mono Light", "Latin Modern Mono", "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+}
+
+.dark,
+:root[data-theme="system-dark"] {
+  --markdown-pie-bg: #171715;
+  --markdown-pie-text: #ece8df;
+  --markdown-pie-muted: #c6bfb2;
+  --markdown-pie-border: #b8aa93;
+  --markdown-pie-soft-border: #5e564a;
+  --markdown-pie-link: #ff8b7d;
+  --markdown-pie-link-hover: #ffb0a7;
+  --markdown-pie-mark: #6f5210;
+  --markdown-pie-code-bg: #211f1b;
+  --markdown-pie-code-head: #2d2a24;
+  --markdown-pie-code-border: #6f665c;
+  --markdown-pie-table-head: #3c403f;
+  --markdown-pie-table-head-text: #f2eee6;
+  --markdown-pie-selection: #6f665c;
+}
+
+:root[data-markdown-style="pie"] .memo-content {
+  color: var(--markdown-pie-text);
+  font-family: var(--markdown-pie-serif);
+  font-size: calc(var(--prose-font-size) + 1px);
+  line-height: 1.62;
+  letter-spacing: 0.005em;
+  font-variant-numeric: oldstyle-nums;
+}
+
+:root[data-markdown-style="pie"] .memo-content ::selection {
+  color: #ffffff;
+  background: var(--markdown-pie-selection);
+  text-shadow: none;
+}
+
+:root[data-markdown-style="pie"] .memo-content > * + * {
+  margin-top: 1em;
+}
+
+:root[data-markdown-style="pie"] .memo-content h1,
+:root[data-markdown-style="pie"] .memo-content h2,
+:root[data-markdown-style="pie"] .memo-content h3,
+:root[data-markdown-style="pie"] .memo-content h4,
+:root[data-markdown-style="pie"] .memo-content h5,
+:root[data-markdown-style="pie"] .memo-content h6 {
+  color: var(--markdown-pie-text) !important;
+  font-family: inherit;
+  line-height: 1.35;
+  margin: 1.05em 0 0.65em;
+  letter-spacing: 0;
+}
+
+:root[data-markdown-style="pie"] .memo-content h1 {
+  text-align: center;
+  font-size: calc(1.72em - 2px) !important;
+  font-weight: 700;
+  padding-bottom: 0.36em;
+  border-bottom: 1px solid var(--markdown-pie-soft-border) !important;
+}
+
+:root[data-markdown-style="pie"] .memo-content h2 {
+  font-size: calc(1.34em - 2px) !important;
+  font-weight: 700;
+  border-bottom: none !important;
+  padding-bottom: 0;
+}
+
+:root[data-markdown-style="pie"] .memo-content h3 { font-size: calc(1.16em - 2px) !important; }
+:root[data-markdown-style="pie"] .memo-content h4 { font-size: calc(1.04em - 2px) !important; color: var(--markdown-pie-muted) !important; }
+:root[data-markdown-style="pie"] .memo-content h5 { font-size: 1.08em; }
+:root[data-markdown-style="pie"] .memo-content h6 { font-size: 1em; color: var(--markdown-pie-muted) !important; }
+
+:root[data-markdown-style="pie"] .memo-content p {
+  margin: 1em 0;
+  text-align: justify;
+  text-justify: inter-ideograph;
+}
+
+:root[data-markdown-style="pie"] .memo-content strong {
+  font-weight: 700;
+}
+
+:root[data-markdown-style="pie"] .memo-content em {
+  font-style: italic;
+}
+
+:root[data-markdown-style="pie"] .memo-content a {
+  color: var(--markdown-pie-link) !important;
+  text-decoration: underline;
+  text-decoration-thickness: 0.06em;
+  text-underline-offset: 0.16em;
+}
+
+:root[data-markdown-style="pie"] .memo-content a:hover {
+  color: var(--markdown-pie-link-hover) !important;
+}
+
+:root[data-markdown-style="pie"] .memo-content blockquote {
+  color: var(--markdown-pie-muted) !important;
+  border-left: 2px solid var(--markdown-pie-border) !important;
+  padding: 0.125em 1.5em;
+  margin: 1.2em 0;
+  font-style: italic;
+  background: transparent !important;
+}
+
+:root[data-markdown-style="pie"] .memo-content blockquote p {
+  text-align: left;
+  margin: 0.5em 0;
+}
+
+:root[data-markdown-style="pie"] .memo-content blockquote p:first-child {
+  margin-top: 0.25em;
+}
+
+:root[data-markdown-style="pie"] .memo-content blockquote p:last-child {
+  margin-bottom: 0.25em;
+}
+
+:root[data-markdown-style="pie"] .memo-content ul,
+:root[data-markdown-style="pie"] .memo-content ol {
+  list-style-position: outside !important;
+  padding-left: 1.55em;
+  margin: 0.85em 0 1em;
+}
+
+:root[data-markdown-style="pie"] .memo-content ul {
+  list-style-type: disc !important;
+}
+
+:root[data-markdown-style="pie"] .memo-content ol {
+  list-style-type: decimal !important;
+}
+
+:root[data-markdown-style="pie"] .memo-content li {
+  display: list-item;
+  line-height: 1.58;
+  padding-left: 0.1em;
+}
+
+:root[data-markdown-style="pie"] .memo-content li + li {
+  margin-top: 0.2em;
+}
+
+:root[data-markdown-style="pie"] .memo-content li.task-list-item,
+:root[data-markdown-style="pie"] .memo-content li[class*="task-list-item"],
+:root[data-markdown-style="pie"] .memo-content li.list-none {
+  display: list-item;
+  list-style: none !important;
+  padding-left: 22px;
+}
+
+:root[data-markdown-style="pie"] .memo-content li > p {
+  margin: 0;
+  display: inline;
+}
+
+:root[data-markdown-style="pie"] .memo-content mark {
+  color: var(--markdown-pie-text) !important;
+  background: var(--markdown-pie-mark) !important;
+  outline: none !important;
+  border-radius: 2px;
+  padding: 0.04em 0.16em;
+}
+
+:root[data-markdown-style="pie"] .memo-content code,
+:root[data-markdown-style="pie"] .memo-content pre,
+:root[data-markdown-style="pie"] .memo-content .markdown-code-language {
+  font-family: var(--markdown-pie-mono) !important;
+}
+
+:root[data-markdown-style="pie"] .memo-content code:not(pre code) {
+  color: var(--markdown-pie-link) !important;
+  background: var(--markdown-pie-code-bg) !important;
+  border: 1px solid var(--markdown-pie-soft-border);
+  border-radius: 999px;
+  padding: 0.08em 0.44em;
+  font-size: 0.88em;
+}
+
+:root[data-markdown-style="pie"] .memo-content .markdown-code-block {
+  border: 1px solid var(--markdown-pie-code-border) !important;
+  border-radius: var(--markdown-pie-code-radius) !important;
+  box-shadow: none !important;
+  background: var(--markdown-pie-code-bg) !important;
+}
+
+:root[data-markdown-style="pie"] .memo-content .markdown-code-header {
+  color: var(--markdown-pie-muted) !important;
+  background: var(--markdown-pie-code-head) !important;
+  border-color: var(--markdown-pie-code-border) !important;
+  border-bottom-width: 1px !important;
+  border-top-left-radius: calc(var(--markdown-pie-code-radius) - 1px) !important;
+  border-top-right-radius: calc(var(--markdown-pie-code-radius) - 1px) !important;
+}
+
+:root[data-markdown-style="pie"] .memo-content .markdown-code-body,
+:root[data-markdown-style="pie"] .memo-content .markdown-code-body pre,
+:root[data-markdown-style="pie"] .memo-content pre {
+  color: var(--markdown-pie-text) !important;
+  background: var(--markdown-pie-code-bg) !important;
+  border-radius: 0 0 calc(var(--markdown-pie-code-radius) - 1px) calc(var(--markdown-pie-code-radius) - 1px) !important;
+}
+
+:root[data-markdown-style="pie"] .memo-content .markdown-code-copy {
+  color: var(--markdown-pie-muted) !important;
+  background: var(--markdown-pie-bg) !important;
+  border-color: var(--markdown-pie-code-border) !important;
+}
+
+:root[data-markdown-style="pie"] .memo-content table {
+  border: 0;
+  border-top: 1px solid var(--markdown-pie-border);
+  border-bottom: 1px solid var(--markdown-pie-border);
+  border-collapse: collapse;
+  border-spacing: 0;
+  width: 100%;
+  margin: 1.2em 0;
+  font-size: 0.82em !important;
+  line-height: 1.48;
+  overflow: visible;
+}
+
+:root[data-markdown-style="pie"] .memo-content th,
+:root[data-markdown-style="pie"] .memo-content td {
+  border: 0 !important;
+  border-bottom: 1px solid var(--markdown-pie-border) !important;
+  font-size: inherit !important;
+  padding: 0.28em 1ch;
+}
+
+:root[data-markdown-style="pie"] .memo-content th *,
+:root[data-markdown-style="pie"] .memo-content td * {
+  font-size: inherit !important;
+}
+
+:root[data-markdown-style="pie"] .memo-content tbody tr:last-child > td,
+:root[data-markdown-style="pie"] .memo-content tbody tr:last-child > th,
+:root[data-markdown-style="pie"] .memo-content table > tr:last-child > td,
+:root[data-markdown-style="pie"] .memo-content table > tr:last-child > th {
+  border-bottom: 0 !important;
+}
+
+:root[data-markdown-style="pie"] .memo-content th {
+  color: var(--markdown-pie-table-head-text) !important;
+  background: var(--markdown-pie-table-head) !important;
+  border-bottom: 1px solid var(--markdown-pie-border) !important;
+  font-weight: 700;
+}
+
+:root[data-markdown-style="pie"] .memo-content hr {
+  border: none;
+  border-top: 1px solid var(--markdown-pie-soft-border) !important;
+  margin: 2em 0;
+}
+
+:root[data-markdown-style="pie"] .memo-content img {
+  border: 1px solid var(--markdown-pie-soft-border);
+  border-radius: 0.2rem;
+  padding: 3px;
+  background: var(--markdown-pie-bg);
+}
+
+:root[data-markdown-style="pie"] .markdown-note-preview.memo-content img {
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+:root[data-markdown-style="pie"] .memo-content .memo-document-link {
+  color: var(--markdown-pie-link) !important;
+  background: transparent !important;
+  border-bottom: 1px dotted var(--markdown-pie-link);
+}
