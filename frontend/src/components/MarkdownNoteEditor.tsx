@@ -321,7 +321,19 @@ const CodeBlock = memo(function CodeBlock({ className, children, ...props }: Mar
         </div>
         {useHighlight ? (
           <SyntaxHighlighter
-            style={isDark ? oneDark : ghcolors}
+            style={(() => {
+              const base = isDark ? oneDark : ghcolors;
+              // 非默认主题暗色模式：覆盖主题的背景为 transparent
+              if (mdStyle && mdStyle !== 'default' && isDark) {
+                return {
+                  ...base,
+                  'code[class*="language-"]': { ...base['code[class*="language-"]'], background: 'transparent' },
+                  'pre[class*="language-"]': { ...base['pre[class*="language-"]'], background: 'transparent' },
+                  'code[class*="language-"] > span': { ...base['code[class*="language-"] > span'] },
+                };
+              }
+              return base;
+            })()}
             language={language}
             PreTag="div"
             className="markdown-code-body"

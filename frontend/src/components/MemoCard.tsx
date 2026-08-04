@@ -181,7 +181,19 @@ const CodeBlock = memo(function CodeBlock({ className, children, palette, compac
         </div>
         {useHighlight ? (
           <SyntaxHighlighter
-            style={palette.isDarkSurface ? oneDark : ghcolors}
+            style={(() => {
+              const base = palette.isDarkSurface ? oneDark : ghcolors;
+              // 非默认主题暗色模式：覆盖主题的背景为 transparent
+              const mdStyle = typeof document !== 'undefined' ? document.documentElement.dataset.markdownStyle : '';
+              if (mdStyle && mdStyle !== 'default' && palette.isDarkSurface) {
+                return {
+                  ...base,
+                  'code[class*="language-"]': { ...base['code[class*="language-"]'], background: 'transparent' },
+                  'pre[class*="language-"]': { ...base['pre[class*="language-"]'], background: 'transparent' },
+                };
+              }
+              return base;
+            })()}
             language={language}
             PreTag="div"
             className="markdown-code-body"

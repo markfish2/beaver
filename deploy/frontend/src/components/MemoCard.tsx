@@ -28,6 +28,7 @@ import cpp from 'react-syntax-highlighter/dist/esm/languages/prism/cpp';
 import go from 'react-syntax-highlighter/dist/esm/languages/prism/go';
 import rust from 'react-syntax-highlighter/dist/esm/languages/prism/rust';
 import yaml from 'react-syntax-highlighter/dist/esm/languages/prism/yaml';
+import { extractMemoFileLinks as extractFileLinks, extractMemoImages as extractImages, extractMemoTags as extractTags, extractMemoUrls as extractUrls, formatMemoTime as formatTime } from './memoCardContent';
 
 SyntaxHighlighter.registerLanguage('jsx', jsx);
 SyntaxHighlighter.registerLanguage('python', python);
@@ -46,13 +47,12 @@ SyntaxHighlighter.registerLanguage('cpp', cpp);
 SyntaxHighlighter.registerLanguage('go', go);
 SyntaxHighlighter.registerLanguage('rust', rust);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
-import { MoreVertical, Pencil, Trash2, Pin, PinOff, X, Check, Copy, CheckCheck, Image, Paperclip, FileText, Download, Archive, ArchiveRestore, ArrowUpRight, Globe, Maximize2, Minimize2, Sparkles } from 'lucide-react';
+import { MoreVertical, Pencil, Trash2, Pin, PinOff, X, Check, Copy, CheckCheck, Image, Paperclip, FileText, Download, Archive, ArchiveRestore, ArrowUpRight, Globe, Maximize2, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Memo, Document, LinkPreview } from '../api/data';
-import { uploadFile, getMemoTags, updateMemoColor, getThumbnailUrl, fetchLinkPreview, retryLinkPreview } from '../api/data';
+import { uploadFile, getMemoTags, getThumbnailUrl, fetchLinkPreview, retryLinkPreview } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import LinkPreviewCard from './LinkPreviewCard';
-import { getPasteMarkdown } from '../utils/htmlToMarkdown';
 import MarkdownEditor from './MarkdownEditor';
 import type { MarkdownEditorHandle } from './MarkdownEditor';
 import EditorToolbar from './EditorToolbar';
@@ -60,41 +60,21 @@ import TagMentionPopup from './TagMentionPopup';
 import type { PopupItem } from './TagMentionPopup';
 import { tagMentionExtension } from '../extensions/tagMentionExtension';
 import type { TagMentionState } from '../extensions/tagMentionExtension';
-import { stripTags, stripAttachments, normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts, escapeCodeBlockHtml } from '../utils/markdownPreprocess';
+import { stripTags, stripAttachments, normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts, escapeCodeBlockHtml, getMarkdownTaskOrdinalAtLine, toggleMarkdownTaskByOrdinal } from '../utils/markdownPreprocess';
 import MemoToDocDialog from './MemoToDocDialog';
 import AudioPlayer from './AudioPlayer';
 import AIChatPanel from './AIChatPanel';
-import { useResizableTextarea } from '../hooks/useResizableTextarea';
-import { useAuth } from '../context/AuthContext';
-
-const MEMO_COLORS = [
-  { name: '白', value: '#ffffff', dark: '#1f2937', whiteText: false },
-  { name: '浅卡片', value: '#E5DFD2', dark: '#2a2720', whiteText: false },
-  { name: '强调黑', value: '#1A1A1A', dark: '#1A1A1A', whiteText: true },
-  { name: '标志橙', value: '#b37f90', dark: '#8B4A2E', whiteText: true },
-  { name: '鼠尾草', value: '#d1dfe8', dark: '#2a3a2d', whiteText: false },
-  { name: '深鼠尾草', value: '#9ec8a8', dark: '#3d5240', whiteText: true },
-];
-
-const TAG_COLORS = [
-  { bg: '#eff6ff', text: '#2563eb', border: '#93c5fd', darkBg: '#172554', darkText: '#60a5fa', darkBorder: '#1e40af' },
-  { bg: '#f0fdf4', text: '#16a34a', border: '#86efac', darkBg: '#052e16', darkText: '#4ade80', darkBorder: '#166534' },
-  { bg: '#fef3c7', text: '#d97706', border: '#fcd34d', darkBg: '#451a03', darkText: '#fbbf24', darkBorder: '#92400e' },
-  { bg: '#fce7f3', text: '#db2777', border: '#f9a8d4', darkBg: '#500724', darkText: '#f472b6', darkBorder: '#9d174d' },
-  { bg: '#f3e8ff', text: '#9333ea', border: '#c4b5fd', darkBg: '#2e1065', darkText: '#a78bfa', darkBorder: '#6b21a8' },
-  { bg: '#ecfeff', text: '#0891b2', border: '#67e8f9', darkBg: '#083344', darkText: '#22d3ee', darkBorder: '#155e75' },
-  { bg: '#fff1f2', text: '#e11d48', border: '#fda4af', darkBg: '#4c0519', darkText: '#fb7185', darkBorder: '#9f1239' },
-  { bg: '#fdf4ff', text: '#c026d3', border: '#e879f9', darkBg: '#4a044e', darkText: '#d946ef', darkBorder: '#86198f' },
-  { bg: '#f0f9ff', text: '#0284c7', border: '#7dd3fc', darkBg: '#082f49', darkText: '#38bdf8', darkBorder: '#075985' },
-  { bg: '#fefce8', text: '#ca8a04', border: '#fde047', darkBg: '#422006', darkText: '#facc15', darkBorder: '#a16207' },
-];
+import { useIsDark } from '../hooks/useIsDark';
+import { getMemoPalette, getMemoPaletteStyle, MEMO_TAG_COLORS, type MemoCardPalette } from './memoCardTheme';
+import { getPasteMarkdown } from '../utils/htmlToMarkdown';
+import { localizeMarkdownImages } from '../utils/markdownImageUpload';
 
 function tagColorIndex(tag: string): number {
   let h = 0;
   for (let i = 0; i < tag.length; i++) {
     h = (h * 31 + tag.charCodeAt(i)) | 0;
   }
-  return Math.abs(h) % TAG_COLORS.length;
+  return Math.abs(h) % MEMO_TAG_COLORS.length;
 }
 
 interface MemoCardProps {
@@ -106,197 +86,69 @@ interface MemoCardProps {
   onTogglePublic?: (id: string, is_public: boolean) => Promise<void>;
   onToggleAI?: (id: string, ai_excluded: boolean) => Promise<void>;
   onTagClick: (tag: string) => void;
-  onColorChange?: (id: string, color: string | null) => void;
   isHighlighted?: boolean;
   documents?: Document[];
   readOnly?: boolean;
+  compact?: boolean;
 }
 
-function formatTime(dateStr: string): string {
-  const d = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
-  const parts = new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai',
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(d);
-  const get = (type: string) => parts.find(p => p.type === type)?.value || '';
-  return `${get('month')}月${get('day')}日 ${get('hour')}:${get('minute')}`;
+const BLOCK_CODE_FONT_SIZE = 'var(--markdown-block-code-font-size)';
+
+// 非默认主题暗色模式返回 transparent，让 CSS 主题变量控制背景
+function themeBg(fallback: string): string {
+  const mdStyle = typeof document !== 'undefined' ? document.documentElement.dataset.markdownStyle : '';
+  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  return (mdStyle && mdStyle !== 'default' && isDark) ? 'transparent' : fallback;
 }
 
-function extractTags(content: string): string[] {
-  const cleaned = content.replace(/```[\s\S]*?```/g, '').replace(/`[^`]+`/g, '');
-  const matches = cleaned.match(/#[a-zA-Z0-9_一-龥]+/g);
-  if (!matches) return [];
-  return [...new Set(matches.map(m => m.trim()))];
-}
-
-function extractImages(content: string): { alt: string; url: string }[] {
-  const results: { alt: string; url: string }[] = [];
-  const regex = /!\[([^\]]*)\]\(([^)]+)\)/g;
-  let match;
-  while ((match = regex.exec(content)) !== null) {
-    // 排除音频文件
-    if (/\.(mp4|webm|ogg|wav|mp3|m4a)(\?|$)/i.test(match[2])) continue;
-    results.push({ alt: match[1], url: match[2] });
-  }
-  return results;
-}
-
-function extractFileLinks(content: string): { name: string; url: string }[] {
-  const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
-  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-  const results: { name: string; url: string }[] = [];
-  // 先收集所有图片 URL，用于排除 ![...](...) 被 [...]() 匹配
-  const imageUrls = new Set<string>();
-  let m;
-  while ((m = imageRegex.exec(content)) !== null) {
-    imageUrls.add(m[2]);
-  }
-  while ((m = linkRegex.exec(content)) !== null) {
-    if (!imageUrls.has(m[2]) && !m[2].startsWith('/d/')) {
-      results.push({ name: m[1], url: m[2] });
-    }
-  }
-  return results;
-}
-
-function extractUrls(content: string): string[] {
-  const urls = new Set<string>();
-
-  // Match markdown link URLs: [text](url)
-  const mdLinkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
-  let m;
-  while ((m = mdLinkRegex.exec(content)) !== null) {
-    const url = m[2];
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      urls.add(url);
-    }
-  }
-
-  // Match bare URLs (outside markdown links)
-  const stripped = content.replace(/\[([^\]]*)\]\([^)]+\)/g, '');
-  const bareUrlRegex = /(?<!\()(https?:\/\/[^\s<>\)\]]+)/g;
-  while ((m = bareUrlRegex.exec(stripped)) !== null) {
-    let url = m[1].replace(/[.,;:!?]+$/, '');
-    urls.add(url);
-  }
-
-  return [...urls];
-}
-
-function useIsDark() {
-  const check = () => {
-    // 优先从 localStorage 读取用户明确选择的主题
-    try {
-      const saved = localStorage.getItem('outline-font-settings');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.theme === 'dark') return true;
-        if (parsed.theme && parsed.theme !== 'dark') return false;
-      }
-    } catch { /* ignore parse error */ }
-    // 无明确主题时，检查 DOM class 或系统偏好
-    return document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
-  };
-  const [isDark, setIsDark] = useState(check);
-  useEffect(() => {
-    const update = () => setIsDark(check());
-    // 监听 FontSettings 派发的主题变更事件（Android PWA 兼容）
-    window.addEventListener('theme-change', update);
-    // MutationObserver 作为补充
-    const obs = new MutationObserver(update);
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    // 系统主题变化（桌面浏览器）
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    mq.addEventListener('change', update);
-    return () => {
-      window.removeEventListener('theme-change', update);
-      obs.disconnect();
-      mq.removeEventListener('change', update);
-    };
-  }, []);
-  return isDark;
-}
-
-function getMemoBg(isDark: boolean, color: string | null, isPinned: boolean): string {
-  if (isDark) {
-    if (color) {
-      const found = MEMO_COLORS.find(c => c.value === color);
-      return found ? found.dark : '#1f2937';
-    }
-    return '#1f2937';
-  }
-  return color || '#ffffff';
-}
-
-function getMemoTextColor(isDark: boolean, color: string | null): string {
-  if (!color) return '';
-  const found = MEMO_COLORS.find(c => c.value === color);
-  if (!found) return '';
-  if (isDark) {
-    if (found.value === '#1A1A1A' || found.value === '#9ec8a8') return 'text-white';
-    return '';
-  }
-  return found.whiteText ? 'text-white' : '';
-}
-
-function getMemoSecondaryBg(isDark: boolean, color: string | null): string {
-  // 代码块、图片块、附件块的背景色，基于卡片颜色适配
-  if (!color) return '';
-  const found = MEMO_COLORS.find(c => c.value === color);
-  if (!found) return '';
-  if (isDark) {
-    if (found.value === '#1A1A1A') return 'bg-[#111111]';
-    if (found.value === '#b37f90') return 'bg-[#6b4a55]';
-    if (found.value === '#9ec8a8') return 'bg-[#4a7a55]';
-    if (found.value === '#d1dfe8') return 'bg-[#3a4a55]';
-    return '';
-  }
-  if (found.value === '#1A1A1A') return 'bg-[#252525]';
-  if (found.value === '#b37f90') return 'bg-[#c9a0ae]';
-  if (found.value === '#9ec8a8') return 'bg-[#85b892]';
-  if (found.value === '#d1dfe8') return 'bg-[#b8cdd8]';
-  if (found.value === '#E5DFD2') return 'bg-[#d9d3c6]';
-  return '';
-}
-
-function getMemoSecondaryBorder(isDark: boolean, color: string | null): string {
-  if (!color) return '';
-  const found = MEMO_COLORS.find(c => c.value === color);
-  if (!found) return '';
-  if (isDark) {
-    if (found.value === '#1A1A1A') return 'border-[#333333]';
-    if (found.value === '#b37f90') return 'border-[#8a5a68]';
-    if (found.value === '#9ec8a8') return 'border-[#5a8a65]';
-    if (found.value === '#d1dfe8') return 'border-[#4a6a7a]';
-    return '';
-  }
-  if (found.value === '#1A1A1A') return 'border-[#3a3a3a]';
-  if (found.value === '#b37f90') return 'border-[#a06a7a]';
-  if (found.value === '#9ec8a8') return 'border-[#70a87e]';
-  if (found.value === '#d1dfe8') return 'border-[#a0b8c5]';
-  if (found.value === '#E5DFD2') return 'border-[#c9c3b6]';
-  return '';
-}
-
-const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => ({
+const codeBlockCustomStyle = (palette: MemoCardPalette): React.CSSProperties => ({
   margin: 0,
   borderRadius: '0 0 0.5rem 0.5rem',
-  fontSize: '0.95em',
-  background: isDark ? '#282c34' : '#fbfbf8',
+  fontSize: BLOCK_CODE_FONT_SIZE,
+  background: themeBg(palette.codeBlockBackground ?? palette.surfaceStrong),
   border: 'none',
   padding: '16px',
+  overflowX: 'auto',
+  whiteSpace: 'pre',
 });
 
-const CodeBlock = memo(function CodeBlock({ className, children, cardColor, ...props }: { className?: string; children: React.ReactNode; cardColor?: string | null; [key: string]: any }) {
+const codeLineNumberStyle = (palette: MemoCardPalette): React.CSSProperties => ({
+  minWidth: '2.25em',
+  paddingRight: '0.9em',
+  marginRight: '0.9em',
+  textAlign: 'right',
+  userSelect: 'none',
+  opacity: 0.58,
+  color: palette.codeMutedText ?? palette.mutedText,
+  borderRight: `1px solid ${palette.codeBorder ?? palette.surfaceBorder}`,
+});
+
+type CodeBlockProps = React.ComponentPropsWithoutRef<'code'> & { palette: MemoCardPalette; compact?: boolean };
+
+function PlainCodeWithLineNumbers({ code, palette, compact }: { code: string; palette: MemoCardPalette; compact: boolean }) {
+  const lineNumberStyle = codeLineNumberStyle(palette);
+  return (
+    <pre
+      className={`markdown-code-body ${compact ? 'p-2.5' : 'p-4'} overflow-x-auto font-mono`}
+      style={{ background: themeBg(palette.plainCodeBlockBackground ?? palette.surfaceStrong), color: palette.codeText ?? palette.text, margin: 0, fontSize: BLOCK_CODE_FONT_SIZE, paddingLeft: compact ? '5px' : '11px' }}
+    >
+      <code className="block min-w-max" style={{ color: palette.codeText ?? palette.text }}>
+        {code.split('\n').map((line, index) => (
+          <span key={index} className="flex whitespace-pre">
+            <span style={lineNumberStyle}>{String(index + 1).padStart(2, '0')}</span>
+            <span>{line || ' '}</span>
+          </span>
+        ))}
+      </code>
+    </pre>
+  );
+}
+
+const CodeBlock = memo(function CodeBlock({ className, children, palette, compact = false, ...props }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
-  const isDark = useIsDark();
   const match = /language-(\w+)/.exec(className || '');
   const language = match ? match[1] : '';
-  const code = String(children).replace(/\n$/, '');
+  const code = String(children).replace(/\n+$/, '');
   const isBlock = code.includes('\n') || language;
 
   const handleCopy = useCallback(async () => {
@@ -305,23 +157,23 @@ const CodeBlock = memo(function CodeBlock({ className, children, cardColor, ...p
     setTimeout(() => setCopied(false), 2000);
   }, [code]);
 
-  const secondaryBg = getMemoSecondaryBg(isDark, cardColor);
-  const secondaryBorder = getMemoSecondaryBorder(isDark, cardColor);
-  const isCardDark = !!cardColor && !!(MEMO_COLORS.find(c => c.value === cardColor)?.whiteText);
-  const codeHeaderBg = secondaryBg ? undefined : (isDark ? '#282c34' : '#f6f5f0');
-  const codeBorderClass = secondaryBorder || 'border-[#dad9d4] dark:border-gray-700';
-
   if (isBlock) {
     const useHighlight = language && language !== 'markdown' && language !== 'text';
     return (
-      <div className={`relative rounded-lg overflow-hidden border ${codeBorderClass}`}>
-        <div className={`flex items-center justify-between px-3 py-1.5 border-b ${codeBorderClass} ${secondaryBg || ''}`}
-          style={codeHeaderBg ? { background: codeHeaderBg } : undefined}
+      <div className="markdown-code-block markdown-code-block-root relative rounded-lg overflow-hidden border" style={{ borderColor: palette.codeBorder ?? palette.surfaceBorder }}>
+        <div
+          className={`markdown-code-header flex items-center justify-between border-b ${compact ? 'px-2 py-1' : 'px-3 py-1.5'}`}
+          style={{ background: themeBg(palette.codeHeaderBackground ?? palette.surface), borderColor: palette.codeBorder ?? palette.surfaceBorder }}
         >
-          <span className={`text-[11px] font-mono ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{language || 'text'}</span>
+          <span className="markdown-code-language text-[11px] font-mono" style={{ color: palette.codeMutedText ?? palette.mutedText }}>{language || 'text'}</span>
           <button
             onClick={handleCopy}
-            className="flex items-center p-1 rounded-md bg-white/90 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-600 transition-all"
+            className="markdown-code-copy flex items-center p-1 rounded-md border transition-opacity hover:opacity-80"
+            style={{
+              color: palette.codeButtonText ?? palette.text,
+              background: palette.codeButtonBackground ?? palette.surfaceStrong,
+              borderColor: palette.codeButtonBorder ?? palette.surfaceBorder,
+            }}
             title={copied ? '已复制' : '复制代码'}
           >
             {copied ? <CheckCheck className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
@@ -329,32 +181,32 @@ const CodeBlock = memo(function CodeBlock({ className, children, cardColor, ...p
         </div>
         {useHighlight ? (
           <SyntaxHighlighter
-            style={isDark ? oneDark : ghcolors}
+            style={palette.isDarkSurface ? oneDark : ghcolors}
             language={language}
             PreTag="div"
-            customStyle={{ ...codeBlockCustomStyle(isDark) }}
+            className="markdown-code-body"
+            customStyle={{ ...codeBlockCustomStyle(palette), padding: compact ? '10px' : '16px', paddingLeft: compact ? '5px' : '11px', fontSize: BLOCK_CODE_FONT_SIZE }}
+            showLineNumbers
+            lineNumberStyle={codeLineNumberStyle(palette)}
+            lineNumberFormatter={(lineNumber) => String(lineNumber).padStart(2, '0')}
           >
             {code}
           </SyntaxHighlighter>
         ) : (
-          <pre className="p-4 overflow-x-auto text-sm font-mono" style={{ background: isDark ? '#1e1e1e' : '#fafafa', margin: 0 }}>
-            <code>{code}</code>
-          </pre>
+          <PlainCodeWithLineNumbers code={code} palette={palette} compact={compact} />
         )}
       </div>
     );
   }
 
-  // 行内代码：深色卡片适配
-  const inlineCodeStyle = isCardDark ? (() => {
-    if (cardColor === '#1A1A1A') return { background: 'rgba(255,255,255,0.15)', color: '#e5e5e5' };
-    if (cardColor === '#b37f90') return { background: 'rgba(255,255,255,0.18)', color: '#f0ebe6' };
-    if (cardColor === '#9ec8a8') return { background: 'rgba(255,255,255,0.15)', color: '#e8e0d8' };
-    return undefined;
-  })() : undefined;
-
   return (
-    <code className={className} {...props} style={inlineCodeStyle}>{children}</code>
+    <code
+      className={className}
+      {...props}
+      style={{ background: palette.inlineCodeBackground, color: palette.inlineCodeText }}
+    >
+      {children}
+    </code>
   );
 });
 
@@ -364,7 +216,6 @@ function ImagePreview({ images, src: initialSrc, onClose }: { images: string[]; 
   const [translate, setTranslate] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const lastTouchRef = useRef<{ dist: number; x: number; y: number; time: number } | null>(null);
   const pinchStartRef = useRef<{ dist: number; scale: number } | null>(null);
   const dragStartRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
   const doubleTapRef = useRef<number>(0);
@@ -397,11 +248,6 @@ function ImagePreview({ images, src: initialSrc, onClose }: { images: string[]; 
     const dy = touches[0].clientY - touches[1].clientY;
     return Math.sqrt(dx * dx + dy * dy);
   };
-
-  const getTouchCenter = (touches: TouchList) => ({
-    x: (touches[0].clientX + touches[1].clientX) / 2,
-    y: (touches[0].clientY + touches[1].clientY) / 2,
-  });
 
   const handleTouchStart = useCallback((e: ReactTouchEvent) => {
     e.stopPropagation();
@@ -565,53 +411,17 @@ const MemoImage = memo(function MemoImage({ src, alt, onPreview }: { src?: strin
   );
 });
 
-function isUnchecked(trimmed: string): boolean {
-  return /^[-*+]\s*\[ \]\s/.test(trimmed);
-}
+type MarkdownAstNodeWithPosition = {
+  position?: {
+    start?: {
+      line?: number;
+    };
+  };
+};
 
-function isInProgress(trimmed: string): boolean {
-  return /^[-*+]\s*\[-\]\s/.test(trimmed);
-}
-
-function isChecked(trimmed: string): boolean {
-  return /^[-*+]\s*\[[xX*]\]\s/.test(trimmed);
-}
-
-function isTaskLine(trimmed: string): boolean {
-  return isUnchecked(trimmed) || isInProgress(trimmed) || isChecked(trimmed);
-}
-
-function toggleTaskCheckbox(content: string, taskIndex: number): string {
-  const lines = content.split('\n');
-  const strippedLines = lines.map(l => {
-    let s = l.replace(/#[a-zA-Z0-9_一-龥]+/g, '');
-    s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '');
-    s = s.replace(/(?<!!)\[([^\]]+)\]\(([^)]+)\)/g, '');
-    return s;
-  });
-  let taskCount = 0;
-  for (let i = 0; i < strippedLines.length; i++) {
-    const trimmed = strippedLines[i].trimStart();
-    if (isTaskLine(trimmed)) {
-      if (taskCount === taskIndex) {
-        const origTrimmed = lines[i].trimStart();
-        const marker = origTrimmed[0];
-        const indent = lines[i].slice(0, lines[i].indexOf(origTrimmed[0]));
-        const rest = origTrimmed.slice(origTrimmed.indexOf(']') + 2);
-        // 两态循环：[ ] ↔ [x]（memo 不需要进行中状态）
-        let newMark: string;
-        if (isChecked(origTrimmed) || isInProgress(origTrimmed)) {
-          newMark = '[ ]';
-        } else {
-          newMark = '[x]';
-        }
-        lines[i] = `${indent}${marker} ${newMark} ${rest}`;
-        return lines.join('\n');
-      }
-      taskCount++;
-    }
-  }
-  return content;
+function getNodeStartLine(node: unknown): number | null {
+  const line = (node as MarkdownAstNodeWithPosition | undefined)?.position?.start?.line;
+  return typeof line === 'number' && Number.isFinite(line) ? line : null;
 }
 
 // 将 [-] 进行中任务转为未完成复选框（memo 只需要两态）
@@ -621,26 +431,23 @@ function normalizeInProgressTasks(content: string): string {
 
 const markdownComponents = (
   onPreview: (url: string) => void,
-  onToggleCheckboxRef: React.MutableRefObject<((taskIndex: number) => void) | undefined>,
-  checkboxIndexRef: React.MutableRefObject<number>,
+  onToggleCheckbox: (sourceLine: number | null) => void,
   navigate: (to: string) => void,
-  cardColor?: string | null,
+  palette: MemoCardPalette,
+  compact: boolean,
 ): Components => {
-  const cardColorDef = cardColor ? MEMO_COLORS.find(c => c.value === cardColor) : null;
-  const isCardDark = !!cardColorDef?.whiteText;
-  const markerClass = isCardDark ? 'text-white/60' : 'text-gray-500 dark:text-gray-400';
   return {
-    code: (props: any) => {
+    code: (props) => {
       const match = /language-(\w+)/.exec(props.className || '');
       if (match && match[1] === 'mermaid') {
-        return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
+        return <MermaidBlock code={String(props.children).replace(/\n$/, '')} dark={palette.isDarkSurface} />;
       }
-      return <CodeBlock {...props} cardColor={cardColor} />;
+      return <CodeBlock {...props} palette={palette} compact={compact} />;
     },
     img: ({ src, alt }) => {
       // 检测音频文件
       if (src && /\.(mp4|webm|ogg|wav|mp3|m4a)(\?|$)/i.test(src)) {
-        return <AudioPlayer src={src} />;
+        return <AudioPlayer src={src} themed />;
       }
       return <MemoImage src={src} alt={alt} onPreview={onPreview} />;
     },
@@ -649,7 +456,7 @@ const markdownComponents = (
         return (
           <a
             href={href}
-            className="text-[#3f587f] hover:text-[#2d4159] dark:text-[#6b8ab5] dark:hover:text-[#a3bdd6] bg-[#3f587f]/10 dark:bg-[#3f587f]/20 px-1 rounded cursor-pointer"
+            className="memo-document-link px-1 rounded cursor-pointer"
             onMouseDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -667,12 +474,14 @@ const markdownComponents = (
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
     },
     li: ({ children, ordered, index, node, ...props }) => {
+      void ordered;
+      void index;
       const liClassName = typeof props.className === 'string' ? props.className : '';
       const isTaskItem = liClassName.includes('task-list-item');
       const hasCheckboxDeep = (nodes: React.ReactNode[]): boolean =>
         nodes.some(child => {
-          if (!isValidElement(child)) return false;
-          if ((child.props as any)?.role === 'checkbox') return true;
+          if (!isValidElement<{ role?: string; children?: React.ReactNode }>(child)) return false;
+          if (child.props.role === 'checkbox') return true;
           if (child.props?.children) {
             return hasCheckboxDeep(Children.toArray(child.props.children));
           }
@@ -682,28 +491,45 @@ const markdownComponents = (
       const hasCheckbox = isTaskItem || hasCheckboxDeep(arr);
       // 任务列表使用自定义渲染，普通列表使用浏览器原生渲染
       if (hasCheckbox) {
-        return <li className="list-none relative pl-[22px] leading-[1.5]">{children}</li>;
+        const sourceLine = getNodeStartLine(node);
+        return (
+          <li
+            className="list-none relative leading-[1.5]"
+            style={{ paddingLeft: 22, marginLeft: 0, listStyle: 'none' }}
+            onClick={(e) => {
+              const target = e.target as HTMLElement;
+              const checkbox = target.closest('[role="checkbox"]');
+              if (!checkbox || !e.currentTarget.contains(checkbox)) return;
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleCheckbox(sourceLine);
+            }}
+          >
+            {children}
+          </li>
+        );
       }
       // 普通列表：让浏览器原生渲染标记（有序数字/无序圆点）
       return <li {...props}>{children}</li>;
     },
     input: ({ checked, type, className: inputClassName, ...props }) => {
       if (type === 'checkbox') {
-        const idx = checkboxIndexRef.current++;
         return (
-          <span
+          <button
+            type="button"
             role="checkbox"
             aria-checked={checked}
-            className={`absolute left-0 top-[5px] inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border cursor-pointer shrink-0 transition-colors ${
+            className={`absolute left-0 top-[0.22em] z-20 inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border cursor-pointer shrink-0 transition-colors ${
               checked
                 ? 'bg-[#3f587f] border-[#3f587f]'
-                : isCardDark
-                  ? 'bg-white/20 border-white/40'
-                  : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-500'
+                : ''
             }`}
+            style={checked ? undefined : { background: palette.surface, borderColor: palette.surfaceBorder }}
+            onMouseDown={(e) => {
+              e.preventDefault();
+            }}
             onClick={(e) => {
-              e.stopPropagation();
-              onToggleCheckboxRef.current?.(idx);
+              e.preventDefault();
             }}
           >
             {checked && (
@@ -711,33 +537,18 @@ const markdownComponents = (
                 <path d="M3.5 8.5L6.5 11.5L12.5 4.5" />
               </svg>
             )}
-          </span>
+          </button>
         );
       }
       return <input type={type} checked={checked} className={inputClassName} {...props} />;
     },
-    blockquote: ({ children, ...props }: any) => {
-      const isWarmDark = cardColor === '#b37f90' || cardColor === '#9ec8a8';
-      const bqStyle = isCardDark
-        ? isWarmDark
-          ? { color: '#f0ebe6', borderLeftColor: '#e8e0d8' }
-          : { color: 'rgba(255,255,255,0.8)', borderLeftColor: 'rgba(255,255,255,0.4)' }
-        : undefined;
-      return (
-        <blockquote {...props} style={bqStyle}>
-          {children}
-        </blockquote>
-      );
-    },
+    blockquote: ({ children, ...props }) => <blockquote {...props}>{children}</blockquote>,
   };
 };
 
-const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, onToggleArchive, onTogglePublic, onToggleAI, onTagClick, onColorChange, isHighlighted, documents, readOnly }: MemoCardProps) {
+const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, onToggleArchive, onTogglePublic, onToggleAI, onTagClick, isHighlighted, documents, readOnly, compact = false }: MemoCardProps) {
   const isDark = useIsDark();
-  const { user } = useAuth();
   const navigate = useNavigate();
-  const navigateRef = useRef(navigate);
-  navigateRef.current = navigate;
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(memo.content);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -757,7 +568,8 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const [expanded, setExpanded] = useState(false);
   const [isLong, setIsLong] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
-  const bgColor = getMemoBg(isDark, memo.color, memo.is_pinned);
+  const palette = getMemoPalette(isDark, memo.color);
+  const bgColor = palette.background;
 
   // Tag/mention state
   const [allTags, setAllTags] = useState<string[]>([]);
@@ -803,6 +615,8 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const isTagPopupActive = useCallback(() => tagState.type === 'tag' && filteredTags.length > 0, [tagState, filteredTags]);
   const isMentionPopupActive = useCallback(() => mentionState.type === 'mention' && filteredDocs.length > 0, [mentionState, filteredDocs]);
 
+  // CodeMirror stores these callbacks and invokes them only for editor events, never during React render.
+  // eslint-disable-next-line react-hooks/refs
   const tmExtension = useMemo(() => tagMentionExtension({
     onTagSearch: (s) => { setTagState(s); setTagDropdownIndex(0); },
     onMentionSearch: (s) => { setMentionState(s); setMentionDropdownIndex(0); },
@@ -825,7 +639,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       active?.focus();
     },
     isPopupActive: () => isTagPopupActive() || isMentionPopupActive(),
-  }), [allTags.length, documents?.length, filteredTags, filteredDocs, tagDropdownIndex, mentionDropdownIndex, isTagPopupActive, isMentionPopupActive, showExpandEditor]);
+  }), [allTags.length, documents?.length, filteredTags, filteredDocs, tagDropdownIndex, mentionDropdownIndex, isTagPopupActive, isMentionPopupActive, showExpandEditor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTagSelect = useCallback((tag: string) => {
     const active = showExpandEditor ? expandEditorRef.current : editorRef.current;
@@ -911,18 +725,15 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
     return () => { cancelled = true; };
   }, [urls]);
 
-  // 用 ref 存储回调，避免闭包过期问题
-  const toggleCheckboxRef = useRef<(taskIndex: number) => void>();
-  toggleCheckboxRef.current = (taskIndex: number) => {
-    const newContent = toggleTaskCheckbox(memo.content, taskIndex);
+  const toggleCheckbox = useCallback((sourceLine: number | null) => {
+    const taskIndex = getMarkdownTaskOrdinalAtLine(strippedContent, sourceLine);
+    if (taskIndex == null) return;
+    const newContent = toggleMarkdownTaskByOrdinal(memo.content, taskIndex);
     if (newContent !== memo.content) {
       onEdit(memo.id, newContent);
     }
-  };
-  // 内容变化时重置 checkbox 计数器
-  const checkboxIndexRef = useRef(0);
-  checkboxIndexRef.current = 0;
-  const mdComponents = useMemo(() => markdownComponents(setPreviewImage, toggleCheckboxRef, checkboxIndexRef, (...args) => navigateRef.current(...args), memo.color), [memo.color]);
+  }, [memo.content, memo.id, onEdit, strippedContent]);
+  const mdComponents = markdownComponents(setPreviewImage, toggleCheckbox, navigate, palette, compact);
 
   // CodeMirror 编辑器自动管理高度，无需手动调整
 
@@ -939,10 +750,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
 
   // 点击外部关闭菜单 & 更新菜单位置
   useEffect(() => {
-    if (!showMenu) {
-      setMenuPos(null);
-      return;
-    }
+    if (!showMenu) return;
     const updatePos = () => {
       const btn = menuButtonRef.current;
       if (btn) {
@@ -997,6 +805,43 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
     }
   }, [insertAtCursor]);
 
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    for (const item of Array.from(e.clipboardData.items)) {
+      if (item.kind !== 'file') continue;
+      e.preventDefault();
+      const file = item.getAsFile();
+      if (file) await handleFileUpload(file, item.type.startsWith('image/'));
+      return;
+    }
+
+    const markdown = getPasteMarkdown(e.clipboardData);
+    if (!markdown) return;
+
+    e.preventDefault();
+    const active = showExpandEditor ? expandEditorRef.current : editorRef.current;
+    active?.insertText(markdown);
+    setEditContent(active?.getValue() ?? editContent);
+
+    if (!markdown.includes('![')) return;
+    setUploading(true);
+    try {
+      const result = await localizeMarkdownImages(markdown);
+      const view = active?.view;
+      if (!view) return;
+      let updated = view.state.doc.toString();
+      if (result.markdown !== markdown) updated = updated.replace(markdown, result.markdown);
+      if (updated !== view.state.doc.toString()) {
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: updated } });
+      }
+      setEditContent(updated);
+      if (result.failedUrls.length > 0) {
+        alert(`${result.failedUrls.length} 张图片未能自动上传，已保留原地址`);
+      }
+    } finally {
+      setUploading(false);
+    }
+  }, [editContent, handleFileUpload, showExpandEditor]);
+
   const handleSave = useCallback(async () => {
     const currentContent = editorRef.current?.getValue() || editContent;
     if (currentContent.trim() === memo.content) {
@@ -1020,12 +865,6 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       console.error('Failed to delete memo', e);
     }
   }, [memo.id, onDelete]);
-
-  const handleColorChange = useCallback((color: string | null) => {
-    setShowMenu(false);
-    onColorChange?.(memo.id, color);
-    updateMemoColor(memo.id, color).catch(e => console.error('Failed to update color', e));
-  }, [memo.id, onColorChange]);
 
   const handleContentDoubleClick = useCallback(() => {
     setIsEditing(true);
@@ -1069,7 +908,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
               <X className="w-4 h-4" />
             </button>
         </div>
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden" onPasteCapture={handlePaste}>
             {(() => {
               try {
                 return (
@@ -1128,9 +967,9 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
           ? 'border-amber-200 dark:border-amber-800/60'
           : 'border-[#dad9d4] dark:border-gray-700'
       }`}
-      style={{ backgroundColor: bgColor }}
+      style={{ ...getMemoPaletteStyle(palette), backgroundColor: bgColor, color: palette.text, borderColor: palette.border }}
       >
-        <div className="relative">
+        <div className="relative" onPasteCapture={handlePaste}>
           <MarkdownEditor
             ref={editorRef}
             value={editContent}
@@ -1248,16 +1087,16 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   }
 
   return (
-    <div id={`memo-${memo.id}`} className={`group rounded-xl p-4 min-w-0 overflow-hidden border border-[#dad9d4] dark:border-gray-700 ${
+    <div id={`memo-${memo.id}`} className={`memo-card-themed group rounded-xl min-w-0 overflow-hidden border ${compact ? 'p-3' : 'p-4'} ${
       isHighlighted ? 'outline outline-2 outline-blue-400 dark:outline-blue-500 outline-offset-2' : ''}`}
-    style={{ backgroundColor: bgColor, contain: 'layout' }}
+    style={{ ...getMemoPaletteStyle(palette), backgroundColor: bgColor, color: palette.text, borderColor: palette.border, contain: 'layout' }}
     >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           {memo.is_pinned && (
             <Pin className="w-3 h-3 text-amber-500 dark:text-amber-400 fill-current" />
           )}
-          <span className={`text-sm ${getMemoTextColor(isDark, memo.color) || 'text-gray-400 dark:text-gray-500'}`}>
+          <span className="text-sm" style={{ color: palette.mutedText }}>
             {formatTime(memo.created_at)}
           </span>
         </div>
@@ -1265,24 +1104,21 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
         {/* 右侧：AI排除图标 + 地球图标 + 三点菜单 */}
         <div className="flex items-center gap-1">
           {memo.ai_excluded && (
-            <svg className={`w-3.5 h-3.5 ${getMemoTextColor(isDark, memo.color) || 'text-gray-400 dark:text-gray-500'}`} viewBox="0 0 24 24" fill="none">
+            <svg className="w-3.5 h-3.5" style={{ color: palette.mutedText }} viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5"/>
               <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
           )}
           {memo.is_public && (
-            <Globe className={`w-3.5 h-3.5 ${getMemoTextColor(isDark, memo.color) || 'text-gray-400 dark:text-gray-500'}`} />
+            <Globe className="w-3.5 h-3.5" style={{ color: palette.mutedText }} />
           )}
         {!readOnly && (() => {
-          const iconClass = getMemoTextColor(isDark, memo.color) || 'text-gray-400 dark:text-gray-500';
-          const hoverClass = (memo.color && MEMO_COLORS.find(cl => cl.value === memo.color)?.whiteText && !isDark)
-            ? 'hover:text-white/80'
-            : 'hover:text-gray-600 dark:hover:text-gray-300';
           return (
             <button
               ref={menuButtonRef}
               onClick={() => setShowMenu(!showMenu)}
-              className={`p-1 rounded transition-colors ${iconClass} ${hoverClass}`}
+              className="p-1 rounded transition-opacity hover:opacity-70"
+              style={{ color: palette.mutedText }}
               title="更多操作"
             >
               <MoreVertical className="w-4 h-4" />
@@ -1294,9 +1130,12 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
 
       <div
         ref={contentRef}
-        className={`memo-content text-base relative ${getMemoTextColor(isDark, memo.color) || 'text-gray-700 dark:text-gray-300'} ${readOnly ? '' : 'cursor-text'}`}
-        style={{ lineHeight: '1.75' }}
-        style={!expanded && isLong ? { maxHeight: '400px', overflow: 'hidden' } : undefined}
+        className={`memo-content text-base relative ${readOnly ? '' : 'cursor-text'}`}
+        style={{
+          lineHeight: '1.75',
+          color: palette.text,
+          ...(!expanded && isLong ? { maxHeight: '400px', overflow: 'hidden' } : {}),
+        }}
         onDoubleClick={readOnly ? undefined : handleContentDoubleClick}
         title={readOnly ? undefined : "双击编辑"}
       >
@@ -1311,11 +1150,8 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       {isLong && (
         <button
           onClick={() => setExpanded(prev => !prev)}
-          className={`mt-1 text-sm transition-colors ${
-            (memo.color && MEMO_COLORS.find(cl => cl.value === memo.color)?.whiteText && !isDark)
-              ? 'text-white/70 hover:text-white'
-              : 'text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300'
-          }`}
+          className="mt-1 text-sm transition-opacity hover:opacity-75"
+          style={{ color: palette.link }}
         >
           {expanded ? '收起' : '显示更多'}
         </button>
@@ -1324,31 +1160,34 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       {/* 图片画廊 */}
       {images.length > 0 && (() => {
         const count = images.length;
-        const cols = count === 1 ? 2 : count === 2 ? 2 : count === 3 ? 3 : 4;
-        const hasMore = count > 4;
-        const bgStyle = getMemoSecondaryBg(isDark, memo.color) ? {} : { background: isDark ? '#111827' : '#fbfbf8' };
+        const cols = count === 1 ? 1 : compact ? 2 : Math.min(count, 4);
+        const hasMore = count > (compact ? 2 : 4);
         const scrollbarStyle = { scrollbarWidth: 'thin' as const, scrollbarColor: isDark ? '#4b5563 transparent' : '#d1d5db transparent' };
         return (
-          <div className={`mt-3 rounded-lg overflow-hidden border ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}>
+          <div className="memo-media-block memo-image-block mt-3 rounded-lg overflow-hidden border" style={{ borderColor: palette.codeBorder ?? palette.surfaceBorder }}>
             <div
-              className={`px-3 py-1.5 text-xs border-b ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'} ${getMemoTextColor(isDark, memo.color) || 'text-gray-500 dark:text-gray-400'} ${getMemoSecondaryBg(isDark, memo.color) || ''}`}
-              style={getMemoSecondaryBg(isDark, memo.color) ? undefined : { background: isDark ? '#1f2937' : '#f6f5f0' }}
+              className="memo-media-header px-3 py-1.5 text-xs border-b"
+              style={{
+                color: palette.codeMutedText ?? palette.mutedText,
+                background: themeBg(palette.codeHeaderBackground ?? palette.surface),
+                borderColor: palette.codeBorder ?? palette.surfaceBorder,
+              }}
             >
               图片 ({count})
             </div>
             {hasMore ? (
               // >4张：横向滚动，每张大小和4张一致
               <div
-                className={`flex ${getMemoSecondaryBg(isDark, memo.color) || ''}`}
-                style={{ gap: '5px', padding: '5px', overflowX: 'auto', ...bgStyle, ...scrollbarStyle }}
+                className="memo-media-body flex"
+                style={{ gap: '5px', padding: '5px', overflowX: 'auto', background: themeBg(palette.codeBlockBackground ?? palette.surfaceStrong), ...scrollbarStyle }}
               >
                 {images.map((img, i) => (
                   <img
                     key={i}
                     src={getThumbnailUrl(img.url)}
                     alt={img.alt}
-                    className={`flex-shrink-0 aspect-square object-cover border cursor-pointer hover:opacity-80 transition-opacity ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}
-                    style={{ width: 'calc((100% - 25px) / 4)', borderRadius: 0 }}
+                    className="memo-gallery-image flex-shrink-0 aspect-square object-cover border cursor-pointer hover:opacity-80 transition-opacity"
+                    style={{ width: compact ? 'calc((100% - 5px) / 2)' : 'calc((100% - 15px) / 4)', borderRadius: 0, borderColor: palette.codeBorder ?? palette.surfaceBorder }}
                     onClick={() => setPreviewImage(img.url)}
                   />
                 ))}
@@ -1356,16 +1195,16 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
             ) : (
               // ≤4张：Grid 均分
               <div
-                className={getMemoSecondaryBg(isDark, memo.color) || ''}
-                style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '5px', padding: '5px', ...bgStyle }}
+                className="memo-media-body"
+                style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '5px', padding: '5px', background: themeBg(palette.codeBlockBackground ?? palette.surfaceStrong) }}
               >
                 {images.map((img, i) => (
                   <img
                     key={i}
                     src={getThumbnailUrl(img.url)}
                     alt={img.alt}
-                    className={`w-full aspect-square object-cover border cursor-pointer hover:opacity-80 transition-opacity ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}
-                    style={{ borderRadius: 0 }}
+                    className={`memo-gallery-image w-full object-cover border cursor-pointer hover:opacity-80 transition-opacity ${count === 1 ? 'max-h-80' : 'aspect-square'}`}
+                    style={{ borderRadius: 0, borderColor: palette.codeBorder ?? palette.surfaceBorder }}
                     onClick={() => setPreviewImage(img.url)}
                   />
                 ))}
@@ -1377,25 +1216,33 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
 
       {/* 附件列表 */}
       {fileLinks.length > 0 && (
-        <div className={`mt-3 rounded-lg overflow-hidden border ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'}`}>
+        <div className="memo-media-block memo-attachment-block mt-3 rounded-lg overflow-hidden border" style={{ borderColor: palette.codeBorder ?? palette.surfaceBorder }}>
           <div
-            className={`px-3 py-1.5 text-xs border-b ${getMemoSecondaryBorder(isDark, memo.color) || 'border-[#dad9d4] dark:border-gray-700'} ${getMemoTextColor(isDark, memo.color) || 'text-gray-500 dark:text-gray-400'} ${getMemoSecondaryBg(isDark, memo.color) || ''}`}
-            style={getMemoSecondaryBg(isDark, memo.color) ? undefined : { background: isDark ? '#1f2937' : '#f6f5f0' }}
+            className="memo-media-header px-3 py-1.5 text-xs border-b"
+            style={{
+              color: palette.codeMutedText ?? palette.mutedText,
+              background: themeBg(palette.codeHeaderBackground ?? palette.surface),
+              borderColor: palette.codeBorder ?? palette.surfaceBorder,
+            }}
           >
             附件 ({fileLinks.length})
           </div>
-          <div className={`flex flex-col gap-1 p-3 ${getMemoSecondaryBg(isDark, memo.color) || ''}`} style={getMemoSecondaryBg(isDark, memo.color) ? undefined : { background: isDark ? '#111827' : '#fbfbf8' }}>
+          <div className="memo-media-body flex flex-col gap-1 p-3" style={{ background: themeBg(palette.codeBlockBackground ?? palette.surfaceStrong) }}>
             {fileLinks.map((file, i) => (
               <a
                 key={i}
                 href={file.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-700/50 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors min-w-0"
+                className="memo-attachment-link flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg transition-opacity hover:opacity-80 min-w-0"
+                style={{
+                  color: palette.codeText ?? palette.text,
+                  background: themeBg(palette.plainCodeBlockBackground ?? palette.surface),
+                }}
               >
-                <FileText className="w-3.5 h-3.5 flex-shrink-0 text-gray-400 dark:text-gray-500" />
+                <FileText className="w-3.5 h-3.5 flex-shrink-0" style={{ color: palette.codeMutedText ?? palette.mutedText }} />
                 <span className="truncate">{file.name}</span>
-                <Download className="w-3 h-3 flex-shrink-0 text-gray-400 dark:text-gray-500 ml-auto" />
+                <Download className="w-3 h-3 flex-shrink-0 ml-auto" style={{ color: palette.codeMutedText ?? palette.mutedText }} />
               </a>
             ))}
           </div>
@@ -1411,75 +1258,35 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
               preview={linkPreviews.get(url) ?? null}
               isLoading={!linkPreviews.has(url)}
               error={linkPreviews.has(url) && linkPreviews.get(url) === null}
+              palette={palette}
+              compact={compact}
             />
           ))}
         </div>
       )}
 
-      {tags.length > 0 && (() => {
-        const cardColorDef = memo.color ? MEMO_COLORS.find(cl => cl.value === memo.color) : null;
-        const isCardDark = cardColorDef?.whiteText && !isDark;
-        const isCardMuted = !isDark && cardColorDef && (cardColorDef.value === '#E5DFD2' || cardColorDef.value === '#d1dfe8');
-        return (
-          <div className="flex flex-wrap gap-1.5 mt-3">
-            {tags.map(tag => {
-              const c = TAG_COLORS[tagColorIndex(tag)];
-              // 深色卡片：半透明白色
-              if (isCardDark) {
-                return (
-                  <button
-                    key={tag}
-                    onClick={(e) => { e.stopPropagation(); onTagClick(tag); }}
-                    className="px-2.5 py-0.5 rounded-full cursor-pointer transition-colors"
-                    style={{
-                      fontSize: '11px',
-                      backgroundColor: 'rgba(255,255,255,0.2)',
-                      color: '#ffffff',
-                      border: '1px solid rgba(255,255,255,0.3)',
-                    }}
-                  >
-                    {tag}
-                  </button>
-                );
-              }
-              // 柔和底色卡片：深灰色标签
-              if (isCardMuted) {
-                return (
-                  <button
-                    key={tag}
-                    onClick={(e) => { e.stopPropagation(); onTagClick(tag); }}
-                    className="px-2.5 py-0.5 rounded-full cursor-pointer transition-colors"
-                    style={{
-                      fontSize: '11px',
-                      backgroundColor: 'rgba(0,0,0,0.08)',
-                      color: '#374151',
-                      border: '1px solid rgba(0,0,0,0.12)',
-                    }}
-                  >
-                    {tag}
-                  </button>
-                );
-              }
-              // 默认白色卡片：原有彩色标签
-              return (
-                <button
-                  key={tag}
-                  onClick={(e) => { e.stopPropagation(); onTagClick(tag); }}
-                  className="px-2.5 py-0.5 rounded-full cursor-pointer transition-colors"
-                  style={{
-                    fontSize: '11px',
-                    backgroundColor: isDark ? c.darkBg : c.bg,
-                    color: isDark ? c.darkText : c.text,
-                    border: `1px solid ${isDark ? c.darkBorder : c.border}`,
-                  }}
-                >
-                  {tag}
-                </button>
-              );
-            })}
-          </div>
-        );
-      })()}
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-3">
+          {tags.map(tag => {
+            const c = MEMO_TAG_COLORS[tagColorIndex(tag)];
+            return (
+              <button
+                key={tag}
+                onClick={(e) => { e.stopPropagation(); onTagClick(tag); }}
+                className="px-2.5 py-0.5 rounded-full cursor-pointer transition-opacity hover:opacity-80"
+                style={{
+                  fontSize: '11px',
+                  backgroundColor: isDark ? c.darkBg : c.bg,
+                  color: isDark ? c.darkText : c.text,
+                  border: `1px solid ${isDark ? c.darkBorder : c.border}`,
+                }}
+              >
+                {tag}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* 删除确认弹窗 - portal 到 body 避免被 contain:layout 裁剪 */}
       {showDeleteConfirm && createPortal(
@@ -1566,26 +1373,6 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
             <Sparkles className={`w-3.5 h-3.5 ${memo.ai_excluded ? 'text-gray-400' : 'text-blue-500'}`} />
             {memo.ai_excluded ? '取消不参与 AI' : '不参与 AI'}
           </button>
-          <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
-          <div className="px-3 py-2">
-            <div className="flex items-center gap-1.5">
-              {MEMO_COLORS.map(c => (
-                <button
-                  key={c.value}
-                  onClick={() => handleColorChange(memo.color === c.value ? null : c.value)}
-                  className={`w-5 h-5 rounded-full border transition-transform hover:scale-110 ${
-                    memo.color === c.value
-                      ? 'ring-2 ring-offset-1 dark:ring-offset-gray-800 ' + (c.whiteText ? 'ring-white/70' : 'ring-gray-400 dark:ring-gray-500')
-                      : c.value === '#ffffff'
-                        ? 'border-gray-400 dark:border-gray-500'
-                        : 'border-white/20 dark:border-white/10'
-                  }`}
-                  style={{ backgroundColor: isDark ? c.dark : c.value }}
-                  title={c.name}
-                />
-              ))}
-            </div>
-          </div>
           <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
           <button
             onClick={() => { setShowMenu(false); setShowConvertDialog(true); }}
