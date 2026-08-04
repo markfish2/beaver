@@ -94,11 +94,18 @@ interface MemoCardProps {
 
 const BLOCK_CODE_FONT_SIZE = 'var(--markdown-block-code-font-size)';
 
+// 非默认主题暗色模式返回 transparent，让 CSS 主题变量控制背景
+function themeBg(fallback: string): string {
+  const mdStyle = typeof document !== 'undefined' ? document.documentElement.dataset.markdownStyle : '';
+  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  return (mdStyle && mdStyle !== 'default' && isDark) ? 'transparent' : fallback;
+}
+
 const codeBlockCustomStyle = (palette: MemoCardPalette): React.CSSProperties => ({
   margin: 0,
   borderRadius: '0 0 0.5rem 0.5rem',
   fontSize: BLOCK_CODE_FONT_SIZE,
-  background: palette.codeBlockBackground ?? palette.surfaceStrong,
+  background: themeBg(palette.codeBlockBackground ?? palette.surfaceStrong),
   border: 'none',
   padding: '16px',
   overflowX: 'auto',
@@ -123,7 +130,7 @@ function PlainCodeWithLineNumbers({ code, palette, compact }: { code: string; pa
   return (
     <pre
       className={`markdown-code-body ${compact ? 'p-2.5' : 'p-4'} overflow-x-auto font-mono`}
-      style={{ background: palette.plainCodeBlockBackground ?? palette.surfaceStrong, color: palette.codeText ?? palette.text, margin: 0, fontSize: BLOCK_CODE_FONT_SIZE, paddingLeft: compact ? '5px' : '11px' }}
+      style={{ background: themeBg(palette.plainCodeBlockBackground ?? palette.surfaceStrong), color: palette.codeText ?? palette.text, margin: 0, fontSize: BLOCK_CODE_FONT_SIZE, paddingLeft: compact ? '5px' : '11px' }}
     >
       <code className="block min-w-max" style={{ color: palette.codeText ?? palette.text }}>
         {code.split('\n').map((line, index) => (
@@ -156,7 +163,7 @@ const CodeBlock = memo(function CodeBlock({ className, children, palette, compac
       <div className="markdown-code-block markdown-code-block-root relative rounded-lg overflow-hidden border" style={{ borderColor: palette.codeBorder ?? palette.surfaceBorder }}>
         <div
           className={`markdown-code-header flex items-center justify-between border-b ${compact ? 'px-2 py-1' : 'px-3 py-1.5'}`}
-          style={{ background: palette.codeHeaderBackground ?? palette.surface, borderColor: palette.codeBorder ?? palette.surfaceBorder }}
+          style={{ background: themeBg(palette.codeHeaderBackground ?? palette.surface), borderColor: palette.codeBorder ?? palette.surfaceBorder }}
         >
           <span className="markdown-code-language text-[11px] font-mono" style={{ color: palette.codeMutedText ?? palette.mutedText }}>{language || 'text'}</span>
           <button
@@ -1162,7 +1169,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
               className="memo-media-header px-3 py-1.5 text-xs border-b"
               style={{
                 color: palette.codeMutedText ?? palette.mutedText,
-                background: palette.codeHeaderBackground ?? palette.surface,
+                background: themeBg(palette.codeHeaderBackground ?? palette.surface),
                 borderColor: palette.codeBorder ?? palette.surfaceBorder,
               }}
             >
@@ -1172,7 +1179,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
               // >4张：横向滚动，每张大小和4张一致
               <div
                 className="memo-media-body flex"
-                style={{ gap: '5px', padding: '5px', overflowX: 'auto', background: palette.codeBlockBackground ?? palette.surfaceStrong, ...scrollbarStyle }}
+                style={{ gap: '5px', padding: '5px', overflowX: 'auto', background: themeBg(palette.codeBlockBackground ?? palette.surfaceStrong), ...scrollbarStyle }}
               >
                 {images.map((img, i) => (
                   <img
@@ -1189,7 +1196,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
               // ≤4张：Grid 均分
               <div
                 className="memo-media-body"
-                style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '5px', padding: '5px', background: palette.codeBlockBackground ?? palette.surfaceStrong }}
+                style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '5px', padding: '5px', background: themeBg(palette.codeBlockBackground ?? palette.surfaceStrong) }}
               >
                 {images.map((img, i) => (
                   <img
@@ -1214,13 +1221,13 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
             className="memo-media-header px-3 py-1.5 text-xs border-b"
             style={{
               color: palette.codeMutedText ?? palette.mutedText,
-              background: palette.codeHeaderBackground ?? palette.surface,
+              background: themeBg(palette.codeHeaderBackground ?? palette.surface),
               borderColor: palette.codeBorder ?? palette.surfaceBorder,
             }}
           >
             附件 ({fileLinks.length})
           </div>
-          <div className="memo-media-body flex flex-col gap-1 p-3" style={{ background: palette.codeBlockBackground ?? palette.surfaceStrong }}>
+          <div className="memo-media-body flex flex-col gap-1 p-3" style={{ background: themeBg(palette.codeBlockBackground ?? palette.surfaceStrong) }}>
             {fileLinks.map((file, i) => (
               <a
                 key={i}
@@ -1230,7 +1237,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
                 className="memo-attachment-link flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg transition-opacity hover:opacity-80 min-w-0"
                 style={{
                   color: palette.codeText ?? palette.text,
-                  background: palette.plainCodeBlockBackground ?? palette.surface,
+                  background: themeBg(palette.plainCodeBlockBackground ?? palette.surface),
                 }}
               >
                 <FileText className="w-3.5 h-3.5 flex-shrink-0" style={{ color: palette.codeMutedText ?? palette.mutedText }} />

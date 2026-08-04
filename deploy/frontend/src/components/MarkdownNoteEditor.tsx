@@ -80,9 +80,9 @@ function preprocess(content: string): string {
 const BLOCK_CODE_FONT_SIZE = 'var(--markdown-block-code-font-size)';
 
 const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => {
-  // markamd 主题暗色模式不设置内联背景，让 CSS 变量控制
+  // 非默认主题的暗色模式不设置内联背景，让 CSS 主题变量控制
   const mdStyle = typeof document !== 'undefined' ? document.documentElement.dataset.markdownStyle : '';
-  if (mdStyle === 'markamd' && isDark) {
+  if (mdStyle && mdStyle !== 'default' && isDark) {
     return { margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: BLOCK_CODE_FONT_SIZE, background: 'transparent', border: 'none', padding: '16px', overflowX: 'auto', whiteSpace: 'pre' };
   }
   return { margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: BLOCK_CODE_FONT_SIZE, background: isDark ? '#282c34' : '#fbfbf8', border: 'none', padding: '16px', overflowX: 'auto', whiteSpace: 'pre' };
@@ -117,7 +117,7 @@ function getNodeStartLine(node: unknown): number | null {
 function PlainCodeWithLineNumbers({ code, isDark }: { code: string; isDark: boolean }) {
   const lineNumberStyle = codeLineNumberStyle(isDark);
   const mdStyle = typeof document !== 'undefined' ? document.documentElement.dataset.markdownStyle : '';
-  const plainBg = (mdStyle === 'markamd' && isDark) ? 'transparent' : (isDark ? '#1e1e1e' : '#fafafa');
+  const plainBg = (mdStyle && mdStyle !== 'default' && isDark) ? 'transparent' : (isDark ? '#1e1e1e' : '#fafafa');
   return (
     <pre className="markdown-code-body p-4 overflow-x-auto font-mono" style={{ background: plainBg, margin: 0, fontSize: BLOCK_CODE_FONT_SIZE, paddingLeft: '11px' }}>
       <code className="block min-w-max">
@@ -310,7 +310,7 @@ const CodeBlock = memo(function CodeBlock({ className, children, ...props }: Mar
   if (isBlock) {
     const useHighlight = language && language !== 'markdown' && language !== 'text';
     const mdStyle = typeof document !== 'undefined' ? document.documentElement.dataset.markdownStyle : '';
-    const headerBg = (mdStyle === 'markamd' && isDark) ? 'transparent' : (isDark ? '#282c34' : '#f6f5f0');
+    const headerBg = (mdStyle && mdStyle !== 'default' && isDark) ? 'transparent' : (isDark ? '#282c34' : '#f6f5f0');
     return (
       <div className="markdown-code-block markdown-code-block-root relative rounded-lg overflow-hidden border border-[#dad9d4] dark:border-gray-700">
         <div className="markdown-code-header flex items-center justify-between px-3 py-1.5 border-b border-[#dad9d4] dark:border-gray-700" style={{ background: headerBg }}>
