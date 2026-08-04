@@ -114,11 +114,11 @@ function getNodeStartLine(node: unknown): number | null {
 function PlainCodeWithLineNumbers({ code, isDark }: { code: string; isDark: boolean }) {
   const lineNumberStyle = codeLineNumberStyle(isDark);
   return (
-    <pre className="markdown-code-body p-4 overflow-x-auto font-mono" style={{ background: isDark ? '#1e1e1e' : '#fafafa', margin: 0, fontSize: BLOCK_CODE_FONT_SIZE }}>
+    <pre className="markdown-code-body p-4 overflow-x-auto font-mono" style={{ background: isDark ? '#1e1e1e' : '#fafafa', margin: 0, fontSize: BLOCK_CODE_FONT_SIZE, paddingLeft: '11px' }}>
       <code className="block min-w-max">
         {code.split('\n').map((line, index) => (
           <span key={index} className="flex whitespace-pre">
-            <span style={lineNumberStyle}>{index + 1}</span>
+            <span style={lineNumberStyle}>{String(index + 1).padStart(2, '0')}</span>
             <span>{line || ' '}</span>
           </span>
         ))}
@@ -318,9 +318,10 @@ const CodeBlock = memo(function CodeBlock({ className, children, ...props }: Mar
             language={language}
             PreTag="div"
             className="markdown-code-body"
-            customStyle={{ ...codeBlockCustomStyle(isDark) }}
+            customStyle={{ ...codeBlockCustomStyle(isDark), paddingLeft: '11px' }}
             showLineNumbers
             lineNumberStyle={codeLineNumberStyle(isDark)}
+            lineNumberFormatter={(lineNumber) => String(lineNumber).padStart(2, '0')}
           >
             {code}
           </SyntaxHighlighter>

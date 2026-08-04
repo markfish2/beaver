@@ -123,12 +123,12 @@ function PlainCodeWithLineNumbers({ code, palette, compact }: { code: string; pa
   return (
     <pre
       className={`markdown-code-body ${compact ? 'p-2.5' : 'p-4'} overflow-x-auto font-mono`}
-      style={{ background: palette.plainCodeBlockBackground ?? palette.surfaceStrong, color: palette.codeText ?? palette.text, margin: 0, fontSize: BLOCK_CODE_FONT_SIZE }}
+      style={{ background: palette.plainCodeBlockBackground ?? palette.surfaceStrong, color: palette.codeText ?? palette.text, margin: 0, fontSize: BLOCK_CODE_FONT_SIZE, paddingLeft: compact ? '5px' : '11px' }}
     >
       <code className="block min-w-max" style={{ color: palette.codeText ?? palette.text }}>
         {code.split('\n').map((line, index) => (
           <span key={index} className="flex whitespace-pre">
-            <span style={lineNumberStyle}>{index + 1}</span>
+            <span style={lineNumberStyle}>{String(index + 1).padStart(2, '0')}</span>
             <span>{line || ' '}</span>
           </span>
         ))}
@@ -178,9 +178,10 @@ const CodeBlock = memo(function CodeBlock({ className, children, palette, compac
             language={language}
             PreTag="div"
             className="markdown-code-body"
-            customStyle={{ ...codeBlockCustomStyle(palette), padding: compact ? '10px' : '16px', fontSize: BLOCK_CODE_FONT_SIZE }}
+            customStyle={{ ...codeBlockCustomStyle(palette), padding: compact ? '10px' : '16px', paddingLeft: compact ? '5px' : '11px', fontSize: BLOCK_CODE_FONT_SIZE }}
             showLineNumbers
             lineNumberStyle={codeLineNumberStyle(palette)}
+            lineNumberFormatter={(lineNumber) => String(lineNumber).padStart(2, '0')}
           >
             {code}
           </SyntaxHighlighter>
