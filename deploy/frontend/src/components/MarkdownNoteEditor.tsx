@@ -1,8 +1,10 @@
 import { useState, useRef, useCallback, useEffect, useMemo, memo } from 'react';
+import type { RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
+import { EditorView } from '@codemirror/view';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -52,7 +54,7 @@ import { getNodes, createNode, updateNode, uploadFile, getMemoTags, getDocuments
 import { useDocuments } from '../context/DocumentContext';
 import type { Document } from '../api/data';
 import MermaidBlock from './MermaidBlock';
-import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts } from '../utils/markdownPreprocess';
+import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts, getMarkdownTaskOrdinalAtLine, toggleMarkdownTaskByOrdinal } from '../utils/markdownPreprocess';
 import { getPasteMarkdown } from '../utils/htmlToMarkdown';
 import { localizeMarkdownImages } from '../utils/markdownImageUpload';
 import { useIsDark } from '../hooks/useIsDark';
@@ -75,36 +77,263 @@ function preprocess(content: string): string {
   return normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(normalizeCallouts(content)))));
 }
 
-const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => ({
-  margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: '0.95em',
-  background: isDark ? '#282c34' : '#fbfbf8', border: 'none', padding: '16px',
+const BLOCK_CODE_FONT_SIZE = 'var(--markdown-block-code-font-size)';
+
+const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => {
+  // markamd 主题暗色模式不设置内联背景，让 CSS 变量控制
+  const mdStyle = typeof document !== 'undefined' ? document.documentElement.dataset.markdownStyle : '';
+  if (mdStyle === 'markamd' && isDark) {
+    return { margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: BLOCK_CODE_FONT_SIZE, background: 'transparent', border: 'none', padding: '16px', overflowX: 'auto', whiteSpace: 'pre' };
+  }
+  return { margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: BLOCK_CODE_FONT_SIZE, background: isDark ? '#282c34' : '#fbfbf8', border: 'none', padding: '16px', overflowX: 'auto', whiteSpace: 'pre' };
+};
+
+const codeLineNumberStyle = (isDark: boolean): React.CSSProperties => ({
+  minWidth: '2.25em',
+  paddingRight: '0.9em',
+  marginRight: '0.9em',
+  textAlign: 'right',
+  userSelect: 'none',
+  opacity: 0.58,
+  color: isDark ? '#8b949e' : '#8c959f',
+  borderRight: `1px solid ${isDark ? 'rgba(139,148,158,0.28)' : 'rgba(140,149,159,0.28)'}`,
 });
 
 type MarkdownCodeProps = Parameters<NonNullable<Components['code']>>[0];
+
+type MarkdownAstNodeWithPosition = {
+  position?: {
+    start?: {
+      line?: number;
+    };
+  };
+};
+
+function getNodeStartLine(node: unknown): number | null {
+  const line = (node as MarkdownAstNodeWithPosition | undefined)?.position?.start?.line;
+  return typeof line === 'number' && Number.isFinite(line) ? line : null;
+}
+
+function PlainCodeWithLineNumbers({ code, isDark }: { code: string; isDark: boolean }) {
+  const lineNumberStyle = codeLineNumberStyle(isDark);
+  const mdStyle = typeof document !== 'undefined' ? document.documentElement.dataset.markdownStyle : '';
+  const plainBg = (mdStyle === 'markamd' && isDark) ? 'transparent' : (isDark ? '#1e1e1e' : '#fafafa');
+  return (
+    <pre className="markdown-code-body p-4 overflow-x-auto font-mono" style={{ background: plainBg, margin: 0, fontSize: BLOCK_CODE_FONT_SIZE, paddingLeft: '11px' }}>
+      <code className="block min-w-max">
+        {code.split('\n').map((line, index) => (
+          <span key={index} className="flex whitespace-pre">
+            <span style={lineNumberStyle}>{String(index + 1).padStart(2, '0')}</span>
+            <span>{line || ' '}</span>
+          </span>
+        ))}
+      </code>
+    </pre>
+  );
+}
+
+interface NoteTocItem {
+  id: string;
+  text: string;
+  level: 1 | 2 | 3 | 4 | 5 | 6;
+  sourceLine: number;
+}
+
+const TOC_LEVEL_INDENT: Record<NoteTocItem['level'], number> = {
+  1: 0,
+  2: 12,
+  3: 24,
+  4: 36,
+  5: 48,
+  6: 60,
+};
+
+function stripInlineMarkdown(text: string): string {
+  return text
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[`*_~]/g, '')
+    .replace(/<[^>]+>/g, '')
+    .trim();
+}
+
+function extractMarkdownHeadings(markdown: string): NoteTocItem[] {
+  const lines = markdown.split(/\r?\n/);
+  const items: NoteTocItem[] = [];
+  let inFence = false;
+  let fenceMarker: '```' | '~~~' | null = null;
+
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    const trimmedStart = line.trimStart();
+    const fence = trimmedStart.match(/^(```|~~~)/);
+    if (fence) {
+      const marker = fence[1] as '```' | '~~~';
+      if (!inFence) {
+        inFence = true;
+        fenceMarker = marker;
+      } else if (fenceMarker === marker) {
+        inFence = false;
+        fenceMarker = null;
+      }
+      continue;
+    }
+    if (inFence) continue;
+
+    const match = line.match(/^ {0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);
+    if (!match) continue;
+
+    const text = stripInlineMarkdown(match[2]);
+    if (!text) continue;
+
+    const sourceLine = index + 1;
+    items.push({
+      id: `note-heading-${sourceLine}-${items.length}`,
+      text,
+      level: match[1].length as NoteTocItem['level'],
+      sourceLine,
+    });
+  }
+
+  return items;
+}
+
+function NoteTableOfContents({
+  items,
+  scrollRootRef,
+  onJump,
+  documentId,
+}: {
+  items: NoteTocItem[];
+  scrollRootRef: RefObject<HTMLDivElement | null>;
+  onJump: (item: NoteTocItem) => void;
+  documentId: string;
+}) {
+  const [activeId, setActiveId] = useState<string | null>(items[0]?.id ?? null);
+  const [closedDocumentId, setClosedDocumentId] = useState<string | null>(null);
+  const rafRef = useRef<number>(0);
+  const visibleActiveId = items.some(item => item.id === activeId) ? activeId : items[0]?.id ?? null;
+
+  useEffect(() => {
+    const scrollRoot = scrollRootRef.current;
+    if (!scrollRoot || items.length === 0) return;
+
+    const updateActive = () => {
+      const rootRect = scrollRoot.getBoundingClientRect();
+      const threshold = rootRect.top + rootRect.height * 0.2;
+      let bestId: string | null = null;
+      let bestTop = -Infinity;
+
+      for (const item of items) {
+        const el = scrollRoot.querySelector<HTMLElement>(`[data-note-heading-id="${item.id}"]`);
+        if (!el) continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.top <= threshold && rect.top > bestTop) {
+          bestTop = rect.top;
+          bestId = item.id;
+        }
+      }
+
+      if (bestId) setActiveId(bestId);
+    };
+
+    const onScroll = () => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(updateActive);
+    };
+
+    scrollRoot.addEventListener('scroll', onScroll, { passive: true });
+    updateActive();
+
+    return () => {
+      scrollRoot.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, [items, scrollRootRef]);
+
+  if (items.length === 0 || closedDocumentId === documentId) return null;
+
+  return (
+    <aside className="hidden lg:block w-[180px] shrink-0 border-l border-gray-100 dark:border-gray-800 px-3 py-4">
+      <div
+        className="sticky top-4 max-h-[calc(100vh-7rem)] overflow-hidden flex flex-col rounded-xl border border-gray-100/70 dark:border-gray-800/70 bg-white/55 dark:bg-gray-900/45 backdrop-blur"
+      >
+        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100/70 dark:border-gray-800/70 shrink-0">
+          <span className="text-xs text-gray-400 dark:text-gray-500">目录</span>
+          <button
+            type="button"
+            onClick={() => setClosedDocumentId(documentId)}
+            className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors"
+            title="关闭目录"
+          >
+            <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar py-1">
+          {items.map((item) => {
+            const isActive = visibleActiveId === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onJump(item)}
+                className={`w-full text-left leading-snug py-1.5 pr-2 transition-all duration-150 truncate border-l-2 ${
+                  isActive
+                    ? 'text-blue-600 dark:text-blue-400 border-blue-500 bg-blue-50/60 dark:bg-blue-900/20 font-medium'
+                    : 'text-gray-400 dark:text-gray-500 border-transparent hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50/80 dark:hover:bg-gray-800/50'
+                }`}
+                style={{ paddingLeft: `${8 + TOC_LEVEL_INDENT[item.level]}px`, fontSize: 'calc(var(--outline-font-size, 16px) - 2px)' }}
+                title={item.text}
+              >
+                <span className="text-gray-300 dark:text-gray-600 mr-0.5 inline-block scale-x-[0.33]">—</span>
+                {item.text.length > 14 ? `${item.text.slice(0, 14)}...` : item.text}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </aside>
+  );
+}
 
 const CodeBlock = memo(function CodeBlock({ className, children, ...props }: MarkdownCodeProps) {
   const [copied, setCopied] = useState(false);
   const isDark = useIsDark();
   const match = /language-(\w+)/.exec(className || '');
   const language = match ? match[1] : '';
-  const code = String(children).replace(/\n$/, '');
+  const code = String(children).replace(/\n+$/, '');
   const isBlock = code.includes('\n') || language;
   const handleCopy = useCallback(async () => { await navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000); }, [code]);
 
   if (isBlock) {
     const useHighlight = language && language !== 'markdown' && language !== 'text';
+    const mdStyle = typeof document !== 'undefined' ? document.documentElement.dataset.markdownStyle : '';
+    const headerBg = (mdStyle === 'markamd' && isDark) ? 'transparent' : (isDark ? '#282c34' : '#f6f5f0');
     return (
-      <div className="relative rounded-lg overflow-hidden border border-[#dad9d4] dark:border-gray-700">
-        <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#dad9d4] dark:border-gray-700" style={{ background: isDark ? '#282c34' : '#f6f5f0' }}>
-          <span className={`text-[11px] font-mono ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{language || 'text'}</span>
-          <button onClick={handleCopy} className="flex items-center p-1 rounded-md bg-white/90 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-600 transition-all" title={copied ? '已复制' : '复制代码'}>
+      <div className="markdown-code-block markdown-code-block-root relative rounded-lg overflow-hidden border border-[#dad9d4] dark:border-gray-700">
+        <div className="markdown-code-header flex items-center justify-between px-3 py-1.5 border-b border-[#dad9d4] dark:border-gray-700" style={{ background: headerBg }}>
+          <span className={`markdown-code-language text-[11px] font-mono ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{language || 'text'}</span>
+          <button onClick={handleCopy} className="markdown-code-copy flex items-center p-1 rounded-md bg-white/90 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-600 transition-all" title={copied ? '已复制' : '复制代码'}>
             {copied ? <CheckCheck className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           </button>
         </div>
         {useHighlight ? (
-          <SyntaxHighlighter style={isDark ? oneDark : ghcolors} language={language} PreTag="div" customStyle={{ ...codeBlockCustomStyle(isDark) }}>{code}</SyntaxHighlighter>
+          <SyntaxHighlighter
+            style={isDark ? oneDark : ghcolors}
+            language={language}
+            PreTag="div"
+            className="markdown-code-body"
+            customStyle={{ ...codeBlockCustomStyle(isDark), paddingLeft: '11px' }}
+            showLineNumbers
+            lineNumberStyle={codeLineNumberStyle(isDark)}
+            lineNumberFormatter={(lineNumber) => String(lineNumber).padStart(2, '0')}
+          >
+            {code}
+          </SyntaxHighlighter>
         ) : (
-          <pre className="p-4 overflow-x-auto text-sm font-mono" style={{ background: isDark ? '#1e1e1e' : '#fafafa', margin: 0 }}><code>{code}</code></pre>
+          <PlainCodeWithLineNumbers code={code} isDark={isDark} />
         )}
       </div>
     );
@@ -138,6 +367,13 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedRef = useRef('');
   const pendingSaveRef = useRef<string | null>(null);
+  const previousDocumentIdRef = useRef(documentId);
+
+  useEffect(() => {
+    if (previousDocumentIdRef.current === documentId) return;
+    previousDocumentIdRef.current = documentId;
+    setViewMode(isNew ? 'edit' : 'preview');
+  }, [documentId, isNew]);
 
   const handleDownload = useCallback(() => {
     const currentContent = editorRef.current?.getValue() ?? content;
@@ -341,11 +577,94 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   }, [handleFileUpload, scheduleSave, content]);
 
   const navigate_fn = useNavigate();
+  const processedContent = useMemo(() => preprocess(content), [content]);
+  const renderedHeadings = useMemo(() => extractMarkdownHeadings(processedContent), [processedContent]);
+  const headingIdByLine = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const item of renderedHeadings) map.set(item.sourceLine, item.id);
+    return map;
+  }, [renderedHeadings]);
+  const tocItems = useMemo(() => {
+    const rawHeadings = extractMarkdownHeadings(content);
+    return rawHeadings.map((item, index) => ({
+      ...item,
+      id: renderedHeadings[index]?.id ?? item.id,
+    }));
+  }, [content, renderedHeadings]);
+  const showNoteToc = viewMode !== 'split' && tocItems.length > 0;
+
+  const handleTocJump = useCallback((item: NoteTocItem) => {
+    if (viewMode === 'preview') {
+      const scrollRoot = previewRef.current;
+      const target = scrollRoot?.querySelector<HTMLElement>(`[data-note-heading-id="${item.id}"]`);
+      if (!scrollRoot || !target) return;
+
+      const rootRect = scrollRoot.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const targetTop = scrollRoot.scrollTop + targetRect.top - rootRect.top - 32;
+      scrollRoot.scrollTo({ top: targetTop, behavior: 'smooth' });
+      return;
+    }
+
+    const view = editorRef.current?.view;
+    if (!view) return;
+    const lineNumber = Math.min(Math.max(item.sourceLine, 1), view.state.doc.lines);
+    const line = view.state.doc.line(lineNumber);
+    view.dispatch({
+      selection: { anchor: line.from },
+      effects: EditorView.scrollIntoView(line.from, { y: 'start', yMargin: 72 }),
+    });
+    view.focus();
+  }, [viewMode]);
+
+  const handlePreviewTaskToggle = useCallback((sourceLine: number | null) => {
+    const taskIndex = getMarkdownTaskOrdinalAtLine(processedContent, sourceLine);
+    if (taskIndex == null) return;
+    const nextContent = toggleMarkdownTaskByOrdinal(content, taskIndex);
+    if (nextContent === content) return;
+    setContent(nextContent);
+    const view = editorRef.current?.view;
+    if (view) {
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: nextContent } });
+    }
+    scheduleSave(nextContent);
+  }, [content, processedContent, scheduleSave]);
+
   const mdComponents = useMemo((): Components => ({
     code: (props: MarkdownCodeProps) => {
       const match = /language-(\w+)/.exec(props.className || '');
       if (match && match[1] === 'mermaid') return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
       return <CodeBlock {...props} />;
+    },
+    h1: ({ node, children, ...props }) => {
+      const line = getNodeStartLine(node);
+      const id = line == null ? undefined : headingIdByLine.get(line);
+      return <h1 {...props} id={id} data-note-heading-id={id}>{children}</h1>;
+    },
+    h2: ({ node, children, ...props }) => {
+      const line = getNodeStartLine(node);
+      const id = line == null ? undefined : headingIdByLine.get(line);
+      return <h2 {...props} id={id} data-note-heading-id={id}>{children}</h2>;
+    },
+    h3: ({ node, children, ...props }) => {
+      const line = getNodeStartLine(node);
+      const id = line == null ? undefined : headingIdByLine.get(line);
+      return <h3 {...props} id={id} data-note-heading-id={id}>{children}</h3>;
+    },
+    h4: ({ node, children, ...props }) => {
+      const line = getNodeStartLine(node);
+      const id = line == null ? undefined : headingIdByLine.get(line);
+      return <h4 {...props} id={id} data-note-heading-id={id}>{children}</h4>;
+    },
+    h5: ({ node, children, ...props }) => {
+      const line = getNodeStartLine(node);
+      const id = line == null ? undefined : headingIdByLine.get(line);
+      return <h5 {...props} id={id} data-note-heading-id={id}>{children}</h5>;
+    },
+    h6: ({ node, children, ...props }) => {
+      const line = getNodeStartLine(node);
+      const id = line == null ? undefined : headingIdByLine.get(line);
+      return <h6 {...props} id={id} data-note-heading-id={id}>{children}</h6>;
     },
     img: ({ src, alt }) => <NoteImage src={src} alt={alt} />,
     a: ({ href, children, ...props }) => {
@@ -356,9 +675,62 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
       }
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 underline">{children}</a>;
     },
-  }), [navigate_fn]);
-
-  const processedContent = useMemo(() => preprocess(content), [content]);
+    li: ({ children, ordered, index, node, ...props }) => {
+      void ordered;
+      void index;
+      const liClassName = typeof props.className === 'string' ? props.className : '';
+      if (liClassName.includes('task-list-item')) {
+        const sourceLine = getNodeStartLine(node);
+        return (
+          <li
+            {...props}
+            className={`${liClassName} relative list-none`}
+            style={{ paddingLeft: 22, marginLeft: 0, listStyle: 'none' }}
+            onClick={(e) => {
+              const target = e.target as HTMLElement;
+              const checkbox = target.closest('[role="checkbox"]');
+              if (!checkbox || !e.currentTarget.contains(checkbox)) return;
+              e.preventDefault();
+              e.stopPropagation();
+              handlePreviewTaskToggle(sourceLine);
+            }}
+          >
+            {children}
+          </li>
+        );
+      }
+      return <li {...props}>{children}</li>;
+    },
+    input: ({ checked, type, className, ...props }) => {
+      if (type === 'checkbox') {
+        return (
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={checked}
+            className={`absolute left-0 top-[0.22em] z-20 inline-flex h-[14px] w-[14px] shrink-0 cursor-pointer items-center justify-center rounded-full border transition-colors ${
+              checked
+                ? 'border-[#3f587f] bg-[#3f587f]'
+                : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800'
+            }`}
+            onMouseDown={(e) => {
+              e.preventDefault();
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+            }}
+          >
+            {checked && (
+              <svg viewBox="0 0 16 16" fill="none" className="h-2 w-2 text-white" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3.5 8.5L6.5 11.5L12.5 4.5" />
+              </svg>
+            )}
+          </button>
+        );
+      }
+      return <input type={type} checked={checked} className={className} {...props} />;
+    },
+  }), [handlePreviewTaskToggle, headingIdByLine, navigate_fn]);
 
   // Scroll sync: bidirectional editor ↔ preview in split mode (from markamd)
   useEffect(() => {
@@ -449,9 +821,9 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
         </div>
       </div>
 
-      <div className={`flex-1 min-h-0 ${viewMode === 'split' ? 'flex' : ''}`}>
+      <div className="flex-1 min-h-0 flex">
         {(viewMode === 'edit' || viewMode === 'split') && (
-          <div className={`${viewMode === 'split' ? 'w-1/2 border-r border-gray-200 dark:border-gray-700' : 'w-full h-full'} flex flex-col`}>
+          <div className={`${viewMode === 'split' ? 'w-1/2 border-r border-gray-200 dark:border-gray-700' : 'flex-1 min-w-0 h-full'} flex flex-col`}>
             <div ref={editorScrollRef} className={`flex-1 min-h-0 overflow-y-auto scrollbar-none ${viewMode === 'split' ? '' : 'flex justify-center'}`}>
               <div className={`flex flex-col ${viewMode === 'split' ? 'w-full' : 'w-full max-w-[768px]'}`} onPasteCapture={handlePaste}>
                 <MarkdownEditor ref={editorRef} value={content} onChange={(val) => { setContent(val); scheduleSave(val); }}
@@ -474,13 +846,21 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
           </div>
         )}
         {(viewMode === 'preview' || viewMode === 'split') && (
-          <div ref={previewRef} className={`${viewMode === 'split' ? 'w-1/2' : 'w-full h-full'} overflow-y-auto scrollbar-none flex flex-col items-center`}>
-            <div className="memo-content max-w-[768px] w-full text-base text-gray-700 dark:text-gray-300 p-6" style={{ lineHeight: '1.75' }}>
+          <div ref={previewRef} className={`${viewMode === 'split' ? 'w-1/2' : 'flex-1 min-w-0 h-full'} overflow-y-auto scrollbar-none flex flex-col items-center`}>
+            <div className="markdown-note-preview memo-content max-w-[768px] w-full text-base text-gray-700 dark:text-gray-300 p-6" style={{ lineHeight: '1.75' }}>
               {content.trim() ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]} components={mdComponents}>{processedContent}</ReactMarkdown>
               ) : <p className="text-gray-400 dark:text-gray-500 italic">空笔记</p>}
             </div>
           </div>
+        )}
+        {showNoteToc && (
+          <NoteTableOfContents
+            items={tocItems}
+            scrollRootRef={viewMode === 'preview' ? previewRef : editorScrollRef}
+            onJump={handleTocJump}
+            documentId={documentId}
+          />
         )}
       </div>
 
