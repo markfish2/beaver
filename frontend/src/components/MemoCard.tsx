@@ -201,7 +201,6 @@ const CodeBlock = memo(function CodeBlock({ className, children, palette, compac
             customStyle={{ ...codeBlockCustomStyle(palette), padding: compact ? '10px' : '16px', paddingLeft: compact ? '5px' : '11px', fontSize: BLOCK_CODE_FONT_SIZE }}
             showLineNumbers
             lineNumberStyle={codeLineNumberStyle(palette)}
-            lineNumberFormatter={(lineNumber) => String(lineNumber).padStart(2, '0')}
           >
             {code}
           </SyntaxHighlighter>

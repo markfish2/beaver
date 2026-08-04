@@ -698,3 +698,25 @@ body,
 .react-syntax-highlighter-line-number {
   font-style: normal !important;
 }
+
+/* SyntaxHighlighter 行号：用 counter 实现前导零 */
+.react-syntax-highlighter-line-number {
+  font-style: normal !important;
+  font-variant-numeric: tabular-nums;
+  /* 隐藏原始行号文字，用 counter 替代 */
+  font-size: 0 !important;
+  min-width: 2.25em !important;
+  padding-right: 0.9em !important;
+  margin-right: 0.9em !important;
+  text-align: right !important;
+  opacity: 0.58 !important;
+}
+.react-syntax-highlighter-line-number::after {
+  content: counter(line) decimal-leading-zero;
+  counter-increment: line;
+  font-size: 0.85em;
+}
+/* 在代码块容器重置 counter */
+.markdown-code-body {
+  counter-reset: line;
+}
