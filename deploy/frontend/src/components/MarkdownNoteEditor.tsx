@@ -75,54 +75,16 @@ function preprocess(content: string): string {
   return normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(normalizeCallouts(content)))));
 }
 
-// Pie 主题的 One Dark 风格语法高亮
-const pieOneDark: Record<string, React.CSSProperties> = {
-  'code[class*="language-"]': { color: '#f0f0f0', background: '#292d3e' },
-  'pre[class*="language-"]': { color: '#f0f0f0', background: '#292d3e' },
-  comment: { color: '#676e95' },
-  prolog: { color: '#676e95' },
-  doctype: { color: '#676e95' },
-  cdata: { color: '#676e95' },
-  punctuation: { color: '#89ddff' },
-  property: { color: '#c792ea' },
-  tag: { color: '#ff5370' },
-  boolean: { color: '#f78c6c' },
-  number: { color: '#f78c6c' },
-  constant: { color: '#f78c6c' },
-  symbol: { color: '#f78c6c' },
-  deleted: { color: '#ff5370' },
-  selector: { color: '#c3e88d' },
-  'attr-name': { color: '#ffcb6b' },
-  string: { color: '#c3e88d' },
-  char: { color: '#c3e88d' },
-  builtin: { color: '#ffcb6b' },
-  inserted: { color: '#c3e88d' },
-  operator: { color: '#89ddff' },
-  entity: { color: '#89ddff', cursor: 'help' },
-  url: { color: '#89ddff' },
-  atrule: { color: '#c792ea' },
-  'attr-value': { color: '#c3e88d' },
-  keyword: { color: '#c792ea' },
-  function: { color: '#82aaff' },
-  'class-name': { color: '#ffcb6b' },
-  regex: { color: '#89ddff' },
-  important: { color: '#89ddff', fontWeight: 'bold' },
-  variable: { color: '#f07178' },
-  bold: { fontWeight: 'bold' },
-  italic: { fontStyle: 'italic' },
-};
-
-const codeBlockCustomStyle = (isDark: boolean, isPie: boolean): React.CSSProperties => {
-  if (isPie) return { margin: 0, borderRadius: '0 0 4px 4px', fontSize: '0.9rem', lineHeight: '1.55', background: '#292d3e', border: 'none', padding: '0.8rem 0 1rem', color: '#f0f0f0' };
-  return { margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: '0.95em', background: isDark ? '#282c34' : '#fbfbf8', border: 'none', padding: '16px' };
-};
+const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => ({
+  margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: '0.95em',
+  background: isDark ? '#282c34' : '#fbfbf8', border: 'none', padding: '16px',
+});
 
 type MarkdownCodeProps = Parameters<NonNullable<Components['code']>>[0];
 
 const CodeBlock = memo(function CodeBlock({ className, children, ...props }: MarkdownCodeProps) {
   const [copied, setCopied] = useState(false);
   const isDark = useIsDark();
-  const isPie = typeof document !== 'undefined' && document.documentElement.dataset.mdTheme === 'pie';
   const match = /language-(\w+)/.exec(className || '');
   const language = match ? match[1] : '';
   const code = String(children).replace(/\n$/, '');
@@ -131,27 +93,18 @@ const CodeBlock = memo(function CodeBlock({ className, children, ...props }: Mar
 
   if (isBlock) {
     const useHighlight = language && language !== 'markdown' && language !== 'text';
-    // Pie 主题：统一深色代码块
-    const wrapperBg = isPie ? '#292d3e' : undefined;
-    const wrapperBorder = isPie ? '1px solid #3a3f55' : undefined;
-    const headerBg = isPie ? '#1e2233' : (isDark ? '#282c34' : '#f6f5f0');
-    const headerBorder = isPie ? '#3a3f55' : undefined;
-    const labelColor = isPie ? '#676e95' : undefined;
-    const plainBg = isPie ? '#292d3e' : (isDark ? '#1e1e1e' : '#fafafa');
-    const plainColor = isPie ? '#f0f0f0' : undefined;
-
     return (
-      <div className="relative rounded-lg overflow-hidden" style={{ background: wrapperBg, border: wrapperBorder || undefined, ...(isPie ? {} : { borderWidth: 1, borderStyle: 'solid', borderColor: isDark ? '#374151' : '#dad9d4' }) }}>
-        <div className="flex items-center justify-between px-3 py-1.5" style={{ background: headerBg, borderBottom: headerBorder ? `1px solid ${headerBorder}` : `1px solid ${isDark ? '#374151' : '#dad9d4'}` }}>
-          <span className="text-[11px] font-mono" style={{ color: labelColor || (isDark ? '#9ca3af' : '#6b7280') }}>{language || 'text'}</span>
-          <button onClick={handleCopy} className="flex items-center p-1 rounded-md transition-all" style={{ background: isPie ? '#3a3f55' : (isDark ? '#374151' : 'rgba(255,255,255,0.9)'), border: `1px solid ${isPie ? '#4a4f65' : (isDark ? '#4b5563' : '#e5e7eb')}`, color: isPie ? '#a3a3a3' : (isDark ? '#d1d5db' : '#4b5563') }} title={copied ? '已复制' : '复制代码'}>
+      <div className="relative rounded-lg overflow-hidden border border-[#dad9d4] dark:border-gray-700">
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#dad9d4] dark:border-gray-700" style={{ background: isDark ? '#282c34' : '#f6f5f0' }}>
+          <span className={`text-[11px] font-mono ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{language || 'text'}</span>
+          <button onClick={handleCopy} className="flex items-center p-1 rounded-md bg-white/90 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-200 dark:border-gray-600 transition-all" title={copied ? '已复制' : '复制代码'}>
             {copied ? <CheckCheck className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           </button>
         </div>
         {useHighlight ? (
-          <SyntaxHighlighter style={isPie ? pieOneDark : (isDark ? oneDark : ghcolors)} language={language} PreTag="div" customStyle={{ ...codeBlockCustomStyle(isDark, isPie) }}>{code}</SyntaxHighlighter>
+          <SyntaxHighlighter style={isDark ? oneDark : ghcolors} language={language} PreTag="div" customStyle={{ ...codeBlockCustomStyle(isDark) }}>{code}</SyntaxHighlighter>
         ) : (
-          <pre className="p-4 overflow-x-auto text-sm font-mono" style={{ background: plainBg, color: plainColor, margin: 0 }}><code>{code}</code></pre>
+          <pre className="p-4 overflow-x-auto text-sm font-mono" style={{ background: isDark ? '#1e1e1e' : '#fafafa', margin: 0 }}><code>{code}</code></pre>
         )}
       </div>
     );

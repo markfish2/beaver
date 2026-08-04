@@ -33,11 +33,11 @@
   --markdown-markamd-surface-hover: #45475a;
   --markdown-markamd-code-bg: #202032;
   --markdown-markamd-code-header: #181825;
-  --markdown-markamd-block-code-bg: #f6f8fa;
-  --markdown-markamd-block-code-header: #f6f8fa;
-  --markdown-markamd-block-code-border: #d0d7de;
-  --markdown-markamd-block-code-text: #24292f;
-  --markdown-markamd-block-code-muted: #57606a;
+  --markdown-markamd-block-code-bg: #202032;
+  --markdown-markamd-block-code-header: #181825;
+  --markdown-markamd-block-code-border: #313244;
+  --markdown-markamd-block-code-text: #cdd6f4;
+  --markdown-markamd-block-code-muted: #8b91a8;
   --markdown-markamd-selection: rgba(250, 179, 135, 0.22);
 }
 
