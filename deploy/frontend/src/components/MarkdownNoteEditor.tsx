@@ -341,7 +341,6 @@ const CodeBlock = memo(function CodeBlock({ className, children, ...props }: Mar
             customStyle={{ ...codeBlockCustomStyle(isDark), paddingLeft: '11px' }}
             showLineNumbers
             lineNumberStyle={codeLineNumberStyle(isDark)}
-            lineNumberFormatter={(lineNumber) => String(lineNumber).padStart(2, '0')}
           >
             {code}
           </SyntaxHighlighter>
