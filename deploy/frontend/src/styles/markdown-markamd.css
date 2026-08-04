@@ -31,10 +31,10 @@
   --markdown-markamd-accent: #fab387;
   --markdown-markamd-surface: #181825;
   --markdown-markamd-surface-hover: #45475a;
-  --markdown-markamd-code-bg: transparent;
-  --markdown-markamd-code-header: transparent;
-  --markdown-markamd-block-code-bg: transparent;
-  --markdown-markamd-block-code-header: transparent;
+  --markdown-markamd-code-bg: #202032;
+  --markdown-markamd-code-header: #181825;
+  --markdown-markamd-block-code-bg: #202032;
+  --markdown-markamd-block-code-header: #181825;
   --markdown-markamd-block-code-border: #313244;
   --markdown-markamd-block-code-text: #cdd6f4;
   --markdown-markamd-block-code-muted: #8b91a8;
