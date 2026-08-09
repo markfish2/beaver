@@ -19,9 +19,9 @@ interface FontSettings {
 }
 
 const FONT_SIZE_MAP: Record<FontSize, string> = {
-  small: '12px',
-  medium: '14px',
-  large: '16px'
+  small: '14px',
+  medium: '16px',
+  large: '18px'
 };
 
 const FONT_FAMILY_MAP: Record<FontFamily, string> = {
@@ -62,6 +62,8 @@ const FONT_FAMILY_PREVIEW_TEXT: Record<FontFamily, string> = {
   lxgw: '文楷 Aa 123'
 };
 
+const VISIBLE_FONT_FAMILIES: FontFamily[] = ['system', 'serif', 'lxgw'];
+
 const MARKDOWN_STYLE_LABELS: Record<MarkdownStyle, { name: string; description: string; preview: string }> = {
   default: {
     name: '默认',
@@ -100,21 +102,21 @@ const normalizeFontFamily = (fontFamily: unknown): FontFamily => {
   switch (fontFamily) {
     case 'sans':
     case 'system':
-      return fontFamily;
+      return 'system';
     case 'serif':
     case 'syst':
     case 'fangsong':
     case 'kaiti':
       return 'serif';
     case 'mono':
-      return 'mono';
+      return 'system';
     case 'lxgw':
     case 'wenkai':
     case 'lxgw-wenkai-lite':
       return 'lxgw';
     case 'yahei':
     case 'pingfang':
-      return 'sans';
+      return 'system';
     default:
       return 'system';
   }
@@ -341,6 +343,9 @@ const AppearanceStateProvider = ({
 
     // 应用字体设置
     root.style.setProperty('--outline-font-size', FONT_SIZE_MAP[settings.fontSize]);
+    root.style.setProperty('--prose-font-size', FONT_SIZE_MAP[settings.fontSize]);
+    root.style.setProperty('--reading-font-size', FONT_SIZE_MAP[settings.fontSize]);
+    root.style.setProperty('--writing-font-size', FONT_SIZE_MAP[settings.fontSize]);
     root.style.setProperty('--outline-font-family', FONT_FAMILY_MAP[settings.fontFamily]);
     root.style.setProperty('--prose-font-family', FONT_FAMILY_MAP[settings.fontFamily]);
     root.dataset.markdownStyle = settings.markdownStyle;
@@ -586,7 +591,7 @@ export const FontSettingsPanel = ({
             字体选择
           </label>
           <div className="space-y-1">
-            {(Object.keys(FONT_FAMILY_LABELS) as FontFamily[]).map((family) => (
+            {VISIBLE_FONT_FAMILIES.map((family) => (
               <button
                 key={family}
                 onClick={() => setFontFamily(family)}
@@ -663,7 +668,7 @@ export const FontSettingsPanel = ({
                 字体选择
               </label>
               <div className="space-y-1">
-                {(Object.keys(FONT_FAMILY_LABELS) as FontFamily[]).map((family) => (
+                {VISIBLE_FONT_FAMILIES.map((family) => (
                   <button
                     key={family}
                     onClick={() => setFontFamily(family)}

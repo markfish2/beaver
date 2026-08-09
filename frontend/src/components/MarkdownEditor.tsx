@@ -63,6 +63,7 @@ function buildTheme(isDark: boolean, scrollable: boolean, compact: boolean) {
     '&': { backgroundColor: bg, color: fg, ...rootStyle },
     '.cm-scroller': { fontFamily: 'inherit', lineHeight: '1.75', ...scrollerStyle },
     '.cm-content': {
+      color: fg,
       caretColor: accent,
       fontFamily: 'inherit',
       fontSize: 'inherit',
@@ -76,7 +77,8 @@ function buildTheme(isDark: boolean, scrollable: boolean, compact: boolean) {
     '::selection': { backgroundColor: selectionBg },
     '.cm-gutters': { backgroundColor: gutterBg, color: muted, border: 'none', borderRight: `1px solid ${gutterBorder}` },
     '.cm-activeLineGutter': { backgroundColor: 'transparent' },
-    '.cm-line': { padding: '0' },
+    '.cm-line': { color: fg, padding: '0' },
+    '.cm-placeholder': { color: muted },
     '.cm-foldPlaceholder': { backgroundColor: gutterBg, color: muted, border: 'none' },
     // 搜索面板
     '.cm-panel': { backgroundColor: isDark ? '#1f2937' : '#ffffff', color: fg },

@@ -229,7 +229,7 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
   const showTagPopup = tagState.type === 'tag' && filteredTags.length > 0 && tagState.coords;
   const showMentionPopup = mentionState.type === 'mention' && filteredDocs.length > 0 && mentionState.coords;
   return (
-    <div className="mb-6 relative">
+    <div className="memo-input-shell mb-6 relative">
       <div className="bg-[#ffffff] dark:bg-gray-800/50 rounded-xl overflow-visible border border-[#dad9d4] dark:border-gray-700/40">
         {/* 紧凑 CodeMirror 编辑器 */}
         <div onPasteCapture={handlePaste}>
@@ -241,7 +241,7 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
             minHeight={60}
             maxHeight={400}
             placeholder="记录你的想法... (支持 Markdown，输入 # 添加标签，@ 链接笔记)"
-            className="px-4 pt-4 pb-2"
+            className="memo-editor-surface px-4 pt-4 pb-2"
             extensions={[tmExtension]}
           />
         </div>
@@ -286,7 +286,6 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
             )}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">Ctrl+Enter 发布</span>
             <div className={`flex items-center rounded-lg overflow-hidden transition-colors ${isTodoMode ? 'bg-emerald-600' : content.trim() ? 'bg-gray-900 dark:bg-gray-100' : 'bg-[#ebebeb] dark:bg-gray-700'}`}>
               <button onClick={isTodoMode ? handlePublishAsTodo : handleSubmit} disabled={!content.trim() || isSubmitting}
                 className={`flex items-center gap-1.5 pl-4 pr-2 py-1.5 text-base font-medium transition-colors disabled:cursor-not-allowed ${isTodoMode ? 'text-white hover:bg-emerald-700' : content.trim() ? 'text-white dark:text-gray-900' : 'text-gray-500 dark:text-gray-400'}`}>
@@ -314,7 +313,7 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
           setContent(newContent);
           setShowExpandEditor(false);
         }}>
-          <div className="flex flex-col w-[90vw] max-w-[680px] h-[75vh] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="memo-expanded-editor flex flex-col w-[90vw] max-w-[680px] h-[75vh] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-end px-4 py-2 border-b border-gray-200 dark:border-gray-700 shrink-0 gap-2">
               {uploading && <span className="text-xs text-blue-500 mr-auto">上传中...</span>}
               <button onClick={() => { const newContent = expandEditorRef.current?.getValue() ?? content; setContent(newContent); setShowExpandEditor(false); setTimeout(() => handleSubmit(), 0); }}
@@ -336,7 +335,7 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
                 autoFocus
                 scrollable
                 placeholder="记录你的想法... (支持 Markdown，输入 # 添加标签，@ 链接笔记)"
-                className="h-full"
+                className="memo-editor-surface h-full"
                 extensions={[tmExtension]}
                 toolbar={<EditorToolbar editorRef={expandEditorRef} onUploadImage={() => imageInputRef.current?.click()} onUploadFile={() => fileInputRef.current?.click()} onRecordAudio={handleAudioRecord} isRecording={recorder.isRecording} />}
               />

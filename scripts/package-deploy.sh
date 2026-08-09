@@ -82,6 +82,14 @@ copy_glob_if_exists() {
   return "$found"
 }
 
+normalize_deploy_compose() {
+  local compose_file="$STAGE_DEPLOY/docker-compose.yml"
+  copy_file_if_exists "$ROOT_DIR/docker-compose.yml" "$compose_file"
+  if [ -f "$compose_file" ]; then
+    sed -i 's#\./backend/data:/app/data#./data:/app/data#g' "$compose_file"
+  fi
+}
+
 printf '%s\n' "Overlay backend source..."
 mkdir -p "$STAGE_DEPLOY/backend"
 rm -rf "$STAGE_DEPLOY/backend/app"
@@ -108,6 +116,9 @@ copy_file_if_exists "$ROOT_DIR/frontend/tsconfig.node.json" "$STAGE_DEPLOY/front
 copy_file_if_exists "$ROOT_DIR/frontend/eslint.config.js" "$STAGE_DEPLOY/frontend/eslint.config.js"
 copy_file_if_exists "$ROOT_DIR/frontend/nginx.conf" "$STAGE_DEPLOY/frontend/nginx.conf"
 copy_file_if_exists "$ROOT_DIR/frontend/postcss.config.js" "$STAGE_DEPLOY/frontend/postcss.config.js"
+
+printf '%s\n' "Normalize deploy compose..."
+normalize_deploy_compose
 
 printf '%s\n' "Clean generated files..."
 find "$STAGE_DEPLOY" -type d -name '__pycache__' -prune -exec rm -rf {} +
@@ -142,6 +153,7 @@ map_source_to_package_path() {
     backend/app/*) printf 'deploy/%s\n' "$source_path" ;;
     backend/Dockerfile|backend/requirements.txt|backend/start.sh) printf 'deploy/%s\n' "$source_path" ;;
     backend/migrate_*) printf 'deploy/%s\n' "$source_path" ;;
+    docker-compose.yml) printf 'deploy/docker-compose.yml\n' ;;
     frontend/src/*) printf 'deploy/%s\n' "$source_path" ;;
     frontend/public/*) printf 'deploy/%s\n' "$source_path" ;;
     frontend/scripts/*) printf 'deploy/%s\n' "$source_path" ;;

@@ -301,6 +301,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   const [loadedDoc, setCurrentDoc] = useState<Document | null>(null);
+  const documentsRef = useRef(documents);
+  useEffect(() => { documentsRef.current = documents; }, [documents]);
 
   useEffect(() => {
     const openArchivedProjects = () => {
@@ -916,7 +918,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       // 先从 context 查找，找不到则从 API 获取（日记文档会被 context 过滤）
       // Normalize: compare without hyphens
       const normalizedId = id.replace(/-/g, '');
-      let foundDoc = documents.find(d => d.id.replace(/-/g, '') === normalizedId);
+      let foundDoc = documentsRef.current.find(d => d.id.replace(/-/g, '') === normalizedId);
       if (!foundDoc) {
         try {
           foundDoc = await getDocument(id);
@@ -975,7 +977,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         setIsLoading(false);
       }
     }
-  }, [commands, documents, execute, nodeIdFromUrl, setSearchParams]);
+  }, [commands, execute, nodeIdFromUrl, setSearchParams]);
 
   useEffect(() => {
     if (documentId) {
@@ -2520,11 +2522,12 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden relative bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans h-screen">
+    <div className="flex-1 flex flex-col overflow-hidden relative bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans h-full">
       {!document.documentElement.dataset.mobileLayout
         && currentDoc?.type !== 'note'
         && currentDoc?.type !== 'excalidraw'
         && !isDiaryDoc
+        && viewMode === 'outline'
         && (
           <div className="flex items-center justify-between px-6 bg-gray-50/80 dark:bg-gray-800/50" style={{ minHeight: '3rem', paddingTop: isMobile ? 'env(safe-area-inset-top)' : undefined, boxShadow: '0 2px 8px -3px rgba(0,0,0,0.08)' }}>
             <div className="flex items-center flex-wrap gap-1">

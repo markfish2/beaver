@@ -99,7 +99,7 @@ export const MEMO_COLOR_OPTIONS: MemoColorOption[] = [
       quoteBorder: '#6b7280',
       inlineCodeBackground: '#4a3f1a',
       codeHeaderBackground: '#282c34',
-      codeBlockBackground: '#282c34',
+      codeBlockBackground: '#1e1e1e',
       plainCodeBlockBackground: '#1e1e1e',
       codeBorder: '#374151',
       codeText: '#d1d5db',

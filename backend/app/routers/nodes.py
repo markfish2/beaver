@@ -8,7 +8,7 @@ from ..dependencies import get_current_user_flexible as get_current_user
 router = APIRouter()
 
 # Batch operation size limit to prevent OOM and database lock contention
-BATCH_SIZE_LIMIT = 500
+BATCH_SIZE_LIMIT = 2000
 
 @router.post("/", response_model=schemas.Node)
 def create_node(node: schemas.NodeCreate, db: Session = Depends(get_db), current_user: schemas.User = Depends(get_current_user)):

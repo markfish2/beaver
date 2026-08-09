@@ -28,3 +28,23 @@ scripts/package-deploy.sh --verify full
 - 前端 Docker build
 
 日常只要求“打包新镜像”时，默认使用 fast 模式，避免每次重复跑完整 Docker 构建。只有改 Dockerfile、依赖、构建脚本、迁移流程，或明确要求完整验证时，才使用 full 模式。
+
+## 预构建镜像上传流程
+
+腾讯云服务器构建较慢时，优先在本地构建镜像并导出：
+
+```bash
+docker compose build backend frontend
+docker save -o docker-images.tar beaver-backend:latest beaver-frontend:latest
+gzip -f docker-images.tar
+```
+
+上传 `deploy-package-new.tar.gz` 和 `docker-images.tar.gz` 到服务器后：
+
+```bash
+cd /www/wwwroot/beaver
+gzip -dc docker-images.tar.gz | docker load
+docker compose up -d
+```
+
+这种方式服务器不要执行 `docker compose up -d --build`。服务器必须长期保留 `data/` 目录，尤其是 `data/app.db`、`data/uploads/`、`data/excalidraw/`、`data/skill/`。部署包内的 `docker-compose.yml` 必须保持 `./data:/app/data`，不得覆盖服务器数据目录。

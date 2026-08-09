@@ -254,16 +254,27 @@ body,
 
 @layer utilities {
   .custom-scrollbar::-webkit-scrollbar {
-    width: 3px;
+    width: 6px;
+    height: 6px;
   }
   .custom-scrollbar::-webkit-scrollbar-track {
     background: transparent;
+    border-radius: 999px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-gray-200 dark:bg-gray-700 rounded;
+    @apply bg-gray-300 dark:bg-gray-600 rounded;
+    border: 1px solid transparent;
+    background-clip: padding-box;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-300 dark:bg-gray-600;
+    @apply bg-gray-400 dark:bg-gray-500;
+  }
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+  .dark .custom-scrollbar {
+    scrollbar-color: #4b5563 transparent;
   }
 
   .scrollbar-none::-webkit-scrollbar {
@@ -273,6 +284,94 @@ body,
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+}
+
+/* 编辑器和大代码块统一使用窄滚动条，保留必要的横向滚动能力。 */
+.cm-scroller,
+.memo-content pre,
+.memo-content .markdown-code-body,
+.markdown-note-preview pre,
+.prose pre {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.dark .cm-scroller,
+.dark .memo-content pre,
+.dark .memo-content .markdown-code-body,
+.dark .markdown-note-preview pre,
+.dark .prose pre {
+  scrollbar-color: #4b5563 transparent;
+}
+
+.cm-scroller::-webkit-scrollbar,
+.memo-content pre::-webkit-scrollbar,
+.memo-content .markdown-code-body::-webkit-scrollbar,
+.markdown-note-preview pre::-webkit-scrollbar,
+.prose pre::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.cm-scroller::-webkit-scrollbar-track,
+.memo-content pre::-webkit-scrollbar-track,
+.memo-content .markdown-code-body::-webkit-scrollbar-track,
+.markdown-note-preview pre::-webkit-scrollbar-track,
+.prose pre::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.cm-scroller::-webkit-scrollbar-thumb,
+.memo-content pre::-webkit-scrollbar-thumb,
+.memo-content .markdown-code-body::-webkit-scrollbar-thumb,
+.markdown-note-preview pre::-webkit-scrollbar-thumb,
+.prose pre::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.dark .cm-scroller::-webkit-scrollbar-thumb,
+.dark .memo-content pre::-webkit-scrollbar-thumb,
+.dark .memo-content .markdown-code-body::-webkit-scrollbar-thumb,
+.dark .markdown-note-preview pre::-webkit-scrollbar-thumb,
+.dark .prose pre::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  background-clip: padding-box;
+}
+
+.cm-scroller::-webkit-scrollbar-thumb:hover,
+.memo-content pre::-webkit-scrollbar-thumb:hover,
+.memo-content .markdown-code-body::-webkit-scrollbar-thumb:hover,
+.markdown-note-preview pre::-webkit-scrollbar-thumb:hover,
+.prose pre::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+  background-clip: padding-box;
+}
+
+.dark .cm-scroller::-webkit-scrollbar-thumb:hover,
+.dark .memo-content pre::-webkit-scrollbar-thumb:hover,
+.dark .memo-content .markdown-code-body::-webkit-scrollbar-thumb:hover,
+.dark .markdown-note-preview pre::-webkit-scrollbar-thumb:hover,
+.dark .prose pre::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+  background-clip: padding-box;
+}
+
+.memo-input-shell,
+.memo-expanded-editor {
+  --memo-editor-scroll-thumb: #cbd5e1;
+}
+
+.dark .memo-input-shell,
+.dark .memo-expanded-editor {
+  --memo-editor-scroll-thumb: #4b5563;
+}
+
+.memo-editor-surface .cm-scroller::-webkit-scrollbar-thumb {
+  background: var(--memo-editor-scroll-thumb);
 }
 
 /* 高亮节点样式 - 文字保持默认颜色（亮色模式黑色，暗色模式白色） */
@@ -442,9 +541,9 @@ body,
   align-items: center;
   justify-content: center;
   vertical-align: middle;
-  top: 0.22em !important;
+  top: 50% !important;
   line-height: 1 !important;
-  transform: none !important;
+  transform: translateY(-50%) !important;
 }
 
 .memo-content .markdown-code-block,
@@ -458,6 +557,7 @@ body,
 :root[data-markdown-style] .memo-content pre.markdown-code-body {
   max-width: 100%;
   font-size: var(--markdown-block-code-font-size) !important;
+  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
   overflow-x: auto !important;
   overflow-y: hidden;
   white-space: pre !important;
@@ -468,6 +568,7 @@ body,
 .memo-content .markdown-code-body *,
 :root[data-markdown-style] .memo-content .markdown-code-body * {
   font-size: inherit !important;
+  font-family: inherit !important;
 }
 
 .memo-content .markdown-code-body pre,
@@ -559,6 +660,60 @@ body,
 
 /* Excalidraw: 隐藏工具栏下方的操作提示 */
 .excalidraw .HintViewer { display: none !important; }
+
+/* 幻灯片播放时将画布提升到窗口层级，彻底隔离编辑器工具栏。 */
+.excalidraw-editor-wrapper.presentation-active {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 1000 !important;
+  background: #fff;
+}
+
+.presentation-active .presentation-editor-chrome {
+  display: none !important;
+}
+
+.presentation-active .excalidraw-canvas-container {
+  flex: 1 !important;
+  min-height: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.presentation-active .excalidraw .layer-ui__wrapper,
+.presentation-active .excalidraw .App-menu_top,
+.presentation-active .excalidraw .App-menu_bottom,
+.presentation-active .excalidraw .App-toolbar,
+.presentation-active .excalidraw .App-top-bar,
+.presentation-active .excalidraw .FixedSideContainer,
+.presentation-active .excalidraw .HintViewer {
+  visibility: hidden !important;
+  display: none !important;
+  pointer-events: none !important;
+}
+
+.presentation-chip {
+  min-height: 28px;
+  height: 28px;
+  color: rgba(39, 39, 42, 0.9);
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  border-radius: 9999px;
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+
+/* SVG 按画框比例适配窗口时，遮住两侧的透明留白，避免底层画布穿透。 */
+.presentation-stage {
+  background: #fff;
+}
+
+.presentation-chip:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.presentation-controls {
+  color: rgba(39, 39, 42, 0.9);
+}
 
 
 
@@ -700,21 +855,52 @@ body,
 }
 
 /* SyntaxHighlighter 行号：用 counter 实现前导零 */
-.react-syntax-highlighter-line-number {
+.memo-content .markdown-code-body .react-syntax-highlighter-line-number,
+:root[data-markdown-style] .memo-content .markdown-code-body .react-syntax-highlighter-line-number {
+  position: relative;
+  display: inline-block !important;
   font-style: normal !important;
   font-variant-numeric: tabular-nums;
-  /* 隐藏原始行号文字，用 counter 替代 */
-  font-size: 0 !important;
+  color: transparent !important;
+  border-right-color: transparent !important;
   min-width: 2.25em !important;
   padding-right: 0.9em !important;
   margin-right: 0.9em !important;
   text-align: right !important;
   opacity: 0.58 !important;
 }
-.react-syntax-highlighter-line-number::after {
-  content: counter(line) decimal-leading-zero;
+.memo-content .markdown-code-body .react-syntax-highlighter-line-number::after,
+:root[data-markdown-style] .memo-content .markdown-code-body .react-syntax-highlighter-line-number::after {
+  content: counter(line, decimal-leading-zero);
   counter-increment: line;
-  font-size: 0.85em;
+  position: absolute;
+  right: 0.9em;
+  top: 0;
+  color: #8c959f;
+  font-size: inherit !important;
+}
+.dark .memo-content .markdown-code-body .react-syntax-highlighter-line-number::after,
+:root.dark[data-markdown-style] .memo-content .markdown-code-body .react-syntax-highlighter-line-number::after {
+  color: #8b949e;
+}
+.memo-content .markdown-code-body:has(.react-syntax-highlighter-line-number),
+:root[data-markdown-style] .memo-content .markdown-code-body:has(.react-syntax-highlighter-line-number) {
+  position: relative;
+}
+.memo-content .markdown-code-body:has(.react-syntax-highlighter-line-number)::before,
+:root[data-markdown-style] .memo-content .markdown-code-body:has(.react-syntax-highlighter-line-number)::before {
+  content: "";
+  position: absolute;
+  top: 16px;
+  bottom: 16px;
+  left: calc(11px + (var(--markdown-block-code-font-size, 13px) * 2.25));
+  width: 1px;
+  background: rgba(140, 149, 159, 0.28);
+  pointer-events: none;
+}
+.dark .memo-content .markdown-code-body:has(.react-syntax-highlighter-line-number)::before,
+:root.dark[data-markdown-style] .memo-content .markdown-code-body:has(.react-syntax-highlighter-line-number)::before {
+  background: rgba(139, 148, 158, 0.28);
 }
 /* 在代码块容器重置 counter */
 .markdown-code-body {

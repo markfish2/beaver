@@ -1,22 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, FileText, Folder, ListTree, PenTool, MoreHorizontal, Star, Copy, Trash2, Pencil } from 'lucide-react';
+import { ChevronRight, FileText, ListTree, Frame, MoreHorizontal, Star, Copy, Trash2, Pencil } from 'lucide-react';
 import { useDocuments } from '../../context/DocumentContext';
 import { deleteDocument, updateDocument, copyDocument } from '../../api/data';
 import DeleteConfirmDialog from '../DeleteConfirmDialog';
 import type { Document } from '../../api/data';
 import { createMobileDocumentState } from '../../utils/mobileNavigation';
+import FolderIcon from '../FolderIcon';
 
 interface FileTreeViewProps {
   starredOnly?: boolean;
 }
 
 function getDocIcon(doc: Document) {
-  if (doc.type === 'folder') return <Folder className="w-4 h-4 text-yellow-600 dark:text-yellow-500 shrink-0" />;
-  if (doc.type === 'note') return <FileText className="w-4 h-4 text-gray-500 dark:text-gray-400 shrink-0" />;
-  if (doc.type === 'excalidraw') return <PenTool className="w-4 h-4 text-gray-500 dark:text-gray-400 shrink-0" />;
+  if (doc.type === 'folder') return <FolderIcon className="w-5 h-5 text-gray-500 dark:text-gray-400 shrink-0" />;
+  if (doc.type === 'note') return <FileText className="w-5 h-5 text-gray-500 dark:text-gray-400 shrink-0" />;
+  if (doc.type === 'excalidraw') return <Frame className="w-5 h-5 text-gray-500 dark:text-gray-400 shrink-0" />;
   // default: document (outline)
-  return <ListTree className="w-4 h-4 text-gray-500 dark:text-gray-400 shrink-0" />;
+  return <ListTree className="w-5 h-5 text-gray-500 dark:text-gray-400 shrink-0" />;
 }
 
 export default function FileTreeView({ starredOnly = false }: FileTreeViewProps) {
@@ -139,14 +140,14 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
         {/* Folder guide line */}
         {depth > 0 && (
           <div
-            className="absolute top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700"
-            style={{ left: `${8 + (depth - 1) * 10 + 7}px` }}
+            className="absolute top-0 bottom-0 z-10 w-px bg-gray-300 dark:bg-gray-600 pointer-events-none"
+            style={{ left: `${8 + (depth - 1) * 6 + 7}px` }}
           />
         )}
 
         <div
-          className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 active:bg-gray-200 dark:active:bg-gray-700 transition-colors group relative"
-          style={{ paddingLeft: `${8 + depth * 10}px` }}
+          className="relative z-0 flex items-center gap-2 px-2 py-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 active:bg-gray-200 dark:active:bg-gray-700 transition-colors group"
+          style={{ paddingLeft: `${8 + depth * 6}px` }}
           onClick={() => handleDocumentClick(doc)}
           onContextMenu={(e) => handleContextMenu(e, doc.id)}
           onTouchStart={(e) => {
@@ -157,7 +158,10 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
           }}
         >
           {isFolder ? (
-            <ChevronRight className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+            <>
+              <ChevronRight className={`w-[18px] h-[18px] text-gray-400 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+              {getDocIcon(doc)}
+            </>
           ) : (
             <span className="ml-[18px]">{getDocIcon(doc)}</span>
           )}
@@ -169,12 +173,12 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
               onChange={(e) => setEditTitle(e.target.value)}
               onBlur={handleSaveRename}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRename(); if (e.key === 'Escape') setEditingId(null); }}
-              className="flex-1 text-sm bg-transparent border-b border-blue-400 outline-none text-gray-800 dark:text-gray-200"
+              className="flex-1 text-base bg-transparent border-b border-blue-400 outline-none text-gray-800 dark:text-gray-200"
               autoFocus
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <span className="flex-1 text-sm text-gray-700 dark:text-gray-300 truncate">
+            <span className={`flex-1 text-base text-gray-700 dark:text-gray-300 truncate ${isFolder ? 'font-medium' : ''}`}>
               {doc.title || '无标题'}
             </span>
           )}
@@ -190,9 +194,9 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
               e.stopPropagation();
               setContextMenu({ docId: doc.id, x: e.currentTarget.getBoundingClientRect().right - 160, y: e.currentTarget.getBoundingClientRect().bottom + 4 });
             }}
-            className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
           >
-            <MoreHorizontal className="w-4 h-4" />
+            <MoreHorizontal className="w-[18px] h-[18px]" />
           </button>
         </div>
       </div>
@@ -218,8 +222,12 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
         <div key={doc.id}>
           {renderDocItem(doc, depth)}
           {isFolder && isExpanded && hasChildren && (
-            <div className="relative">
-              {renderTree(doc.id, depth + 1)}
+            <div className="relative z-0">
+              <div
+                className="absolute top-0 bottom-0 z-10 w-px bg-gray-300 dark:bg-gray-600 pointer-events-none"
+                style={{ left: `${8 + depth * 6 + 7}px` }}
+              />
+              <div className="relative">{renderTree(doc.id, depth + 1)}</div>
             </div>
           )}
         </div>

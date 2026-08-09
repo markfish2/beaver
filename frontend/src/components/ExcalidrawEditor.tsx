@@ -2,7 +2,7 @@ import React, { useRef, useState, useCallback, useEffect, useMemo, Component, Su
 import type { ReactNode, ErrorInfo } from 'react';
 import { Excalidraw, MainMenu, exportToBlob, exportToSvg } from "@excalidraw/excalidraw";
 import type { AppState, BinaryFiles, ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from "@excalidraw/excalidraw/types";
-import { Download, Image, FileJson, FileText, Loader2, StickyNote } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, FileJson, FileText, GripVertical, Image, Loader2, Play, Presentation, StickyNote, Wand2, X } from 'lucide-react';
 import { getExcalidrawDataFresh, updateExcalidrawData, loadExcalidrawFiles, VersionConflictError } from '../api/excalidraw';
 import NoteEmbedContent from './NoteEmbedContent';
 import NotePickerDialog from './NotePickerDialog';
@@ -19,9 +19,68 @@ function omitViewportState<T extends Record<string, unknown>>(appState: T): T {
   return result;
 }
 
-function fingerprint(elements: ReadonlyArray<{ id: string; version: number }>): string {
-  const lastElement = elements[elements.length - 1];
-  return `${elements.length}:${lastElement?.id || ''}:${lastElement?.version || ''}`;
+function fingerprint(elements: ReadonlyArray<{ id: string; version: number; type?: string; name?: string | null }>): string {
+  return elements
+    .map(element => `${element.id}:${element.version}:${element.type || ''}:${element.name || ''}`)
+    .join('|');
+}
+
+interface PresentationSlide {
+  frameId: string;
+  /** Legacy field retained when loading old scenes; frame.name is authoritative. */
+  title?: string;
+  order: number;
+  visible: boolean;
+}
+
+interface PresentationConfig {
+  slides: PresentationSlide[];
+}
+
+type FrameElement = {
+  id: string;
+  type: 'frame' | 'magicframe';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  name?: string | null;
+};
+
+const isFrameElement = (element: { type?: string; id?: string; isDeleted?: boolean }): element is FrameElement =>
+  element.isDeleted !== true &&
+  (element.type === 'frame' || element.type === 'magicframe') &&
+  typeof element.id === 'string';
+
+const getFrameElements = (elements: ReadonlyArray<{ type?: string; id?: string; isDeleted?: boolean }>): FrameElement[] =>
+  elements.filter(isFrameElement);
+
+const sortFramesByPosition = (frames: FrameElement[]) => [...frames].sort((a, b) => a.y - b.y || a.x - b.x);
+
+function normalizePresentation(config: Partial<PresentationConfig> | null | undefined, frames: FrameElement[]): PresentationConfig {
+  const frameMap = new Map(frames.map(frame => [frame.id, frame]));
+  const configured = Array.isArray(config?.slides) ? config.slides : [];
+  const validSlides = configured
+    .filter(slide => slide && typeof slide.frameId === 'string' && frameMap.has(slide.frameId))
+    .sort((a, b) => a.order - b.order)
+    .map((slide, index) => ({
+      frameId: slide.frameId,
+      order: index + 1,
+      visible: slide.visible !== false,
+    }));
+  const existingIds = new Set(validSlides.map(slide => slide.frameId));
+  const missingSlides = sortFramesByPosition(frames)
+    .filter(frame => !existingIds.has(frame.id))
+    .map((frame, index) => ({
+      frameId: frame.id,
+      order: validSlides.length + index + 1,
+      visible: true,
+    }));
+  return { slides: [...validSlides, ...missingSlides] };
+}
+
+function getFrameTitle(frame: FrameElement, pageIndex: number): string {
+  return frame.name?.trim() || `未命名画框 ${pageIndex + 1}`;
 }
 
 // Error boundary to catch Excalidraw rendering errors (React 19 compatibility)
@@ -100,13 +159,20 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   type SceneElements = ReturnType<ExcalidrawImperativeAPI['getSceneElements']>;
   type SceneElement = SceneElements[number];
   type SaveData = (elements: SceneElements, appState: AppState) => void;
-  type ScenePayload = { elements: SceneElements; appState: Partial<AppState>; files?: BinaryFiles };
+  type ScenePayload = { elements: SceneElements; appState: Partial<AppState>; files?: BinaryFiles; presentation?: PresentationConfig };
 
   const [initialData, setInitialData] = useState<ExcalidrawInitialDataState | null>(null);
   const [mobilePreview, setMobilePreview] = useState<'idle' | 'ready' | 'error'>('idle');
   const mobilePreviewRef = useRef<HTMLDivElement>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error' | 'conflict'>('idle');
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showPresentationPanel, setShowPresentationPanel] = useState(false);
+  const [isPresenting, setIsPresenting] = useState(false);
+  const [presentationIndex, setPresentationIndex] = useState(0);
+  const [presentationSceneVersion, setPresentationSceneVersion] = useState(0);
+  const [frameElements, setFrameElements] = useState<FrameElement[]>([]);
+  const [presentation, setPresentation] = useState<PresentationConfig>({ slides: [] });
+  const [dragOverSlideId, setDragOverSlideId] = useState<string | null>(null);
   const [localTitle, setLocalTitle] = useState(title);
   const isMobile = usePhoneLayout();
   const [showNotePicker, setShowNotePicker] = useState(false);
@@ -255,6 +321,17 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     pendingElementsRef.current = null;
     versionRef.current = 0;
     pendingAppStateRef.current = null;
+    sceneElementsRef.current = [];
+    frameSignatureRef.current = '';
+    setFrameElements([]);
+    presentationRef.current = { slides: [] };
+    setPresentation({ slides: [] });
+    setShowPresentationPanel(false);
+    setIsPresenting(false);
+    setPresentationSceneVersion(0);
+    presentationSceneFingerprintRef.current = '';
+    presentationExportCacheRef.current.clear();
+    presentationExportInFlightRef.current.clear();
     saveDataRef.current?.cancel?.();
 
     const loadData = async () => {
@@ -266,6 +343,12 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         if (data?.scene_data) {
           versionRef.current = data.version || 0;
           const sceneData = JSON.parse(data.scene_data);
+          const loadedFrames = getFrameElements(sceneData.elements || []);
+          const loadedPresentation = normalizePresentation(sceneData.presentation, loadedFrames);
+          sceneElementsRef.current = sceneData.elements || [];
+          presentationRef.current = loadedPresentation;
+          setFrameElements(loadedFrames);
+          setPresentation(loadedPresentation);
           if (sceneData.elements?.length > 0) {
             const restAppState = omitViewportState(sceneData.appState || {});
 
@@ -315,13 +398,14 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
       const elements = pendingElementsRef.current;
       const appState = pendingAppStateRef.current;
       // 有未保存的变更时，弹出确认对话框
-      if (hasUnsavedChangesRef.current && elements && elements.length > 0) {
+      if (hasUnsavedChangesRef.current && elements) {
         e.preventDefault();
         e.returnValue = '画布有未保存的更改，确定要离开吗？';
         // 同时尝试保存
         const payload: ScenePayload = {
           elements,
           appState: { viewBackgroundColor: appState?.viewBackgroundColor, gridSize: appState?.gridSize },
+          presentation: presentationRef.current,
         };
         if (filesDirtyRef.current && filesRef.current) {
           payload.files = filesRef.current;
@@ -341,10 +425,11 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
       // 组件卸载时用 fetch keepalive 同步保存（async flushSave 在卸载时无法完成）
       const elements = pendingElementsRef.current;
       const appState = pendingAppStateRef.current;
-      if (hasUnsavedChangesRef.current && elements && elements.length > 0) {
+      if (hasUnsavedChangesRef.current && elements) {
         const payload: ScenePayload = {
           elements,
           appState: { viewBackgroundColor: appState?.viewBackgroundColor, gridSize: appState?.gridSize },
+          presentation: presentationRef.current,
         };
         if (filesDirtyRef.current && filesRef.current) {
           payload.files = filesRef.current;
@@ -395,6 +480,16 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   const filesDirtyRef = useRef(false);
   const pendingElementsRef = useRef<SceneElements | null>(null);
   const pendingAppStateRef = useRef<AppState | null>(null);
+  const presentationRef = useRef<PresentationConfig>({ slides: [] });
+  const sceneElementsRef = useRef<SceneElements>([]);
+  const frameSignatureRef = useRef('');
+  const previousViewportRef = useRef<Partial<AppState> | null>(null);
+  const draggedSlideRef = useRef<string | null>(null);
+  const touchStartXRef = useRef<number | null>(null);
+  const presentationPreviewRef = useRef<HTMLDivElement>(null);
+  const presentationSceneFingerprintRef = useRef('');
+  const presentationExportCacheRef = useRef(new Map<string, string>());
+  const presentationExportInFlightRef = useRef(new Map<string, Promise<string>>());
 
   // 移动端只查看画布时生成隔离 SVG，不挂载完整 Excalidraw React UI。
   // SVG 直接挂载到 DOM，避免 iOS/部分 Android WebView 无法解码 Blob SVG。
@@ -504,13 +599,13 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   const flushSave = useCallback(async () => {
     const elements = pendingElementsRef.current;
     const appState = pendingAppStateRef.current;
-    if (!elements || elements.length === 0) return;
+    if (!elements) return;
 
     // 如果 debounce 正在保存，等待它完成后再检查是否有更新的数据
     if (isSavingRef.current) {
       await new Promise<void>(resolve => { saveCompleteRef.current = resolve; });
       // debounce 完成后，检查是否还有更新的数据需要保存
-      if (!pendingElementsRef.current || pendingElementsRef.current.length === 0) return;
+      if (!pendingElementsRef.current) return;
       return flushSave(); // 递归：用最新数据再保存一次
     }
 
@@ -522,6 +617,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           viewBackgroundColor: appState?.viewBackgroundColor,
           gridSize: appState?.gridSize,
         },
+        presentation: presentationRef.current,
       };
       if (filesDirtyRef.current && filesRef.current) {
         payload.files = filesRef.current;
@@ -559,6 +655,14 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
       if (data?.scene_data) {
         const sceneData = JSON.parse(data.scene_data);
         versionRef.current = data.version || 0;
+        presentationSceneFingerprintRef.current = '';
+        presentationExportCacheRef.current.clear();
+        const loadedFrames = getFrameElements(sceneData.elements || []);
+        const loadedPresentation = normalizePresentation(sceneData.presentation, loadedFrames);
+        sceneElementsRef.current = sceneData.elements || [];
+        presentationRef.current = loadedPresentation;
+        setFrameElements(loadedFrames);
+        setPresentation(loadedPresentation);
         filesDirtyRef.current = false;
         const restAppState = omitViewportState(sceneData.appState || {});
         // 用 updateScene 更新已挂载的 Excalidraw
@@ -597,7 +701,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   const saveData = useMemo(
     () =>
       debounce(async (elements: SceneElements, appState: AppState) => {
-        if (!elements || elements.length === 0) return;
+        if (!elements) return;
         if (isSavingRef.current) return;
 
         isSavingRef.current = true;
@@ -619,6 +723,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
               viewBackgroundColor: appState.viewBackgroundColor,
               gridSize: appState.gridSize,
             },
+            presentation: presentationRef.current,
           };
           if (filesDirtyRef.current && filesRef.current) {
             payload.files = filesRef.current;
@@ -717,9 +822,37 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     saveDataRef.current = saveData;
     flushSaveRef.current = flushSave;
   }, [saveData, flushSave]);
+
+  const syncPresentationFrames = useCallback((elements: ReadonlyArray<{ type?: string; id?: string; isDeleted?: boolean }>) => {
+    const nextFrames = getFrameElements(elements);
+    const nextFrameSignature = nextFrames
+      .map(frame => `${frame.id}:${frame.x}:${frame.y}:${frame.width}:${frame.height}:${frame.name || ''}`)
+      .join('|');
+    if (nextFrameSignature === frameSignatureRef.current) return;
+    frameSignatureRef.current = nextFrameSignature;
+    setFrameElements(nextFrames);
+    const nextPresentation = normalizePresentation(presentationRef.current, nextFrames);
+    presentationRef.current = nextPresentation;
+    setPresentation(nextPresentation);
+  }, []);
+
+  // Excalidraw 的 onChange 可能晚于删除操作触发，打开面板时以当前场景校正一次。
+  useEffect(() => {
+    if (!showPresentationPanel || !excalidrawRef.current) return;
+    syncPresentationFrames(excalidrawRef.current.getSceneElements());
+  }, [showPresentationPanel, syncPresentationFrames]);
+
   const handleChange = useCallback(
     (elements: SceneElements, appState: AppState, files: BinaryFiles) => {
-      if (elements && elements.length > 0) {
+      if (elements) {
+        sceneElementsRef.current = elements;
+        const nextSceneFingerprint = fingerprint(elements);
+        if (nextSceneFingerprint !== presentationSceneFingerprintRef.current) {
+          presentationSceneFingerprintRef.current = nextSceneFingerprint;
+          presentationExportCacheRef.current.clear();
+          setPresentationSceneVersion(version => version + 1);
+        }
+        syncPresentationFrames(elements);
         // 记录最新数据（用于页面关闭时立即保存）
         pendingElementsRef.current = elements;
         pendingAppStateRef.current = appState;
@@ -736,7 +869,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         }
       }
     },
-    []
+    [syncPresentationFrames]
   );
 
   // 导出功能
@@ -772,13 +905,193 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
       case 'json': {
         const elements = api.getSceneElements();
         const appState = api.getAppState();
-        const jsonData = JSON.stringify({ elements, appState }, null, 2);
+        const jsonData = JSON.stringify({ elements, appState, presentation: presentationRef.current }, null, 2);
         const jsonBlob = new Blob([jsonData], { type: 'application/json' });
         downloadBlob(jsonBlob, `canvas-${Date.now()}.excalidraw`);
         break;
       }
     }
   };
+
+  const availableSlides = useMemo(
+    () => presentation.slides.filter(slide => slide.visible && frameElements.some(frame => frame.id === slide.frameId)),
+    [presentation.slides, frameElements],
+  );
+
+  const focusFrame = useCallback((frameId: string, animate = true) => {
+    const api = excalidrawRef.current;
+    const frame = frameElements.find(item => item.id === frameId);
+    if (!api || !frame) return;
+    api.scrollToContent(frame as never, {
+      fitToViewport: true,
+      viewportZoomFactor: 1,
+      canvasOffsets: { top: 0, right: 0, bottom: 0, left: 0 },
+      animate,
+    });
+  }, [frameElements]);
+
+  const queuePresentationSave = useCallback((nextPresentation: PresentationConfig) => {
+    presentationRef.current = nextPresentation;
+    setPresentation(nextPresentation);
+    if (readOnly || !excalidrawRef.current) return;
+    const elements = excalidrawRef.current.getSceneElements();
+    const appState = excalidrawRef.current.getAppState();
+    if (elements.length === 0) return;
+    sceneElementsRef.current = elements;
+    pendingElementsRef.current = elements;
+    pendingAppStateRef.current = appState;
+    hasUnsavedChangesRef.current = true;
+    saveDataRef.current?.(elements, appState);
+  }, [readOnly]);
+
+  const reorderSlides = useCallback((fromFrameId: string, toFrameId: string) => {
+    if (readOnly || fromFrameId === toFrameId) return;
+    const slides = [...presentationRef.current.slides];
+    const fromIndex = slides.findIndex(slide => slide.frameId === fromFrameId);
+    const toIndex = slides.findIndex(slide => slide.frameId === toFrameId);
+    if (fromIndex < 0 || toIndex < 0) return;
+    const [moved] = slides.splice(fromIndex, 1);
+    slides.splice(toIndex, 0, moved);
+    queuePresentationSave({ slides: slides.map((slide, index) => ({ ...slide, order: index + 1 })) });
+  }, [queuePresentationSave, readOnly]);
+
+  const arrangeSlidesByCanvas = useCallback(() => {
+    if (readOnly) return;
+    const order = new Map(sortFramesByPosition(frameElements).map((frame, index) => [frame.id, index]));
+    const slides = [...presentationRef.current.slides].sort((a, b) => (order.get(a.frameId) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.frameId) ?? Number.MAX_SAFE_INTEGER));
+    queuePresentationSave({ slides: slides.map((slide, index) => ({ ...slide, order: index + 1 })) });
+  }, [frameElements, queuePresentationSave, readOnly]);
+
+  const exitPresentation = useCallback(() => {
+    setIsPresenting(false);
+    const viewport = previousViewportRef.current;
+    if (viewport && excalidrawRef.current) {
+      if (viewport.frameRendering) {
+        excalidrawRef.current.updateFrameRendering(viewport.frameRendering);
+      }
+      excalidrawRef.current.updateScene({ appState: viewport });
+    }
+    previousViewportRef.current = null;
+  }, []);
+
+  const startPresentation = useCallback(() => {
+    if (availableSlides.length === 0 || !excalidrawRef.current) return;
+    const appState = excalidrawRef.current.getAppState();
+    previousViewportRef.current = {
+      scrollX: appState.scrollX,
+      scrollY: appState.scrollY,
+      zoom: appState.zoom,
+      frameRendering: appState.frameRendering,
+    };
+    // 保留画框裁剪，隐藏画框线和名称，避免相邻画框内容溢出到当前幻灯片。
+    excalidrawRef.current.updateFrameRendering({ enabled: false, outline: false, name: false, clip: true });
+    setPresentationIndex(0);
+    setShowPresentationPanel(false);
+    setIsPresenting(true);
+  }, [availableSlides.length]);
+
+  // 播放时只导出当前画框，生成成功前保留上一页，避免翻页失败时出现空白。
+  useEffect(() => {
+    if (!isPresenting) return;
+    const slide = availableSlides[presentationIndex];
+    const api = excalidrawRef.current;
+    const previewRoot = presentationPreviewRef.current;
+    const frame = slide && frameElements.find(item => item.id === slide.frameId);
+    if (!api || !previewRoot || !frame) return;
+
+    let cancelled = false;
+    const elements = api.getSceneElements();
+    const files = api.getFiles();
+    const appState = {
+      ...api.getAppState(),
+      exportBackground: true,
+      frameRendering: { enabled: false, outline: false, name: false, clip: true },
+    };
+    const sceneFingerprint = fingerprint(elements);
+
+    const getCacheKey = (targetFrame: FrameElement) =>
+      `${sceneFingerprint}:${targetFrame.id}:${targetFrame.x}:${targetFrame.y}:${targetFrame.width}:${targetFrame.height}`;
+
+    const renderFrameMarkup = (targetFrame: FrameElement, targetIndex: number): Promise<string> => {
+      const cacheKey = getCacheKey(targetFrame);
+      const cachedMarkup = presentationExportCacheRef.current.get(cacheKey);
+      if (cachedMarkup) return Promise.resolve(cachedMarkup);
+
+      const inFlight = presentationExportInFlightRef.current.get(cacheKey);
+      if (inFlight) return inFlight;
+
+      const renderPromise = exportToSvg({
+        elements,
+        appState,
+        files,
+        exportingFrame: targetFrame as never,
+        exportPadding: 0,
+        renderEmbeddables: true,
+      }).then(svg => {
+        svg.setAttribute('role', 'img');
+        svg.setAttribute('aria-label', getFrameTitle(targetFrame, targetIndex));
+        svg.style.display = 'block';
+        svg.style.width = '100%';
+        svg.style.height = '100%';
+        svg.style.maxWidth = '100%';
+        svg.style.maxHeight = '100%';
+        const markup = svg.outerHTML;
+        presentationExportCacheRef.current.set(cacheKey, markup);
+        return markup;
+      }).finally(() => {
+        presentationExportInFlightRef.current.delete(cacheKey);
+      });
+      presentationExportInFlightRef.current.set(cacheKey, renderPromise);
+      return renderPromise;
+    };
+
+    const mountMarkup = (markup: string) => {
+      const template = document.createElement('template');
+      template.innerHTML = markup;
+      const svg = template.content.firstElementChild;
+      if (!(svg instanceof SVGSVGElement)) throw new Error('Invalid presentation SVG');
+      return svg;
+    };
+
+    const renderPreview = async () => {
+      try {
+        const markup = await renderFrameMarkup(frame, presentationIndex);
+        if (cancelled) return;
+        previewRoot.replaceChildren(mountMarkup(markup));
+
+        // 单线程预渲染下一页，翻页时直接恢复已生成的 SVG 字符串。
+        const nextSlide = availableSlides[presentationIndex + 1];
+        const nextFrame = nextSlide && frameElements.find(item => item.id === nextSlide.frameId);
+        if (nextFrame) {
+          void renderFrameMarkup(nextFrame, presentationIndex + 1).catch(error => {
+            console.warn('Presentation next frame pre-render failed:', error);
+          });
+        }
+      } catch (error) {
+        console.error('Presentation frame preview failed:', error);
+      }
+    };
+    void renderPreview();
+    return () => {
+      cancelled = true;
+    };
+  }, [availableSlides, frameElements, isPresenting, presentationIndex, presentationSceneVersion]);
+
+  useEffect(() => {
+    if (!isPresenting) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        exitPresentation();
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+        setPresentationIndex(index => Math.max(0, index - 1));
+      } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown' || event.key === ' ') {
+        event.preventDefault();
+        setPresentationIndex(index => Math.min(availableSlides.length - 1, index + 1));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [availableSlides.length, exitPresentation, isPresenting]);
 
   const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -829,9 +1142,9 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   };
 
   return (
-    <div className="excalidraw-editor-wrapper" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
+    <div className={`excalidraw-editor-wrapper ${isPresenting ? 'presentation-active' : ''}`} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
       {/* 标题栏 */}
-      <div className="flex items-center gap-3 px-4 py-2 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shrink-0">
+      <div className="presentation-editor-chrome flex items-center gap-3 px-4 py-2 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shrink-0">
         <input
           type="text"
           value={localTitle}
@@ -843,6 +1156,15 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         />
         {/* 保存状态 */}
         <SaveStatusIndicator status={saveStatus} />
+        <button
+          onClick={() => setShowPresentationPanel(value => !value)}
+          disabled={frameElements.length === 0}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          title={frameElements.length === 0 ? '请先创建画框' : '管理幻灯片'}
+        >
+          <Presentation className="w-4 h-4" />
+          <span className="hidden md:inline">幻灯片</span>
+        </button>
         {/* 导出按钮 */}
         <div className="relative">
           <button
@@ -881,8 +1203,84 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         </div>
       </div>
 
+      {showPresentationPanel && !isPresenting && (
+        <div className="absolute right-3 top-[52px] z-30 flex w-[min(360px,calc(100vw-24px))] max-h-[calc(100%-64px)] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white/95 shadow-xl backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
+          <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2.5 dark:border-gray-700">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100">幻灯片</h2>
+              <p className="text-xs text-gray-400">拖动左侧手柄调整播放顺序</p>
+            </div>
+            <button onClick={() => { setShowPresentationPanel(false); setDragOverSlideId(null); }} className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200" title="关闭">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2">
+            {presentation.slides.map((slide, index) => {
+              const frame = frameElements.find(item => item.id === slide.frameId);
+              if (!frame) return null;
+              return (
+                <div
+                  key={slide.frameId}
+                  draggable={!readOnly}
+                  onDragStart={() => { draggedSlideRef.current = slide.frameId; setDragOverSlideId(null); }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                    if (draggedSlideRef.current !== slide.frameId) setDragOverSlideId(slide.frameId);
+                  }}
+                  onDrop={() => {
+                    if (draggedSlideRef.current) reorderSlides(draggedSlideRef.current, slide.frameId);
+                    draggedSlideRef.current = null;
+                    setDragOverSlideId(null);
+                  }}
+                  onDragEnd={() => { draggedSlideRef.current = null; setDragOverSlideId(null); }}
+                  className={`relative mb-1 flex items-center gap-1 rounded-lg border p-1 ${
+                    dragOverSlideId === slide.frameId && draggedSlideRef.current !== slide.frameId
+                      ? 'border-blue-400 bg-blue-50/70 dark:border-blue-500 dark:bg-blue-950/30'
+                      : 'border-transparent hover:border-gray-200 hover:bg-gray-50 dark:hover:border-gray-700 dark:hover:bg-gray-800/70'
+                  }`}
+                >
+                  {dragOverSlideId === slide.frameId && draggedSlideRef.current !== slide.frameId && (
+                    <span className="pointer-events-none absolute -top-2 left-8 z-10 rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-medium text-white shadow-sm">
+                      放置到此处
+                    </span>
+                  )}
+                  <button
+                    disabled={readOnly}
+                    className="cursor-grab rounded p-1 text-gray-400 hover:bg-gray-200 active:cursor-grabbing dark:hover:bg-gray-700 disabled:cursor-default"
+                    title="拖动排序"
+                  >
+                    <GripVertical className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => { focusFrame(slide.frameId); setShowPresentationPanel(false); }} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-100 text-xs font-semibold tabular-nums text-gray-500 dark:bg-gray-800 dark:text-gray-400">{String(index + 1).padStart(2, '0')}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm text-gray-700 dark:text-gray-200">{getFrameTitle(frame, index)}</span>
+                      <span className="block truncate text-[11px] text-gray-400">{Math.round(frame.width)} × {Math.round(frame.height)}</span>
+                    </span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex items-center justify-between gap-2 border-t border-gray-200 p-2 dark:border-gray-700">
+            {!readOnly && (
+              <button onClick={arrangeSlidesByCanvas} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800" title="按画框在画布中的位置排序">
+                <Wand2 className="h-3.5 w-3.5" />
+                自动排序
+              </button>
+            )}
+            <button onClick={startPresentation} disabled={availableSlides.length === 0} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40">
+              <Play className="h-3.5 w-3.5" />
+              播放
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Excalidraw 编辑器 */}
       <div
+        className="excalidraw-canvas-container"
         style={{
           flex: 1,
           minHeight: 0,
@@ -944,6 +1342,46 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         </Suspense>
         </ExcalidrawErrorBoundary>
       </div>
+
+      {isPresenting && availableSlides.length > 0 && (
+        <div
+          className="presentation-stage absolute inset-0 z-40 flex flex-col text-white"
+          onTouchStart={event => { touchStartXRef.current = event.touches[0]?.clientX ?? null; }}
+          onTouchEnd={event => {
+            const startX = touchStartXRef.current;
+            const endX = event.changedTouches[0]?.clientX;
+            touchStartXRef.current = null;
+            if (startX === null || endX === undefined || Math.abs(endX - startX) < 48) return;
+            setPresentationIndex(index => endX < startX ? Math.min(availableSlides.length - 1, index + 1) : Math.max(0, index - 1));
+          }}
+        >
+          <div ref={presentationPreviewRef} className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center" aria-hidden="true" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between px-4 pt-4">
+            <span className="presentation-chip pointer-events-auto max-w-[30vw] truncate px-3 py-1.5 text-sm font-medium">
+              {localTitle.trim() || '无标题画布'}
+            </span>
+            <span className="presentation-chip pointer-events-auto absolute left-1/2 max-w-[40vw] -translate-x-1/2 truncate px-4 py-1.5 text-sm font-medium">
+              {availableSlides[presentationIndex] && getFrameTitle(
+                frameElements.find(frame => frame.id === availableSlides[presentationIndex].frameId)!,
+                presentationIndex,
+              )}
+            </span>
+            <button onClick={exitPresentation} className="presentation-chip pointer-events-auto rounded-full p-1" title="退出播放（Esc）">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1" />
+          <div className="presentation-chip presentation-controls pointer-events-auto absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-full px-1 py-1">
+            <button onClick={() => setPresentationIndex(index => Math.max(0, index - 1))} disabled={presentationIndex === 0} className="rounded-full p-1 text-zinc-800 hover:bg-black/10 disabled:text-zinc-400" title="上一页">
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <span className="min-w-12 px-1 text-center text-xs tabular-nums text-zinc-800/80">{presentationIndex + 1} / {availableSlides.length}</span>
+            <button onClick={() => setPresentationIndex(index => Math.min(availableSlides.length - 1, index + 1))} disabled={presentationIndex === availableSlides.length - 1} className="rounded-full p-1 text-zinc-800 hover:bg-black/10 disabled:text-zinc-400" title="下一页">
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <NotePickerDialog
         key={`${documentId}-${showNotePicker}`}

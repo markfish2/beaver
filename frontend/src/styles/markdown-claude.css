@@ -106,7 +106,7 @@
 }
 
 :root[data-markdown-style="claude"] .memo-content h4 {
-  font-size: calc(1.04em - 2px) !important;
+  font-size: 1em !important;
   margin: 0.95rem 0 0.5rem;
 }
 

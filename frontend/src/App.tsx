@@ -9,6 +9,7 @@ import { useRetryFailedPreviews } from './hooks/useRetryFailedPreviews';
 import type { ReactNode } from 'react';
 import { AppearanceProvider } from './components/FontSettings';
 import { usePhoneLayout } from './hooks/usePhoneLayout';
+import { getDeviceLayoutSnapshot, isTabletDevice } from './utils/deviceLayout';
 
 const SetupPage = lazy(() => import('./pages/SetupPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -23,6 +24,8 @@ const MobileLayout = lazy(() => import('./components/mobile/MobileLayout'));
 
 const AppLayout = ({ children }: { children: ReactNode }) => {
   const isMobile = usePhoneLayout();
+  // 平板走桌面布局，顶部状态栏可能覆盖操作区；手机布局由 MobileTopBar 自己处理安全区。
+  const needsTabletTopInset = !isMobile && isTabletDevice(getDeviceLayoutSnapshot());
   const sidebarOpenRef = useRef(false);
 
   useEffect(() => {
@@ -47,7 +50,13 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <div className="flex h-screen bg-white dark:bg-gray-900" style={{ paddingBottom: 'var(--safe-area-inset-bottom)' }}>
+    <div
+      className="flex h-[100dvh] overflow-hidden bg-white dark:bg-gray-900"
+      style={{
+        paddingTop: needsTabletTopInset ? 'var(--safe-area-inset-top)' : undefined,
+        paddingBottom: 'var(--safe-area-inset-bottom)',
+      }}
+    >
       <Sidebar isMobile={false} onDocumentSelect={() => {}} />
       {children}
     </div>

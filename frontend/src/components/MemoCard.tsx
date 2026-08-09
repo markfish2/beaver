@@ -149,8 +149,9 @@ const CodeBlock = memo(function CodeBlock({ className, children, palette, compac
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || '');
   const language = match ? match[1] : '';
-  const code = String(children).replace(/\n+$/, '');
-  const isBlock = code.includes('\n') || language;
+  const rawCode = String(children);
+  const code = rawCode.replace(/\n+$/, '');
+  const isBlock = rawCode.endsWith('\n') || code.includes('\n') || Boolean(language);
 
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(code);
@@ -184,9 +185,7 @@ const CodeBlock = memo(function CodeBlock({ className, children, palette, compac
           <SyntaxHighlighter
             style={(() => {
               const base = palette.isDarkSurface ? oneDark : ghcolors;
-              // 非默认主题暗色模式：覆盖主题的背景为 transparent
-              const mdStyle = typeof document !== 'undefined' ? document.documentElement.dataset.markdownStyle : '';
-              if (mdStyle && mdStyle !== 'default' && palette.isDarkSurface) {
+              if (palette.isDarkSurface) {
                 return {
                   ...base,
                   'code[class*="language-"]': { ...base['code[class*="language-"]'], background: 'transparent' },
@@ -893,7 +892,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       setEditContent(newContent);
       setShowExpandEditor(false);
     }}>
-      <div className="flex flex-col w-[90vw] max-w-[680px] h-[75vh] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="memo-expanded-editor flex flex-col w-[90vw] max-w-[680px] h-[75vh] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-end px-4 py-2 border-b border-gray-200 dark:border-gray-700 shrink-0 gap-2">
           {uploading && <span className="text-xs text-blue-500 mr-auto">上传中...</span>}
             <button
@@ -932,7 +931,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
                     autoFocus
                     scrollable
                     placeholder="编辑笔记..."
-                    className="h-full"
+                    className="memo-editor-surface h-full"
                     extensions={[tmExtension]}
                     toolbar={<EditorToolbar editorRef={expandEditorRef} onUploadImage={() => imageInputRef.current?.click()} onUploadFile={() => fileInputRef.current?.click()} />}
                   />
@@ -991,7 +990,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
             maxHeight={500}
             autoFocus
             placeholder="编辑笔记..."
-            className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700"
+          className="memo-editor-surface bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700"
             extensions={[tmExtension]}
           />
           {showTagPopup && createPortal(

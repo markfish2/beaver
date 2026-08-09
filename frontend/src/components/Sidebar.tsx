@@ -459,7 +459,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   }, [sidebarWidth]);
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
       if (!resizingRef.current) return;
 
       const newWidth = e.clientX - ICON_RAIL_WIDTH;
@@ -470,7 +470,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       }
     };
 
-    const handleMouseUp = () => {
+    const handlePointerUp = () => {
       if (resizingRef.current) {
         resizingRef.current = false;
         setIsResizing(false);
@@ -481,12 +481,12 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       }
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('pointermove', handlePointerMove);
+    document.addEventListener('pointerup', handlePointerUp);
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
     };
   }, []);
 
@@ -910,7 +910,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                 } ${dragOverItem === doc.id && isFolder ? 'bg-gray-500 ring-2 ring-gray-400' : ''} ${
                   draggedItem?.id === doc.id ? 'opacity-50' : ''
                 } ${clickedFolderId === doc.id ? 'bg-gray-300/70 dark:bg-gray-600/70' : ''}`}
-                style={{ paddingLeft: `${level * 12 + 4}px` }}
+                style={{ paddingLeft: `${level * 6 + 4}px` }}
                 onClick={(e) => {
                   if (longPressTriggeredRef.current) {
                     longPressTriggeredRef.current = false;
@@ -986,7 +986,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
               {!searchQuery.trim() && viewMode !== 'starred' && isFolder && isExpanded[doc.id] && (
                 <div
                   className="relative pl-2 border-l border-gray-200 dark:border-gray-600"
-                  style={{ marginLeft: `calc(${level * 12 + 4}px + 0.4375rem)` }}
+                  style={{ marginLeft: `calc(${level * 6 + 4}px + 0.4375rem)` }}
                 >
                   {renderFileTree(doc.id, level + 1)}
                 </div>
@@ -1505,8 +1505,9 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
             {contentExpanded && (
               <>
                 <div
-                  className="absolute top-0 right-0 w-1 h-full bg-transparent hover:bg-blue-500 cursor-col-resize transition-colors z-50"
-                  onMouseDown={(e) => {
+                  className="absolute top-0 right-0 z-50 h-full w-3 translate-x-1/2 cursor-col-resize bg-transparent transition-colors hover:bg-blue-500/50"
+                  style={{ touchAction: 'none' }}
+                  onPointerDown={(e) => {
                     e.preventDefault();
                     resizingRef.current = true;
                     setIsResizing(true);
@@ -1976,7 +1977,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                     ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                 }`}
-                style={{ paddingLeft: `${8 + depth * 10}px`, paddingRight: '8px' }}
+                style={{ paddingLeft: `${8 + depth * 6}px`, paddingRight: '8px' }}
               >
                 <FolderIcon className="w-4 h-4 shrink-0" />
                 <span className="truncate">{node.title}</span>

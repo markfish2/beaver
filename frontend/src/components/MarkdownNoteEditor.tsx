@@ -85,7 +85,7 @@ const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => {
   if (mdStyle && mdStyle !== 'default' && isDark) {
     return { margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: BLOCK_CODE_FONT_SIZE, background: 'transparent', border: 'none', padding: '16px', overflowX: 'auto', whiteSpace: 'pre' };
   }
-  return { margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: BLOCK_CODE_FONT_SIZE, background: isDark ? '#282c34' : '#fbfbf8', border: 'none', padding: '16px', overflowX: 'auto', whiteSpace: 'pre' };
+  return { margin: 0, borderRadius: '0 0 0.5rem 0.5rem', fontSize: BLOCK_CODE_FONT_SIZE, background: isDark ? '#1e1e1e' : '#fbfbf8', border: 'none', padding: '16px', overflowX: 'auto', whiteSpace: 'pre' };
 };
 
 const codeLineNumberStyle = (isDark: boolean): React.CSSProperties => ({
@@ -304,8 +304,9 @@ const CodeBlock = memo(function CodeBlock({ className, children, ...props }: Mar
   const isDark = useIsDark();
   const match = /language-(\w+)/.exec(className || '');
   const language = match ? match[1] : '';
-  const code = String(children).replace(/\n+$/, '');
-  const isBlock = code.includes('\n') || language;
+  const rawCode = String(children);
+  const code = rawCode.replace(/\n+$/, '');
+  const isBlock = rawCode.endsWith('\n') || code.includes('\n') || Boolean(language);
   const handleCopy = useCallback(async () => { await navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000); }, [code]);
 
   if (isBlock) {
@@ -324,13 +325,19 @@ const CodeBlock = memo(function CodeBlock({ className, children, ...props }: Mar
           <SyntaxHighlighter
             style={(() => {
               const base = isDark ? oneDark : ghcolors;
-              // 非默认主题暗色模式：覆盖主题的背景为 transparent
               if (mdStyle && mdStyle !== 'default' && isDark) {
                 return {
                   ...base,
                   'code[class*="language-"]': { ...base['code[class*="language-"]'], background: 'transparent' },
                   'pre[class*="language-"]': { ...base['pre[class*="language-"]'], background: 'transparent' },
                   'code[class*="language-"] > span': { ...base['code[class*="language-"] > span'] },
+                };
+              }
+              if (isDark) {
+                return {
+                  ...base,
+                  'code[class*="language-"]': { ...base['code[class*="language-"]'], background: 'transparent' },
+                  'pre[class*="language-"]': { ...base['pre[class*="language-"]'], background: 'transparent' },
                 };
               }
               return base;
@@ -836,7 +843,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
       <div className="flex-1 min-h-0 flex">
         {(viewMode === 'edit' || viewMode === 'split') && (
           <div className={`${viewMode === 'split' ? 'w-1/2 border-r border-gray-200 dark:border-gray-700' : 'flex-1 min-w-0 h-full'} flex flex-col`}>
-            <div ref={editorScrollRef} className={`flex-1 min-h-0 overflow-y-auto scrollbar-none ${viewMode === 'split' ? '' : 'flex justify-center'}`}>
+            <div ref={editorScrollRef} className={`flex-1 min-h-0 overflow-y-auto custom-scrollbar ${viewMode === 'split' ? '' : 'flex justify-center'}`}>
               <div className={`flex flex-col ${viewMode === 'split' ? 'w-full' : 'w-full max-w-[768px]'}`} onPasteCapture={handlePaste}>
                 <MarkdownEditor ref={editorRef} value={content} onChange={(val) => { setContent(val); scheduleSave(val); }}
                   compact={false} placeholder="开始书写... (支持 Markdown，输入 # 添加标签，@ 链接笔记)" className="flex-1 min-h-0 px-6 pt-6"
@@ -858,7 +865,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
           </div>
         )}
         {(viewMode === 'preview' || viewMode === 'split') && (
-          <div ref={previewRef} className={`${viewMode === 'split' ? 'w-1/2' : 'flex-1 min-w-0 h-full'} overflow-y-auto scrollbar-none flex flex-col items-center`}>
+          <div ref={previewRef} className={`${viewMode === 'split' ? 'w-1/2' : 'flex-1 min-w-0 h-full'} overflow-y-auto custom-scrollbar flex flex-col items-center`}>
             <div className="markdown-note-preview memo-content max-w-[768px] w-full text-base text-gray-700 dark:text-gray-300 p-6" style={{ lineHeight: '1.75' }}>
               {content.trim() ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]} components={mdComponents}>{processedContent}</ReactMarkdown>

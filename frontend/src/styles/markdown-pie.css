@@ -9,7 +9,7 @@
   --markdown-pie-mark: #fff387;
   --markdown-pie-code-bg: #f8f8f3;
   --markdown-pie-code-head: #efeee7;
-  --markdown-pie-code-border: #333333;
+  --markdown-pie-code-border: #9ca3af;
   --markdown-pie-code-radius: 6px;
   --markdown-pie-table-head: #575c61;
   --markdown-pie-table-head-text: #f3f3f3;
@@ -30,7 +30,7 @@
   --markdown-pie-mark: #6f5210;
   --markdown-pie-code-bg: #211f1b;
   --markdown-pie-code-head: #2d2a24;
-  --markdown-pie-code-border: #6f665c;
+  --markdown-pie-code-border: #6b7280;
   --markdown-pie-table-head: #3c403f;
   --markdown-pie-table-head-text: #f2eee6;
   --markdown-pie-selection: #6f665c;
@@ -84,7 +84,7 @@
 }
 
 :root[data-markdown-style="pie"] .memo-content h3 { font-size: calc(1.16em - 2px) !important; }
-:root[data-markdown-style="pie"] .memo-content h4 { font-size: calc(1.04em - 2px) !important; color: var(--markdown-pie-muted) !important; }
+:root[data-markdown-style="pie"] .memo-content h4 { font-size: 1em !important; color: var(--markdown-pie-muted) !important; }
 :root[data-markdown-style="pie"] .memo-content h5 { font-size: 1.08em; }
 :root[data-markdown-style="pie"] .memo-content h6 { font-size: 1em; color: var(--markdown-pie-muted) !important; }
 

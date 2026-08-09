@@ -367,7 +367,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   }, []);
 
   return (
-    <div className={`overflow-y-auto bg-[var(--app-canvas)] custom-scrollbar ${document.documentElement.dataset.mobileLayout ? 'flex-1' : 'flex-1 h-screen'}`}
+    <div className={`overflow-y-auto bg-[var(--app-canvas)] custom-scrollbar ${document.documentElement.dataset.mobileLayout ? 'flex-1' : 'flex-1 h-full'}`}
       style={document.documentElement.dataset.mobileLayout ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 44px)', paddingBottom: '52px' } : undefined}
     >
       {/* 移动端菜单按钮 (hidden when MobileLayout is active) */}
@@ -389,7 +389,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
         className={`flex flex-row mx-auto px-4 pb-20 gap-6 transition-[max-width] ${
           memoColumns === 2 ? 'max-w-[960px]' : 'max-w-[670px]'
         }`}
-        style={{ paddingTop: document.documentElement.dataset.mobileLayout ? '24px' : 'calc(env(safe-area-inset-top, 0px) + 24px)' }}
+        style={{ paddingTop: '24px' }}
       >
         {/* 左栏：输入框 + 待办 + 随想 */}
         <div className="flex-1 min-w-0">

@@ -194,6 +194,12 @@
   appearance: none;
 }
 
+/* 任务复选框与列表文字垂直居中。 */
+:root[data-markdown-style="markamd"] .memo-content li > button[role="checkbox"] {
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
 :root[data-markdown-style="markamd"] .memo-content code,
 :root[data-markdown-style="markamd"] .memo-content pre,
 :root[data-markdown-style="markamd"] .memo-content .markdown-code-language {

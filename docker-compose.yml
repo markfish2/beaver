@@ -1,9 +1,10 @@
 services:
   backend:
+    image: beaver-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: miniflowy-backend
+    container_name: beaver-backend
     restart: unless-stopped
     platform: linux/amd64
     volumes:
@@ -26,10 +27,11 @@ services:
         max-file: "3"
 
   frontend:
+    image: beaver-frontend:latest
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: miniflowy-frontend
+    container_name: beaver-frontend
     restart: unless-stopped
     platform: linux/amd64
     depends_on:
@@ -44,7 +46,7 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: miniflowy-nginx
+    container_name: beaver-nginx
     restart: unless-stopped
     platform: linux/amd64
     ports:
