@@ -8,6 +8,7 @@ import { parseTodoDueDate } from '../utils/todoDueDate';
 import { showToast } from '../utils/toast';
 import { logNavigation } from '../utils/navigationDebug';
 import { getDiaryDayStats } from '../utils/diaryHeatmap';
+import DeleteConfirmDialog from './DeleteConfirmDialog';
 
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
 
@@ -52,6 +53,7 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
   const [editText, setEditText] = useState('');
   const [newTodoText, setNewTodoText] = useState('');
   const [showAddTodo, setShowAddTodo] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; content: string } | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const newTodoInputRef = useRef<HTMLInputElement>(null);
   const pendingDayClicksRef = useRef<Set<string>>(new Set());
@@ -129,11 +131,17 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
     }
   };
 
-  // Delete todo
-  const handleDeleteTodo = async (todoId: string) => {
+  // 删除待办：先弹确认
+  const requestDeleteTodo = (task: Todo) => {
     setActiveMenuId(null);
+    setPendingDelete({ id: task.id, content: task.content });
+  };
+
+  const handleDeleteTodo = async () => {
+    if (!pendingDelete) return;
     try {
-      await deleteTodo(todoId);
+      await deleteTodo(pendingDelete.id);
+      setPendingDelete(null);
       showToast('待办已删除');
       onTaskMoved?.();
     } catch (err) {
@@ -492,7 +500,7 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
                       安排到今天
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteTodo(task.id); }}
+                      onClick={(e) => { e.stopPropagation(); requestDeleteTodo(task); }}
                       className="w-full px-3 py-1.5 text-left text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -590,6 +598,15 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
       {loading && (
         <div className="text-center text-[10px] text-gray-400 py-1">加载中...</div>
       )}
+
+      {/* 删除待办确认 */}
+      <DeleteConfirmDialog
+        isOpen={pendingDelete !== null}
+        title="删除待办"
+        message={`确定要删除「${pendingDelete?.content || ''}」吗？此操作无法撤销。`}
+        onConfirm={() => void handleDeleteTodo()}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }
