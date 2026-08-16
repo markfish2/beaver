@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 import elkLayouts from '@mermaid-js/layout-elk';
 import { Maximize2, Minus, Plus, RotateCcw, X } from 'lucide-react';
@@ -118,7 +118,8 @@ export default function MermaidBlock({ code, dark }: MermaidBlockProps) {
 
   // iOS Safari 会对 CSS transform scale 的 SVG 先栅格化再放大，导致模糊；
   // 改为直接调整 SVG 宽高（矢量按新尺寸重渲染），transform 只用于平移。
-  useEffect(() => {
+  // 每次渲染后都重新应用缩放尺寸：拖动（pan）等引起的重渲染不会丢失放大效果
+  useLayoutEffect(() => {
     const svg = viewerContentRef.current?.querySelector('svg');
     if (!isViewerOpen || !svg) {
       svgNaturalSizeRef.current = null;
@@ -134,7 +135,7 @@ export default function MermaidBlock({ code, dark }: MermaidBlockProps) {
     }
     svg.style.setProperty('width', `${svgNaturalSizeRef.current.width * scale}px`, 'important');
     svg.style.setProperty('height', `${svgNaturalSizeRef.current.height * scale}px`, 'important');
-  }, [isViewerOpen, scale]);
+  });
 
   if (error) {
     return (

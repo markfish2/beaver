@@ -26,6 +26,10 @@
   max-width: none !important;
   height: auto !important;
 }
+/* 放大查看器里 SVG 是 flex 子项，禁止收缩，否则宽图放大后会被压回容器宽度 */
+.mermaid-viewer-content > svg {
+  flex-shrink: 0 !important;
+}
 .mermaid-diagram > svg,
 .mermaid-diagram > svg text,
 .mermaid-diagram > svg .nodeLabel {
