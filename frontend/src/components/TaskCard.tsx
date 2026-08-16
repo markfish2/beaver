@@ -61,9 +61,10 @@ function formatMMDD(dateStr: string): string {
 
 // ==================== Inline date editor ====================
 
-function InlineDate({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
+function InlineDate({ value, onChange, disabled = false, className }: { value: string; onChange: (v: string) => void; disabled?: boolean; className?: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const handleClick = () => {
+    if (disabled) return;
     if (inputRef.current) {
       if (inputRef.current.showPicker) inputRef.current.showPicker();
       else inputRef.current.click();
@@ -73,7 +74,9 @@ function InlineDate({ value, onChange, className }: { value: string; onChange: (
     <span className={`relative inline-flex items-center ${className || ''}`}>
       <span
         onClick={handleClick}
-        className="text-[11px] cursor-pointer hover:text-blue-500 transition-colors w-[40px] text-center"
+        className={`text-[11px] w-[40px] text-center ${
+          disabled ? 'text-gray-300 dark:text-gray-600 cursor-default' : 'cursor-pointer hover:text-blue-500 transition-colors'
+        }`}
       >
         {formatMMDD(value)}
       </span>
@@ -81,8 +84,9 @@ function InlineDate({ value, onChange, className }: { value: string; onChange: (
         ref={inputRef}
         type="date"
         value={value || ''}
+        disabled={disabled}
         onChange={e => { if (e.target.value) onChange(e.target.value); }}
-        className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+        className={`absolute inset-0 w-full h-full opacity-0 ${disabled ? '' : 'cursor-pointer'}`}
         style={{ fontSize: '16px' }}
       />
     </span>
@@ -247,7 +251,7 @@ export default function TaskCard({
         {/* Card */}
         <div
           ref={cardRef}
-          draggable
+          draggable={!isEditing}
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
@@ -322,12 +326,14 @@ export default function TaskCard({
                 <InlineDate
                   value={task.start_date}
                   onChange={v => handleDateChange('start_date', v)}
+                  disabled={hasChildren}
                   className="text-gray-500 dark:text-gray-400"
                 />
                 <span className="text-gray-300 dark:text-gray-600 text-[11px]">—</span>
                 <InlineDate
                   value={task.end_date}
                   onChange={v => handleDateChange('end_date', v)}
+                  disabled={hasChildren}
                   className="text-gray-500 dark:text-gray-400"
                 />
               </div>
@@ -408,12 +414,14 @@ export default function TaskCard({
               <InlineDate
                 value={task.start_date}
                 onChange={v => handleDateChange('start_date', v)}
+                disabled={hasChildren}
                 className="text-gray-500 dark:text-gray-400"
               />
               <span className="text-gray-300 dark:text-gray-600 text-[11px]">—</span>
               <InlineDate
                 value={task.end_date}
                 onChange={v => handleDateChange('end_date', v)}
+                disabled={hasChildren}
                 className="text-gray-500 dark:text-gray-400"
               />
             </div>

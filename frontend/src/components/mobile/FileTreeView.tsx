@@ -1,27 +1,26 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ChevronRight, FileText, ListTree, Frame, MoreHorizontal, Star, Copy, Trash2, Pencil } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { ChevronRight, MoreHorizontal, Copy, Trash2, Pencil } from 'lucide-react';
 import { useDocuments } from '../../context/DocumentContext';
 import { deleteDocument, updateDocument, copyDocument } from '../../api/data';
 import DeleteConfirmDialog from '../DeleteConfirmDialog';
 import type { Document } from '../../api/data';
 import { createMobileDocumentState } from '../../utils/mobileNavigation';
-import FolderIcon from '../FolderIcon';
+import DocumentTypeIcon from '../DocumentTypeIcon';
+import NavigationIcon from '../NavigationIcon';
 
 interface FileTreeViewProps {
   starredOnly?: boolean;
 }
 
-function getDocIcon(doc: Document) {
-  if (doc.type === 'folder') return <FolderIcon className="w-5 h-5 text-gray-500 dark:text-gray-400 shrink-0" />;
-  if (doc.type === 'note') return <FileText className="w-5 h-5 text-gray-500 dark:text-gray-400 shrink-0" />;
-  if (doc.type === 'excalidraw') return <Frame className="w-5 h-5 text-gray-500 dark:text-gray-400 shrink-0" />;
-  // default: document (outline)
-  return <ListTree className="w-5 h-5 text-gray-500 dark:text-gray-400 shrink-0" />;
+function getDocIcon(doc: Document, isExpanded = false) {
+  const iconType = doc.type === 'folder' && isExpanded ? 'folder-open' : doc.type;
+  return <DocumentTypeIcon type={iconType} className="h-5 w-5" />;
 }
 
 export default function FileTreeView({ starredOnly = false }: FileTreeViewProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { documents, refreshDocuments } = useDocuments();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ docId: string; x: number; y: number } | null>(null);
@@ -33,6 +32,7 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
   const filteredDocs = starredOnly
     ? documents.filter(d => d.is_starred)
     : documents;
+  const selectedDocumentId = location.pathname.match(/^\/d\/([^/]+)$/)?.[1];
 
   const handleToggleFolder = (folderId: string) => {
     setExpandedFolders(prev => {
@@ -141,13 +141,17 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
         {depth > 0 && (
           <div
             className="absolute top-0 bottom-0 z-10 w-px bg-gray-300 dark:bg-gray-600 pointer-events-none"
-            style={{ left: `${8 + (depth - 1) * 6 + 7}px` }}
+            style={{ left: `${8 + (depth - 1) * 12 + 9}px` }}
           />
         )}
 
         <div
-          className="relative z-0 flex items-center gap-2 px-2 py-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 active:bg-gray-200 dark:active:bg-gray-700 transition-colors group"
-          style={{ paddingLeft: `${8 + depth * 6}px` }}
+          className={`relative z-0 flex items-center gap-2 px-2 py-2.5 rounded-full transition-colors group ${
+            selectedDocumentId === doc.id
+              ? 'bg-[#f1f1f1] text-gray-900 dark:bg-gray-700 dark:text-gray-100'
+              : 'hover:bg-gray-100 dark:hover:bg-gray-800 active:bg-gray-200 dark:active:bg-gray-700'
+          }`}
+          style={{ paddingLeft: `${8 + depth * 12}px` }}
           onClick={() => handleDocumentClick(doc)}
           onContextMenu={(e) => handleContextMenu(e, doc.id)}
           onTouchStart={(e) => {
@@ -160,7 +164,7 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
           {isFolder ? (
             <>
               <ChevronRight className={`w-[18px] h-[18px] text-gray-400 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-              {getDocIcon(doc)}
+              {getDocIcon(doc, isExpanded)}
             </>
           ) : (
             <span className="ml-[18px]">{getDocIcon(doc)}</span>
@@ -178,7 +182,7 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <span className={`flex-1 text-base text-gray-700 dark:text-gray-300 truncate ${isFolder ? 'font-medium' : ''}`}>
+            <span className={`flex-1 text-base truncate ${selectedDocumentId === doc.id ? 'font-medium text-gray-900 dark:text-gray-100' : 'text-gray-700 dark:text-gray-300'} ${isFolder ? 'font-medium' : ''}`}>
               {doc.title || '无标题'}
             </span>
           )}
@@ -225,7 +229,7 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
             <div className="relative z-0">
               <div
                 className="absolute top-0 bottom-0 z-10 w-px bg-gray-300 dark:bg-gray-600 pointer-events-none"
-                style={{ left: `${8 + depth * 6 + 7}px` }}
+                style={{ left: `${8 + depth * 12 + 9}px` }}
               />
               <div className="relative">{renderTree(doc.id, depth + 1)}</div>
             </div>
@@ -268,7 +272,7 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
           >
             {doc.type !== 'folder' && (
               <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); void handleStar(contextMenu.docId); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
-                <Star className={`w-4 h-4 ${doc.is_starred ? 'fill-yellow-500 text-yellow-500' : ''}`} />
+                <NavigationIcon type="starred" className={`w-4 h-4 ${doc.is_starred ? 'text-gray-700 dark:text-gray-200' : ''}`} />
                 {doc.is_starred ? '取消收藏' : '收藏'}
               </button>
             )}

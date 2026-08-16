@@ -23,12 +23,38 @@ test('展平节点时保留父子关系并递增排序', () => {
   assert.equal(flat[1].parent_node_id, flat[0].id);
 });
 
-test('Memo 内容提取排除代码标签、图片链接和内部文档链接', () => {
-  const content = '#标签 `#代码` ![图](https://cdn.test/a.png) [附件](https://cdn.test/a.pdf) [文档](/d/1) https://site.test/a.';
+test('Memo 内容提取：仅 /uploads/ 视为附件，邮箱/网址/内部链接不算', () => {
+  const content = '#标签 `#代码` ![图](https://cdn.test/a.png) [附件](/uploads/abc-123.pdf) [外部](https://cdn.test/a.pdf) [邮箱](mailto:a@b.com) [文档](/d/1) https://site.test/a.';
   assert.deepEqual(extractMemoTags(content), ['#标签']);
   assert.deepEqual(extractMemoImages(content), [{ alt: '图', url: 'https://cdn.test/a.png' }]);
-  assert.deepEqual(extractMemoFileLinks(content), [{ name: '附件', url: 'https://cdn.test/a.pdf' }]);
+  assert.deepEqual(extractMemoFileLinks(content), [{ name: '附件', url: '/uploads/abc-123.pdf' }]);
   assert.deepEqual(new Set(extractMemoUrls(content)), new Set(['https://cdn.test/a.png', 'https://cdn.test/a.pdf', 'https://site.test/a']));
+});
+
+test('Memo 内容提取：代码块和行内代码里的链接不算', () => {
+  const content = [
+    '正文链接 https://real.test/a',
+    '',
+    '```python',
+    '[代码里的链接](https://fake.test/b)',
+    'https://fake.test/c',
+    '![代码里的图](https://fake.test/d.png)',
+    '[代码里的附件](/uploads/fake.pdf)',
+    '```',
+    '',
+    '行内 `https://fake.test/e` 和 `[链接](https://fake.test/f)` 都不算',
+  ].join('\n');
+  assert.deepEqual(new Set(extractMemoUrls(content)), new Set(['https://real.test/a']));
+  assert.deepEqual(extractMemoFileLinks(content), []);
+});
+
+test('Memo 内容提取：图片不作为附件重复展示', () => {
+  const content = '![本地图](/uploads/img.png) [附件](/uploads/doc.pdf) ![外链图](https://cdn.test/b.png)';
+  assert.deepEqual(extractMemoImages(content), [
+    { alt: '本地图', url: '/uploads/img.png' },
+    { alt: '外链图', url: 'https://cdn.test/b.png' },
+  ]);
+  assert.deepEqual(extractMemoFileLinks(content), [{ name: '附件', url: '/uploads/doc.pdf' }]);
 });
 
 test('缩进 callout 不会影响后续正文和列表解析', () => {

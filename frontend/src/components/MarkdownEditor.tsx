@@ -173,9 +173,9 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
     insertText(text: string) {
       const view = viewRef.current;
       if (!view) return;
-      const { from } = view.state.selection.main;
+      const { from, to } = view.state.selection.main;
       view.dispatch({
-        changes: { from, insert: text },
+        changes: { from, to, insert: text },
         selection: { anchor: from + text.length },
       });
       view.focus();

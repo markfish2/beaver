@@ -1893,6 +1893,52 @@ def get_tasks_flat(db: Session, project_id: uuid.UUID) -> list:
     ).order_by(models.Task.sort_order).all()
 
 
+def _derive_task_from_children(db: Session, task) -> bool:
+    """父任务周期 = 覆盖所有子任务的最早开始 ~ 最晚结束。
+    返回是否有子任务；没有子任务时保持自身日期不变（独立调整）。
+    """
+    children = db.query(models.Task).filter(models.Task.parent_id == task.id).all()
+    if not children:
+        return False
+    task.start_date = min(c.start_date for c in children)
+    task.end_date = max(c.end_date for c in children)
+    return True
+
+
+def _recompute_ancestor_dates(db: Session, task) -> None:
+    """从 task 开始沿父链向上推导父任务周期（YYYY-MM-DD 字符串可直接比较）。"""
+    current = task
+    while current is not None and current.parent_id is not None:
+        parent = db.query(models.Task).filter(models.Task.id == current.parent_id).first()
+        if parent is None:
+            break
+        children = db.query(models.Task).filter(models.Task.parent_id == parent.id).all()
+        if not children:
+            break
+        parent.start_date = min(c.start_date for c in children)
+        parent.end_date = max(c.end_date for c in children)
+        current = parent
+
+
+def _is_descendant(db: Session, ancestor_id, node_id) -> bool:
+    """判断 node_id 是否在 ancestor_id 的后代子树中（含自身），用于防止任务层级成环。"""
+    if ancestor_id == node_id:
+        return True
+    stack = [ancestor_id]
+    seen = set()
+    while stack:
+        parent_id = stack.pop()
+        if parent_id in seen:
+            continue
+        seen.add(parent_id)
+        children = db.query(models.Task.id).filter(models.Task.parent_id == parent_id).all()
+        for (child_id,) in children:
+            if child_id == node_id:
+                return True
+            stack.append(child_id)
+    return False
+
+
 def create_task(db: Session, project_id, data) -> models.Task:
     task = models.Task(
         id=uuid.uuid4(),
@@ -1906,6 +1952,10 @@ def create_task(db: Session, project_id, data) -> models.Task:
     db.add(task)
     db.commit()
     db.refresh(task)
+    if task.parent_id:
+        _recompute_ancestor_dates(db, task)
+        db.commit()
+        db.refresh(task)
     return task
 
 
@@ -1914,11 +1964,39 @@ def update_task(db: Session, task_id: uuid.UUID, data) -> Optional[models.Task]:
     if not task:
         return None
     update_data = data if isinstance(data, dict) else data.model_dump(exclude_unset=True)
+    old_parent_id = task.parent_id
+
+    # 父任务周期由子任务推导：有子任务时忽略直接传入的日期
+    has_children = db.query(models.Task).filter(models.Task.parent_id == task.id).first() is not None
+    if has_children:
+        update_data.pop("start_date", None)
+        update_data.pop("end_date", None)
+
+    # 防环：不能把任务挂到自己的后代下面
+    if "parent_id" in update_data and update_data["parent_id"] is not None:
+        if _is_descendant(db, task.id, update_data["parent_id"]):
+            update_data.pop("parent_id")
+
     for field, value in update_data.items():
         if value is not None:
             setattr(task, field, value)
+
+    if has_children:
+        _derive_task_from_children(db, task)
+    _recompute_ancestor_dates(db, task)
+
     db.commit()
     db.refresh(task)
+
+    # 层级变化时，原父任务也要重新推导
+    new_parent_id = update_data.get("parent_id", old_parent_id)
+    if new_parent_id != old_parent_id and old_parent_id is not None:
+        old_parent = db.query(models.Task).filter(models.Task.id == old_parent_id).first()
+        if old_parent:
+            _derive_task_from_children(db, old_parent)
+            _recompute_ancestor_dates(db, old_parent)
+            db.commit()
+
     return task
 
 
@@ -1926,8 +2004,15 @@ def delete_task(db: Session, task_id: uuid.UUID) -> bool:
     task = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not task:
         return False
+    parent_id = task.parent_id
     db.delete(task)
     db.commit()
+    if parent_id is not None:
+        parent = db.query(models.Task).filter(models.Task.id == parent_id).first()
+        if parent:
+            _derive_task_from_children(db, parent)
+            _recompute_ancestor_dates(db, parent)
+            db.commit()
     return True
 
 
@@ -2001,9 +2086,39 @@ def _auto_toggle_archive(db: Session, project_id):
 def reorder_tasks(db: Session, items: list[dict]):
     """批量更新任务排序和层级"""
     for item in items:
-        task = db.query(models.Task).filter(models.Task.id == item["id"]).first()
-        if task:
-            task.sort_order = item.get("sort_order", task.sort_order)
-            if "parent_id" in item:
-                task.parent_id = item["parent_id"]
+        try:
+            task_id = uuid.UUID(str(item["id"]))
+        except (ValueError, TypeError, AttributeError):
+            continue
+        task = db.query(models.Task).filter(models.Task.id == task_id).first()
+        if not task:
+            continue
+        old_parent_id = task.parent_id
+        task.sort_order = item.get("sort_order", task.sort_order)
+        if "parent_id" in item:
+            raw_parent_id = item["parent_id"]
+            try:
+                new_parent_id = uuid.UUID(str(raw_parent_id)) if raw_parent_id is not None else None
+            except (ValueError, TypeError, AttributeError):
+                new_parent_id = old_parent_id
+            if new_parent_id is not None and _is_descendant(db, task.id, new_parent_id):
+                new_parent_id = old_parent_id
+            task.parent_id = new_parent_id
+            if new_parent_id != old_parent_id:
+                # 新父链推导
+                if new_parent_id is not None:
+                    new_parent = db.query(models.Task).filter(
+                        models.Task.id == new_parent_id
+                    ).first()
+                    if new_parent:
+                        _derive_task_from_children(db, new_parent)
+                        _recompute_ancestor_dates(db, new_parent)
+                # 旧父链推导
+                if old_parent_id is not None:
+                    old_parent = db.query(models.Task).filter(
+                        models.Task.id == old_parent_id
+                    ).first()
+                    if old_parent:
+                        _derive_task_from_children(db, old_parent)
+                        _recompute_ancestor_dates(db, old_parent)
     db.commit()

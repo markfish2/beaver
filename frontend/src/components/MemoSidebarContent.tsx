@@ -57,7 +57,7 @@ export default function MemoSidebarContent() {
   }, [activeTag]);
 
   const btnClass = (active: boolean, color: string) =>
-    `w-full flex items-center gap-2 px-3 py-1.5 text-sm font-medium transition-colors rounded-md ${
+    `w-full flex items-center gap-2 px-0 py-1.5 text-sm font-medium transition-colors rounded-md ${
       active
         ? `text-${color}-600 dark:text-${color}-400 bg-${color}-50 dark:bg-${color}-900/20`
         : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50'
@@ -69,7 +69,7 @@ export default function MemoSidebarContent() {
       <MemoHeatmapCalendar embedded />
 
       {/* 近7天计划 */}
-      <ProjectWeekView />
+      <ProjectWeekView embedded />
 
       {/* 习惯打卡 */}
       <HabitTracker embedded />

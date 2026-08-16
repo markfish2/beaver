@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { ListTree, FileText, Square, Folder, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { createDocument, createTodo } from '../../api/data';
 import { useDocuments } from '../../context/DocumentContext';
+import DocumentTypeIcon, { type DocumentIconType } from '../DocumentTypeIcon';
+import NavigationIcon from '../NavigationIcon';
 
 interface NewMenuPopupProps {
   onClose: () => void;
@@ -62,10 +64,10 @@ export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopu
   };
 
   const menuItems = [
-    { type: 'document', label: '大纲笔记', icon: ListTree, color: 'text-emerald-600 dark:text-emerald-400' },
-    { type: 'note', label: '普通笔记', icon: FileText, color: 'text-blue-600 dark:text-blue-400' },
-    { type: 'todo', label: '待办', icon: Square, color: 'text-orange-600 dark:text-orange-400' },
-    { type: 'folder', label: '文件夹', icon: Folder, color: 'text-yellow-600 dark:text-yellow-400' },
+    { type: 'document', label: '大纲笔记', iconType: 'document' as DocumentIconType },
+    { type: 'note', label: '普通笔记', iconType: 'note' as DocumentIconType },
+    { type: 'todo', label: '待办', navigationIcon: 'todo' as const },
+    { type: 'folder', label: '文件夹', iconType: 'folder' as DocumentIconType },
   ];
 
   if (showInputDialog) {
@@ -118,14 +120,15 @@ export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopu
         </div>
 
         {menuItems.map(item => {
-          const Icon = item.icon;
           return (
             <button
               key={item.type}
               onClick={() => handleCreate(item.type)}
               className="w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 transition-colors"
             >
-              <Icon className={`w-4.5 h-4.5 ${item.color}`} />
+              {'iconType' in item
+                ? <DocumentTypeIcon type={item.iconType} className="h-5 w-5" />
+                : <NavigationIcon type={item.navigationIcon} className="h-5 w-5" />}
               <span>{item.label}</span>
             </button>
           );

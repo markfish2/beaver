@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 import { AppearanceProvider } from './components/FontSettings';
 import { usePhoneLayout } from './hooks/usePhoneLayout';
 import { getDeviceLayoutSnapshot, isTabletDevice } from './utils/deviceLayout';
+import { logNavigation } from './utils/navigationDebug';
 
 const SetupPage = lazy(() => import('./pages/SetupPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -21,6 +22,7 @@ const ConflictResolver = lazy(() => import('./components/ConflictResolver'));
 const Sidebar = lazy(() => import('./components/Sidebar'));
 const MainArea = lazy(() => import('./components/MainArea'));
 const MobileLayout = lazy(() => import('./components/mobile/MobileLayout'));
+const GlobalSearchPalette = lazy(() => import('./components/GlobalSearchPalette'));
 
 const AppLayout = ({ children }: { children: ReactNode }) => {
   const isMobile = usePhoneLayout();
@@ -59,6 +61,9 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
     >
       <Sidebar isMobile={false} onDocumentSelect={() => {}} />
       {children}
+      <Suspense fallback={null}>
+        <GlobalSearchPalette />
+      </Suspense>
     </div>
   );
 };
@@ -74,6 +79,31 @@ function AppRoutes() {
   useRetryFailedPreviews();
   const { isAuthenticated, isLoading, isSetupRequired } = useAuth();
   const location = useLocation();
+
+  useEffect(() => {
+    logNavigation('route-render', {
+      pathname: location.pathname,
+      search: location.search,
+      hash: location.hash,
+    });
+  }, [location]);
+
+  useEffect(() => {
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const interactive = target?.closest('button, a, [role="button"]');
+      logNavigation('document-click-capture', {
+        target: target?.tagName.toLowerCase() || null,
+        targetClass: target?.className || null,
+        interactive: interactive?.tagName.toLowerCase() || null,
+        interactiveTitle: interactive?.getAttribute('title') || null,
+        interactiveText: interactive?.textContent?.trim().slice(0, 80) || null,
+        defaultPrevented: event.defaultPrevented,
+      });
+    };
+    document.addEventListener('click', handleClick, true);
+    return () => document.removeEventListener('click', handleClick, true);
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated) return;

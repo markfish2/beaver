@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, Fragment, useRef, useCallback, lazy } from 'react';
 import type { SetStateAction } from 'react';
-import { Menu } from 'lucide-react';
+import { Menu, Search } from 'lucide-react';
 import NodeItem from './NodeItem';
 import MobileToolbar from './MobileToolbar';
 import { useMobileToolbar } from '../context/MobileToolbarContext';
@@ -21,6 +21,7 @@ import { useUserView } from '../context/UserViewContext';
 import type { UserSubView } from '../context/UserViewContext';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { getNodes, getDocument, updateNode, updateDocument, deleteNode, createNode, createNodesBatch, uploadFile, batchUpdateNodes, batchMoveNodes, batchDeleteNodes, moveNode, getDiaryDayDates, getOrCreateDayNode, getMonthlyDiary } from '../api/data';
+import { dataCache } from '../api/cache';
 import type { Node, Document } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
 import { useSearch } from '../context/SearchContext';
@@ -34,6 +35,7 @@ import { createCommandFactory } from '../commands/implementations';
 import { saveStateManager, sendBatchSaveRequest, PendingOperation } from '../utils/saveStateManager';
 import { saveViewState, saveScrollPosition, loadScrollPosition } from '../utils/pwaState';
 import { getErrorMessage } from '../utils/errors';
+import { logNavigation } from '../utils/navigationDebug';
 import { flattenParsedNodes, parseMarkdown } from './mainAreaClipboard';
 import type { ParsedNode } from './mainAreaClipboard';
 
@@ -295,6 +297,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const [searchParams, setSearchParams] = useSearchParams();
   const { updateDocumentTitle, documents } = useDocuments();
   const { searchQuery, setSearchQuery } = useSearch();
+  const [showOutlineFilter, setShowOutlineFilter] = useState(false);
   const diaryCtx = useDiary();
   const fetchIdRef = useRef(0);
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -361,7 +364,38 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   }, [scrollToElement]);
   const [focusedNodeId, setFocusedNodeId] = useState<{ id: string, field: 'content' | 'note' } | null>(null);
 
-  const [zoomedNodeId, setZoomedNodeId] = useState<string | null>(null);
+  const [zoomedNodeState, setZoomedNodeState] = useState<{ documentId: string | null; nodeId: string | null }>({ documentId, nodeId: null });
+  const zoomedNodeId = zoomedNodeState.documentId === documentId ? zoomedNodeState.nodeId : null;
+  const setZoomedNodeId = useCallback((nodeId: string | null) => {
+    setZoomedNodeState({ documentId: documentId ?? null, nodeId });
+  }, [documentId]);
+  const focusBreadcrumbs = useMemo(() => {
+    const documentBreadcrumb = {
+      id: `document:${currentDoc?.id ?? documentId ?? ''}`,
+      label: currentDoc?.title || '无标题',
+      nodeId: null as string | null,
+    };
+    if (!zoomedNodeId || !currentDoc) return [documentBreadcrumb];
+
+    const nodeMap = new Map(nodes.map(node => [node.id, node]));
+    const path: { id: string; label: string; nodeId: string }[] = [];
+    const visited = new Set<string>();
+    let currentNode = nodeMap.get(zoomedNodeId);
+
+    while (currentNode && !visited.has(currentNode.id)) {
+      visited.add(currentNode.id);
+      path.unshift({
+        id: currentNode.id,
+        label: currentNode.content || '无标题',
+        nodeId: currentNode.id,
+      });
+      currentNode = currentNode.parent_node_id
+        ? nodeMap.get(currentNode.parent_node_id)
+        : undefined;
+    }
+
+    return [documentBreadcrumb, ...path];
+  }, [currentDoc, documentId, nodes, zoomedNodeId]);
   const [tagFilterState, setTagFilterState] = useState<{ documentId: string | null; value: string | null }>({ documentId, value: null });
   const tagFilter = tagFilterState.documentId === documentId ? tagFilterState.value : null;
   const setTagFilter = useCallback((action: SetStateAction<string | null>) => {
@@ -988,6 +1022,18 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     }
   }, [documentId, fetchData]);
 
+  useEffect(() => {
+    logNavigation('main-area-document-state', {
+      documentId,
+      urlDocumentId,
+      diaryDocId,
+      currentDocId: currentDoc?.id || null,
+      currentDocType: currentDoc?.type || null,
+      diaryDate: currentDoc?.diary_date || null,
+      isDiaryDoc,
+    });
+  }, [currentDoc?.diary_date, currentDoc?.id, currentDoc?.type, diaryDocId, documentId, isDiaryDoc, urlDocumentId]);
+
   // Fetch diary days when document changes
   useEffect(() => {
     if (isDiaryDoc && diaryYear !== null && diaryMonth !== null) {
@@ -997,6 +1043,21 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     const timer = window.setTimeout(() => setDiaryDays(new Set()), 0);
     return () => window.clearTimeout(timer);
   }, [currentDoc?.diary_date, diaryMonth, diaryYear, isDiaryDoc, setDiaryDays]);
+
+  // 项目任务完成/取消完成会联动当天日记：收到事件后失效缓存并热更新日记文档与日历
+  useEffect(() => {
+    if (!isDiaryDoc || diaryYear === null || diaryMonth === null || !documentId) return;
+    const refreshFromTaskToggle = () => {
+      dataCache.invalidate(`nodes:${documentId}`);
+      dataCache.invalidate(`diary:days:${diaryYear}:${diaryMonth}`);
+      fetchData(documentId, ++fetchIdRef.current);
+      getDiaryDayDates(diaryYear, diaryMonth)
+        .then(days => setDiaryDays(new Set(days)))
+        .catch(() => {});
+    };
+    window.addEventListener('diary-tasks-updated', refreshFromTaskToggle);
+    return () => window.removeEventListener('diary-tasks-updated', refreshFromTaskToggle);
+  }, [isDiaryDoc, diaryYear, diaryMonth, documentId, fetchData, setDiaryDays]);
 
   // Handle clicking a day in the diary date bar (returns true if handled)
   const handleDiaryDayClick = useCallback(async (day: number): Promise<boolean> => {
@@ -1071,13 +1132,20 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
 
   // Register/unregister diary handler with context
   useEffect(() => {
+    logNavigation('main-area-diary-handler', {
+      documentId,
+      isDiaryDoc,
+      diaryYear,
+      diaryMonth,
+      action: isDiaryDoc && diaryYear !== null && diaryMonth !== null ? 'register' : 'unregister',
+    });
     if (isDiaryDoc && diaryYear !== null && diaryMonth !== null) {
       registerDiaryHandler(diaryYear, diaryMonth, handleDiaryDayClick);
     } else {
       unregisterDiaryHandler();
     }
     return () => unregisterDiaryHandler();
-  }, [isDiaryDoc, diaryYear, diaryMonth, handleDiaryDayClick, registerDiaryHandler, unregisterDiaryHandler]);
+  }, [documentId, isDiaryDoc, diaryYear, diaryMonth, handleDiaryDayClick, registerDiaryHandler, unregisterDiaryHandler]);
 
   // Register addNode callback for drag-drop hot update
   useEffect(() => {
@@ -1439,13 +1507,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
               
               if (nodes.length <= 1) {
                 e.stopPropagation();
-                if (currentDoc) {
-                  const cmd = commands.createCreateNodeCommand({
-                    document_id: currentDoc.id, content: '', parent_node_id: null, sort_order: createSortOrder()
-                  });
-                  execute(cmd);
-                  if (cmd.nodeId) setFocusedNodeId({ id: cmd.nodeId, field: 'content' });
-                }
+                setFocusedNodeId(null);
+                setFocusedNodeIdForToolbar(null);
+                execute(commands.createDeleteNodeCommand(currentNode, []));
                 return;
               }
 
@@ -2489,7 +2553,10 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   // User sub-view rendering
   if (userSubView) {
     return (
-      <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      <div
+        className="flex-1 h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+        style={document.documentElement.dataset.mobileLayout ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 44px)', paddingBottom: '52px' } : undefined}
+      >
         {userSubView === 'profile' && <UserProfileEditor />}
         {userSubView === 'appearance' && <AppearanceSettingsPage />}
         {userSubView === 'token' && <TokenPanel />}
@@ -2529,122 +2596,127 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         && !isDiaryDoc
         && viewMode === 'outline'
         && (
-          <div className="flex items-center justify-between px-6 bg-gray-50/80 dark:bg-gray-800/50" style={{ minHeight: '3rem', paddingTop: isMobile ? 'env(safe-area-inset-top)' : undefined, boxShadow: '0 2px 8px -3px rgba(0,0,0,0.08)' }}>
+          <div className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-2 dark:border-gray-700 dark:bg-gray-900" style={{ paddingTop: isMobile ? 'env(safe-area-inset-top)' : undefined }}>
             <div className="flex items-center flex-wrap gap-1">
-          {/* 移动端菜单按钮 */}
-          {isMobile && (
-            <button
-              onClick={() => {
-                const event = new CustomEvent('toggleSidebar');
-                window.dispatchEvent(event);
-              }}
-              className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 transition-colors"
-              title="打开菜单"
-            >
-              <Menu size={16} />
-            </button>
-          )}
-          {/* 聚焦层级面包屑 */}
-          {zoomedNodeId && (() => {
-            const getAncestors = (nodeId: string): Node[] => {
-              const ancestors: Node[] = [];
-              let currentId: string | null = nodeId;
-              while (currentId) {
-                const node = nodes.find(n => n.id === currentId);
-                if (node) {
-                  ancestors.unshift(node);
-                  currentId = node.parent_node_id;
-                } else {
-                  break;
-                }
-              }
-              return ancestors;
-            };
-            
-            const ancestors = getAncestors(zoomedNodeId);
-            const maxLength = isMobile ? 3 : 15;
-            
-            return ancestors.map((ancestor, index) => (
-              <Fragment key={ancestor.id}>
-                {index > 0 && (
-                  <span className="text-sm text-gray-400 dark:text-gray-500 mx-1">
-                    {'>'}
-                  </span>
-                )}
-                <span 
-                  className={`text-sm cursor-pointer ${
-                    index === ancestors.length - 1 
-                      ? 'text-yellow-600 dark:text-yellow-400 font-medium' 
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                  }`}
-                  onClick={() => setZoomedNodeId(ancestor.id)}
-                  title={ancestor.content || '无标题'}
+              {/* 移动端菜单按钮 */}
+              {isMobile && (
+                <button
+                  onClick={() => {
+                    const event = new CustomEvent('toggleSidebar');
+                    window.dispatchEvent(event);
+                  }}
+                  className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 transition-colors"
+                  title="打开菜单"
                 >
-                  {(ancestor.content.slice(0, maxLength) || '无标题')}
-                  {ancestor.content.length > maxLength ? '...' : ''}
-                </span>
-              </Fragment>
-            ));
-          })()}
-          
-          {searchQuery && documentId && (
-            <div className="ml-4 flex items-center bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-full text-xs animate-in fade-in">
-              <span className="text-blue-600 dark:text-blue-400 mr-2">正在过滤: {searchQuery}</span>
-              <button 
-                onClick={() => setSearchQuery('')} 
-                className="text-blue-400 hover:text-blue-600 dark:hover:text-blue-300"
-              >✕</button>
-            </div>
-          )}
+                  <Menu size={16} />
+                </button>
+              )}
+              {/* 聚焦层级面包屑：始终从文档标题开始，避免聚焦后无法返回 */}
+              <div className="min-w-0 flex-1 flex items-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-none">
+                {focusBreadcrumbs.map((breadcrumb, index) => (
+                  <Fragment key={breadcrumb.id}>
+                    {index > 0 && <span className="editor-topbar-action shrink-0 text-sm text-gray-400 dark:text-gray-500">/</span>}
+                    <button
+                      type="button"
+                      onClick={() => setZoomedNodeId(breadcrumb.nodeId)}
+                      className={`editor-topbar-action max-w-[min(42vw,18rem)] shrink-0 truncate text-left text-sm transition-colors ${
+                        index === focusBreadcrumbs.length - 1
+                          ? 'font-medium text-gray-700 dark:text-gray-200'
+                          : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                      }`}
+                      title={breadcrumb.label}
+                      aria-current={index === focusBreadcrumbs.length - 1 ? 'page' : undefined}
+                    >
+                      {breadcrumb.label}
+                    </button>
+                  </Fragment>
+                ))}
+              </div>
+
+              {searchQuery && documentId && (
+                <div className="editor-topbar-action ml-4 flex items-center bg-blue-50 dark:bg-blue-900/30 px-3 py-1.5 rounded-full text-sm animate-in fade-in">
+                  <span className="text-blue-600 dark:text-blue-400 mr-2">正在过滤: {searchQuery}</span>
+                  <button onClick={() => setSearchQuery('')} className="text-blue-400 hover:text-blue-600 dark:hover:text-blue-300">✕</button>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
-          {currentDoc?.type === 'document' && (
-            <button
-              onClick={() => setViewMode('mindmap')}
-              className="p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors"
-              title="思维导图"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-              </svg>
-            </button>
-          )}
-          {currentDoc?.type !== 'note' && (
-            <button
-              onClick={() => {
-                const hasCollapsed = nodes.some(n => n.is_collapsed);
-                if (hasCollapsed) {
-                  const collapsedNodeIds = nodes.filter(n => n.is_collapsed).map(n => n.id);
-                  execute(commands.createBatchTogglePropertyCommand(collapsedNodeIds, 'is_collapsed', false));
-                } else {
-                  const nodesWithChildren = nodes.filter(n => nodes.some(child => child.parent_node_id === n.id));
-                  const expandedNodeIds = nodesWithChildren.map(n => n.id);
-                  execute(commands.createBatchTogglePropertyCommand(expandedNodeIds, 'is_collapsed', true));
-                }
-              }}
-              className="p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors"
-              title={nodes.some(n => n.is_collapsed) ? "展开全部" : "折叠全部"}
-            >
-              {nodes.some(n => n.is_collapsed) ? (
+              {/* 大纲过滤：独立于全局搜索 */}
+              <div className="flex items-center gap-1.5">
+                {showOutlineFilter && (
+                  <input
+                    autoFocus
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setShowOutlineFilter(false);
+                        setSearchQuery('');
+                      }
+                    }}
+                    placeholder="过滤当前大纲..."
+                    className="editor-topbar-action w-40 rounded-md border border-gray-200 bg-white px-2 py-1 text-sm outline-none placeholder:text-gray-400 focus:border-blue-400 dark:border-gray-700 dark:bg-gray-800"
+                  />
+                )}
+                <button
+                  onClick={() => {
+                    if (showOutlineFilter) setSearchQuery('');
+                    setShowOutlineFilter(v => !v);
+                  }}
+                  className={`editor-topbar-action p-2 rounded-md transition-colors ${
+                    searchQuery
+                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700'
+                  }`}
+                  title={searchQuery ? `正在过滤: ${searchQuery}` : '过滤当前大纲'}
+                >
+                  <Search className="w-5 h-5" />
+                </button>
+              </div>
+              <button
+                onClick={() => setViewMode('mindmap')}
+                className="editor-topbar-action p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors"
+                title="思维导图"
+              >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 13l-7 7-7-7m14-8l-7 7-7-7" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                 </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 11l7-7 7 7M5 19l7-7 7 7" />
-                </svg>
-              )}
-            </button>
-          )}
-          <DocumentSettingsMenu
-            nodes={nodes}
-            currentDoc={currentDoc}
-            generateMarkdownPreview={generateMarkdownPreview}
-          />
-          <SaveStatusIndicator status={saveStatus} pendingCount={pendingCount} offlineQueueCount={offlineQueueCount} />
-        </div>
-      </div>
-      )}
+              </button>
+              <button
+                onClick={() => {
+                  const hasCollapsed = nodes.some(n => n.is_collapsed);
+                  if (hasCollapsed) {
+                    const collapsedNodeIds = nodes.filter(n => n.is_collapsed).map(n => n.id);
+                    execute(commands.createBatchTogglePropertyCommand(collapsedNodeIds, 'is_collapsed', false));
+                  } else {
+                    const nodesWithChildren = nodes.filter(n => nodes.some(child => child.parent_node_id === n.id));
+                    const expandedNodeIds = nodesWithChildren.map(n => n.id);
+                    execute(commands.createBatchTogglePropertyCommand(expandedNodeIds, 'is_collapsed', true));
+                  }
+                }}
+                className="editor-topbar-action p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors"
+                title={nodes.some(n => n.is_collapsed) ? "展开全部" : "折叠全部"}
+              >
+                {nodes.some(n => n.is_collapsed) ? (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 13l-7 7-7-7m14-8l-7 7-7-7" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 11l7-7 7 7M5 19l7-7 7 7" />
+                  </svg>
+                )}
+              </button>
+              <DocumentSettingsMenu
+                nodes={nodes}
+                currentDoc={currentDoc}
+                generateMarkdownPreview={generateMarkdownPreview}
+              />
+              <SaveStatusIndicator status={saveStatus} pendingCount={pendingCount} offlineQueueCount={offlineQueueCount} />
+            </div>
+          </div>
+        )}
 
       {!isOnline && (
         <div className="bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 px-6 py-2">
@@ -2683,8 +2755,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       {/* Outline View - Only show in outline mode */}
       {viewMode === 'outline' && currentDoc?.type !== 'note' && currentDoc?.type !== 'excalidraw' && (
         <>
+        <div className="toc-layout-container flex-1 min-h-0 flex overflow-hidden">
         <div
-          className="main-content-area flex-1 overflow-y-auto px-8 py-8 custom-scrollbar"
+          className="main-content-area outline-content-scroll-area min-w-0 flex-1 overflow-y-auto px-8 py-8 custom-scrollbar"
           onClick={() => updateSelectedNodeIds([])}
         >
           <div className="max-w-[900px] ml-auto mr-auto md:ml-16 md:mr-auto">
@@ -2953,6 +3026,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           </div>
         </div>
         {!isMobile && <TableOfContents nodes={sortedNodes} documentId={documentId} />}
+        </div>
         </>
       )}
 

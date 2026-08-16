@@ -11,6 +11,8 @@ import 'katex/dist/katex.min.css';
 import { preserveCodeBlocks } from '../utils/preserveCodeBlocks';
 import { askAI, getAIConversation, createMemo, createDocument, createNode, getSkills, Skill } from '../api/data';
 import MermaidBlock from './MermaidBlock';
+import { getMemoPalette, getMemoPaletteStyle } from './memoCardTheme';
+import { useIsDark } from '../hooks/useIsDark';
 import { useDocuments } from '../context/DocumentContext';
 import { useAuth } from '../context/AuthContext';
 import { showToast } from '../utils/toast';
@@ -40,6 +42,10 @@ type MarkdownLinkProps = Parameters<NonNullable<Components['a']>>[0];
 export default function AIChatMainView({ conversationId, onConversationCreated, onNavigate }: AIChatMainViewProps) {
   const { addDocument } = useDocuments();
   const { user } = useAuth();
+  const isDark = useIsDark();
+  // AI 回复使用与 MemoCard 一致的默认配色（白色卡片 + 当前 markdown 主题）
+  const palette = getMemoPalette(isDark, undefined);
+  const bgColor = palette.background;
   const nickname = user?.nickname || user?.username || '';
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -256,15 +262,29 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
         ) : null}
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`px-4 py-3 relative group overflow-hidden ${
-              msg.role === 'user'
-                ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 max-w-[70%]'
-                : 'bg-white dark:bg-gray-800/50 border border-[#dad9d4] dark:border-gray-700/40 text-gray-800 dark:text-gray-200'
-            }`} style={{ borderRadius: '8px', wordBreak: 'break-word', maxWidth: msg.role === 'user' ? undefined : 'calc(100% - 30px)' }}>
+            <div
+              className={`relative group overflow-hidden ${
+                msg.role === 'user'
+                  ? 'bg-blue-50 px-4 py-3 text-gray-900 dark:bg-blue-900/20 dark:text-gray-100 max-w-[70%]'
+                  : 'memo-card-themed rounded-xl border p-4'
+              }`}
+              style={
+                msg.role === 'user'
+                  ? { borderRadius: '8px', wordBreak: 'break-word' }
+                  : {
+                      ...getMemoPaletteStyle(palette),
+                      backgroundColor: bgColor,
+                      color: palette.text,
+                      borderColor: palette.border,
+                      wordBreak: 'break-word',
+                      maxWidth: 'calc(100% - 30px)',
+                    }
+              }
+            >
               {msg.role === 'user' ? (
                 <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
               ) : (
-                <div className="text-sm prose prose-sm dark:prose-invert max-w-none overflow-hidden">
+                <div className="memo-content text-base relative overflow-hidden" style={{ lineHeight: '1.75', color: palette.text }}>
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
                     rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]}
@@ -357,9 +377,9 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
             </p>
           )}
           <div>
-            <div className="relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-2xl focus-within:border-gray-400 dark:focus-within:border-gray-500 transition-colors shadow-sm">
+            <div className="relative rounded-xl border border-[#dad9d4] bg-[#ffffff] dark:border-gray-700/40 dark:bg-gray-800/50">
             {/* 第一行：模式 + Skill + Skill 标签 */}
-            <div className="flex items-center gap-1 px-3 pt-2.5">
+            <div className="flex items-center gap-1 px-4 pt-4">
               <button
                 onClick={() => setMode(mode === 'data' ? 'web' : 'data')}
                 className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
@@ -412,7 +432,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
               )}
             </div>
             {/* 第二行：输入框 + 发送按钮 */}
-            <div className="flex items-end px-3 pb-2.5 pt-1">
+            <div className="flex items-end gap-2 px-4 pb-3 pt-1">
               <textarea
                 ref={inputRef}
                 value={input}
@@ -430,13 +450,14 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || loading}
-                className={`flex-shrink-0 ml-2 w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
+                className={`flex flex-shrink-0 items-center gap-1.5 rounded-lg py-1.5 pl-4 pr-2 text-sm font-medium transition-colors disabled:cursor-not-allowed ${
                   input.trim()
-                    ? 'bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200'
-                    : 'bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400'
-                } disabled:opacity-30 disabled:cursor-not-allowed`}
+                    ? 'bg-gray-900 text-white hover:bg-gray-700 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-300'
+                    : 'bg-[#ebebeb] text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                } disabled:opacity-40`}
               >
-                <Send className="w-4 h-4" />
+                <Send className="h-3.5 w-3.5" />
+                发送
               </button>
             </div>
             </div>

@@ -15,9 +15,9 @@ function getFirstDayOfWeek(year: number, month: number) {
 
 function getIntensity(count: number): string {
   if (count === 0) return '';
-  if (count === 1) return 'bg-[#a3bdd6] dark:bg-[#2a3a50]';
-  if (count <= 3) return 'bg-[#6b8ab5] dark:bg-[#3f587f]';
-  return 'bg-[#3f587f] dark:bg-[#6b8ab5]';
+  if (count === 1) return 'bg-[#b9d9d0] dark:bg-[#2f554e]';
+  if (count <= 3) return 'bg-[#75b4a4] dark:bg-[#4d9383]';
+  return 'bg-[#4d9383] dark:bg-[#75b4a4]';
 }
 
 export default function MemoHeatmapCalendar({ embedded = false }: { embedded?: boolean } = {}) {
@@ -56,7 +56,7 @@ export default function MemoHeatmapCalendar({ embedded = false }: { embedded?: b
   while (cells.length % 7 !== 0) cells.push(null);
 
   return (
-    <div className={embedded ? 'px-1' : 'bg-white dark:bg-gray-800/50 rounded-xl p-4 border border-[#e7e7e5] dark:border-gray-700/40'}>
+    <div className={embedded ? 'px-1' : 'bg-white dark:bg-gray-800/50 rounded-2xl p-4 border border-[#e7e7e5] dark:border-gray-700/40'}>
       <div className="flex items-center justify-between mb-3">
         <button onClick={prevMonth} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors">
           <ChevronLeft className="w-4 h-4 text-gray-500 dark:text-gray-400" />
@@ -99,9 +99,9 @@ export default function MemoHeatmapCalendar({ embedded = false }: { embedded?: b
       <div className="flex items-center justify-end gap-1 mt-2">
         <span className="text-[9px] text-gray-400">少</span>
         <div className="w-3 h-3 rounded-[5px] bg-[#f4f2ec] dark:bg-gray-800" />
-        <div className="w-3 h-3 rounded-[5px] bg-[#a3bdd6] dark:bg-[#2a3a50]" />
-        <div className="w-3 h-3 rounded-[5px] bg-[#6b8ab5] dark:bg-[#3f587f]" />
-        <div className="w-3 h-3 rounded-[5px] bg-[#3f587f] dark:bg-[#6b8ab5]" />
+        <div className="w-3 h-3 rounded-[5px] bg-[#b9d9d0] dark:bg-[#2f554e]" />
+        <div className="w-3 h-3 rounded-[5px] bg-[#75b4a4] dark:bg-[#4d9383]" />
+        <div className="w-3 h-3 rounded-[5px] bg-[#4d9383] dark:bg-[#75b4a4]" />
         <span className="text-[9px] text-gray-400">多</span>
       </div>
     </div>

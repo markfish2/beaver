@@ -1,6 +1,6 @@
-import { Search, FileText, ChevronDown, Plus, Trash, Star, LogOut, ChevronLeft, ChevronRight, Folder, Edit2, CalendarDays, MoreHorizontal, Copy, ArrowUpRight, ListTree, FolderPlus, FilePlus, Move, Frame, StickyNote, Square, Key, Clock, Lock, Sparkles, User, Sun, Moon, FolderKanban, Archive, Palette } from 'lucide-react';
+import { Search, FileText, ChevronDown, Plus, Trash, Star, LogOut, ChevronLeft, ChevronRight, Folder, Edit2, CalendarDays, MoreHorizontal, Copy, ArrowUpRight, FolderPlus, FilePlus, FileUp, Move, Frame, StickyNote, Key, Lock, Sparkles, User, Archive, Palette, SquarePen } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { createDocument, deleteDocument, updateDocument, copyDocument, getNodes, createMemo, uploadFile, search as apiSearch, getTodos, createTodo, updateTodo, getMonthlyDiary, getOrCreateDayNode } from '../api/data';
+import { createDocument, deleteDocument, updateDocument, copyDocument, getNodes, createNodesBatch, createMemo, uploadFile, search as apiSearch, getTodos, createTodo, updateTodo, getMonthlyDiary, getOrCreateDayNode } from '../api/data';
 import type { Document as DocType, SearchResultItem, Todo } from '../api/data';
 import { createExcalidrawDocument, getExcalidrawDataFresh } from '../api/excalidraw';
 import { saveStateManager } from '../utils/saveStateManager';
@@ -15,6 +15,8 @@ import DeleteConfirmDialog from './DeleteConfirmDialog';
 import NewFolderDialog from './NewFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
 import FolderIcon from './FolderIcon';
+import DocumentTypeIcon from './DocumentTypeIcon';
+import NavigationIcon from './NavigationIcon';
 import DiaryCalendar from './DiaryCalendar';
 import TokenDialog from './TokenDialog';
 import TrashDialog from './TrashDialog';
@@ -27,6 +29,8 @@ import type { Project } from '../api/projects';
 import { formatRelativeTime, highlightSidebarText as highlightText } from './sidebarFormatting';
 import { useFontSettings } from './FontSettings';
 import { useIsDark } from '../hooks/useIsDark';
+import { logNavigation } from '../utils/navigationDebug';
+import { showToast } from '../utils/toast';
 
 interface SidebarProps {
   onDocumentSelect?: () => void;
@@ -76,7 +80,7 @@ const VIEW_MODES: ViewMode[] = ['diary', 'all', 'starred', 'recent', 'memo', 'us
 
 const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: SidebarProps) => {
   const { documents, isLoading, refreshDocuments, updateDocumentLocal, moveDocument, addDocument, removeDocument } = useDocuments();
-  const { searchQuery, setSearchQuery } = useSearch();
+  const { setSearchOpen } = useSearch();
   const [isExpanded, setIsExpanded] = useState<Record<string, boolean>>(() => {
     try {
       return JSON.parse(sessionStorage.getItem(SIDEBAR_FOLDERS_STATE_KEY) || '{}');
@@ -93,21 +97,22 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     }
   });
   const [isSearchMode, setIsSearchMode] = useState(false);
+  const [sidebarSearchQuery, setSidebarSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
-  const visibleSearchResults = isSearchMode && searchQuery.trim() ? searchResults : [];
+  const visibleSearchResults = isSearchMode && sidebarSearchQuery.trim() ? searchResults : [];
   const [searchLoading, setSearchLoading] = useState(false);
   const [recentDocuments, setRecentDocuments] = useState<DocType[]>([]);
 
   // 防抖搜索 - 调用后端全文搜索 API
   useEffect(() => {
-    if (!isSearchMode || !searchQuery.trim()) {
+    if (!isSearchMode || !sidebarSearchQuery.trim()) {
       return;
     }
     const timer = setTimeout(async () => {
       setSearchLoading(true);
       try {
-        const resp = await apiSearch(searchQuery.trim());
+        const resp = await apiSearch(sidebarSearchQuery.trim());
         setSearchResults(resp.results);
       } catch {
         setSearchResults([]);
@@ -116,7 +121,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery, isSearchMode]);
+  }, [sidebarSearchQuery, isSearchMode]);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     try {
       const savedMode: unknown = JSON.parse(sessionStorage.getItem(SIDEBAR_PANEL_STATE_KEY) || '{}').viewMode;
@@ -180,10 +185,13 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   }, [viewMode]);
   const [newMenuTarget] = useState<string | null>(null);
   const newMenuRef = useRef<HTMLDivElement>(null);
+  const markdownInputRef = useRef<HTMLInputElement>(null);
+  const markdownImportParentRef = useRef<string | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ show: boolean; id: string; title: string; type: 'document' | 'folder'; deleteMode?: 'move' | 'all' }>({ show: false, id: '', title: '', type: 'document' });
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
   const [editFolderDialog, setEditFolderDialog] = useState<{ show: boolean; id: string; title: string; icon?: string }>({ show: false, id: '', title: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isImportingMarkdown, setIsImportingMarkdown] = useState(false);
   const [draggedItem, setDraggedItem] = useState<{ id: string; type: 'document' | 'folder' } | null>(null);
   const draggedItemRef = useRef<{ id: string; type: 'document' | 'folder' } | null>(null);
   const [dragOverItem, setDragOverItem] = useState<string | null>(null);
@@ -214,6 +222,8 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     docId: string; docTitle: string; docType: 'document' | 'folder'; isStarred: boolean; aiExcluded: boolean; x: number; y: number; buttonBottom: number;
   } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const [rootContextMenu, setRootContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const rootContextMenuRef = useRef<HTMLDivElement>(null);
   const [moveDialog, setMoveDialog] = useState<{ show: boolean; docId: string; docTitle: string; docType: 'document' | 'folder' }>({ show: false, docId: '', docTitle: '', docType: 'document' });
   const [moveTargetFolder, setMoveTargetFolder] = useState<string | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -405,6 +415,9 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
         setContextMenu(null);
       }
+      if (rootContextMenuRef.current && !rootContextMenuRef.current.contains(event.target as Node)) {
+        setRootContextMenu(null);
+      }
       if (newMenuRef.current && !newMenuRef.current.contains(event.target as Node)) {
         setShowNewMenu(false);
       }
@@ -525,15 +538,15 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   }, [compareFileItem, filteredDocuments]);
 
   const localSearchResults = useMemo(() => {
-    if (!searchQuery.trim()) {
+    if (!sidebarSearchQuery.trim()) {
       return null;
     }
     
-    const query = searchQuery.toLowerCase().trim();
+    const query = sidebarSearchQuery.toLowerCase().trim();
     return documents
       .filter(d => DOCUMENT_ITEM_TYPES.has(d.type) && d.title.toLowerCase().includes(query))
       .sort(compareByLastEdited);
-  }, [compareByLastEdited, documents, searchQuery]);
+  }, [compareByLastEdited, documents, sidebarSearchQuery]);
 
   const handleCreateDocument = async (parentId?: string | null) => {
     try {
@@ -560,6 +573,55 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       window.dispatchEvent(new CustomEvent('sidebarClose'));
     } catch (error) {
       console.error('Failed to create note', error);
+    }
+  };
+
+  const openMarkdownImport = (parentId: string | null = null) => {
+    markdownImportParentRef.current = parentId;
+    markdownInputRef.current?.click();
+  };
+
+  const handleMarkdownImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []).filter(file => /\.(md|markdown)$/i.test(file.name));
+    event.target.value = '';
+    if (files.length === 0) return;
+
+    const parentId = markdownImportParentRef.current;
+    markdownImportParentRef.current = null;
+    setIsImportingMarkdown(true);
+    let importedCount = 0;
+    let failedCount = 0;
+
+    try {
+      for (const [index, file] of files.entries()) {
+        try {
+          const content = await file.text();
+          const title = file.name.replace(/\.(md|markdown)$/i, '').trim() || '无标题笔记';
+          const newDoc = await createDocument(title, 'note', parentId, Date.now() + index);
+          const createdNodes = await createNodesBatch([{
+            document_id: newDoc.id,
+            content,
+            parent_node_id: null,
+            sort_order: Date.now() + index,
+          }]);
+          if (createdNodes.length !== 1 || createdNodes[0].content !== content) {
+            throw new Error('Markdown 正文校验失败');
+          }
+          addDocument(newDoc);
+          importedCount += 1;
+        } catch (error) {
+          failedCount += 1;
+          console.error(`导入 Markdown 文件失败：${file.name}`, error);
+        }
+      }
+      closeArchivedProjects();
+      if (failedCount > 0) {
+        showToast(`已导入 ${importedCount} 个 md 文件，${failedCount} 个文件导入失败`, 'error');
+      } else {
+        showToast(`已成功导入 ${importedCount} 个 md 文件`);
+      }
+    } finally {
+      setIsImportingMarkdown(false);
     }
   };
 
@@ -615,6 +677,14 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     }
   };
 
+  const handleRootContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (viewMode !== 'all' && viewMode !== 'starred' && viewMode !== 'recent') return;
+    if ((e.target as HTMLElement).closest('[data-file-tree-item]')) return;
+    e.preventDefault();
+    setContextMenu(null);
+    setRootContextMenu({ x: e.clientX, y: e.clientY });
+  };
+
   const handleEditFolder = async (folderId: string, title: string) => {
     const oldDoc = documents.find(d => d.id === folderId);
     const oldTitle = oldDoc?.title;
@@ -664,19 +734,6 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     setContentExpanded(prev => !prev);
   };
 
-  const toggleSearch = () => {
-    if (isSearchMode && contentExpanded) {
-      setIsSearchMode(false);
-      setContentExpanded(false);
-      setSearchQuery('');
-    } else {
-      setIsSearchMode(true);
-      setUserSubViewContext(null);
-      setContentExpanded(true);
-      setTimeout(() => searchInputRef.current?.focus(), 100);
-    }
-  };
-
   const handleSearchResultClick = (result: SearchResultItem) => {
     closeArchivedProjects();
     switch (result.result_type) {
@@ -690,7 +747,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
         navigate(`/d/${result.entity_id}?_t=${navigationNonce()}`);
         break;
       case 'memo':
-        navigate(`/?search=${encodeURIComponent(searchQuery)}&highlight=${result.entity_id}&_t=${navigationNonce()}`);
+        navigate(`/?highlight=${result.entity_id}&_t=${navigationNonce()}`);
         break;
     }
     onDocumentSelect?.();
@@ -698,6 +755,11 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   };
 
   const toggleViewPanel = (nextView: ViewMode) => {
+    logNavigation('sidebar-toggle-view-panel', {
+      fromView: viewMode,
+      toView: nextView,
+      contentExpanded,
+    });
     setIsSearchMode(false);
     setUserSubViewContext(null);
     if (viewMode === nextView && contentExpanded) {
@@ -713,6 +775,12 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   const memoResults = visibleSearchResults.filter(r => r.result_type === 'memo');
 
   const handleSelect = (id: string, type: 'document' | 'folder' | 'note' | 'excalidraw') => {
+    logNavigation('sidebar-handle-select', {
+      documentId: id,
+      type,
+      viewMode,
+      contentExpanded,
+    });
     setContextMenu(null);
     if (type === 'document' || type === 'note' || type === 'excalidraw') {
       closeArchivedProjects();
@@ -863,7 +931,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   const renderFileTree = (parentId: string | null, level: number) => {
     let children;
 
-    if (searchQuery.trim() && localSearchResults) {
+    if (sidebarSearchQuery.trim() && localSearchResults) {
       if (parentId === null) {
         children = localSearchResults;
       } else {
@@ -894,23 +962,28 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       <div className="space-y-px">
         {children.map((doc) => {
           const isFolder = doc.type === 'folder';
+          const folderIconType = isFolder && isExpanded[doc.id] ? 'folder-open' : doc.type;
           return (
             <div key={doc.id}>
               <div
+                data-file-tree-item
                 draggable
                 onDragStart={(e) => handleDragStart(e, doc)}
                 onDragOver={(e) => handleDragOver(e, doc)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, doc)}
                 onDragEnd={handleDragEnd}
-                className={`flex items-center px-2 py-2 rounded cursor-pointer group transition-all ${
+                className={`flex items-center px-2 py-1.5 rounded-full cursor-pointer group transition-all ${
                   documentId === doc.id
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-medium shadow-sm ring-1 ring-gray-100 dark:ring-gray-700'
+                    ? 'bg-[#f1f1f1] text-gray-900 dark:bg-gray-700 dark:text-gray-100 font-medium'
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200/50 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-gray-200'
                 } ${dragOverItem === doc.id && isFolder ? 'bg-gray-500 ring-2 ring-gray-400' : ''} ${
                   draggedItem?.id === doc.id ? 'opacity-50' : ''
                 } ${clickedFolderId === doc.id ? 'bg-gray-300/70 dark:bg-gray-600/70' : ''}`}
-                style={{ paddingLeft: `${level * 6 + 4}px` }}
+                style={{
+                  marginLeft: `${level * 12 + 4}px`,
+                  paddingLeft: '4px',
+                }}
                 onClick={(e) => {
                   if (longPressTriggeredRef.current) {
                     longPressTriggeredRef.current = false;
@@ -921,6 +994,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                 }}
                 onContextMenu={(e) => {
                   e.preventDefault();
+                  setRootContextMenu(null);
                   setContextMenu({
                     docId: doc.id,
                     docTitle: doc.title || '无标题',
@@ -940,7 +1014,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                   {isFolder && (
                     isExpanded[doc.id] ? <ChevronDown className="w-3.5 h-3.5 mr-0.5 text-gray-400 dark:text-gray-500" /> : <ChevronRight className="w-3.5 h-3.5 mr-0.5 text-gray-400 dark:text-gray-500" />
                   )}
-                  {isFolder ? <FolderIcon className="w-5 h-5" /> : doc.type === 'note' ? <FileText className="w-5 h-5 text-gray-500 dark:text-gray-400" /> : doc.type === 'excalidraw' ? <Frame className="w-5 h-5 text-gray-500 dark:text-gray-400" /> : <ListTree className="w-5 h-5 text-gray-500 dark:text-gray-400" />}
+                  <DocumentTypeIcon type={folderIconType} className={`h-5 w-5 ${!isFolder ? 'ml-4' : ''}`} />
                   {!isFolder && doc.is_starred && (
                     <Star className="w-2 h-2 fill-current text-yellow-500 absolute -top-0.5 -right-0.5" />
                   )}
@@ -983,11 +1057,15 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                 </button>
               </div>
               
-              {!searchQuery.trim() && viewMode !== 'starred' && isFolder && isExpanded[doc.id] && (
+              {!sidebarSearchQuery.trim() && viewMode !== 'starred' && isFolder && isExpanded[doc.id] && (
                 <div
-                  className="relative pl-2 border-l border-gray-200 dark:border-gray-600"
-                  style={{ marginLeft: `calc(${level * 6 + 4}px + 0.4375rem)` }}
+                  className="relative"
                 >
+                  <div
+                    className="absolute top-0 bottom-0 border-l border-gray-200 dark:border-gray-600"
+                    style={{ left: `calc(${level * 12 + 8}px + 0.4375rem)` }}
+                    aria-hidden="true"
+                  />
                   {renderFileTree(doc.id, level + 1)}
                 </div>
               )}
@@ -1029,19 +1107,6 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
         </div>
       </div>
 
-      {/* 搜索 */}
-      <button
-        onClick={toggleSearch}
-        className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors mb-1 ${
-          isSearchMode && contentExpanded
-            ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
-            : 'text-[#8B8B80] dark:text-gray-400 hover:text-[#5A5A52] dark:hover:text-gray-200 hover:bg-[#EDEDE8] dark:hover:bg-gray-800'
-        }`}
-        title="搜索"
-      >
-        <Search className="w-5 h-5" />
-      </button>
-
       {/* 随想笔记 */}
       <button
         onClick={() => {
@@ -1058,13 +1123,18 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
         className="w-10 h-10 flex items-center justify-center rounded-lg transition-colors text-[#8B8B80] dark:text-gray-400 hover:text-[#5A5A52] dark:hover:text-gray-200 hover:bg-[#EDEDE8] dark:hover:bg-gray-800"
         title="随想笔记"
       >
-        <StickyNote className="w-5 h-5" />
+        <NavigationIcon type="memo" className="h-6 w-6" />
       </button>
 
       {/* 导航图标 */}
       <div className="flex flex-col items-center gap-1 flex-1">
         <button
           onClick={async () => {
+            logNavigation('sidebar-diary-click', {
+              viewMode,
+              contentExpanded,
+              isSearchMode,
+            });
             setIsSearchMode(false);
             setUserSubViewContext(null);
             if (viewMode === 'diary' && contentExpanded) {
@@ -1083,6 +1153,10 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                   getOrCreateDayNode(y, m, d),
                 ]);
                 navigate(`/d/${diaryData.document.id}?nodeId=${dayResult.node_id}`);
+                logNavigation('sidebar-diary-navigate', {
+                  documentId: diaryData.document.id,
+                  nodeId: dayResult.node_id,
+                });
                 onDocumentSelect?.();
               } catch (e) {
                 console.error('Failed to open today diary', e);
@@ -1096,7 +1170,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           }`}
           title="日记"
         >
-          <CalendarDays className="w-5 h-5" />
+          <NavigationIcon type="diary" className="h-6 w-6" />
         </button>
         <button
           onClick={() => toggleViewPanel('projects')}
@@ -1107,7 +1181,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           }`}
           title="项目"
         >
-          <FolderKanban className="w-5 h-5" />
+          <NavigationIcon type="project" className="h-6 w-6" />
         </button>
         <button
           onClick={() => toggleViewPanel('all')}
@@ -1118,7 +1192,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           }`}
           title="文件"
         >
-          <FileText className="w-5 h-5" />
+          <NavigationIcon type="files" className="h-6 w-6" />
         </button>
         <button
           onClick={() => toggleViewPanel('recent')}
@@ -1129,7 +1203,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           }`}
           title="最近编辑"
         >
-          <Clock className={`w-5 h-5 ${viewMode === 'recent' && contentExpanded ? 'text-blue-500' : ''}`} />
+          <NavigationIcon type="recent" className="h-6 w-6" />
         </button>
         <button
           onClick={() => toggleViewPanel('starred')}
@@ -1140,7 +1214,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           }`}
           title="收藏"
         >
-          <Star className={`w-5 h-5 ${viewMode === 'starred' && contentExpanded ? 'fill-current text-yellow-500' : ''}`} />
+          <NavigationIcon type="starred" className="h-6 w-6" />
         </button>
         <button
           onClick={() => {
@@ -1162,9 +1236,18 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           }`}
           title="AI 问答"
         >
-          <Sparkles className="w-5 h-5" />
+          <NavigationIcon type="ai" className="h-6 w-6" />
         </button>
       </div>
+
+      {/* 全局搜索 */}
+      <button
+        onClick={() => setSearchOpen(true)}
+        className="w-9 h-9 flex items-center justify-center rounded-lg text-[#8B8B80] hover:text-[#5A5A52] hover:bg-[#EDEDE8] dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800 transition-colors"
+        title="全局搜索 (Ctrl+K)"
+      >
+        <NavigationIcon type="search" className="h-6 w-6" />
+      </button>
 
       {/* 日/夜模式切换 */}
       <button
@@ -1172,17 +1255,29 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
         className="w-9 h-9 flex items-center justify-center text-[#8B8B80] hover:text-[#5A5A52] hover:bg-[#EDEDE8] dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors"
         title={isDark ? '切换到日间模式' : '切换到夜间模式'}
       >
-        {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        <NavigationIcon
+          type={isDark ? 'sun' : 'moon'}
+          className={`h-6 w-6 ${isDark ? '!text-gray-200' : '!text-[#5A5A52]'}`}
+        />
       </button>
 
       {/* 新建按钮 */}
       <div ref={newMenuRef} className="relative">
+        <input
+          ref={markdownInputRef}
+          type="file"
+          accept=".md,.markdown,text/markdown"
+          multiple
+          onChange={handleMarkdownImport}
+          className="hidden"
+          aria-hidden="true"
+        />
         <button
           onClick={() => setShowNewMenu(!showNewMenu)}
-          className="w-9 h-9 flex items-center justify-center text-[#8B8B80] hover:text-[#5A5A52] hover:bg-[#EDEDE8] rounded-lg transition-colors"
+          className="relative z-20 flex h-9 w-10 items-center justify-center rounded-full bg-[#f1f1f1] px-0 text-[#5A5A52] transition-colors hover:bg-[#e7e7e7] dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
           title="新建"
         >
-          <Plus className="w-5 h-5" />
+          <SquarePen className="h-5 w-5 stroke-[1.8]" />
         </button>
         {showNewMenu && (
           <div className="absolute left-full bottom-0 ml-2 mb-0 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50 w-48">
@@ -1190,36 +1285,44 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
               onClick={() => { handleCreateDocument(); setShowNewMenu(false); }}
               className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
             >
-              <ListTree className="w-4 h-4" />
+              <DocumentTypeIcon type="document" className="h-4 w-4" />
               <span>新建大纲笔记</span>
             </button>
             <button
               onClick={() => { handleCreateNote(); setShowNewMenu(false); }}
               className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
             >
-              <FileText className="w-4 h-4" />
+              <DocumentTypeIcon type="note" className="h-4 w-4" />
               <span>新建普通笔记</span>
             </button>
             <button
               onClick={() => { setShowTodoDialog(true); setShowNewMenu(false); }}
               className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
             >
-              <Square className="w-4 h-4" />
+              <NavigationIcon type="todo" className="h-4 w-4" />
               <span>新建待办</span>
             </button>
             <button
               onClick={() => { handleCreateExcalidraw(); setShowNewMenu(false); }}
               className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
             >
-              <Frame className="w-4 h-4" />
+              <DocumentTypeIcon type="excalidraw" className="h-4 w-4" />
               <span>新建画布</span>
             </button>
             <button
               onClick={() => { setShowNewFolderDialog(true); setShowNewMenu(false); }}
               className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
             >
-              <Folder className="w-4 h-4" />
+              <DocumentTypeIcon type="folder" className="h-4 w-4" />
               <span>新建文件夹</span>
+            </button>
+            <button
+              onClick={() => { setShowNewMenu(false); openMarkdownImport(null); }}
+              disabled={isImportingMarkdown}
+              className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2 disabled:opacity-50"
+            >
+              <FileUp className="h-4 w-4 text-gray-400" />
+              <span>批量导入 md</span>
             </button>
             <button
               onClick={() => {
@@ -1228,7 +1331,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
               }}
               className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
             >
-              <FolderKanban className="w-4 h-4" />
+              <DocumentTypeIcon type="project" className="h-4 w-4" />
               <span>新建项目计划</span>
             </button>
           </div>
@@ -1251,7 +1354,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           )}
           {contentExpanded && (
             <div
-              className="fixed inset-y-0 left-0 flex shadow-xl bg-[var(--app-surface)]"
+              className="fixed inset-y-0 left-0 flex shadow-xl bg-[var(--app-sidebar)]"
               style={{ zIndex: 58, width: `calc(80vw)` }}
             >
               {/* 图标栏 */}
@@ -1262,7 +1365,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
               {/* 内容面板 */}
               <div
                 ref={sidebarRef}
-                className="flex-1 h-full bg-[var(--app-surface)] flex flex-col select-none text-sm relative overflow-hidden"
+                className="flex-1 h-full bg-[var(--app-sidebar)] flex flex-col select-none text-sm relative overflow-hidden"
               >
                 {isSearchMode ? (
                   /* 搜索模式 */
@@ -1280,8 +1383,8 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                         <input
                           ref={searchInputRef}
                           type="text"
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
+                          value={sidebarSearchQuery}
+                          onChange={(e) => setSidebarSearchQuery(e.target.value)}
                           placeholder="搜索..."
                           className="w-full pl-8 pr-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 border-none rounded-lg placeholder-gray-400 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
                         />
@@ -1311,7 +1414,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                                   <div className="text-sm text-gray-800 dark:text-gray-200 truncate">{result.title || '无标题'}</div>
                                   {result.snippet && (
                                     <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                                      {highlightText(result.snippet, searchQuery)}
+                                      {highlightText(result.snippet, sidebarSearchQuery)}
                                     </div>
                                   )}
                                 </button>
@@ -1319,7 +1422,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                             </div>
                           ));
                         })()
-                      ) : searchQuery ? (
+                      ) : sidebarSearchQuery ? (
                         <div className="text-center text-gray-400 text-xs py-4">无搜索结果</div>
                       ) : (
                         <div className="text-center text-gray-400 text-xs py-4">输入关键词搜索</div>
@@ -1341,7 +1444,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                         <ChevronLeft className="w-4 h-4" />
                       </button>
                     </div>
-                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto custom-scrollbar" onContextMenu={handleRootContextMenu}>
                       {viewMode === 'user' ? (
                         <div className="py-2">
                           <button onClick={() => { setUserSubView('profile'); onDocumentSelect?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
@@ -1407,12 +1510,12 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                                   e.preventDefault();
                                   setProjectContextMenu({ id: p.id, name: p.name, x: e.clientX, y: e.clientY });
                                 }}
-                                className={`group px-3 py-2 flex items-center gap-2 cursor-pointer transition-colors ${
+                                className={`group px-4 py-2 flex items-center gap-2 cursor-pointer transition-colors ${
                                   selectedProjectId === p.id
                                     ? 'bg-[#E0E0D8] dark:bg-gray-700'
                                     : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
                                 }`}>
-                                <FolderKanban className="w-4 h-4 text-gray-400 shrink-0" />
+                                <DocumentTypeIcon type="project" className="h-4 w-4" />
                                 {editingProjectId === p.id ? (
                                   <input
                                     type="text"
@@ -1495,7 +1598,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           {/* 内容面板 - 可折叠 */}
           <div
             ref={sidebarRef}
-            className={`h-full bg-[var(--app-surface)] flex flex-col select-none text-sm relative border-r border-gray-200 dark:border-gray-700 ${
+            className={`h-full bg-[var(--app-sidebar)] flex flex-col select-none text-sm relative border-r border-gray-200 dark:border-gray-700 ${
               isResizing ? '' : 'transition-all duration-300 ease-in-out'
             } ${!contentExpanded ? 'overflow-hidden' : ''}`}
             style={{
@@ -1524,8 +1627,8 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                           ref={searchInputRef}
                           type="text"
                           placeholder="搜索笔记、日记、随想..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
+                          value={sidebarSearchQuery}
+                          onChange={(e) => setSidebarSearchQuery(e.target.value)}
                           className="w-full pl-8 pr-3 py-1.5 text-sm bg-white dark:bg-gray-800 border-none rounded shadow-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-200 dark:focus:ring-gray-700 transition-all"
                         />
                       </div>
@@ -1540,7 +1643,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                     <div className="flex-1 overflow-y-auto px-2 pb-2 custom-scrollbar">
                       {searchLoading ? (
                         <div className="p-4 text-xs text-gray-400 text-center">搜索中...</div>
-                      ) : !searchQuery.trim() ? (
+                      ) : !sidebarSearchQuery.trim() ? (
                         <div className="p-4 text-xs text-gray-400 text-center">输入关键词搜索</div>
                       ) : visibleSearchResults.length === 0 ? (
                         <div className="p-4 text-xs text-gray-400 text-center">未找到匹配内容</div>
@@ -1555,8 +1658,8 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                               </div>
                               {docResults.map(r => (
                                 <div key={`${r.entity_id}-${r.node_id || ''}`} onClick={() => handleSearchResultClick(r)} className="px-2 py-2 rounded cursor-pointer hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
-                                  <div className="text-xs font-medium text-gray-800 dark:text-gray-200 truncate">{r.title ? highlightText(r.title, searchQuery) : '无标题'}</div>
-                                  {r.snippet && <div className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 mt-0.5">{highlightText(r.snippet, searchQuery)}</div>}
+                                  <div className="text-xs font-medium text-gray-800 dark:text-gray-200 truncate">{r.title ? highlightText(r.title, sidebarSearchQuery) : '无标题'}</div>
+                                  {r.snippet && <div className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 mt-0.5">{highlightText(r.snippet, sidebarSearchQuery)}</div>}
                                 </div>
                               ))}
                             </div>
@@ -1571,7 +1674,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                               {diaryResults.map(r => (
                                 <div key={`${r.entity_id}-${r.node_id || ''}`} onClick={() => handleSearchResultClick(r)} className="px-2 py-2 rounded cursor-pointer hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
                                   <div className="text-xs font-medium text-gray-800 dark:text-gray-200 truncate">{r.title || '无标题'}</div>
-                                  {r.snippet && <div className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 mt-0.5">{highlightText(r.snippet, searchQuery)}</div>}
+                                  {r.snippet && <div className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 mt-0.5">{highlightText(r.snippet, sidebarSearchQuery)}</div>}
                                 </div>
                               ))}
                             </div>
@@ -1585,7 +1688,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                               </div>
                               {memoResults.map(r => (
                                 <div key={r.entity_id} onClick={() => handleSearchResultClick(r)} className="px-2 py-2 rounded cursor-pointer hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
-                                  <div className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2">{highlightText(r.snippet, searchQuery)}</div>
+                                  <div className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2">{highlightText(r.snippet, sidebarSearchQuery)}</div>
                                 </div>
                               ))}
                             </div>
@@ -1605,8 +1708,8 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                         <ChevronLeft className="w-4 h-4" />
                       </button>
                     </div>
-                    <div className="flex-1 relative overflow-hidden bg-[var(--app-surface)]">
-                      <div ref={listRef} className="absolute inset-0 overflow-y-auto custom-scrollbar" onDragOver={(e) => e.preventDefault()} onDrop={handleRootDrop} onClick={() => setSelectedFolderId(null)}>
+                    <div className="flex-1 relative overflow-hidden bg-[var(--app-sidebar)]">
+                      <div ref={listRef} className="absolute inset-0 overflow-y-auto custom-scrollbar" onDragOver={(e) => e.preventDefault()} onDrop={handleRootDrop} onClick={() => setSelectedFolderId(null)} onContextMenu={handleRootContextMenu}>
                         {viewMode === 'user' ? (
                           <div className="py-2">
                             {/* 个人资料 */}
@@ -1705,12 +1808,12 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                                     e.preventDefault();
                                     setProjectContextMenu({ id: p.id, name: p.name, x: e.clientX, y: e.clientY });
                                   }}
-                                  className={`group px-3 py-2 flex items-center gap-2 cursor-pointer transition-colors ${
+                                  className={`group px-4 py-2 flex items-center gap-2 cursor-pointer transition-colors ${
                                     selectedProjectId === p.id
                                       ? 'bg-[#E0E0D8] dark:bg-gray-700'
                                       : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
                                   }`}>
-                                  <FolderKanban className="w-4 h-4 text-gray-400 shrink-0" />
+                                  <DocumentTypeIcon type="project" className="h-4 w-4" />
                                   {editingProjectId === p.id ? (
                                     <input
                                       type="text"
@@ -2073,6 +2176,55 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
         </div>
       )}
 
+      {/* 文件列表空白区域右键菜单 */}
+      {rootContextMenu && (
+        <div
+          ref={rootContextMenuRef}
+          className="fixed z-[9999] w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-xl dark:border-gray-700 dark:bg-gray-800"
+          style={{
+            left: Math.min(rootContextMenu.x, window.innerWidth - 184),
+            top: Math.min(rootContextMenu.y, window.innerHeight - 190),
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => { setRootContextMenu(null); handleCreateDocument(null); }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            <DocumentTypeIcon type="document" className="h-4 w-4" />
+            <span>新建大纲笔记</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { setRootContextMenu(null); handleCreateNote(null); }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            <DocumentTypeIcon type="note" className="h-4 w-4" />
+            <span>新建普通笔记</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { setRootContextMenu(null); handleCreateExcalidraw(null); }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            <DocumentTypeIcon type="excalidraw" className="h-4 w-4" />
+            <span>新建画布</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              pendingFolderParentRef.current = null;
+              setRootContextMenu(null);
+              setShowNewFolderDialog(true);
+            }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            <DocumentTypeIcon type="folder" className="h-4 w-4" />
+            <span>新建文件夹</span>
+          </button>
+        </div>
+      )}
+
       {/* Context Menu */}
       {contextMenu && (() => {
         const MENU_HEIGHT = contextMenu.docType === 'folder' ? 260 : 250;
@@ -2227,6 +2379,17 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
               >
                 <FileText className="w-4 h-4 text-gray-400" />
                 <span>新建普通笔记</span>
+              </button>
+              <button
+                onClick={() => {
+                  openMarkdownImport(contextMenu.docId);
+                  setContextMenu(null);
+                }}
+                disabled={isImportingMarkdown}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+              >
+                <FileUp className="w-4 h-4 text-gray-400" />
+                <span>批量导入 md</span>
               </button>
               <button
                 onClick={() => {

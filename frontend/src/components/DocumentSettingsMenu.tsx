@@ -32,18 +32,18 @@ export default function DocumentSettingsMenu({
     <>
       <button
         onClick={handleDownload}
-        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+        className="editor-topbar-action inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100"
         title="导出 Markdown"
       >
-        <Download className="h-4 w-4" />
+        <Download className="h-[18px] w-[18px]" />
         <span className="hidden lg:inline">导出</span>
       </button>
       <button
         onClick={() => setShowShareDialog(true)}
-        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+        className="editor-topbar-action inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100"
         title="分享文档"
       >
-        <Share2 className="h-4 w-4" />
+        <Share2 className="h-[18px] w-[18px]" />
         <span className="hidden lg:inline">分享</span>
       </button>
       {currentDoc && (

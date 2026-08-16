@@ -237,11 +237,12 @@ export const createNodesBatch = async (nodesData: Array<{
   content_type?: 'text' | 'image' | 'attachment';
   file_path?: string;
   file_name?: string;
-}>): Promise<void> => {
-  await api.post('/nodes/batch/create', nodesData);
+}>): Promise<Node[]> => {
+  const response = await api.post<Node[]>('/nodes/batch/create', nodesData);
   const docIds = [...new Set(nodesData.map(n => n.document_id))];
   docIds.forEach(id => dataCache.invalidate(`nodes:${id}`));
   dataCache.invalidate('diary:');
+  return response.data;
 };
 
 // File upload
@@ -268,6 +269,36 @@ export const uploadFromUrl = async (url: string): Promise<UploadResponse> => {
 export const getFileUrl = (filePath: string): string => {
   // Remove /api prefix if present since static files are served at /uploads
   return filePath.replace(/^\/api/, '');
+};
+
+/**
+ * 下载应用内附件（/uploads/...）：走带鉴权的下载接口，返回原始文件名并强制下载；
+ * 非应用内链接则退回新标签打开。
+ */
+export const downloadAttachment = async (url: string, fallbackName?: string): Promise<void> => {
+  const match = url.match(/\/uploads\/([^/?#]+)/);
+  const filename = match?.[1];
+  if (!filename) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  try {
+    const response = await api.get(`/attachments/download/${encodeURIComponent(filename)}`, {
+      responseType: 'blob',
+    });
+    const blob = response.data as Blob;
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = fallbackName || filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(objectUrl);
+  } catch (e) {
+    console.error('附件下载失败', e);
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
 };
 
 /**

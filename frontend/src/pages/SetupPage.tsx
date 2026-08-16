@@ -43,7 +43,7 @@ const SetupPage = () => {
           <img
             src="/beaver.png"
             alt="Beaver"
-            className="w-16 h-16 mb-4"
+            className="mb-4 h-16 w-16 rounded-[22%]"
           />
           <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Beaver</h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">创建管理员账户</p>

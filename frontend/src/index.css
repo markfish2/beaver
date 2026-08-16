@@ -5,6 +5,88 @@
 @import "./styles/markdown-border.css";
 @import "./styles/markdown-pie.css";
 
+/* Mermaid 图统一使用中性灰阶，覆盖 Mermaid 生成的内联主题样式。 */
+.mermaid-diagram {
+  --mermaid-node-bg: #f3f4f6;
+  --mermaid-node-border: #9ca3af;
+  --mermaid-node-text: #374151;
+  --mermaid-line: #9ca3af;
+}
+.mermaid-surface {
+  background-color: #ffffff !important;
+}
+.dark .mermaid-diagram {
+  --mermaid-node-bg: #374151;
+  --mermaid-node-border: #9ca3af;
+  --mermaid-node-text: #f3f4f6;
+  --mermaid-line: #9ca3af;
+}
+.mermaid-diagram > svg {
+  width: auto !important;
+  max-width: none !important;
+  height: auto !important;
+}
+.mermaid-diagram > svg,
+.mermaid-diagram > svg text,
+.mermaid-diagram > svg .nodeLabel {
+  font-family: Arial, "Microsoft YaHei", sans-serif !important;
+  font-size: 14px !important;
+  line-height: normal !important;
+}
+/* Mermaid 标签默认已是原生 SVG 文本（MermaidBlock 顶层 htmlLabels:false）；
+   以下规则只兜底 katex/图标等强制 HTML 标签的场景，
+   阻止 Markdown 主题对 p/div 的字体、行高、外边距漏进 foreignObject 造成文字被裁切。 */
+.mermaid-diagram svg foreignObject > div,
+.mermaid-diagram svg foreignObject p,
+.mermaid-diagram svg foreignObject span {
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-family: Arial, "Microsoft YaHei", sans-serif !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  text-align: center !important;
+}
+.mermaid-diagram svg .node rect,
+.mermaid-diagram svg .node circle,
+.mermaid-diagram svg .node ellipse,
+.mermaid-diagram svg .node polygon,
+.mermaid-diagram svg .node path {
+  fill: var(--mermaid-node-bg) !important;
+  stroke: var(--mermaid-node-border) !important;
+}
+.mermaid-diagram svg .node .label,
+.mermaid-diagram svg .node text,
+.mermaid-diagram svg .node foreignObject {
+  color: var(--mermaid-node-text) !important;
+  fill: var(--mermaid-node-text) !important;
+}
+.mermaid-diagram svg .edgePath .path,
+.mermaid-diagram svg .flowchart-link,
+.mermaid-diagram svg .messageLine0,
+.mermaid-diagram svg .messageLine1 {
+  stroke: var(--mermaid-line) !important;
+}
+.mermaid-diagram svg .cluster rect {
+  fill: #fffdf0 !important;
+  stroke: #e8dfaa !important;
+}
+
+/* 目录根据编辑详情区域宽度显示，不根据浏览器窗口断点显示。 */
+.toc-layout-container {
+  container: toc-layout / inline-size;
+}
+
+.toc-responsive {
+  display: none;
+}
+
+@container toc-layout (min-width: 750px) {
+  .toc-responsive {
+    display: block;
+  }
+}
+
 @font-face {
   font-family: "LXGW WenKai Lite";
   src: url("/fonts/lxgw-wenkai-lite/LXGWWenKaiLite-Regular.woff2") format("woff2");
@@ -16,17 +98,17 @@
 @variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --color-blue-50: #f0f3f7;
-  --color-blue-100: #dde3ec;
-  --color-blue-200: #b9c5d6;
-  --color-blue-300: #8ea4bb;
-  --color-blue-400: #6583a0;
-  --color-blue-500: #3f587f;
-  --color-blue-600: #334766;
-  --color-blue-700: #2a3b54;
-  --color-blue-800: #222f44;
-  --color-blue-900: #1a2333;
-  --color-blue-950: #111722;
+  --color-blue-50: #eef8f5;
+  --color-blue-100: #d9eee8;
+  --color-blue-200: #b4ddd2;
+  --color-blue-300: #83bfb0;
+  --color-blue-400: #65a99a;
+  --color-blue-500: #4d9383;
+  --color-blue-600: #3f7d70;
+  --color-blue-700: #35685e;
+  --color-blue-800: #2c534c;
+  --color-blue-900: #23433d;
+  --color-blue-950: #18302b;
 }
 
 :root {
@@ -86,15 +168,16 @@
   --color-gray-800: #1f2937;
   --color-gray-900: #111827;
   --color-gray-950: #030712;
-  --app-canvas: #faf9f5;
-  --app-surface: #faf9f5;
+  --app-canvas: #f7f6f2;
+  --app-surface: #f7f6f2;
+  --app-sidebar: #faf9f6;
   --app-surface-raised: #ffffff;
   --app-icon-rail: #f5f4ee;
   --app-code-bg: #f3f4f6;
   --app-code-text: #1f2937;
   --app-quote-bg: #f9fafb;
   --app-quote-border: #e5e7eb;
-  --app-link: #3f587f;
+  --app-link: #4d9383;
   --app-selection: #dbeafe;
 }
 
@@ -112,6 +195,7 @@
   --color-gray-950: #030712;
   --app-canvas: #111827;
   --app-surface: #1f2937;
+  --app-sidebar: #1f2937;
   --app-surface-raised: #374151;
   --app-icon-rail: #111827;
   --app-code-bg: #111827;
@@ -136,6 +220,7 @@
   --color-gray-950: #1c1c1a;
   --app-canvas: #262624;
   --app-surface: #2d2d2a;
+  --app-sidebar: #2d2d2a;
   --app-surface-raised: #353532;
   --app-icon-rail: #262624;
   --app-code-bg: #1f1f1d;
@@ -253,9 +338,31 @@ body,
 }
 
 @layer utilities {
+  /* 顶部操作使用界面小字号，避免被正文节点字号和全局 span 规则放大。 */
+  .editor-topbar-action,
+  .editor-topbar-action span {
+    /* --writing-font-size 会被外观设置同步为正文大小，工具栏不能跟随它变化。 */
+    font-size: 14px !important;
+    line-height: 1.25;
+  }
+
+  .editor-topbar-action > svg {
+    width: 1.25em !important;
+    height: 1.25em !important;
+  }
+
+  /* 全局统一窄滚动条，竖向与横向均保持 3px。 */
+  *::-webkit-scrollbar {
+    width: 3px !important;
+    height: 3px !important;
+  }
+  * {
+    scrollbar-width: thin;
+  }
+
   .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 3px !important;
+    height: 3px !important;
   }
   .custom-scrollbar::-webkit-scrollbar-track {
     background: transparent;
@@ -263,8 +370,6 @@ body,
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
     @apply bg-gray-300 dark:bg-gray-600 rounded;
-    border: 1px solid transparent;
-    background-clip: padding-box;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     @apply bg-gray-400 dark:bg-gray-500;
@@ -277,12 +382,50 @@ body,
     scrollbar-color: #4b5563 transparent;
   }
 
+  /* 甘特图需要保留明确的横向滚动区域，避免被项目分栏的 overflow-hidden 吞掉。 */
+  .gantt-chart-scroll-area {
+    scrollbar-width: 6px;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+  .gantt-chart-scroll-area::-webkit-scrollbar {
+    width: 6px !important;
+    height: 6px !important;
+  }
+  .gantt-chart-scroll-area::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .gantt-chart-scroll-area::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 999px;
+  }
+  .dark .gantt-chart-scroll-area {
+    scrollbar-color: #4b5563 transparent;
+  }
+  .dark .gantt-chart-scroll-area::-webkit-scrollbar-thumb {
+    background: #4b5563;
+  }
+
   .scrollbar-none::-webkit-scrollbar {
     display: none;
   }
   .scrollbar-none {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+}
+
+/* 仅在浏览器支持长度值时使用精确 3px；其他浏览器保留兼容的 thin。 */
+@supports (scrollbar-width: 3px) {
+  * {
+    scrollbar-width: 3px;
+  }
+  .custom-scrollbar,
+  .cm-scroller,
+  .memo-content pre,
+  .memo-content .markdown-code-body,
+  .markdown-note-preview pre,
+  .prose pre {
+    scrollbar-width: 3px;
   }
 }
 
@@ -309,8 +452,8 @@ body,
 .memo-content .markdown-code-body::-webkit-scrollbar,
 .markdown-note-preview pre::-webkit-scrollbar,
 .prose pre::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 3px !important;
+  height: 3px !important;
 }
 
 .cm-scroller::-webkit-scrollbar-track,
@@ -328,9 +471,7 @@ body,
 .markdown-note-preview pre::-webkit-scrollbar-thumb,
 .prose pre::-webkit-scrollbar-thumb {
   background: #cbd5e1;
-  border: 1px solid transparent;
   border-radius: 999px;
-  background-clip: padding-box;
 }
 
 .dark .cm-scroller::-webkit-scrollbar-thumb,
@@ -339,7 +480,6 @@ body,
 .dark .markdown-note-preview pre::-webkit-scrollbar-thumb,
 .dark .prose pre::-webkit-scrollbar-thumb {
   background: #4b5563;
-  background-clip: padding-box;
 }
 
 .cm-scroller::-webkit-scrollbar-thumb:hover,
@@ -348,7 +488,6 @@ body,
 .markdown-note-preview pre::-webkit-scrollbar-thumb:hover,
 .prose pre::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
-  background-clip: padding-box;
 }
 
 .dark .cm-scroller::-webkit-scrollbar-thumb:hover,
@@ -357,7 +496,6 @@ body,
 .dark .markdown-note-preview pre::-webkit-scrollbar-thumb:hover,
 .dark .prose pre::-webkit-scrollbar-thumb:hover {
   background: #64748b;
-  background-clip: padding-box;
 }
 
 .memo-input-shell,
@@ -540,10 +678,7 @@ body,
   margin: 0 !important;
   align-items: center;
   justify-content: center;
-  vertical-align: middle;
-  top: 50% !important;
   line-height: 1 !important;
-  transform: translateY(-50%) !important;
 }
 
 .memo-content .markdown-code-block,
@@ -905,4 +1040,29 @@ body,
 /* 在代码块容器重置 counter */
 .markdown-code-body {
   counter-reset: line;
+}
+
+/* 滚动条最终统一覆盖：WebKit 使用伪元素精确控制为 3px。 */
+*::-webkit-scrollbar {
+  width: 3px !important;
+  height: 3px !important;
+}
+* {
+  scrollbar-width: thin;
+}
+@supports (-webkit-appearance: none) {
+  * {
+    /* 重置标准滚动条属性，避免 Chromium 忽略 WebKit 的 3px 规则。 */
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+  .custom-scrollbar,
+  .cm-scroller,
+  .memo-content pre,
+  .memo-content .markdown-code-body,
+  .markdown-note-preview pre,
+  .prose pre {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
 }

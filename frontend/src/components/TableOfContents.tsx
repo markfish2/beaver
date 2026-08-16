@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { Node } from '../api/data';
 
 interface TocItem {
@@ -12,7 +12,7 @@ interface TableOfContentsProps {
   documentId?: string;
 }
 
-const LEVEL_INDENT: Record<string, number> = {
+const LEVEL_INDENT: Record<TocItem['level'], number> = {
   h1: 0,
   h2: 12,
   h3: 24,
@@ -20,37 +20,68 @@ const LEVEL_INDENT: Record<string, number> = {
   top: 0,
 };
 
-const LEVEL_DASH: Record<string, string> = {
-  h1: '—',
-  h2: '—',
-  h3: '—',
-  h4: '—',
-  top: '—',
-};
-
 export default function TableOfContents({ nodes, documentId }: TableOfContentsProps) {
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [, setActiveId] = useState<string | null>(null);
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 0 });
+  const [visibleRail, setVisibleRail] = useState({ top: 0, height: 0 });
   const [closedDocumentId, setClosedDocumentId] = useState<string | null>(null);
   const rafRef = useRef<number>(0);
+  const tocListRef = useRef<HTMLDivElement>(null);
+  const tocItemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const documentKey = documentId ?? '__default__';
   const closed = closedDocumentId === documentKey;
 
-  const headingNodes = nodes.filter(n => n.heading && n.content.trim());
-  const tocItems: TocItem[] = headingNodes.length > 0
-    ? headingNodes.map(n => ({
-        id: n.id,
-        content: n.content,
-        level: n.heading as TocItem['level'],
-      }))
-    : nodes
-        .filter(n => !n.parent_node_id && n.content.trim())
-        .map(n => ({ id: n.id, content: n.content, level: 'top' }));
+  const tocItemsSignature = nodes.map(n => `${n.id}\u001f${n.heading ?? ''}\u001f${n.content}\u001f${n.parent_node_id ?? ''}`).join('\u001e');
+  // The signature captures every node field used below while keeping the array stable
+  // when MainArea creates a new sorted array with unchanged content.
+  const tocItems = useMemo<TocItem[]>(() => {
+    const headingNodes = nodes.filter(n => n.heading && n.content.trim());
+    return headingNodes.length > 0
+      ? headingNodes.map(n => ({
+          id: n.id,
+          content: n.content,
+          level: n.heading as TocItem['level'],
+        }))
+      : nodes
+          .filter(n => !n.parent_node_id && n.content.trim())
+          .map(n => ({ id: n.id, content: n.content, level: 'top' }));
+  // tocItemsSignature contains all node fields read by the builder.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tocItemsSignature]);
+
+  useEffect(() => {
+    const list = tocListRef.current;
+    const first = tocItemRefs.current[tocItems[visibleRange.start]?.id];
+    const last = tocItemRefs.current[tocItems[visibleRange.end]?.id];
+    if (!list || !first || !last) return;
+    const next = {
+      top: first.offsetTop,
+      height: Math.max(1, last.offsetTop + last.offsetHeight - first.offsetTop),
+    };
+    setVisibleRail(previous => previous.top === next.top && previous.height === next.height ? previous : next);
+  }, [tocItems, visibleRange]);
+
+  useEffect(() => {
+    const list = tocListRef.current;
+    const first = tocItemRefs.current[tocItems[visibleRange.start]?.id];
+    const last = tocItemRefs.current[tocItems[visibleRange.end]?.id];
+    if (!list || !first || !last) return;
+    const viewportTop = list.scrollTop;
+    const viewportBottom = viewportTop + list.clientHeight;
+    const rangeTop = first.offsetTop;
+    const rangeBottom = last.offsetTop + last.offsetHeight;
+    if (rangeTop < viewportTop) {
+      first.scrollIntoView({ block: 'nearest' });
+    } else if (rangeBottom > viewportBottom) {
+      last.scrollIntoView({ block: 'nearest' });
+    }
+  }, [tocItems, visibleRange]);
 
   // Scroll-based tracking
   useEffect(() => {
     if (tocItems.length === 0) return;
 
-    const scrollContainer = document.querySelector('.main-content-area');
+    const scrollContainer = document.querySelector('.outline-content-scroll-area');
     if (!scrollContainer) return;
 
     const update = () => {
@@ -59,11 +90,17 @@ export default function TableOfContents({ nodes, documentId }: TableOfContentsPr
 
       let bestId: string | null = null;
       let bestTop = -Infinity;
+      let firstVisible = -1;
+      let lastVisible = -1;
 
-      for (const item of tocItems) {
+      for (const [index, item] of tocItems.entries()) {
         const el = document.querySelector(`[data-node-id="${item.id}"]`);
         if (!el) continue;
         const rect = el.getBoundingClientRect();
+        if (rect.bottom > containerRect.top && rect.top < containerRect.bottom) {
+          if (firstVisible === -1) firstVisible = index;
+          lastVisible = index;
+        }
         if (rect.top <= threshold && rect.top > bestTop) {
           bestTop = rect.top;
           bestId = item.id;
@@ -75,7 +112,14 @@ export default function TableOfContents({ nodes, documentId }: TableOfContentsPr
       }
 
       if (bestId) {
-        setActiveId(bestId);
+        setActiveId(previous => previous === bestId ? previous : bestId);
+      }
+      if (firstVisible !== -1) {
+        setVisibleRange(previous => (
+          previous.start === firstVisible && previous.end === lastVisible
+            ? previous
+            : { start: firstVisible, end: lastVisible }
+        ));
       }
     };
 
@@ -97,7 +141,7 @@ export default function TableOfContents({ nodes, documentId }: TableOfContentsPr
     const el = document.getElementById(`node-${id}`);
     if (!el) return;
 
-    const scrollContainer = document.querySelector('.main-content-area');
+    const scrollContainer = document.querySelector('.outline-content-scroll-area');
     if (scrollContainer) {
       const containerRect = scrollContainer.getBoundingClientRect();
       const elRect = el.getBoundingClientRect();
@@ -113,19 +157,17 @@ export default function TableOfContents({ nodes, documentId }: TableOfContentsPr
 
   return (
     <nav
-      className="fixed top-14 right-4 z-30 w-[180px] max-h-[70vh] hidden lg:block"
+      className="toc-responsive w-[240px] shrink-0 px-3 py-4"
     >
-      <div
-        className="toc-glass overflow-hidden flex flex-col"
-        style={{
-          background: 'rgba(255,255,255,0.5)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
-        }}
-      >
+      <div className="sticky top-4 max-h-[calc(100vh-7rem)] overflow-hidden flex flex-col text-gray-600 dark:text-gray-300">
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-100/60 dark:border-gray-700/40 shrink-0">
-          <span className="text-xs text-gray-400 dark:text-gray-500">目录</span>
+        <div className="flex items-center justify-between px-2 py-1.5 shrink-0">
+          <span className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+            <svg className="h-4 w-4 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <path d="M5 6h14M5 12h14M5 18h14" />
+            </svg>
+            目录
+          </span>
           <button
             onClick={() => setClosedDocumentId(documentKey)}
             className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200/60 dark:hover:bg-gray-600/40 transition-colors"
@@ -137,23 +179,32 @@ export default function TableOfContents({ nodes, documentId }: TableOfContentsPr
           </button>
         </div>
         {/* Items */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar py-1">
-          {tocItems.map((item) => {
-            const isActive = activeId === item.id;
+        <div ref={tocListRef} className="relative flex-1 overflow-y-auto custom-scrollbar py-0.5 pl-2">
+          <div className="absolute left-[10px] top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700" aria-hidden="true" />
+          {visibleRange.end >= visibleRange.start && (
+            <div
+              className="pointer-events-none absolute left-[10px] z-20 w-px bg-[#46745b] dark:bg-[#8fc5a5]"
+              style={{ top: visibleRail.top, height: visibleRail.height }}
+              aria-hidden="true"
+            >
+              <span className="absolute left-1/2 bottom-[-2px] h-1 w-1 -translate-x-1/2 rounded-full bg-[#46745b] dark:bg-[#8fc5a5]" />
+            </div>
+          )}
+          {tocItems.map((item, index) => {
             return (
               <button
                 key={item.id}
+                ref={(element) => { tocItemRefs.current[item.id] = element; }}
                 onClick={() => scrollToHeading(item.id)}
-                className={`w-full text-left leading-snug py-1 px-2 transition-all duration-150 truncate border-l-2 ${
-                  isActive
-                    ? 'text-blue-600 dark:text-blue-400 border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 font-medium'
-                    : 'text-gray-400 dark:text-gray-500 border-transparent hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50/60 dark:hover:bg-gray-800/40'
+                className={`relative z-10 w-full text-left leading-tight py-1 pr-2 pl-5 transition-all duration-150 truncate ${
+                  index >= visibleRange.start && index <= visibleRange.end
+                    ? 'text-[#46745b] dark:text-[#8fc5a5] font-medium'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                 }`}
-                style={{ paddingLeft: `${8 + LEVEL_INDENT[item.level]}px`, fontSize: 'calc(var(--outline-font-size, 16px) - 2px)' }}
+                style={{ paddingLeft: `${20 + LEVEL_INDENT[item.level]}px`, fontSize: '13px' }}
                 title={item.content}
               >
-                <span className="text-gray-300 dark:text-gray-600 mr-0.5 inline-block scale-x-[0.33]">{LEVEL_DASH[item.level]}</span>
-                {item.content.length > 12 ? item.content.slice(0, 12) + '...' : item.content}
+                {item.content}
               </button>
             );
           })}
@@ -161,7 +212,6 @@ export default function TableOfContents({ nodes, documentId }: TableOfContentsPr
       </div>
 
       <style>{`
-        .dark .toc-glass { background: rgba(30,32,38,0.5) !important; }
       `}</style>
     </nav>
   );

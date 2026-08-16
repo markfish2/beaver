@@ -50,7 +50,7 @@ SyntaxHighlighter.registerLanguage('yaml', yaml);
 import { MoreVertical, Pencil, Trash2, Pin, PinOff, X, Check, Copy, CheckCheck, Image, Paperclip, FileText, Download, Archive, ArchiveRestore, ArrowUpRight, Globe, Maximize2, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Memo, Document, LinkPreview } from '../api/data';
-import { uploadFile, getMemoTags, getThumbnailUrl, fetchLinkPreview, retryLinkPreview } from '../api/data';
+import { uploadFile, getMemoTags, getThumbnailUrl, fetchLinkPreview, retryLinkPreview, downloadAttachment } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import LinkPreviewCard from './LinkPreviewCard';
 import MarkdownEditor from './MarkdownEditor';
@@ -482,6 +482,23 @@ const markdownComponents = (
           </a>
         );
       }
+      if (href?.startsWith('/uploads/')) {
+        return (
+          <a
+            {...props}
+            href={href}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void downloadAttachment(href, typeof children === 'string' ? children : undefined);
+            }}
+            className="text-blue-500 underline hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
+            title="下载附件"
+          >
+            {children}
+          </a>
+        );
+      }
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
     },
     li: ({ children, ordered, index, node, ...props }) => {
@@ -530,9 +547,9 @@ const markdownComponents = (
             type="button"
             role="checkbox"
             aria-checked={checked}
-            className={`absolute left-0 top-[0.22em] z-20 inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border cursor-pointer shrink-0 transition-colors ${
+            className={`absolute left-0 top-[5px] z-20 inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border cursor-pointer shrink-0 transition-colors ${
               checked
-                ? 'bg-[#3f587f] border-[#3f587f]'
+                ? 'bg-[#4d9383] border-[#4d9383]'
                 : ''
             }`}
             style={checked ? undefined : { background: palette.surface, borderColor: palette.surfaceBorder }}
@@ -748,15 +765,23 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
 
   // CodeMirror 编辑器自动管理高度，无需手动调整
 
-  // 测量内容高度，判断是否需要折叠
+  // 测量内容高度，判断是否需要折叠。
+  // 用 ResizeObserver 在尺寸/可见性变化时重新测量：
+  // 面板初始隐藏（display:none）时 scrollHeight 为 0，跳过测量避免误判为短内容，
+  // 等面板可见后再得到正确的长内容状态，避免丢失“显示更多/收起”按钮。
   useEffect(() => {
     if (isEditing) return;
     const el = contentRef.current;
-    if (el) {
+    if (!el) return;
+    const measure = () => {
+      if (el.scrollHeight <= 0) return;
       const long = el.scrollHeight > 400;
       setIsLong(long);
       if (!long) setExpanded(false);
-    }
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [strippedContent, isEditing]);
 
   // 点击外部关闭菜单 & 更新菜单位置
@@ -903,9 +928,9 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
                 setTimeout(() => handleSave(), 0);
               }}
               disabled={uploading}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white dark:text-gray-900 bg-gray-900 dark:bg-gray-100 hover:bg-gray-700 dark:hover:bg-gray-300 rounded-lg transition-colors disabled:opacity-40"
+              className="editor-topbar-action inline-flex min-h-8 items-center gap-1.5 rounded-md px-2.5 py-1 text-sm text-white dark:text-gray-900 bg-gray-900 dark:bg-gray-100 hover:bg-gray-700 dark:hover:bg-gray-300 transition-colors disabled:opacity-40"
             >
-              <Check className="w-4 h-4" />
+              <Check className="h-[14px] w-[14px]" />
               <span>保存</span>
             </button>
             <button
@@ -914,9 +939,9 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
                 setEditContent(newContent);
                 setShowExpandEditor(false);
               }}
-              className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              className="editor-topbar-action inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 transition-colors"
             >
-              <X className="w-4 h-4" />
+              <X className="h-[14px] w-[14px]" />
             </button>
         </div>
         <div className="flex-1 overflow-hidden" onPasteCapture={handlePaste}>
@@ -1173,7 +1198,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
         const count = images.length;
         const cols = count === 1 ? 1 : compact ? 2 : Math.min(count, 4);
         const hasMore = count > (compact ? 2 : 4);
-        const scrollbarStyle = { scrollbarWidth: 'thin' as const, scrollbarColor: isDark ? '#4b5563 transparent' : '#d1d5db transparent' };
+        const scrollbarStyle = { scrollbarColor: isDark ? '#4b5563 transparent' : '#d1d5db transparent' };
         return (
           <div className="memo-media-block memo-image-block mt-3 rounded-lg overflow-hidden border" style={{ borderColor: palette.codeBorder ?? palette.surfaceBorder }}>
             <div
@@ -1243,13 +1268,16 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
               <a
                 key={i}
                 href={file.url}
-                target="_blank"
-                rel="noopener noreferrer"
+                onClick={(e) => {
+                  e.preventDefault();
+                  void downloadAttachment(file.url, file.name);
+                }}
                 className="memo-attachment-link flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg transition-opacity hover:opacity-80 min-w-0"
                 style={{
                   color: palette.codeText ?? palette.text,
                   background: themeBg(palette.plainCodeBlockBackground ?? palette.surface),
                 }}
+                title="下载附件"
               >
                 <FileText className="w-3.5 h-3.5 flex-shrink-0" style={{ color: palette.codeMutedText ?? palette.mutedText }} />
                 <span className="truncate">{file.name}</span>
@@ -1289,7 +1317,6 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
                   fontSize: '11px',
                   backgroundColor: isDark ? c.darkBg : c.bg,
                   color: isDark ? c.darkText : c.text,
-                  border: `1px solid ${isDark ? c.darkBorder : c.border}`,
                 }}
               >
                 {tag}

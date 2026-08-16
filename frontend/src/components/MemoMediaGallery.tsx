@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Image, Paperclip, Link, Download, X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { getMemos, getThumbnailUrl, getFileUrl, fetchLinkPreview, retryLinkPreview, type Memo, type LinkPreview } from '../api/data';
+import { getMemos, getThumbnailUrl, getFileUrl, fetchLinkPreview, retryLinkPreview, downloadAttachment, type Memo, type LinkPreview } from '../api/data';
 import LinkPreviewCard from './LinkPreviewCard';
 
 interface MediaItem {
@@ -21,16 +21,11 @@ function extractImages(content: string, memoId: string, memoDate: string): Media
 }
 
 function extractFileLinks(content: string, memoId: string, memoDate: string): MediaItem[] {
-  const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
   const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-  const imageUrls = new Set<string>();
-  let m;
-  while ((m = imageRegex.exec(content)) !== null) {
-    imageUrls.add(m[2]);
-  }
   const results: MediaItem[] = [];
+  let m;
   while ((m = linkRegex.exec(content)) !== null) {
-    if (!imageUrls.has(m[2]) && !m[2].startsWith('/d/')) {
+    if (m[2].startsWith('/uploads/')) {
       results.push({ url: m[2], name: m[1], memoId, memoDate });
     }
   }
@@ -204,9 +199,12 @@ export default function MemoMediaGallery() {
                     <a
                       key={f.url}
                       href={getFileUrl(f.url)}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        void downloadAttachment(getFileUrl(f.url), f.name);
+                      }}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group"
+                      title="下载附件"
                     >
                       <Paperclip className="w-4 h-4 text-gray-400 shrink-0" />
                       <div className="flex-1 min-w-0">

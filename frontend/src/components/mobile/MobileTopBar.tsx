@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, X, ArrowLeft, LogOut, Key, Trash, User, Sparkles, Lock, Sun, Moon, Palette } from 'lucide-react';
+import { Search, X, ArrowLeft, LogOut, Key, Trash, User, Lock, Sun, Moon, Palette } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import UserProfileEditor from '../UserProfileEditor';
 import TokenPanel from '../TokenPanel';
@@ -10,6 +10,7 @@ import PasswordPanel from '../PasswordPanel';
 import { useFontSettings } from '../FontSettings';
 import { useIsDark } from '../../hooks/useIsDark';
 import AppearanceSettingsPage from '../AppearanceSettingsPage';
+import NavigationIcon from '../NavigationIcon';
 
 interface MobileTopBarProps {
   title: string;
@@ -62,7 +63,24 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
   const openDialog = (name: string) => {
     setActiveDialog(name);
     setShowUserMenu(false);
+    // 压入历史记录，让安卓系统返回键可以关闭弹出层
+    window.history.pushState({ mobileDialog: name }, '');
   };
+
+  const closeDialog = () => {
+    setActiveDialog(null);
+    if (window.history.state?.mobileDialog) {
+      window.history.back();
+    }
+  };
+
+  // 系统返回键/浏览器返回：关闭弹出层
+  useEffect(() => {
+    if (!activeDialog) return;
+    const onPopState = () => setActiveDialog(null);
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [activeDialog]);
 
   return (
     <>
@@ -123,7 +141,7 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
                     <Key className="w-4 h-4 text-gray-400" /><span>API Token</span>
                   </button>
                   <button onClick={() => openDialog('ai')} className="w-full px-3 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center gap-2.5">
-                    <Sparkles className="w-4 h-4 text-gray-400" /><span>AI 设置</span>
+                    <NavigationIcon type="ai" className="w-4 h-4" /><span>AI 设置</span>
                   </button>
                   <button onClick={() => openDialog('trash')} className="w-full px-3 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center gap-2.5">
                     <Trash className="w-4 h-4 text-gray-400" /><span>回收站</span>
@@ -241,11 +259,11 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
               {activeDialog === 'trash' && '回收站'}
               {activeDialog === 'password' && '修改密码'}
             </span>
-            <button onClick={() => setActiveDialog(null)} className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400">
+            <button onClick={closeDialog} className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400" aria-label="关闭">
               <X className="w-5 h-5" />
             </button>
           </div>
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             {activeDialog === 'profile' && <UserProfileEditor />}
             {activeDialog === 'appearance' && <AppearanceSettingsPage />}
             {activeDialog === 'token' && <TokenPanel />}

@@ -22,7 +22,7 @@ function getFreshCachedTasks(): WeekTask[] | null {
   return cachedTasks && Date.now() - cacheTime <= CACHE_TTL ? cachedTasks : null;
 }
 
-const BAR_COLOR = 'bg-[#6b8ab5] dark:bg-[#3f587f]';
+const BAR_COLOR = 'bg-[#75b4a4] dark:bg-[#4d9383]';
 
 const DAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -114,7 +114,7 @@ export default function ProjectWeekView({ embedded = false }: ProjectWeekViewPro
 
   if (loading) {
     return (
-      <div className={embedded ? 'px-3' : 'px-3 py-2'}>
+      <div className={embedded ? 'px-0' : 'px-3 py-2'}>
         <div className="flex items-center gap-1.5 text-base font-medium text-gray-400 dark:text-gray-500 mb-2"><CalendarDays className="w-4 h-4" />近 7 天计划</div>
         <div className="text-xs text-gray-400 py-2">加载中...</div>
       </div>
@@ -123,7 +123,7 @@ export default function ProjectWeekView({ embedded = false }: ProjectWeekViewPro
 
   if (weekTasks.length === 0) {
     return (
-      <div className={embedded ? 'px-3' : 'px-3 py-2'}>
+      <div className={embedded ? 'px-0' : 'px-3 py-2'}>
         <div className="flex items-center gap-1.5 text-base font-medium text-gray-400 dark:text-gray-500 mb-2"><CalendarDays className="w-4 h-4" />近 7 天计划</div>
         <p className="text-xs text-gray-400 py-2">暂无计划</p>
       </div>
@@ -131,7 +131,7 @@ export default function ProjectWeekView({ embedded = false }: ProjectWeekViewPro
   }
 
   return (
-    <div className={embedded ? 'px-3' : 'px-3 py-2'}>
+    <div className={embedded ? 'px-0' : 'px-3 py-2'}>
       <div className="flex items-center gap-1.5 text-base font-medium text-gray-400 dark:text-gray-500 mb-2">
         <CalendarDays className="w-4 h-4" />
         近 7 天计划
@@ -147,7 +147,7 @@ export default function ProjectWeekView({ embedded = false }: ProjectWeekViewPro
               key={i}
               className={`flex-1 text-center leading-tight py-0.5 rounded-sm ${
                 isToday
-                  ? 'bg-[#6b8ab5] dark:bg-[#3f587f] text-white font-medium'
+                  ? 'bg-[#75b4a4] dark:bg-[#4d9383] text-white font-medium'
                   : isWeekend
                     ? 'text-gray-400 dark:text-gray-500'
                     : 'text-gray-500 dark:text-gray-400'

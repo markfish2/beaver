@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronLeft, ChevronRight, ChevronDown, MoreHorizontal, CalendarDays, Trash2, Pencil } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, MoreHorizontal, CalendarDays, Trash2, Pencil, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getDiaryMonths, getMonthlyDiary, getOrCreateDayNode, getDiaryDayDates, deleteTodo, createNode, updateTodo } from '../api/data';
+import { getDiaryMonths, getMonthlyDiary, getOrCreateDayNode, getDiaryDayDates, deleteTodo, createNode, createTodo, updateTodo } from '../api/data';
 import type { Todo } from '../api/data';
 import { useDiary } from '../context/DiaryContext';
 import { parseTodoDueDate } from '../utils/todoDueDate';
 import { showToast } from '../utils/toast';
+import { logNavigation } from '../utils/navigationDebug';
+import { getDiaryDayStats } from '../utils/diaryHeatmap';
 
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
 
@@ -16,6 +18,13 @@ function getDaysInMonth(year: number, month: number) {
 function getFirstDayOfWeek(year: number, month: number) {
   const day = new Date(year, month - 1, 1).getDay();
   return day === 0 ? 6 : day - 1;
+}
+
+function getIntensity(count: number): string {
+  if (count === 0) return '';
+  if (count === 1) return 'bg-[#b9d9d0] dark:bg-[#2f554e]';
+  if (count <= 3) return 'bg-[#75b4a4] dark:bg-[#4d9383]';
+  return 'bg-[#4d9383] dark:bg-[#75b4a4]';
 }
 
 interface DiaryCalendarProps {
@@ -32,6 +41,7 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [localDiaryDays, setLocalDiaryDays] = useState<Set<number>>(new Set());
+  const [dayStats, setDayStats] = useState<Record<number, { total: number; incomplete: number }>>({});
   const [monthItems, setMonthItems] = useState<{ year: number; months: number[] }[]>([]);
   const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set([today.getFullYear()]));
   const [loading, setLoading] = useState(false);
@@ -40,7 +50,10 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
   const menuRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+  const [newTodoText, setNewTodoText] = useState('');
+  const [showAddTodo, setShowAddTodo] = useState(false);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const newTodoInputRef = useRef<HTMLInputElement>(null);
   const pendingDayClicksRef = useRef<Set<string>>(new Set());
 
   // Handle todo drop on a day cell: create diary node from todo, then delete todo
@@ -147,6 +160,32 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
     }
   };
 
+  // 快捷添加独立待办：点击虚线框展开输入，Enter 或「添加」按钮创建
+  const handleAddTodo = async () => {
+    const trimmed = newTodoText.trim();
+    if (!trimmed) return;
+    try {
+      await createTodo(trimmed);
+      setNewTodoText('');
+      setShowAddTodo(false);
+      showToast('待办已创建');
+      onTaskMoved?.();
+    } catch (err) {
+      console.error('Failed to create todo:', err);
+    }
+  };
+
+  const cancelAddTodo = () => {
+    setShowAddTodo(false);
+    setNewTodoText('');
+  };
+
+  useEffect(() => {
+    if (showAddTodo && newTodoInputRef.current) {
+      newTodoInputRef.current.focus();
+    }
+  }, [showAddTodo]);
+
   useEffect(() => {
     if (editingId && editInputRef.current) {
       editInputRef.current.focus();
@@ -161,10 +200,15 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
   // Fetch which days have content for current month view
   const fetchDays = useCallback(async (y: number, m: number) => {
     try {
-      const days = await getDiaryDayDates(y, m);
+      const [days, diary] = await Promise.all([
+        getDiaryDayDates(y, m),
+        getMonthlyDiary(y, m),
+      ]);
       setLocalDiaryDays(new Set(days));
+      setDayStats(getDiaryDayStats(diary.nodes));
     } catch {
       setLocalDiaryDays(new Set());
+      setDayStats({});
     }
   }, []);
 
@@ -198,11 +242,20 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
 
   // Click a month header → navigate to monthly diary
   const handleMonthClick = async (y: number, m: number) => {
+    logNavigation('diary-calendar-month-click', { year: y, month: m });
+    // Keep the heatmap and the archive selection on the same month.
+    setYear(y);
+    setMonth(m);
     setLoading(true);
     try {
       const data = await getMonthlyDiary(y, m);
       if (data.is_new) fetchMonths();
       navigate(`/d/${data.document.id}`);
+      logNavigation('diary-calendar-month-navigate', {
+        documentId: data.document.id,
+        year: y,
+        month: m,
+      });
       onNavigate?.();
     } catch (e) {
       console.error('Failed to open diary', e);
@@ -214,6 +267,13 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
   // Click a day in calendar → navigate and create day node
   const handleDayClick = async (day: number) => {
     const pendingKey = `${year}-${month}-${day}`;
+    logNavigation('diary-calendar-day-click', {
+      year,
+      month,
+      day,
+      isActiveMonth,
+      hasContextHandler: Boolean(diaryCtx.handleDayClick),
+    });
     if (pendingDayClicksRef.current.has(pendingKey)) return;
     pendingDayClicksRef.current.add(pendingKey);
     // If already viewing this month's diary, use context handler (no navigation)
@@ -233,6 +293,12 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
       ]);
       if (data.is_new) fetchMonths();
       navigate(`/d/${data.document.id}`);
+      logNavigation('diary-calendar-day-navigate', {
+        documentId: data.document.id,
+        year,
+        month,
+        day,
+      });
       onNavigate?.();
     } catch (e) {
       console.error('Failed to open diary', e);
@@ -265,7 +331,7 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
   return (
     <div className="flex flex-col h-full">
       {/* Calendar */}
-      <div className="px-2 py-3">
+      <div className="px-4 py-3">
         {/* Month header */}
         <div className="flex items-center justify-between mb-3">
           <button onClick={prevMonth} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors">
@@ -285,16 +351,21 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
         {/* Weekday labels */}
         <div className="grid grid-cols-7 mb-1">
           {WEEKDAYS.map(d => (
-            <div key={d} className="text-center text-[10px] text-gray-400 dark:text-gray-500 py-1">{d}</div>
+            <div key={d} className="text-center text-[10px] text-gray-400 dark:text-gray-500 py-0.5">{d}</div>
           ))}
         </div>
 
         {/* Day grid */}
-        <div className="grid grid-cols-7">
+        <div className="grid grid-cols-7 gap-1">
           {cells.map((day, i) => {
-            if (day === null) return <div key={`empty-${i}`} className="h-8" />;
+            if (day === null) return <div key={`empty-${i}`} className="aspect-square" />;
             const isToday = isCurrentMonth && day === today.getDate();
             const hasEntry = diaryDays.has(day);
+            const stats = dayStats[day] || { total: 0, incomplete: 0 };
+            const count = stats.total;
+            const intensity = getIntensity(count);
+            const isPast = new Date(year, month - 1, day) < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const hasOverdueTodo = isPast && stats.incomplete > 0;
             return (
               <button
                 key={day}
@@ -302,30 +373,47 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
                 onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverDay(day); }}
                 onDragLeave={() => setDragOverDay(null)}
                 onDrop={(e) => handleTodoDrop(day, e)}
-                className={`relative h-8 flex flex-col items-center justify-center text-xs rounded transition-colors ${
+                title={`${day}日：共 ${count} 项待办，未完成 ${stats.incomplete} 项`}
+                className="aspect-square flex items-center justify-center"
+              >
+                <span className={`relative w-[80%] aspect-square rounded-[5px] flex items-center justify-center text-[10px] transition-colors ${
                   dragOverDay === day
                     ? 'bg-blue-200 dark:bg-blue-800 ring-2 ring-blue-400 dark:ring-blue-500'
                     : isToday
-                    ? 'bg-[#3f587f] dark:bg-[#3f587f] text-white dark:text-white font-semibold'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                }`}
-              >
-                <span>{day}</span>
-                {hasEntry && (
-                  <span className={`absolute bottom-0.5 w-1 h-1 rounded-full ${isToday ? 'bg-white' : 'bg-gray-400 dark:bg-gray-500'}`} />
-                )}
+                    ? 'bg-[#f4f2ec] dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium border border-black'
+                    : intensity
+                    ? `${intensity} text-white dark:text-gray-900 font-medium hover:brightness-95`
+                    : `bg-[#f4f2ec] dark:bg-gray-800 ${hasEntry ? 'text-gray-600 dark:text-gray-300 font-medium' : 'text-gray-400 dark:text-gray-500'} hover:bg-gray-200 dark:hover:bg-gray-700`
+                }`}>
+                  {day}
+                  {hasOverdueTodo && (
+                    <span
+                      aria-label="有未完成待办"
+                      className="absolute right-[2px] bottom-[2px] w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-400 ring-1 ring-white/80 dark:ring-gray-900/80"
+                    />
+                  )}
+                </span>
               </button>
             );
           })}
         </div>
+
+        <div className="flex items-center justify-end gap-1 mt-2">
+          <span className="text-[9px] text-gray-400">少</span>
+          <div className="w-3 h-3 rounded-[5px] bg-[#f4f2ec] dark:bg-gray-800" />
+          <div className="w-3 h-3 rounded-[5px] bg-[#b9d9d0] dark:bg-[#2f554e]" />
+          <div className="w-3 h-3 rounded-[5px] bg-[#75b4a4] dark:bg-[#4d9383]" />
+          <div className="w-3 h-3 rounded-[5px] bg-[#4d9383] dark:bg-[#75b4a4]" />
+          <span className="text-[9px] text-gray-400">多</span>
+          <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-400" title="过去日期有未完成待办" />
+        </div>
       </div>
 
       {/* Pending todos */}
-      {pendingTasks.length > 0 && (
-        <div className="px-2 py-2">
-          <div className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 px-1">待办</div>
-          <div className="space-y-1.5">
-            {pendingTasks.map(task => {
+      <div className="px-2 py-2">
+        <div className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 px-1">待办</div>
+        <div className="space-y-1.5">
+          {pendingTasks.map(task => {
               const isEditing = editingId === task.id;
               const parsed = parseTodoDueDate(isEditing ? editText : task.content);
               const dateClass = parsed.urgency === 'today' ? 'text-orange-500 font-medium' :
@@ -414,10 +502,50 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
                 )}
               </div>
             );
-            })}
-          </div>
+          })}
+
+          {/* 快捷添加待办：虚线框，点击展开输入 */}
+          {showAddTodo ? (
+            <div className="rounded-xl bg-gray-50 dark:bg-gray-800/50 p-2.5 space-y-2">
+              <input
+                ref={newTodoInputRef}
+                type="text"
+                value={newTodoText}
+                onChange={(e) => setNewTodoText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleAddTodo();
+                  if (e.key === 'Escape') cancelAddTodo();
+                }}
+                placeholder="待办内容..."
+                className="w-full bg-transparent text-sm text-gray-800 dark:text-gray-100 outline-none border-b border-blue-400 py-1 placeholder:text-gray-400"
+              />
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  onClick={cancelAddTodo}
+                  className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-600 transition-colors hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleAddTodo}
+                  disabled={!newTodoText.trim()}
+                  className="rounded-full bg-blue-500 px-3 py-1 text-sm text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  添加
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAddTodo(true)}
+              className="w-full flex items-center justify-center gap-1 px-2.5 py-2 rounded-none border border-dashed border-gray-200 dark:border-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600 transition-colors text-sm leading-snug"
+            >
+              <Plus size={14} />
+              添加待办
+            </button>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Divider */}
       <div className="border-t border-gray-200 dark:border-gray-700 mx-2" />
@@ -445,7 +573,7 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
                       onClick={() => handleMonthClick(item.year, m)}
                       className={`px-2 py-1 text-xs rounded transition-colors ${
                         item.year === year && m === month
-                          ? 'bg-[#3f587f] dark:bg-[#3f587f] text-white dark:text-white font-medium'
+                          ? 'bg-[#4d9383] dark:bg-[#4d9383] text-white dark:text-white font-medium'
                           : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
                       }`}
                     >

@@ -9,6 +9,7 @@ interface GanttChartProps {
   onTaskUpdate?: (taskId: string, startDate: string, endDate: string) => void;
   scrollRef?: React.RefObject<HTMLDivElement | null>;
   readOnly?: boolean;
+  collapsedTaskIds?: ReadonlySet<string>;
 }
 
 interface DragState {
@@ -70,12 +71,12 @@ function getWeekNumber(d: Date): number {
 
 // ==================== Flatten Task Tree ====================
 
-function flattenTasks(tasks: Task[]): FlattenedTask[] {
+function flattenTasks(tasks: Task[], collapsedTaskIds?: ReadonlySet<string>): FlattenedTask[] {
   const result: FlattenedTask[] = [];
   function walk(list: Task[], depth: number) {
     for (const task of list) {
       result.push({ task, depth });
-      if (task.children && task.children.length > 0) {
+      if (task.children && task.children.length > 0 && !collapsedTaskIds?.has(task.id)) {
         walk(task.children, depth + 1);
       }
     }
@@ -87,30 +88,57 @@ function flattenTasks(tasks: Task[]): FlattenedTask[] {
 // ==================== Constants ====================
 
 const ROW_HEIGHT = 32;
-const HEADER_HEIGHT = 40;
+const HEADER_HEIGHT = 44;
 const DRAG_HANDLE_WIDTH = 5;
 
-// Depth-based colors matching TaskCard.tsx DEPTH_COLORS bg
-const DEPTH_BAR_COLORS = [
-  '#D4883A', // depth 0 - warm orange (darker)
-  '#5A8BC4', // depth 1 - blue (darker)
-  '#5AC48A', // depth 2 - green (darker)
-  '#C45A8A', // depth 3 - pink (darker)
-  '#8A5AC4', // depth 4 - purple (darker)
-];
-const DONE_COLOR = '#F3F4F6';
+const TASK_BAR_FILL = '#a9dcfb';
+const TASK_BAR_STROKE = '#60b8f3';
+const SUMMARY_BAR_FILL = '#d7d7d7';
+const SUMMARY_BAR_STROKE = '#b7b7b7';
+const DONE_COLOR = '#eef0f2';
+
+/** 标准圆角矩形路径：四条直边 + 四个独立圆角，避免边向内弯曲 */
+function traceRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+): void {
+  const r = Math.max(0, Math.min(radius, width / 2, height / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
 
 // ==================== Component ====================
 
-const GanttChart: React.FC<GanttChartProps> = ({ tasks, scale, onTaskUpdate, scrollRef, readOnly = false }) => {
+const GanttChart: React.FC<GanttChartProps> = ({
+  tasks,
+  scale,
+  onTaskUpdate,
+  scrollRef,
+  readOnly = false,
+  collapsedTaskIds,
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const prevTaskCountRef = useRef(0);
 
   const [zoom, setZoom] = useState<number>(1);
   const [dragState, setDragState] = useState<DragState | null>(null);
 
   // Derived data
-  const flatTasks = flattenTasks(tasks);
+  const flatTasks = flattenTasks(tasks, collapsedTaskIds);
   const todayStr = getToday();
 
   // Calculate date range
@@ -140,8 +168,8 @@ const GanttChart: React.FC<GanttChartProps> = ({ tasks, scale, onTaskUpdate, scr
   const totalDays = daysBetween(rangeStart, rangeEnd) + 1;
 
   // Day width based on scale and zoom
-  const baseDayWidth = scale === 'day' ? 30 : 20;
-  const dayWidth = Math.max(4, Math.min(60, baseDayWidth * zoom));
+  const baseDayWidth = scale === 'day' ? 18 : 12;
+  const dayWidth = Math.max(6, Math.min(42, baseDayWidth * zoom));
 
   const canvasWidth = totalDays * dayWidth;
   const canvasHeight = HEADER_HEIGHT + flatTasks.length * ROW_HEIGHT;
@@ -154,6 +182,20 @@ const GanttChart: React.FC<GanttChartProps> = ({ tasks, scale, onTaskUpdate, scr
     },
     [dayWidth, rangeStart]
   );
+
+  // 默认把「今天」放到甘特图最左边；数据首次加载完成后再对齐一次（可用 key 让每个项目重新定位）
+  useEffect(() => {
+    if (flatTasks.length === 0) return;
+    if (prevTaskCountRef.current === 0) {
+      prevTaskCountRef.current = flatTasks.length;
+      const container = containerRef.current;
+      if (container) {
+        container.scrollLeft = Math.max(0, daysBetween(rangeStart, parseDate(todayStr)) * dayWidth);
+      }
+      return;
+    }
+    prevTaskCountRef.current = flatTasks.length;
+  }, [flatTasks.length, rangeStart, todayStr, dayWidth]);
 
   // ==================== Drawing ====================
 
@@ -177,65 +219,63 @@ const GanttChart: React.FC<GanttChartProps> = ({ tasks, scale, onTaskUpdate, scr
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-    // 2. Weekend highlights
+    // 2. Alternating row and weekend highlights
+    for (let row = 0; row < flatTasks.length; row++) {
+      const { task } = flatTasks[row];
+      const y = HEADER_HEIGHT + row * ROW_HEIGHT;
+      if (task.children && task.children.length > 0) {
+        ctx.fillStyle = '#F3F4F6';
+        ctx.fillRect(0, y, canvasWidth, ROW_HEIGHT);
+      } else if (row % 2 === 1) {
+        ctx.fillStyle = '#FBFBFB';
+        ctx.fillRect(0, y, canvasWidth, ROW_HEIGHT);
+      }
+    }
+
     for (let i = 0; i < totalDays; i++) {
       const d = addDays(rangeStart, i);
       if (isWeekend(d)) {
         const x = i * dayWidth;
-        ctx.fillStyle = '#F9FAFB';
+        ctx.fillStyle = 'rgba(244, 244, 245, 0.7)';
         ctx.fillRect(x, HEADER_HEIGHT, dayWidth, canvasHeight - HEADER_HEIGHT);
       }
     }
 
-    // 3. Grid lines
+    // 4. Header background（先画，让竖线能贯穿表头与正文对齐）
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvasWidth, HEADER_HEIGHT);
+    ctx.strokeStyle = '#D1D5DB';
+    ctx.beginPath();
+    ctx.moveTo(0, HEADER_HEIGHT);
+    ctx.lineTo(canvasWidth, HEADER_HEIGHT);
+    ctx.stroke();
+
+    // 3. Grid lines（表头与正文同一条竖线）
     ctx.lineWidth = 1;
     for (let i = 0; i <= totalDays; i++) {
       const d = addDays(rangeStart, i);
       const x = i * dayWidth;
 
       if (scale === 'week') {
-        // Week lines are darker
-        if (d.getDay() === 1) {
-          ctx.strokeStyle = '#E5E7EB';
-          ctx.beginPath();
-          ctx.moveTo(x, HEADER_HEIGHT);
-          ctx.lineTo(x, canvasHeight);
-          ctx.stroke();
-        } else {
-          ctx.strokeStyle = '#F3F4F6';
-          ctx.beginPath();
-          ctx.moveTo(x, HEADER_HEIGHT);
-          ctx.lineTo(x, canvasHeight);
-          ctx.stroke();
-        }
+        ctx.strokeStyle = d.getDay() === 1 ? '#BFC4CB' : '#E5E7EB';
       } else {
-        // Day mode
-        ctx.strokeStyle = '#E5E7EB';
-        ctx.beginPath();
-        ctx.moveTo(x, HEADER_HEIGHT);
-        ctx.lineTo(x, canvasHeight);
-        ctx.stroke();
+        ctx.strokeStyle = d.getDate() === 1 ? '#9CA3AF' : '#DDE1E6';
       }
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, canvasHeight);
+      ctx.stroke();
     }
 
     // Row lines
     for (let r = 0; r <= flatTasks.length; r++) {
       const y = HEADER_HEIGHT + r * ROW_HEIGHT;
-      ctx.strokeStyle = '#F3F4F6';
+      ctx.strokeStyle = '#EAECF0';
       ctx.beginPath();
       ctx.moveTo(0, y);
       ctx.lineTo(canvasWidth, y);
       ctx.stroke();
     }
-
-    // 4. Header background
-    ctx.fillStyle = '#F9FAFB';
-    ctx.fillRect(0, 0, canvasWidth, HEADER_HEIGHT);
-    ctx.strokeStyle = '#E5E7EB';
-    ctx.beginPath();
-    ctx.moveTo(0, HEADER_HEIGHT);
-    ctx.lineTo(canvasWidth, HEADER_HEIGHT);
-    ctx.stroke();
 
     // Header labels
     ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
@@ -247,18 +287,28 @@ const GanttChart: React.FC<GanttChartProps> = ({ tasks, scale, onTaskUpdate, scr
         const d = addDays(rangeStart, i);
         const x = i * dayWidth + dayWidth / 2;
 
-        // Date number
-        ctx.fillStyle = isWeekend(d) ? '#9CA3AF' : '#374151';
-        ctx.fillText(String(d.getDate()), x, HEADER_HEIGHT / 2 - 6);
-
-        // Month/day label on 1st or first visible
         if (d.getDate() === 1 || i === 0) {
-          ctx.fillStyle = '#6B7280';
-          ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-          const label = `${d.getMonth() + 1}/${d.getDate()}`;
-          ctx.fillText(label, x, HEADER_HEIGHT / 2 + 8);
+          ctx.fillStyle = '#374151';
+          ctx.font = '600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+          const nextMonthStart = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+          const daysInMonthVisible = Math.min(
+            daysBetween(d, rangeEnd) + 1,
+            daysBetween(d, nextMonthStart)
+          );
+          const labelX = x + Math.max(dayWidth, daysInMonthVisible * dayWidth) / 2;
+          ctx.fillText(`${d.getFullYear()}年${d.getMonth() + 1}月`, labelX, 12);
           ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
         }
+
+        // Date number
+        ctx.fillStyle = isWeekend(d) ? '#8C96A3' : '#374151';
+        ctx.fillText(String(d.getDate()), x, 26);
+
+        // 星期几文字底部与表头下边框保留 3px 距离（9px 字号、middle 基线约 ±4.5px，表头 44px）
+        ctx.fillStyle = '#8C96A3';
+        ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+        ctx.fillText(['日', '一', '二', '三', '四', '五', '六'][d.getDay()], x, 36);
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
       }
     } else {
       // Week mode - group by week
@@ -308,7 +358,7 @@ const GanttChart: React.FC<GanttChartProps> = ({ tasks, scale, onTaskUpdate, scr
     ctx.textBaseline = 'middle';
 
     for (let row = 0; row < flatTasks.length; row++) {
-      const { task, depth } = flatTasks[row];
+      const { task } = flatTasks[row];
       const y = HEADER_HEIGHT + row * ROW_HEIGHT;
 
       // Determine effective dates (use drag preview if dragging this task)
@@ -325,73 +375,55 @@ const GanttChart: React.FC<GanttChartProps> = ({ tasks, scale, onTaskUpdate, scr
       const barHeight = 16;
       const barWidth = Math.max(dayWidth, x2 - x1);
 
-      // Bar color based on depth
-      const colorIdx = depth % DEPTH_BAR_COLORS.length;
-      const barColor = task.is_done ? DONE_COLOR : DEPTH_BAR_COLORS[colorIdx];
+      const hasChildren = task.children && task.children.length > 0;
+      const barColor = task.is_done ? DONE_COLOR : hasChildren ? SUMMARY_BAR_FILL : TASK_BAR_FILL;
+      const strokeColor = task.is_done ? '#D1D5DB' : hasChildren ? SUMMARY_BAR_STROKE : TASK_BAR_STROKE;
 
       // Drag preview: semi-transparent
       const isDragging = dragState && dragState.taskId === task.id;
 
       // Draw rounded rect
-      const radius = barHeight / 2;
+      const radius = hasChildren ? 8 : 4;
       ctx.globalAlpha = isDragging ? 0.7 : 1;
       ctx.fillStyle = barColor;
-      ctx.beginPath();
-      ctx.moveTo(x1 + radius, barY);
-      ctx.lineTo(x1 + barWidth - radius, barY);
-      ctx.quadraticCurveTo(x1 + barWidth, barY, x1 + barWidth, barY + radius);
-      ctx.quadraticCurveTo(x1 + barWidth, barY + barHeight, x1 + barWidth - radius, barY + barHeight);
-      ctx.lineTo(x1 + radius, barY + barHeight);
-      ctx.quadraticCurveTo(x1, barY + barHeight, x1, barY + barHeight - radius);
-      ctx.quadraticCurveTo(x1, barY, x1 + radius, barY);
-      ctx.closePath();
+      ctx.strokeStyle = strokeColor;
+      traceRoundedRect(ctx, x1, barY, barWidth, barHeight, radius);
       ctx.fill();
-      // No border, no shadow
+      ctx.stroke();
 
-      // Task title text
-      if (barWidth > 40) {
-        ctx.fillStyle = task.is_done ? '#D1D5DB' : '#FFFFFF';
-        ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-        const maxTextWidth = barWidth - 12;
-        const text = task.title;
-        // Truncate if needed
-        let displayText = text;
-        const measured = ctx.measureText(text);
-        if (measured.width > maxTextWidth) {
-          while (displayText.length > 0 && ctx.measureText(displayText + '...').width > maxTextWidth) {
-            displayText = displayText.slice(0, -1);
-          }
-          displayText += '...';
+      // Task title text：1~2 天的短任务条也显示名称（画在条右侧，超出画布时截断）
+      ctx.fillStyle = task.is_done ? '#9CA3AF' : '#333333';
+      ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      const maxTextWidth = Math.max(0, canvasWidth - x1 - barWidth - 16);
+      const text = task.title;
+      // Truncate if needed
+      let displayText = text;
+      const measured = ctx.measureText(text);
+      if (measured.width > maxTextWidth) {
+        while (displayText.length > 0 && ctx.measureText(displayText + '...').width > maxTextWidth) {
+          displayText = displayText.slice(0, -1);
         }
-        ctx.fillText(displayText, x1 + 6, barY + barHeight / 2);
+        displayText += '...';
       }
+      ctx.fillText(displayText, x1 + barWidth + 12, barY + barHeight / 2);
 
       ctx.globalAlpha = 1;
     }
 
     // 6. Today line
     const todayX = dateToX(todayStr);
-    ctx.strokeStyle = '#EF4444';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#4d9383';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(todayX, HEADER_HEIGHT);
+    ctx.moveTo(todayX, 0);
     ctx.lineTo(todayX, canvasHeight);
     ctx.stroke();
-    ctx.lineWidth = 1;
-
-    // Today marker on header
-    ctx.fillStyle = '#EF4444';
-    ctx.beginPath();
-    ctx.moveTo(todayX - 5, HEADER_HEIGHT);
-    ctx.lineTo(todayX + 5, HEADER_HEIGHT);
-    ctx.lineTo(todayX, HEADER_HEIGHT + 6);
-    ctx.closePath();
-    ctx.fill();
   }, [
     canvasWidth,
     canvasHeight,
     totalDays,
     rangeStart,
+    rangeEnd,
     dayWidth,
     scale,
     flatTasks,
@@ -415,6 +447,9 @@ const GanttChart: React.FC<GanttChartProps> = ({ tasks, scale, onTaskUpdate, scr
       if (row < 0 || row >= flatTasks.length) return null;
 
       const { task } = flatTasks[row];
+      // 父任务周期由子任务推导，不允许直接拖动或拉伸
+      if (task.children && task.children.length > 0) return null;
+
       const x1 = dateToX(task.start_date);
       const x2 = dateToX(task.end_date) + dayWidth;
       const barWidth = Math.max(dayWidth, x2 - x1);
@@ -592,7 +627,7 @@ const GanttChart: React.FC<GanttChartProps> = ({ tasks, scale, onTaskUpdate, scr
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full overflow-auto"
+      className="gantt-chart-scroll-area relative w-full h-full overflow-x-auto overflow-y-auto custom-scrollbar"
       onWheel={handleWheel}
       onScroll={handleContainerScroll}
     >

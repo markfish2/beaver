@@ -49,8 +49,8 @@ SyntaxHighlighter.registerLanguage('cpp', cpp);
 SyntaxHighlighter.registerLanguage('go', go);
 SyntaxHighlighter.registerLanguage('rust', rust);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
-import { Pencil, Eye, Save, Columns2, Copy, CheckCheck, Download, Share2 } from 'lucide-react';
-import { getNodes, createNode, updateNode, uploadFile, getMemoTags, getDocuments, updateDocument } from '../api/data';
+import { Pencil, Eye, Save, Columns2, Copy, CheckCheck, Download, FileDown, Share2 } from 'lucide-react';
+import { getNodes, createNode, updateNode, uploadFile, getMemoTags, getDocuments, updateDocument, downloadAttachment } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
 import type { Document } from '../api/data';
 import MermaidBlock from './MermaidBlock';
@@ -58,6 +58,7 @@ import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normal
 import { getPasteMarkdown } from '../utils/htmlToMarkdown';
 import { localizeMarkdownImages } from '../utils/markdownImageUpload';
 import { useIsDark } from '../hooks/useIsDark';
+import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import MarkdownEditor from './MarkdownEditor';
 import type { MarkdownEditorHandle } from './MarkdownEditor';
 import EditorToolbar from './EditorToolbar';
@@ -67,6 +68,8 @@ import { tagMentionExtension } from '../extensions/tagMentionExtension';
 import type { TagMentionState } from '../extensions/tagMentionExtension';
 import AIChatPanel from './AIChatPanel';
 import ShareDialog from './ShareDialog';
+import { exportNotePdf } from '../utils/notePdf';
+import { showToast } from '../utils/toast';
 
 interface Props {
   documentId: string;
@@ -210,10 +213,41 @@ function NoteTableOfContents({
   onJump: (item: NoteTocItem) => void;
   documentId: string;
 }) {
-  const [activeId, setActiveId] = useState<string | null>(items[0]?.id ?? null);
+  const [, setActiveId] = useState<string | null>(items[0]?.id ?? null);
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 0 });
+  const [visibleRail, setVisibleRail] = useState({ top: 0, height: 0 });
   const [closedDocumentId, setClosedDocumentId] = useState<string | null>(null);
   const rafRef = useRef<number>(0);
-  const visibleActiveId = items.some(item => item.id === activeId) ? activeId : items[0]?.id ?? null;
+  const tocListRef = useRef<HTMLDivElement>(null);
+  const tocItemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  useEffect(() => {
+    const list = tocListRef.current;
+    const first = tocItemRefs.current[items[visibleRange.start]?.id];
+    const last = tocItemRefs.current[items[visibleRange.end]?.id];
+    if (!list || !first || !last) return;
+    const next = {
+      top: first.offsetTop,
+      height: Math.max(1, last.offsetTop + last.offsetHeight - first.offsetTop),
+    };
+    setVisibleRail(previous => previous.top === next.top && previous.height === next.height ? previous : next);
+  }, [items, visibleRange]);
+
+  useEffect(() => {
+    const list = tocListRef.current;
+    const first = tocItemRefs.current[items[visibleRange.start]?.id];
+    const last = tocItemRefs.current[items[visibleRange.end]?.id];
+    if (!list || !first || !last) return;
+    const viewportTop = list.scrollTop;
+    const viewportBottom = viewportTop + list.clientHeight;
+    const rangeTop = first.offsetTop;
+    const rangeBottom = last.offsetTop + last.offsetHeight;
+    if (rangeTop < viewportTop) {
+      first.scrollIntoView({ block: 'nearest' });
+    } else if (rangeBottom > viewportBottom) {
+      last.scrollIntoView({ block: 'nearest' });
+    }
+  }, [items, visibleRange]);
 
   useEffect(() => {
     const scrollRoot = scrollRootRef.current;
@@ -225,17 +259,30 @@ function NoteTableOfContents({
       let bestId: string | null = null;
       let bestTop = -Infinity;
 
-      for (const item of items) {
+      let firstVisible = -1;
+      let lastVisible = -1;
+      for (const [index, item] of items.entries()) {
         const el = scrollRoot.querySelector<HTMLElement>(`[data-note-heading-id="${item.id}"]`);
         if (!el) continue;
         const rect = el.getBoundingClientRect();
+        if (rect.bottom > rootRect.top && rect.top < rootRect.bottom) {
+          if (firstVisible === -1) firstVisible = index;
+          lastVisible = index;
+        }
         if (rect.top <= threshold && rect.top > bestTop) {
           bestTop = rect.top;
           bestId = item.id;
         }
       }
 
-      if (bestId) setActiveId(bestId);
+      if (bestId) setActiveId(previous => previous === bestId ? previous : bestId);
+      if (firstVisible !== -1) {
+        setVisibleRange(previous => (
+          previous.start === firstVisible && previous.end === lastVisible
+            ? previous
+            : { start: firstVisible, end: lastVisible }
+        ));
+      }
     };
 
     const onScroll = () => {
@@ -255,12 +302,17 @@ function NoteTableOfContents({
   if (items.length === 0 || closedDocumentId === documentId) return null;
 
   return (
-    <aside className="hidden lg:block w-[180px] shrink-0 border-l border-gray-100 dark:border-gray-800 px-3 py-4">
+    <aside className="toc-responsive w-[240px] shrink-0 px-3 py-4">
       <div
-        className="sticky top-4 max-h-[calc(100vh-7rem)] overflow-hidden flex flex-col rounded-xl border border-gray-100/70 dark:border-gray-800/70 bg-white/55 dark:bg-gray-900/45 backdrop-blur"
+        className="sticky top-4 max-h-[calc(100vh-7rem)] overflow-hidden flex flex-col text-gray-600 dark:text-gray-300"
       >
-        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100/70 dark:border-gray-800/70 shrink-0">
-          <span className="text-xs text-gray-400 dark:text-gray-500">目录</span>
+        <div className="flex items-center justify-between px-2 py-1.5 shrink-0">
+          <span className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+            <svg className="h-4 w-4 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <path d="M5 6h14M5 12h14M5 18h14" />
+            </svg>
+            目录
+          </span>
           <button
             type="button"
             onClick={() => setClosedDocumentId(documentId)}
@@ -272,24 +324,33 @@ function NoteTableOfContents({
             </svg>
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto custom-scrollbar py-1">
-          {items.map((item) => {
-            const isActive = visibleActiveId === item.id;
+        <div ref={tocListRef} className="relative flex-1 overflow-y-auto custom-scrollbar py-0.5 pl-2">
+          <div className="absolute left-[10px] top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700" aria-hidden="true" />
+          {visibleRange.end >= visibleRange.start && (
+            <div
+              className="pointer-events-none absolute left-[10px] z-20 w-px bg-[#46745b] dark:bg-[#8fc5a5]"
+              style={{ top: visibleRail.top, height: visibleRail.height }}
+              aria-hidden="true"
+            >
+              <span className="absolute left-1/2 bottom-[-2px] h-1 w-1 -translate-x-1/2 rounded-full bg-[#46745b] dark:bg-[#8fc5a5]" />
+            </div>
+          )}
+          {items.map((item, index) => {
             return (
               <button
                 key={item.id}
                 type="button"
+                ref={(element) => { tocItemRefs.current[item.id] = element; }}
                 onClick={() => onJump(item)}
-                className={`w-full text-left leading-snug py-1.5 pr-2 transition-all duration-150 truncate border-l-2 ${
-                  isActive
-                    ? 'text-blue-600 dark:text-blue-400 border-blue-500 bg-blue-50/60 dark:bg-blue-900/20 font-medium'
-                    : 'text-gray-400 dark:text-gray-500 border-transparent hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50/80 dark:hover:bg-gray-800/50'
+                className={`relative z-10 w-full text-left leading-tight py-1 pr-2 pl-5 transition-all duration-150 truncate ${
+                  index >= visibleRange.start && index <= visibleRange.end
+                    ? 'text-[#46745b] dark:text-[#8fc5a5] font-medium'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                 }`}
-                style={{ paddingLeft: `${8 + TOC_LEVEL_INDENT[item.level]}px`, fontSize: 'calc(var(--outline-font-size, 16px) - 2px)' }}
+                style={{ paddingLeft: `${20 + TOC_LEVEL_INDENT[item.level]}px`, fontSize: '13px' }}
                 title={item.text}
               >
-                <span className="text-gray-300 dark:text-gray-600 mr-0.5 inline-block scale-x-[0.33]">—</span>
-                {item.text.length > 14 ? `${item.text.slice(0, 14)}...` : item.text}
+                {item.text}
               </button>
             );
           })}
@@ -367,6 +428,7 @@ function NoteImage({ src, alt }: { src?: string; alt?: string }) {
 
 export default function MarkdownNoteEditor({ documentId, isNew = false }: Props) {
   const { updateDocumentTitle } = useDocuments();
+  const isMobile = usePhoneLayout();
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>(isNew ? 'edit' : 'preview');
   const [content, setContent] = useState('');
   const [showAIPanel, setShowAIPanel] = useState(false);
@@ -376,6 +438,8 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
   const editorRef = useRef<MarkdownEditorHandle>(null);
@@ -383,6 +447,8 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
   const previewRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  const exportSurfaceRef = useRef<HTMLDivElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedRef = useRef('');
   const pendingSaveRef = useRef<string | null>(null);
@@ -403,6 +469,39 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
     anchor.click();
     URL.revokeObjectURL(url);
   }, [content, title]);
+
+  // 点击外部关闭导出菜单
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showExportMenu]);
+
+  const handleExportPdf = useCallback(async () => {
+    if (exportingPdf || !exportSurfaceRef.current) return;
+    setExportingPdf(true);
+    try {
+      await exportNotePdf({ surface: exportSurfaceRef.current, title: title || 'note' });
+    } catch (e) {
+      console.error('导出 PDF 失败', e);
+      showToast('导出 PDF 失败：' + (e instanceof Error ? e.message : '未知错误'), 'error');
+    } finally {
+      setExportingPdf(false);
+    }
+  }, [exportingPdf, title]);
+
+  // 预览区双击进入编辑模式（链接/按钮等交互元素除外）
+  const handlePreviewDoubleClick = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('a, button, input, textarea, [role="checkbox"], .markdown-code-copy')) return;
+    setViewMode('edit');
+    setTimeout(() => editorRef.current?.focus(), 0);
+  }, []);
 
   const [tagState, setTagState] = useState<TagMentionState>({ type: null, query: '', coords: null, from: 0, to: 0 });
   const [mentionState, setMentionState] = useState<TagMentionState>({ type: null, query: '', coords: null, from: 0, to: 0 });
@@ -610,7 +709,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
       id: renderedHeadings[index]?.id ?? item.id,
     }));
   }, [content, renderedHeadings]);
-  const showNoteToc = viewMode !== 'split' && tocItems.length > 0;
+  const showNoteToc = !isMobile && viewMode !== 'split' && tocItems.length > 0;
 
   const handleTocJump = useCallback((item: NoteTocItem) => {
     if (viewMode === 'preview') {
@@ -692,6 +791,22 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
         return <a href={href} className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-1 rounded cursor-pointer"
           onClick={(e) => { e.preventDefault(); navigate_fn(`/d/${docId}`); }}>{children}</a>;
       }
+      if (href?.startsWith('/uploads/')) {
+        return (
+          <a
+            {...props}
+            href={href}
+            onClick={(e) => {
+              e.preventDefault();
+              void downloadAttachment(href, typeof children === 'string' ? children : undefined);
+            }}
+            className="text-blue-500 underline hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
+            title="下载附件"
+          >
+            {children}
+          </a>
+        );
+      }
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 underline">{children}</a>;
     },
     li: ({ children, ordered, index, node, ...props }) => {
@@ -727,9 +842,9 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
             type="button"
             role="checkbox"
             aria-checked={checked}
-            className={`absolute left-0 top-[0.22em] z-20 inline-flex h-[14px] w-[14px] shrink-0 cursor-pointer items-center justify-center rounded-full border transition-colors ${
+            className={`absolute left-0 top-[5px] z-20 inline-flex h-[14px] w-[14px] shrink-0 cursor-pointer items-center justify-center rounded-full border transition-colors ${
               checked
-                ? 'border-[#3f587f] bg-[#3f587f]'
+                ? 'border-[#4d9383] bg-[#4d9383]'
                 : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800'
             }`}
             onMouseDown={(e) => {
@@ -804,7 +919,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
 
   return (
     <div className="flex flex-col h-full bg-[var(--app-canvas)]">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 dark:border-gray-800 shrink-0">
+      <div className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-900">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
             onBlur={() => { if (title.trim()) saveTitle(title.trim()); }}
@@ -814,41 +929,74 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
           {uploading && <span className="text-xs text-blue-500 shrink-0">上传中...</span>}
         </div>
         <div className="flex items-center gap-1 shrink-0 ml-4">
-          <button
-            onClick={handleDownload}
-            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
-            title="导出 Markdown"
-          >
-            <Download className="h-4 w-4" />
-            <span className="hidden lg:inline">导出</span>
-          </button>
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              onClick={() => setShowExportMenu(v => !v)}
+              className="editor-topbar-action inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+              title="导出"
+            >
+              <Download className="h-[14px] w-[14px]" />
+              <span className="hidden lg:inline">导出</span>
+            </button>
+            {showExportMenu && (
+              <div className="absolute right-0 top-full z-50 mt-1 min-w-[150px] overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                <button
+                  onClick={() => { setShowExportMenu(false); handleDownload(); }}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  <Download className="h-4 w-4" />
+                  导出 Markdown
+                </button>
+                <button
+                  onClick={() => { setShowExportMenu(false); void handleExportPdf(); }}
+                  disabled={exportingPdf}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  <FileDown className="h-4 w-4" />
+                  {exportingPdf ? '导出中...' : '导出 PDF'}
+                </button>
+              </div>
+            )}
+          </div>
           <button
             onClick={() => setShowShareDialog(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+            className="editor-topbar-action inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
             title="分享笔记"
           >
-            <Share2 className="h-4 w-4" />
+            <Share2 className="h-[14px] w-[14px]" />
             <span className="hidden lg:inline">分享</span>
           </button>
           <button onClick={() => setViewMode(viewMode === 'preview' ? 'edit' : 'preview')}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm leading-none rounded-lg transition-colors ${viewMode === 'preview' ? 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>
-            {viewMode === 'preview' ? <><Pencil className="w-4 h-4" />编辑</> : <><Eye className="w-4 h-4" />阅读</>}
+            className={`editor-topbar-action inline-flex min-h-9 items-center gap-1.5 px-2.5 py-1.5 text-sm leading-none rounded-lg transition-colors ${viewMode === 'preview' ? 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>
+            {viewMode === 'preview' ? <><Pencil className="h-[14px] w-[14px]" />编辑</> : <><Eye className="h-[14px] w-[14px]" />阅读</>}
           </button>
           <button onClick={() => setViewMode(viewMode === 'split' ? 'edit' : 'split')}
-            className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-sm leading-none rounded-lg transition-colors ${viewMode === 'split' ? 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-            title="分屏模式"><Columns2 className="w-4 h-4" /></button>
+            className={`editor-topbar-action inline-flex min-h-9 items-center gap-1 px-2.5 py-1.5 text-sm leading-none rounded-lg transition-colors ${viewMode === 'split' ? 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+            title="分屏模式"><Columns2 className="h-[14px] w-[14px]" /></button>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 flex">
+      <div className="toc-layout-container flex-1 min-h-0 flex">
         {(viewMode === 'edit' || viewMode === 'split') && (
           <div className={`${viewMode === 'split' ? 'w-1/2 border-r border-gray-200 dark:border-gray-700' : 'flex-1 min-w-0 h-full'} flex flex-col`}>
+            {/* Markdown 快捷工具栏：与编辑器同一宽度容器，固定在滚动区外，下滑时始终可见 */}
+            <div className="shrink-0 overflow-x-auto">
+              <div className={viewMode === 'split' ? 'w-full' : 'flex justify-center'}>
+                <div className={viewMode === 'split' ? 'w-full' : 'w-full max-w-[768px]'}>
+                  <EditorToolbar
+                    editorRef={editorRef}
+                    onUploadImage={() => imageInputRef.current?.click()}
+                    onUploadFile={() => fileInputRef.current?.click()}
+                    onOpenAI={() => setShowAIPanel(true)}
+                  />
+                </div>
+              </div>
+            </div>
             <div ref={editorScrollRef} className={`flex-1 min-h-0 overflow-y-auto custom-scrollbar ${viewMode === 'split' ? '' : 'flex justify-center'}`}>
               <div className={`flex flex-col ${viewMode === 'split' ? 'w-full' : 'w-full max-w-[768px]'}`} onPasteCapture={handlePaste}>
                 <MarkdownEditor ref={editorRef} value={content} onChange={(val) => { setContent(val); scheduleSave(val); }}
                   compact={false} placeholder="开始书写... (支持 Markdown，输入 # 添加标签，@ 链接笔记)" className="flex-1 min-h-0 px-6 pt-6"
                   extensions={[tmExtension]}
-                  toolbar={<EditorToolbar editorRef={editorRef} onUploadImage={() => imageInputRef.current?.click()} onUploadFile={() => fileInputRef.current?.click()} onOpenAI={() => setShowAIPanel(true)} />}
                 />
               </div>
             </div>
@@ -866,7 +1014,12 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
         )}
         {(viewMode === 'preview' || viewMode === 'split') && (
           <div ref={previewRef} className={`${viewMode === 'split' ? 'w-1/2' : 'flex-1 min-w-0 h-full'} overflow-y-auto custom-scrollbar flex flex-col items-center`}>
-            <div className="markdown-note-preview memo-content max-w-[768px] w-full text-base text-gray-700 dark:text-gray-300 p-6" style={{ lineHeight: '1.75' }}>
+            <div
+              onDoubleClick={handlePreviewDoubleClick}
+              className="markdown-note-preview memo-content max-w-[768px] w-full cursor-text text-base text-gray-700 dark:text-gray-300 p-6"
+              style={{ lineHeight: '1.75' }}
+              title="双击编辑"
+            >
               {content.trim() ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]} components={mdComponents}>{processedContent}</ReactMarkdown>
               ) : <p className="text-gray-400 dark:text-gray-500 italic">空笔记</p>}
@@ -899,6 +1052,24 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
         documentId={documentId}
         onCancel={() => setShowShareDialog(false)}
       />
+
+      {/* 导出 PDF 用的隐藏渲染面：与预览同一套渲染管线，任意视图下都可导出 */}
+      <div
+        ref={exportSurfaceRef}
+        className="markdown-note-preview memo-content"
+        style={{ position: 'fixed', left: -99999, top: 0, width: 768, background: '#ffffff', color: '#1f2937', lineHeight: 1.75, zIndex: -1, pointerEvents: 'none' }}
+        aria-hidden="true"
+      >
+        {content.trim() ? (
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
+            rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]}
+            components={mdComponents}
+          >
+            {processedContent}
+          </ReactMarkdown>
+        ) : null}
+      </div>
     </div>
   );
 }

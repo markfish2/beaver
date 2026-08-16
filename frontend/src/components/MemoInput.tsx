@@ -318,12 +318,12 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
               {uploading && <span className="text-xs text-blue-500 mr-auto">上传中...</span>}
               <button onClick={() => { const newContent = expandEditorRef.current?.getValue() ?? content; setContent(newContent); setShowExpandEditor(false); setTimeout(() => handleSubmit(), 0); }}
                 disabled={isSubmitting || !content.trim()}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white dark:text-gray-900 bg-gray-900 dark:bg-gray-100 hover:bg-gray-700 dark:hover:bg-gray-300 rounded-lg transition-colors disabled:opacity-40">
-                <Send className="w-4 h-4" /><span>发布</span>
+                className="editor-topbar-action inline-flex min-h-8 items-center gap-1.5 rounded-md px-2.5 py-1 text-sm text-white dark:text-gray-900 bg-gray-900 dark:bg-gray-100 hover:bg-gray-700 dark:hover:bg-gray-300 transition-colors disabled:opacity-40">
+                <Send className="h-[14px] w-[14px]" /><span>发布</span>
               </button>
               <button onClick={() => { const newContent = expandEditorRef.current?.getValue() ?? content; setContent(newContent); setShowExpandEditor(false); }}
-                className="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                <X className="w-4 h-4" />
+                className="editor-topbar-action inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors">
+                <X className="h-[14px] w-[14px]" />
               </button>
             </div>
             <div className="flex-1 overflow-hidden" onPasteCapture={handlePaste}>
@@ -337,7 +337,7 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
                 placeholder="记录你的想法... (支持 Markdown，输入 # 添加标签，@ 链接笔记)"
                 className="memo-editor-surface h-full"
                 extensions={[tmExtension]}
-                toolbar={<EditorToolbar editorRef={expandEditorRef} onUploadImage={() => imageInputRef.current?.click()} onUploadFile={() => fileInputRef.current?.click()} onRecordAudio={handleAudioRecord} isRecording={recorder.isRecording} />}
+                toolbar={<EditorToolbar editorRef={expandEditorRef} onUploadImage={() => imageInputRef.current?.click()} onUploadFile={() => fileInputRef.current?.click()} onRecordAudio={handleAudioRecord} isRecording={recorder.isRecording} onOpenAI={() => setShowAIPanel(true)} />}
               />
             </div>
             {/* Tag/mention popups for expanded editor */}
@@ -360,7 +360,11 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
 
       {showAIPanel && (
         <AIChatPanel context={content}
-          onWriteBack={(newContent) => { setContent(newContent); editorRef.current?.view?.dispatch({ changes: { from: 0, to: editorRef.current.view.state.doc.length, insert: newContent } }); }}
+          onWriteBack={(newContent) => {
+            setContent(newContent);
+            const activeEditor = showExpandEditor ? expandEditorRef.current : editorRef.current;
+            activeEditor?.view?.dispatch({ changes: { from: 0, to: activeEditor.view.state.doc.length, insert: newContent } });
+          }}
           onClose={() => setShowAIPanel(false)} />
       )}
     </div>

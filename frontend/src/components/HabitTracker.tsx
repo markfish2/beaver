@@ -325,10 +325,10 @@ const HabitRow = memo(function HabitRow({
                 onClick={() => onToggle(habit.id, date)}
                 className={`w-[18px] h-[18px] rounded-full flex items-center justify-center transition-all ${
                   checked
-                    ? 'bg-[#3f587f] dark:bg-[#6b8ab5] scale-110'
+                    ? 'bg-[#4d9383] dark:bg-[#75b4a4] scale-110'
                     : today
-                      ? 'border-2 border-[#3f587f] dark:border-[#6b8ab5] bg-transparent'
-                      : 'border border-gray-300 dark:border-gray-600 bg-transparent hover:border-[#3f587f] dark:hover:border-[#6b8ab5]'
+                      ? 'border-2 border-[#4d9383] dark:border-[#75b4a4] bg-transparent'
+                      : 'border border-gray-300 dark:border-gray-600 bg-transparent hover:border-[#4d9383] dark:hover:border-[#75b4a4]'
                 }`}
                 title={`${date}${checked ? ' ✓' : ''}`}
               >
@@ -439,7 +439,7 @@ export default function HabitTracker({ embedded = false }: { embedded?: boolean 
   };
 
   return (
-    <div className={embedded ? 'px-1' : 'bg-white dark:bg-gray-800/50 rounded-xl p-4 border border-[#e7e7e5] dark:border-gray-700/40'}>
+    <div className={embedded ? 'px-0' : 'bg-white dark:bg-gray-800/50 rounded-xl p-4 border border-[#e7e7e5] dark:border-gray-700/40'}>
       {/* 标题栏 */}
       <div className="flex items-center justify-between mb-3">
         <span className="flex items-center gap-1.5 text-base font-medium text-gray-400 dark:text-gray-500">

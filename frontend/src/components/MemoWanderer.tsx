@@ -13,7 +13,7 @@ function shuffleArray<T>(arr: T[]): T[] {
   return a;
 }
 
-export default function MemoWanderer({ onExit, initialMemoId }: { onExit: () => void; initialMemoId?: string | null }) {
+export default function MemoWanderer({ onExit, initialMemoId, isolated = false }: { onExit: () => void; initialMemoId?: string | null; isolated?: boolean }) {
 
   const [memos, setMemos] = useState<Memo[]>([]);
   const [index, setIndex] = useState(0);
@@ -54,6 +54,12 @@ export default function MemoWanderer({ onExit, initialMemoId }: { onExit: () => 
         all = shuffleArray(all);
       }
 
+      // 单独展示模式：只保留选中的那一条
+      if (isolated) {
+        const normalizedInitialId = initialMemoId?.replace(/-/g, '');
+        all = normalizedInitialId ? all.filter(m => m.id.replace(/-/g, '') === normalizedInitialId) : [];
+      }
+
       setMemos(all);
       setIndex(0);
     } catch (e) {
@@ -61,7 +67,7 @@ export default function MemoWanderer({ onExit, initialMemoId }: { onExit: () => 
     } finally {
       setLoading(false);
     }
-  }, [initialMemoId]);
+  }, [initialMemoId, isolated]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadMemos(), 0);
@@ -117,22 +123,26 @@ export default function MemoWanderer({ onExit, initialMemoId }: { onExit: () => 
   return (
     <div className="flex flex-col items-center">
       {/* Page counter */}
-      <div className="w-full max-w-xl mb-3 flex items-center justify-end px-1">
-        <span className="text-xs text-gray-300 dark:text-gray-600 tabular-nums">
-          {index + 1} / {memos.length}
-        </span>
-      </div>
+      {!isolated && (
+        <div className="w-full max-w-xl mb-3 flex items-center justify-end px-1">
+          <span className="text-xs text-gray-300 dark:text-gray-600 tabular-nums">
+            {index + 1} / {memos.length}
+          </span>
+        </div>
+      )}
 
       {/* Card with side arrows */}
       <div className="relative w-full max-w-xl">
         {/* Left arrow */}
-        <button
-          onClick={goPrev}
-          className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 lg:-translate-x-12 w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-gray-700 shadow-md border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600 hover:text-gray-700 dark:hover:text-gray-200 transition-colors z-10"
-          title="上一条 (←)"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
+        {!isolated && (
+          <button
+            onClick={goPrev}
+            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 lg:-translate-x-12 w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-gray-700 shadow-md border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600 hover:text-gray-700 dark:hover:text-gray-200 transition-colors z-10"
+            title="上一条 (←)"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+        )}
 
         {/* MemoCard in readOnly mode */}
         {current && (
@@ -148,13 +158,15 @@ export default function MemoWanderer({ onExit, initialMemoId }: { onExit: () => 
         )}
 
         {/* Right arrow */}
-        <button
-          onClick={goNext}
-          className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 lg:translate-x-12 w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-gray-700 shadow-md border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600 hover:text-gray-700 dark:hover:text-gray-200 transition-colors z-10"
-          title="下一条 (→)"
-        >
-          <ChevronRight className="w-5 h-5" />
-        </button>
+        {!isolated && (
+          <button
+            onClick={goNext}
+            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 lg:translate-x-12 w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-gray-700 shadow-md border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600 hover:text-gray-700 dark:hover:text-gray-200 transition-colors z-10"
+            title="下一条 (→)"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       {/* Bottom controls */}

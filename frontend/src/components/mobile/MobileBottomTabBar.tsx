@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { StickyNote, CalendarDays, Plus, FileText, Sparkles } from 'lucide-react';
+import NavigationIcon, { type NavigationIconType } from '../NavigationIcon';
 
 export type MobileTab = 'memos' | 'diary' | 'new' | 'files' | 'ai';
 
@@ -8,12 +8,12 @@ interface MobileBottomTabBarProps {
   onTabChange: (tab: MobileTab) => void;
 }
 
-const tabs: { id: MobileTab; icon: typeof StickyNote }[] = [
-  { id: 'memos',  icon: StickyNote },
-  { id: 'diary',  icon: CalendarDays },
-  { id: 'new',    icon: Plus },
-  { id: 'files',  icon: FileText },
-  { id: 'ai',     icon: Sparkles },
+const tabs: { id: MobileTab; icon: NavigationIconType }[] = [
+  { id: 'memos',  icon: 'memo' },
+  { id: 'diary',  icon: 'diary' },
+  { id: 'new',    icon: 'add' },
+  { id: 'files',  icon: 'files' },
+  { id: 'ai',     icon: 'ai' },
 ];
 
 const INDICATOR_WIDTH = 54;
@@ -51,7 +51,6 @@ export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBot
           />
 
           {tabs.map((tab) => {
-            const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             const isNew = tab.id === 'new';
 
@@ -71,11 +70,12 @@ export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBot
                                      ? 'bg-blue-500 text-white shadow-[0_4px_14px_-2px_rgba(59,130,246,0.4)] scale-110'
                                      : 'bg-gray-600 dark:bg-gray-400 text-white'
                                    }`}>
-                    <Icon className="w-[16px] h-[16px]" strokeWidth={2} />
+                    <NavigationIcon type={tab.icon} className="w-[18px] h-[18px] text-white" strokeWidth={2} />
                   </div>
                 ) : (
-                  <Icon
-                    className={`w-[18px] h-[18px] transition-all duration-300
+                  <NavigationIcon
+                    type={tab.icon}
+                    className={`w-[22px] h-[22px] transition-all duration-300
                                ${isActive
                                  ? 'text-blue-600 dark:text-blue-400 scale-110'
                                  : 'text-gray-400 dark:text-gray-500'

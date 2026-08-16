@@ -833,13 +833,13 @@ function MindMapView({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+      <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-900">
         <div className="flex items-center gap-2">
           <button
             onClick={onBackToOutline}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors text-sm font-medium"
+            className="editor-topbar-action inline-flex min-h-9 items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors text-sm font-medium"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
             返回大纲
@@ -859,13 +859,13 @@ function MindMapView({
               <div className="relative">
                 <button
                   onClick={() => { setShowLevelMenu(!showLevelMenu); setShowColorMenu(false); setShowStyleMenu(false); }}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  className="editor-topbar-action inline-flex min-h-9 items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
                 >
-                  <Layers className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                  <Layers className="w-[18px] h-[18px] text-gray-500 dark:text-gray-400" />
                   <span className="text-sm text-gray-700 dark:text-gray-300">
                     {collapseLevel === 0 ? '全部层级' : `显示 ${collapseLevel} 级`}
                   </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                  <ChevronDown className="w-[18px] h-[18px] text-gray-400" />
                 </button>
                 {showLevelMenu && (
                   <div className="absolute right-0 top-full mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 min-w-[140px] z-50">
@@ -896,11 +896,11 @@ function MindMapView({
           <div className="relative">
             <button
               onClick={() => { setShowColorMenu(!showColorMenu); setShowStyleMenu(false); setShowLevelMenu(false); }}
-              className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="editor-topbar-action inline-flex min-h-9 items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
               <ColorThemePreview theme={currentColorTheme} isActive={false} />
               <span className="text-sm hidden sm:inline">{COLOR_THEMES[currentColorTheme].name}</span>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
@@ -937,11 +937,11 @@ function MindMapView({
           <div className="relative">
             <button
               onClick={() => { setShowStyleMenu(!showStyleMenu); setShowColorMenu(false); setShowLevelMenu(false); }}
-              className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="editor-topbar-action inline-flex min-h-9 items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
               <LineStylePreview style={currentLineStyle} isActive={false} />
               <span className="text-sm hidden sm:inline">{LINE_STYLES[currentLineStyle].name}</span>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
@@ -977,7 +977,7 @@ function MindMapView({
           <button
             onClick={handleExportPDF}
             disabled={isExporting}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+            className="editor-topbar-action inline-flex min-h-9 items-center px-2.5 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
           >
             {isExporting ? '导出中...' : '导出 PDF'}
           </button>

@@ -139,7 +139,7 @@ const THEMES: Record<Theme, {
     bg: '#FAF9F5',
     text: '#111827',
     secondaryText: '#6B7280',
-    accent: '#3F587F',
+    accent: '#4D9383',
     guideColor: '#e5e7eb',
     headingColor: '#111111',
     preview: 'bg-gradient-to-r from-white to-[#111827]',

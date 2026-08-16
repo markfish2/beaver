@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Menu, Archive, X, Globe, Shuffle, Image as ImageIcon, CalendarDays, ListTodo, AlertCircle } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import MemoInput from './MemoInput';
@@ -8,6 +8,7 @@ import HabitTracker from './HabitTracker';
 import MemoTagsPanel from './MemoTagsPanel';
 import MemoWanderer from './MemoWanderer';
 import MemoMediaGallery from './MemoMediaGallery';
+import MemoCard from './MemoCard';
 import { getMemos, getDiarySummary, updateMemo, deleteMemo, toggleMemoPinned, toggleMemoArchived, toggleMemoPublic, toggleMemoAI, updateNode, getTodos, updateTodo } from '../api/data';
 import type { Memo, Node, Todo } from '../api/data';
 import { parseTodoDueDate } from '../utils/todoDueDate';
@@ -51,6 +52,40 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   const [searchFilter, setSearchFilter] = useState<string | null>(searchFromUrl);
   const [highlightMemoId, setHighlightMemoId] = useState<string | null>(highlightFromUrl || memoIdFromUrl);
   const [showRightPanel, setShowRightPanel] = useState(false);
+  // 置顶 memo：宽屏时右侧面板单独展示，主列表不包含置顶项；窄屏时回到普通卡片流（置顶项排在最前）
+  const pinnedMemos = useMemo(() => memos.filter(m => m.is_pinned), [memos]);
+  const regularMemos = useMemo(() => memos.filter(m => !m.is_pinned), [memos]);
+  const [pinPanelVisible, setPinPanelVisible] = useState(() => window.matchMedia(memoColumns === 2 ? '(min-width: 1520px)' : '(min-width: 1240px)').matches);
+  // 置顶面板的显隐与 CSS 断点保持一致（1520px 双栏 / 1240px 单栏）
+  useEffect(() => {
+    const mql = window.matchMedia(memoColumns === 2 ? '(min-width: 1520px)' : '(min-width: 1240px)');
+    const sync = () => setPinPanelVisible(mql.matches);
+    sync();
+    mql.addEventListener('change', sync);
+    return () => mql.removeEventListener('change', sync);
+  }, [memoColumns]);
+  // 窄屏（面板隐藏）时置顶项回到普通卡片流，置顶项排在最前
+  const displayMemos = useMemo(() => pinPanelVisible ? regularMemos : [...pinnedMemos, ...regularMemos], [pinPanelVisible, pinnedMemos, regularMemos]);
+  // 置顶面板的显示断点：面板显示时左右两栏独立滚动；隐藏时整页保持默认滚动容器
+  const pinnedPanelCls = memoColumns === 2
+    ? {
+        pageScrollLock: 'min-[1520px]:overflow-hidden',
+        containerFill: 'min-[1520px]:h-full',
+        containerMax: 'max-w-[960px] min-[1520px]:max-w-[1440px]',
+        leftScroll: 'min-[1520px]:h-full min-[1520px]:overflow-y-auto',
+        containerClear: 'min-[1520px]:pt-0 min-[1520px]:pb-[15px]',
+        columnPadTop: 'min-[1520px]:pt-6',
+        panelVisible: 'min-[1520px]:block',
+      }
+    : {
+        pageScrollLock: 'min-[1240px]:overflow-hidden',
+        containerFill: 'min-[1240px]:h-full',
+        containerMax: 'max-w-[670px] min-[1240px]:max-w-[1200px]',
+        leftScroll: 'min-[1240px]:h-full min-[1240px]:overflow-y-auto',
+        containerClear: 'min-[1240px]:pt-0 min-[1240px]:pb-[15px]',
+        columnPadTop: 'min-[1240px]:pt-6',
+        panelVisible: 'min-[1240px]:block',
+      };
   type PendingTask = (Node & { origin: 'diary'; diary_date?: string }) | (Todo & { origin: 'todo' });
   const [allPendingTasks, setAllPendingTasks] = useState<PendingTask[]>([]);
   const [completingTaskIds, setCompletingTaskIds] = useState<Set<string>>(new Set());
@@ -162,8 +197,8 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
         if (highlightFromUrl) setHighlightMemoId(highlightFromUrl);
         if (memoIdFromUrl) {
           setHighlightMemoId(memoIdFromUrl);
-          if (viewFromUrl === 'wanderer') setMemoView('wanderer');
         }
+        if (viewFromUrl === 'wanderer') setMemoView('wanderer');
         const params = new URLSearchParams(searchParams);
         params.delete('search');
         params.delete('highlight');
@@ -175,16 +210,16 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
     }
   }, [searchFromUrl, highlightFromUrl, viewFromUrl, memoIdFromUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 高亮目标 memo（从搜索结果跳转过来）
+  // 高亮目标 memo（从搜索结果跳转过来；漫游视图里不滚动列表，避免误清高亮）
   useEffect(() => {
-    if (!highlightMemoId || memos.length === 0) return;
+    if (!highlightMemoId || memos.length === 0 || memoView === 'wanderer') return;
     const el = document.getElementById(`memo-${highlightMemoId}`);
     if (el) {
       el.scrollIntoView({ behavior: 'instant', block: 'center' });
       const timer = setTimeout(() => setHighlightMemoId(null), 3000);
       return () => clearTimeout(timer);
     }
-  }, [highlightMemoId, memos]);
+  }, [highlightMemoId, memos, memoView]);
 
   // 保存视图状态到 localStorage
   useEffect(() => {
@@ -367,7 +402,9 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   }, []);
 
   return (
-    <div className={`overflow-y-auto bg-[var(--app-canvas)] custom-scrollbar ${document.documentElement.dataset.mobileLayout ? 'flex-1' : 'flex-1 h-full'}`}
+    <div className={`overflow-y-auto bg-[var(--app-canvas)] custom-scrollbar ${document.documentElement.dataset.mobileLayout ? 'flex-1' : 'flex-1 h-full'} ${
+      pinnedMemos.length > 0 ? pinnedPanelCls.pageScrollLock : ''
+    }`}
       style={document.documentElement.dataset.mobileLayout ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 44px)', paddingBottom: '52px' } : undefined}
     >
       {/* 移动端菜单按钮 (hidden when MobileLayout is active) */}
@@ -386,13 +423,22 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
       )}
 
       <div
-        className={`flex flex-row mx-auto px-4 pb-20 gap-6 transition-[max-width] ${
-          memoColumns === 2 ? 'max-w-[960px]' : 'max-w-[670px]'
+        className={`flex flex-row mx-auto px-4 pt-6 pb-20 gap-6 transition-[max-width] ${
+          pinnedMemos.length > 0 ? `${pinnedPanelCls.containerFill} ${pinnedPanelCls.containerClear}` : ''
+        } ${
+          pinnedMemos.length > 0
+            ? pinnedPanelCls.containerMax
+            : memoColumns === 2
+              ? 'max-w-[960px]'
+              : 'max-w-[670px]'
         }`}
-        style={{ paddingTop: '24px' }}
       >
         {/* 左栏：输入框 + 待办 + 随想 */}
-        <div className="flex-1 min-w-0">
+        <div className={`flex-1 min-w-0 ${
+          pinnedMemos.length > 0
+            ? `${pinnedPanelCls.leftScroll} ${pinnedPanelCls.columnPadTop} scrollbar-none`
+            : ''
+        }`}>
           {memoView === 'active' && <MemoInput onMemoCreated={handleMemoCreated} documents={documents} />}
 
           {/* 待办事项（日记待办 + 独立待办，归档/公开视图不显示） */}
@@ -579,34 +625,58 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
               <MemoWanderer
                 onExit={() => { setMemoView('active'); setTagFilter(null); setSearchFilter(null); }}
                 initialMemoId={highlightMemoId}
+                isolated={!!highlightMemoId}
               />
             ) : memoView === 'media' ? (
               <MemoMediaGallery />
-            ) : (
-              <MemoList
-                memos={memos}
-                columns={memoColumns}
-                onEdit={handleMemoEdit}
-                onDelete={handleMemoDelete}
-                onTogglePin={handleMemoTogglePin}
-                onToggleArchive={handleMemoToggleArchive}
-                onTogglePublic={handleMemoTogglePublic}
-                onToggleAI={handleMemoToggleAI}
-                onTagClick={handleMemoTagClick}
-                onLoadMore={handleLoadMoreMemos}
-                hasMore={memos.length < memoTotal}
-                highlightId={highlightMemoId}
-                documents={documents}
-              />
+            ) : displayMemos.length === 0 ? (
+                <div className="py-12 text-center text-sm text-gray-400 dark:text-gray-500">暂无其他随想</div>
+              ) : (
+                <MemoList
+                  memos={displayMemos}
+                  columns={memoColumns}
+                  onEdit={handleMemoEdit}
+                  onDelete={handleMemoDelete}
+                  onTogglePin={handleMemoTogglePin}
+                  onToggleArchive={handleMemoToggleArchive}
+                  onTogglePublic={handleMemoTogglePublic}
+                  onToggleAI={handleMemoToggleAI}
+                  onTagClick={handleMemoTagClick}
+                  onLoadMore={handleLoadMoreMemos}
+                  hasMore={memos.length < memoTotal}
+                  highlightId={highlightMemoId}
+                  documents={documents}
+                />
             )}
           </div>
         </div>
 
-        {/* 右侧栏已移至左侧栏 memo 视图中 */}
+        {/* 右侧：置顶 memo（仅宽屏显示） */}
+        {pinnedMemos.length > 0 && (
+          <div className={`hidden h-full w-[420px] shrink-0 overflow-y-auto scrollbar-none ${pinnedPanelCls.columnPadTop} ${pinnedPanelCls.panelVisible}`}>
+            <div className="space-y-3">
+              {pinnedMemos.map(memo => (
+                <MemoCard
+                  key={memo.id}
+                  memo={memo}
+                  compact
+                  onEdit={handleMemoEdit}
+                  onDelete={handleMemoDelete}
+                  onTogglePin={handleMemoTogglePin}
+                  onToggleArchive={handleMemoToggleArchive}
+                  onTogglePublic={handleMemoTogglePublic}
+                  onToggleAI={handleMemoToggleAI}
+                  onTagClick={handleMemoTagClick}
+                  documents={documents}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 移动端：右栏展开/收起按钮 */}
-      {!sidebarOpen && (
+      {!sidebarOpen && document.documentElement.dataset.mobileLayout && (
       <button
         onClick={() => setShowRightPanel(!showRightPanel)}
         className="lg:hidden fixed right-4 z-40 p-2.5 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
@@ -624,10 +694,10 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
       )}
 
       {/* 移动端：右栏浮层 */}
-      {showRightPanel && (
+      {showRightPanel && document.documentElement.dataset.mobileLayout && (
         <div className="lg:hidden fixed inset-0 z-30" onClick={() => setShowRightPanel(false)}>
           <div
-            className="absolute right-0 w-72 bg-white dark:bg-gray-900 shadow-xl overflow-y-auto custom-scrollbar p-4 space-y-4"
+            className="absolute right-0 w-72 bg-[var(--app-sidebar)] shadow-xl overflow-y-auto custom-scrollbar p-4 space-y-4"
             style={{
               top: document.documentElement.dataset.mobileLayout
                 ? 'calc(env(safe-area-inset-top, 0px) + 44px)'
@@ -668,7 +738,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
               </button>
               <div className="border-t border-gray-100 dark:border-gray-700" />
               <button
-                onClick={() => { setMemoView(memoView === 'wanderer' ? 'active' : 'wanderer'); setTagFilter(null); setSearchFilter(null); setShowRightPanel(false); }}
+                onClick={() => { setMemoView(memoView === 'wanderer' ? 'active' : 'wanderer'); setHighlightMemoId(null); setTagFilter(null); setSearchFilter(null); setShowRightPanel(false); }}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-base font-medium transition-colors ${
                   memoView === 'wanderer'
                     ? 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20'

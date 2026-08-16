@@ -48,7 +48,7 @@ function ToolbarSlot({ showZoom, hasTabBar }: { showZoom?: boolean; hasTabBar?: 
 export default function MobileLayout({ children }: MobileLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { activeConvId, setActiveConvId, refreshConvList } = useUserView();
+  const { userSubView, setUserSubView, activeConvId, setActiveConvId, refreshConvList } = useUserView();
   const [activeTab, setActiveTab] = useState<MobileTab>(
     () => getMobileTabFromState(location.state) ?? 'memos',
   );
@@ -141,6 +141,10 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   }, [isEditing, navigate]);
 
   const handleBack = useCallback(() => {
+    if (userSubView) {
+      setUserSubView(null);
+      return;
+    }
     const target = resolveMobileBackTarget(location.key, location.state, window.history.length);
     if (target.kind === 'history') {
       navigate(-1);
@@ -153,7 +157,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       replace: true,
       state: target.tab ? { mobileReturnTab: target.tab } : undefined,
     });
-  }, [location.key, location.state, navigate]);
+  }, [location.key, location.state, navigate, setUserSubView, userSubView]);
 
   const handleSearch = useCallback((query: string) => {
     navigate(`/search?q=${encodeURIComponent(query)}`, {
@@ -182,6 +186,17 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   // Determine top bar title
   const getTopBarTitle = () => {
     if (isEditing) return '编辑';
+    if (userSubView) {
+      switch (userSubView) {
+        case 'profile': return '个人资料';
+        case 'appearance': return '外观与主题';
+        case 'token': return 'API Token';
+        case 'ai': return 'AI 设置';
+        case 'trash': return '回收站';
+        case 'password': return '修改密码';
+        default: return '设置';
+      }
+    }
     switch (activeTab) {
       case 'memos': return '随想';
       case 'diary': return '日记';
@@ -199,7 +214,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     <div className="flex flex-col bg-white dark:bg-gray-900" style={{ height: '100dvh' }}>
       <MobileTopBar
         title={getTopBarTitle()}
-        showBack={isEditing}
+        showBack={isEditing || !!userSubView}
         onBack={handleBack}
         onSearch={handleSearch}
       />
@@ -259,7 +274,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
             {showAIHistory && (
               <>
                 <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowAIHistory(false)} />
-                <div className="fixed top-0 right-0 bottom-0 w-72 bg-[var(--app-surface)] z-50 shadow-xl flex flex-col">
+                <div className="fixed top-0 right-0 bottom-0 w-72 bg-[var(--app-sidebar)] z-50 shadow-xl flex flex-col">
                   <AIChatSidebar
                     activeConvId={activeConvId}
                     onSelectConversation={(convId) => {

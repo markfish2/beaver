@@ -50,6 +50,12 @@ def toggle_task(task_id: str, db: Session = Depends(get_db)):
             _add_to_diary(db, task)
         except Exception:
             pass  # 日记联动失败不影响主流程
+    else:
+        # 取消完成：从当天日记移除自动添加的完成节点
+        try:
+            _remove_from_diary(db, task)
+        except Exception:
+            pass
 
     return task
 
@@ -103,3 +109,45 @@ def _add_to_diary(db: Session, task):
     )
     db.add(node)
     db.commit()
+
+
+def _remove_from_diary(db: Session, task):
+    """取消完成时，从当天日记中移除任务完成时自动添加的节点。"""
+    from .. import models
+
+    today = date.today()
+    year, month, day = today.year, today.month, today.day
+
+    # 获取项目名称（与添加时一致的定位方式）
+    project = db.query(models.Project).filter(models.Project.id == task.project_id).first()
+    if not project:
+        return
+
+    # 只查不建：避免取消完成时凭空生成空日记结构
+    doc = db.query(models.Document).filter(
+        models.Document.diary_date == f"{year:04d}-{month:02d}"
+    ).first()
+    if not doc:
+        return
+
+    weekday = crud.WEEKDAYS[date(year, month, day).weekday()]
+    date_content = f"{year}年{month}月{day}日 {weekday}"
+    day_node = db.query(models.Node).filter(
+        models.Node.document_id == doc.id,
+        models.Node.parent_node_id.is_(None),
+        models.Node.content == date_content,
+    ).first()
+    if not day_node:
+        return
+
+    expected = f"{task.title} #{project.name}"
+    nodes = db.query(models.Node).filter(
+        models.Node.document_id == doc.id,
+        models.Node.parent_node_id == day_node.id,
+        models.Node.content == expected,
+        models.Node.is_completed == True,
+    ).all()
+    for node in nodes:
+        db.delete(node)
+    if nodes:
+        db.commit()

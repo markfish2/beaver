@@ -141,7 +141,10 @@ turndown.addRule('fencedCodeBlock', {
 
 // 清理多余空行
 function cleanMarkdown(md: string): string {
-  return md.replace(/\n{3,}/g, '\n\n').trim();
+  let result = md.replace(/\n{3,}/g, '\n\n');
+  // 链接文字与地址完全相同时，简化为纯 URL（remark-gfm 自动识别为链接）
+  result = result.replace(/\[(https?:\/\/[^\s)\]]+)\]\(\1\)/g, '$1');
+  return result.trim();
 }
 
 /**

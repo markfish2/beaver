@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { search } from '../api/data';
 import type { SearchResultItem } from '../api/data';
-import { FileText, CalendarDays, StickyNote, X, ArrowLeft } from 'lucide-react';
-import { createMobileDocumentState, resolveMobileBackTarget } from '../utils/mobileNavigation';
+import { FileText, CalendarDays, StickyNote, X, Search } from 'lucide-react';
+import { createMobileDocumentState } from '../utils/mobileNavigation';
 
 const highlightText = (text: string, query: string) => {
   if (!query.trim()) return text;
@@ -65,20 +65,8 @@ const SearchResultsPage = () => {
         navigate(`/d/${result.entity_id}`, { state: documentState });
         break;
       case 'memo':
-        navigate(`/?search=${encodeURIComponent(query)}&highlight=${result.entity_id}`);
+        navigate(`/?view=wanderer&highlight=${result.entity_id}`);
         break;
-    }
-  };
-
-  const handleBack = () => {
-    const target = resolveMobileBackTarget(location.key, location.state, window.history.length);
-    if (target.kind === 'history') {
-      navigate(-1);
-    } else {
-      navigate(target.to, {
-        replace: true,
-        state: target.tab ? { mobileReturnTab: target.tab } : undefined,
-      });
     }
   };
 
@@ -124,79 +112,36 @@ const SearchResultsPage = () => {
 
   return (
     <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 h-full overflow-hidden">
-      {/* 顶部导航栏 - 与 MobileTopBar 一致 */}
-      <div
-        className="fixed left-3 right-3 z-30 flex items-center justify-between"
-        style={{
-          top: `calc(8px + env(safe-area-inset-top, 0px))`,
-          height: '44px',
-        }}
-      >
-        {/* 左侧：返回按钮 */}
-        <button
-          onClick={handleBack}
-          className="flex items-center justify-center w-[36px] h-[36px] rounded-full
-                     bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
-                     shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]
-                     text-gray-600 dark:text-gray-300
-                     active:scale-95 transition-transform"
-        >
-          <ArrowLeft className="w-[18px] h-[18px]" />
-        </button>
-
-        {/* 中间：标题胶囊 */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center h-[36px] px-4
-                        bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
-                        rounded-full
-                        shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]">
-          <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200">
-            搜索
-          </span>
-        </div>
-
-        {/* 右侧：关闭按钮 */}
-        <button
-          onClick={handleBack}
-          className="flex items-center justify-center w-[36px] h-[36px] rounded-full
-                     bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
-                     shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]
-                     text-gray-500 dark:text-gray-400
-                     active:scale-95 transition-transform"
-        >
-          <X className="w-[16px] h-[16px]" />
-        </button>
-      </div>
-
-      {/* 搜索输入框 */}
-      <div className="shrink-0 px-4 pb-2" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 58px)' }}>
-        <div className="relative">
+      {/* PC 顶部栏：与其它页面顶栏风格一致，无悬浮返回/关闭按钮 */}
+      <div className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-900">
+        <div className="relative min-w-0 flex-1">
+          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
             placeholder="搜索笔记、日记、随想..."
-            className="w-full pl-4 pr-10 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
+            className="w-full rounded-lg border border-gray-200 bg-gray-50 py-1.5 pl-9 pr-8 text-sm outline-none placeholder:text-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             autoFocus
           />
           {inputValue && (
             <button
               onClick={() => setInputValue('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              title="清空"
             >
               <X className="w-4 h-4" />
             </button>
           )}
         </div>
-        {query && !isLoading && (
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 px-1">
-            共找到 {results.length} 条结果
-          </p>
-        )}
+        <span className="shrink-0 text-xs text-gray-400 dark:text-gray-500">
+          {query && !isLoading ? `共 ${results.length} 条结果` : ''}
+        </span>
       </div>
 
       {/* Results */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
         <div className="max-w-4xl mx-auto px-6 py-6">
           {isLoading ? (
             <div className="text-center py-12">
