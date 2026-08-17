@@ -142,7 +142,7 @@ export default function MermaidBlock({ code, dark }: MermaidBlockProps) {
       if (!event.ctrlKey) return;
       event.preventDefault();
       event.stopPropagation();
-      setScale((value) => Math.min(3, Math.max(0.5, value * (event.deltaY < 0 ? 1.1 : 0.9))));
+      setScale((value) => Math.min(5, Math.max(0.5, value * (event.deltaY < 0 ? 1.1 : 0.9))));
     };
     window.addEventListener('keydown', handleKeyDown);
     // 在捕获阶段拦截浏览器默认的页面缩放，确保 Ctrl+滚轮只缩放 Mermaid 图。
@@ -226,7 +226,7 @@ export default function MermaidBlock({ code, dark }: MermaidBlockProps) {
                   <Minus className="h-4 w-4" aria-hidden="true" />
                 </button>
                 <span className="min-w-12 text-center text-xs tabular-nums text-gray-500 dark:text-gray-400">{Math.round(scale * 100)}%</span>
-                <button type="button" onClick={() => setScale((value) => Math.min(3, value + 0.25))} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800" title="放大" aria-label="放大">
+                <button type="button" onClick={() => setScale((value) => Math.min(5, value + 0.25))} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800" title="放大" aria-label="放大">
                   <Plus className="h-4 w-4" aria-hidden="true" />
                 </button>
                 <button type="button" onClick={() => { setScale(1); setPan({ x: 0, y: 0 }); }} className="ml-1 rounded-md p-1.5 text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800" title="恢复大小和位置" aria-label="恢复大小和位置">
@@ -268,7 +268,7 @@ export default function MermaidBlock({ code, dark }: MermaidBlockProps) {
                 if (pointersRef.current.size >= 2 && pinchRef.current) {
                   const points = [...pointersRef.current.values()];
                   const distance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
-                  setScale(Math.min(3, Math.max(0.5, pinchRef.current.scale * distance / pinchRef.current.distance)));
+                  setScale(Math.min(5, Math.max(0.5, pinchRef.current.scale * distance / pinchRef.current.distance)));
                   return;
                 }
                 const drag = dragRef.current;
