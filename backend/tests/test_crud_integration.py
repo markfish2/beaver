@@ -165,6 +165,28 @@ class CrudIntegrationTest(unittest.TestCase):
         self.assertEqual(parent.start_date, "2026-09-02")
         self.assertEqual(parent.end_date, "2026-09-03")
 
+    def test_update_task_can_move_to_root_and_recompute_old_parent(self):
+        project = crud.create_project(self.db, "移动到根级项目")
+        parent = crud.create_task(self.db, project.id, schemas.TaskCreate(
+            title="父任务",
+            start_date="2026-09-01",
+            end_date="2026-09-01",
+        ))
+        child = crud.create_task(self.db, project.id, schemas.TaskCreate(
+            title="子任务",
+            start_date="2026-09-02",
+            end_date="2026-09-03",
+            parent_id=parent.id,
+        ))
+
+        crud.update_task(self.db, child.id, schemas.TaskUpdate(parent_id=None))
+        self.db.refresh(child)
+        self.db.refresh(parent)
+        self.assertIsNone(child.parent_id)
+        # 父任务失去子任务后保留当前周期，之后可以独立调整。
+        self.assertEqual(parent.start_date, "2026-09-02")
+        self.assertEqual(parent.end_date, "2026-09-03")
+
     def test_task_cannot_be_moved_into_own_descendant(self):
         project = crud.create_project(self.db, "防环项目")
         root = crud.create_task(self.db, project.id, schemas.TaskCreate(

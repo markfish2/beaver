@@ -244,13 +244,14 @@ export default function ProjectView({ projectId, showArchived = false, archivedR
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   const collapsedTaskIds = collapsedTaskState.projectId === projectId ? collapsedTaskState.ids : EMPTY_COLLAPSED_TASK_IDS;
-  const flatTaskRows = useMemo(() => flattenVisibleTasks(tasks, collapsedTaskIds), [tasks, collapsedTaskIds]);
+  const displayTasks = useMemo(() => deriveSummaryDates(tasks), [tasks]);
+  const flatTaskRows = useMemo(() => flattenVisibleTasks(displayTasks, collapsedTaskIds), [displayTasks, collapsedTaskIds]);
 
   useEffect(() => {
     if (!projectId) return;
     let active = true;
     getTasks(projectId)
-      .then(data => { if (active) setTasks(data); })
+      .then(data => { if (active) setTasks(deriveSummaryDates(data)); })
       .catch(error => console.error('Failed to load tasks:', error))
       .finally(() => { if (active) setIsLoading(false); });
     return () => { active = false; };
@@ -305,28 +306,33 @@ export default function ProjectView({ projectId, showArchived = false, archivedR
       // 完成/取消完成会联动当天日记，通知日记页热更新
       window.dispatchEvent(new CustomEvent('diary-tasks-updated'));
       // 静默刷新以获取级联变化（父任务自动完成等）
-      if (projectId) getTasks(projectId).then(setTasks).catch(() => {});
+      if (projectId) getTasks(projectId).then(data => setTasks(deriveSummaryDates(data))).catch(() => {});
     } catch {
       // 回滚
-      if (projectId) getTasks(projectId).then(setTasks);
+      if (projectId) getTasks(projectId).then(data => setTasks(deriveSummaryDates(data)));
     }
   }, [projectId]);
 
   const handleUpdate = useCallback(async (id: string, data: Partial<Task>) => {
-    setTasks(prev => deriveSummaryDates(updateTaskInTree(prev, id, t => ({ ...t, ...data }))));
+    const current = findTaskInTree(tasks, id);
+    const safeData = current?.children.length
+      ? Object.fromEntries(Object.entries(data).filter(([key]) => key !== 'start_date' && key !== 'end_date'))
+      : data;
+    if (Object.keys(safeData).length === 0) return;
+    setTasks(prev => deriveSummaryDates(updateTaskInTree(prev, id, t => ({ ...t, ...safeData }))));
     try {
-      await updateTask(id, data);
+      await updateTask(id, safeData);
     } catch {
-      if (projectId) getTasks(projectId).then(setTasks);
+      if (projectId) getTasks(projectId).then(data => setTasks(deriveSummaryDates(data)));
     }
-  }, [projectId]);
+  }, [projectId, tasks]);
 
   const handleDelete = useCallback(async (id: string) => {
     setTasks(prev => deriveSummaryDates(removeTaskFromTree(prev, id)));
     try {
       await deleteTask(id);
     } catch {
-      if (projectId) getTasks(projectId).then(setTasks);
+      if (projectId) getTasks(projectId).then(data => setTasks(deriveSummaryDates(data)));
     }
   }, [projectId]);
 
@@ -378,13 +384,13 @@ export default function ProjectView({ projectId, showArchived = false, archivedR
     setIsExportingPdf(true);
     try {
       const ganttCanvas = ganttWrapRef.current?.querySelector('canvas') ?? null;
-      await exportProjectPdf({ projectName, tasks, ganttCanvas });
+      await exportProjectPdf({ projectName, tasks: displayTasks, ganttCanvas });
     } catch (err) {
       console.error('Failed to export project PDF:', err);
     } finally {
       setIsExportingPdf(false);
     }
-  }, [projectId, isExportingPdf, projectName, tasks]);
+  }, [projectId, isExportingPdf, projectName, displayTasks]);
 
   // ==================== 新建顶级任务 ====================
 
@@ -457,14 +463,16 @@ export default function ProjectView({ projectId, showArchived = false, archivedR
   // ==================== 甘特图拖拽更新 ====================
 
   const handleGanttUpdate = useCallback(async (taskId: string, startDate: string, endDate: string) => {
+    const current = findTaskInTree(tasks, taskId);
+    if (!current || current.children.length > 0) return;
     // 乐观更新
     setTasks(prev => deriveSummaryDates(updateTaskInTree(prev, taskId, t => ({ ...t, start_date: startDate, end_date: endDate }))));
     try {
       await updateTask(taskId, { start_date: startDate, end_date: endDate });
     } catch {
-      if (projectId) getTasks(projectId).then(setTasks);
+      if (projectId) getTasks(projectId).then(data => setTasks(deriveSummaryDates(data)));
     }
-  }, [projectId]);
+  }, [projectId, tasks]);
 
   // ==================== 拖拽排序 ====================
 
@@ -494,7 +502,7 @@ export default function ProjectView({ projectId, showArchived = false, archivedR
         sort_order: result.sortOrder,
       });
     } catch {
-      if (projectId) getTasks(projectId).then(setTasks);
+      if (projectId) getTasks(projectId).then(data => setTasks(deriveSummaryDates(data)));
     }
   }, [projectId, tasks]);
 
@@ -778,7 +786,7 @@ export default function ProjectView({ projectId, showArchived = false, archivedR
             </div>
           ) : (
             <div className="space-y-1">
-              {tasks.map((task, idx) => (
+              {displayTasks.map((task, idx) => (
                 <TaskCard
                   key={task.id}
                   task={task}
@@ -868,7 +876,7 @@ export default function ProjectView({ projectId, showArchived = false, archivedR
           <div ref={ganttWrapRef} className="flex-1 overflow-hidden min-w-0">
             <GanttChart
               key={projectId}
-              tasks={tasks}
+              tasks={displayTasks}
               scale={ganttScale}
               onTaskUpdate={handleGanttUpdate}
               scrollRef={taskTableScrollRef}

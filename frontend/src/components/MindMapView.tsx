@@ -53,6 +53,18 @@ interface ColorThemeConfig {
   node: Record<string, unknown>;
 }
 
+interface ExportSvgWithTagText {
+  find: (selector: string) => ArrayLike<{ fill: (color: string) => void }> & {
+    forEach: (callback: (item: { fill: (color: string) => void }) => void) => void;
+  };
+}
+
+/** simple-mind-map 的标签文字默认会输出为白色，导出 SVG 时显式设置可见颜色。 */
+function makeExportedTagTextReadable(svg: ExportSvgWithTagText, color: string): ExportSvgWithTagText {
+  svg.find('rect + text').forEach(text => text.fill(color));
+  return svg;
+}
+
 const COLOR_THEMES: Record<ColorThemeKey, ColorThemeConfig> = {
   classic: {
     name: '经典',
@@ -467,6 +479,8 @@ function MindMapView({
     };
   }, []);
 
+  const exportTagTextColor = currentColorTheme === 'dark' ? '#d1d5db' : '#475569';
+
   const applyTheme = useCallback((lineKey: LineStyleKey, colorKey: ColorThemeKey) => {
     if (!mindMapRef.current) return;
     const mergedTheme = buildMergedTheme(lineKey, colorKey);
@@ -506,8 +520,9 @@ function MindMapView({
         el: container,
         data: data,
         layout: 'logicalStructure',
-        themeConfig: mergedTheme,
-        enableFreeDrag: false,
+          themeConfig: mergedTheme,
+          handleBeingExportSvg: (svg: ExportSvgWithTagText) => makeExportedTagTextReadable(svg, exportTagTextColor),
+          enableFreeDrag: false,
         nodeTextEditZIndex: 1000,
         textAutoWrapWidth: 99999,
         minZoom: 0.5,
@@ -729,6 +744,7 @@ function MindMapView({
             data: data,
             layout: 'logicalStructure',
             themeConfig: mergedTheme,
+            handleBeingExportSvg: (svg: ExportSvgWithTagText) => makeExportedTagTextReadable(svg, exportTagTextColor),
             enableFreeDrag: false,
             nodeTextEditZIndex: 1000,
             textAutoWrapWidth: 99999,
@@ -796,7 +812,7 @@ function MindMapView({
     }
 
     prevNodesRef.current = currentHashWithTheme;
-  }, [nodes, convertNodesToMindMapData, currentLineStyle, currentColorTheme, collapseLevel, buildMergedTheme]);
+  }, [nodes, convertNodesToMindMapData, currentLineStyle, currentColorTheme, collapseLevel, buildMergedTheme, exportTagTextColor]);
 
   // 更新样式
   useEffect(() => {

@@ -1920,6 +1920,17 @@ def _recompute_ancestor_dates(db: Session, task) -> None:
         current = parent
 
 
+def _recompute_parent_chain(db: Session, parent_id) -> None:
+    """从指定父任务开始，向上同步整条父任务日期链。"""
+    if parent_id is None:
+        return
+    parent = db.query(models.Task).filter(models.Task.id == parent_id).first()
+    if parent is None:
+        return
+    _derive_task_from_children(db, parent)
+    _recompute_ancestor_dates(db, parent)
+
+
 def _is_descendant(db: Session, ancestor_id, node_id) -> bool:
     """判断 node_id 是否在 ancestor_id 的后代子树中（含自身），用于防止任务层级成环。"""
     if ancestor_id == node_id:
@@ -1978,7 +1989,8 @@ def update_task(db: Session, task_id: uuid.UUID, data) -> Optional[models.Task]:
             update_data.pop("parent_id")
 
     for field, value in update_data.items():
-        if value is not None:
+        # parent_id=None 表示移动到根级任务，不能和“未传字段”混淆。
+        if field == "parent_id" or value is not None:
             setattr(task, field, value)
 
     if has_children:
@@ -1990,12 +2002,10 @@ def update_task(db: Session, task_id: uuid.UUID, data) -> Optional[models.Task]:
 
     # 层级变化时，原父任务也要重新推导
     new_parent_id = update_data.get("parent_id", old_parent_id)
-    if new_parent_id != old_parent_id and old_parent_id is not None:
-        old_parent = db.query(models.Task).filter(models.Task.id == old_parent_id).first()
-        if old_parent:
-            _derive_task_from_children(db, old_parent)
-            _recompute_ancestor_dates(db, old_parent)
-            db.commit()
+    if new_parent_id != old_parent_id:
+        _recompute_parent_chain(db, old_parent_id)
+        _recompute_parent_chain(db, new_parent_id)
+        db.commit()
 
     return task
 
@@ -2008,11 +2018,8 @@ def delete_task(db: Session, task_id: uuid.UUID) -> bool:
     db.delete(task)
     db.commit()
     if parent_id is not None:
-        parent = db.query(models.Task).filter(models.Task.id == parent_id).first()
-        if parent:
-            _derive_task_from_children(db, parent)
-            _recompute_ancestor_dates(db, parent)
-            db.commit()
+        _recompute_parent_chain(db, parent_id)
+        db.commit()
     return True
 
 
@@ -2085,6 +2092,7 @@ def _auto_toggle_archive(db: Session, project_id):
 
 def reorder_tasks(db: Session, items: list[dict]):
     """批量更新任务排序和层级"""
+    affected_parent_ids = set()
     for item in items:
         try:
             task_id = uuid.UUID(str(item["id"]))
@@ -2105,20 +2113,10 @@ def reorder_tasks(db: Session, items: list[dict]):
                 new_parent_id = old_parent_id
             task.parent_id = new_parent_id
             if new_parent_id != old_parent_id:
-                # 新父链推导
-                if new_parent_id is not None:
-                    new_parent = db.query(models.Task).filter(
-                        models.Task.id == new_parent_id
-                    ).first()
-                    if new_parent:
-                        _derive_task_from_children(db, new_parent)
-                        _recompute_ancestor_dates(db, new_parent)
-                # 旧父链推导
                 if old_parent_id is not None:
-                    old_parent = db.query(models.Task).filter(
-                        models.Task.id == old_parent_id
-                    ).first()
-                    if old_parent:
-                        _derive_task_from_children(db, old_parent)
-                        _recompute_ancestor_dates(db, old_parent)
+                    affected_parent_ids.add(old_parent_id)
+                if new_parent_id is not None:
+                    affected_parent_ids.add(new_parent_id)
+    for parent_id in affected_parent_ids:
+        _recompute_parent_chain(db, parent_id)
     db.commit()

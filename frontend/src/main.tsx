@@ -118,6 +118,11 @@ async function clearDevelopmentServiceWorker(): Promise<boolean> {
     return tooltipEl;
   }
 
+  function shouldShowCustomTooltip(el: HTMLElement): boolean {
+    // 仅给没有文字说明的图标控件补充提示；文字按钮保留浏览器原生 title。
+    return Boolean(el.querySelector('svg, [data-icon]')) && !el.textContent?.trim();
+  }
+
   function show(target: HTMLElement) {
     const tip = ensureTooltip();
     tip.textContent = target.dataset.tooltip ?? '';
@@ -140,7 +145,7 @@ async function clearDevelopmentServiceWorker(): Promise<boolean> {
   document.addEventListener('mouseover', (e) => {
     const me = e as MouseEvent;
     const el = (me.target as HTMLElement).closest('[title]') as HTMLElement | null;
-    if (!el) return;
+    if (!el || !shouldShowCustomTooltip(el)) return;
     el.dataset.tooltip = el.getAttribute('title') ?? '';
     el.removeAttribute('title');
     activeTarget = el;
@@ -173,6 +178,17 @@ async function clearDevelopmentServiceWorker(): Promise<boolean> {
       hide();
     }
   });
+
+  // 页面切换时 hover 目标可能被 React 直接卸载，不一定会触发 mouseout。
+  // 监听 DOM 移除，避免旧 tooltip 残留在鼠标旁直到超时才消失。
+  const tooltipObserver = new MutationObserver(() => {
+    if (activeTarget && !activeTarget.isConnected) {
+      activeTarget = null;
+      window.clearTimeout(showTimer);
+      hide();
+    }
+  });
+  tooltipObserver.observe(document.body, { childList: true, subtree: true });
 }
 
 void clearDevelopmentServiceWorker().then(shouldRender => {
