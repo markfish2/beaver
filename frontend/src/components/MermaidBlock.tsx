@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 import elkLayouts from '@mermaid-js/layout-elk';
+import { renderMermaidSVG } from 'beautiful-mermaid';
 import { Maximize2, Minus, Plus, RotateCcw, X } from 'lucide-react';
 
 let initializedTheme: 'dark' | 'default' | null = null;
@@ -45,6 +46,40 @@ async function initMermaid(dark?: boolean) {
   initializedTheme = theme;
 }
 
+// beautiful-mermaid 只支持这些图表类型；其他（pie/gantt/mindmap/timeline 等）回退官方 mermaid。
+const BM_SUPPORTED = /^(?:graph|flowchart|stateDiagram|sequenceDiagram|classDiagram|erDiagram|xychart)/i;
+
+// 渲染优先级：beautiful-mermaid（紧凑布局）→ 官方 mermaid（兜底）
+async function renderSvg(code: string, dark?: boolean): Promise<string> {
+  const isDark = (dark ?? document.documentElement.classList.contains('dark'));
+  const trimmed = code.trim();
+  if (BM_SUPPORTED.test(trimmed)) {
+    try {
+      const svg = renderMermaidSVG(trimmed, {
+        bg: isDark ? '#18181B' : '#FFFFFF',
+        fg: isDark ? '#FAFAFA' : '#27272A',
+        font: 'Arial, "Microsoft YaHei", sans-serif',
+        // 紧凑布局：节点间距/层级间距显著小于官方 mermaid 的 ELK 硬编码值
+        nodeSpacing: 10,
+        layerSpacing: 18,
+        padding: 24,
+        transparent: true,
+      });
+      // 移除 Google Fonts @import：项目使用本地字体栈，避免离线/内网加载失败
+      return svg.replace(/@import url\([^)]*\);?\s*/g, '');
+    } catch {
+      // 解析失败时回退官方 mermaid（如语法超出 beautiful-mermaid 支持范围）
+    }
+  }
+  // 官方 mermaid 渲染（含 elk 布局）
+  await initMermaid(dark);
+  const id = `mermaid-${Math.random().toString(36).slice(2, 10)}`;
+  const { svg } = await mermaid.render(id, code.trim()
+    .replace(/<br\s*\/?\s*>/gi, '<br/>')
+    .replace(/&(?!amp;|lt;|gt;|quot;|apos;|#)/g, '&amp;'));
+  return svg;
+}
+
 interface MermaidBlockProps {
   code: string;
   dark?: boolean;
@@ -68,15 +103,10 @@ export default function MermaidBlock({ code, dark }: MermaidBlockProps) {
 
     const render = async () => {
       try {
-        await initMermaid(dark);
         if (!containerRef.current) return;
 
-        // 预处理：修复常见语法问题。普通 flowchart 使用平滑曲线，保留用户明确指定的渲染器。
-        const processedCode = code.trim()
-          .replace(/<br\s*\/?\s*>/gi, '<br/>')
-          .replace(/&(?!amp;|lt;|gt;|quot;|apos;|#)/g, '&amp;');
-        const id = `mermaid-${Math.random().toString(36).slice(2, 10)}`;
-        const { svg } = await mermaid.render(id, processedCode);
+        // 优先 beautiful-mermaid 紧凑渲染，不支持的类型回退官方 mermaid
+        const svg = await renderSvg(code, dark);
         if (!cancelled && containerRef.current) {
           containerRef.current.innerHTML = svg;
           setSvgMarkup(svg);
