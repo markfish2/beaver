@@ -1018,7 +1018,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
               onDoubleClick={handlePreviewDoubleClick}
               className="markdown-note-preview memo-content max-w-[768px] w-full cursor-text text-base text-gray-700 dark:text-gray-300 p-6"
               style={{ lineHeight: '1.75' }}
-              title="双击编辑"
+
             >
               {content.trim() ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]} components={mdComponents}>{processedContent}</ReactMarkdown>

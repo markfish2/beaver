@@ -249,6 +249,26 @@ body,
   background: var(--app-selection);
 }
 
+/* ── 自定义 title tooltip：胶囊形状 + 主题绿色背景 ── */
+/* JS 动态创建 .beaver-tooltip，跟随鼠标右下角 */
+.beaver-tooltip {
+  position: fixed;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: #4d9383;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease 0.2s;
+  z-index: 99999;
+}
+.beaver-tooltip.visible {
+  opacity: 1;
+}
+
 .memo-content a,
 .main-content-area a {
   color: var(--app-link);

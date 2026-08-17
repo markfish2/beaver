@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronRight, MoreHorizontal, Copy, Trash2, Pencil } from 'lucide-react';
 import { useDocuments } from '../../context/DocumentContext';
@@ -18,6 +18,33 @@ function getDocIcon(doc: Document, isExpanded = false) {
   return <DocumentTypeIcon type={iconType} className="h-5 w-5" />;
 }
 
+// 与 PC 端 Sidebar 保持一致的排序函数
+const compareFolderTitle = (a: Document, b: Document) =>
+  (a.title || '').localeCompare(b.title || '', 'zh-CN', {
+    numeric: true,
+    sensitivity: 'base',
+  });
+
+const resolveDocumentSortTime = (doc: Document) => {
+  const updatedAt = doc.updated_at ? Date.parse(doc.updated_at) : 0;
+  if (Number.isFinite(updatedAt) && updatedAt > 0) return updatedAt;
+  return doc.sort_order || 0;
+};
+
+const compareDocumentByLastEditedDesc = (sortTimes: Map<string, number>) => (a: Document, b: Document) => {
+  const timeDiff = (sortTimes.get(b.id) || 0) - (sortTimes.get(a.id) || 0);
+  if (timeDiff !== 0) return timeDiff;
+  return (b.sort_order || 0) - (a.sort_order || 0);
+};
+
+const compareFileMenuItem = (sortTimes: Map<string, number>) => (a: Document, b: Document) => {
+  const aIsFolder = a.type === 'folder';
+  const bIsFolder = b.type === 'folder';
+  if (aIsFolder !== bIsFolder) return aIsFolder ? -1 : 1;
+  if (aIsFolder && bIsFolder) return compareFolderTitle(a, b);
+  return compareDocumentByLastEditedDesc(sortTimes)(a, b);
+};
+
 export default function FileTreeView({ starredOnly = false }: FileTreeViewProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -33,6 +60,19 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
     ? documents.filter(d => d.is_starred)
     : documents;
   const selectedDocumentId = location.pathname.match(/^\/d\/([^/]+)$/)?.[1];
+
+  // 计算文档排序时间映射（与 PC 端 Sidebar 一致）
+  const documentSortTimes = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const doc of documents) {
+      map.set(doc.id, resolveDocumentSortTime(doc));
+    }
+    return map;
+  }, [documents]);
+
+  // 预排序比较函数（与 PC 端 Sidebar 一致）
+  const compareByLastEdited = useMemo(() => compareDocumentByLastEditedDesc(documentSortTimes), [documentSortTimes]);
+  const compareFileItem = useMemo(() => compareFileMenuItem(documentSortTimes), [documentSortTimes]);
 
   const handleToggleFolder = (folderId: string) => {
     setExpandedFolders(prev => {
@@ -210,11 +250,7 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
   const renderTree = (parentId: string | null, depth: number) => {
     const children = filteredDocs
       .filter(d => d.parent_id === parentId)
-      .sort((a, b) => {
-        if (a.type === 'folder' && b.type !== 'folder') return -1;
-        if (a.type !== 'folder' && b.type === 'folder') return 1;
-        return (a.title || '').localeCompare(b.title || '');
-      });
+      .sort(compareFileItem);
 
     return children.map(doc => {
       const isFolder = doc.type === 'folder';
@@ -240,8 +276,9 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
   };
 
   // For starred view: render as flat list (parent folders may not be starred)
+  // 与 PC 端 Sidebar 收藏视图排序一致：按最近编辑时间降序
   const renderStarredList = () => {
-    const sorted = [...filteredDocs].sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    const sorted = [...filteredDocs].sort(compareByLastEdited);
     return sorted.map(doc => renderDocItem(doc, 0));
   };
 

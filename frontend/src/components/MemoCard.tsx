@@ -1173,7 +1173,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
           ...(!expanded && isLong ? { maxHeight: '400px', overflow: 'hidden' } : {}),
         }}
         onDoubleClick={readOnly ? undefined : handleContentDoubleClick}
-        title={readOnly ? undefined : "双击编辑"}
+
       >
         <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]} components={mdComponents}>{strippedContent}</ReactMarkdown>
         {!expanded && isLong && (
