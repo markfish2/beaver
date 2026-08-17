@@ -9,6 +9,8 @@ let initializedTheme: 'dark' | 'default' | null = null;
 async function initMermaid(dark?: boolean) {
   const theme = (dark ?? document.documentElement.classList.contains('dark')) ? 'dark' : 'default';
   if (initializedTheme === theme) return;
+  // 注册 ELK 布局算法（registerExternalDiagrams 只注册图表检测器，布局算法需要单独注册）
+  mermaid.registerLayoutLoaders(elkLayouts);
   await mermaid.registerExternalDiagrams([elkLayouts]);
   mermaid.initialize({
     startOnLoad: false,
@@ -24,6 +26,7 @@ async function initMermaid(dark?: boolean) {
       nodeSpacing: 50,
       rankSpacing: 80,
       padding: 15,
+      defaultRenderer: 'elk',
     },
     themeVariables: theme === 'dark'
       ? {
@@ -73,10 +76,14 @@ async function renderSvg(code: string, dark?: boolean): Promise<string> {
   }
   // 官方 mermaid 渲染（含 elk 布局）
   await initMermaid(dark);
-  const id = `mermaid-${Math.random().toString(36).slice(2, 10)}`;
-  const { svg } = await mermaid.render(id, code.trim()
+  // mermaid 的 graph 检测器在 defaultRenderer=elk 时会拒绝图表，
+  // 需要将 graph 替换为 flowchart（两者等价），ELK 布局才能生效。
+  const normalized = code.trim()
+    .replace(/^\s*graph\s+/i, 'flowchart ')
     .replace(/<br\s*\/?\s*>/gi, '<br/>')
-    .replace(/&(?!amp;|lt;|gt;|quot;|apos;|#)/g, '&amp;'));
+    .replace(/&(?!amp;|lt;|gt;|quot;|apos;|#)/g, '&amp;');
+  const id = `mermaid-${Math.random().toString(36).slice(2, 10)}`;
+  const { svg } = await mermaid.render(id, normalized);
   return svg;
 }
 
