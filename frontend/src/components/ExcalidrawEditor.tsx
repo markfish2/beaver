@@ -11,6 +11,9 @@ import { usePhoneLayout } from '../hooks/usePhoneLayout';
 // 模块级变量存储 Excalidraw API
 let _excalidrawApiInstance: ExcalidrawImperativeAPI | null = null;
 
+// 导出图片时给元素四周保留稳定的呼吸空间，避免内容贴住图片边缘。
+const CANVAS_EXPORT_PADDING = 100;
+
 function omitViewportState<T extends Record<string, unknown>>(appState: T): T {
   const result = { ...appState };
   delete result.scrollX;
@@ -585,7 +588,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
             exportBackground: true,
           },
           files: initialData.files ?? filesRef.current,
-          exportPadding: 24,
+          exportPadding: CANVAS_EXPORT_PADDING,
         });
         if (cancelled || !previewRoot) return;
         svg.removeAttribute('width');
@@ -911,9 +914,11 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         const pngBlob = await exportToBlob({
           elements: api.getSceneElements(),
           appState: api.getAppState(),
+          files: api.getFiles(),
           mimeType: 'image/png',
           quality: 1,
           scale: 2,
+          exportPadding: CANVAS_EXPORT_PADDING,
         });
         downloadBlob(pngBlob, `canvas-${Date.now()}.png`);
         break;
@@ -923,6 +928,8 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         const svg = await exportToSvg({
           elements: api.getSceneElements(),
           appState: api.getAppState(),
+          files: api.getFiles(),
+          exportPadding: CANVAS_EXPORT_PADDING,
         });
         const svgBlob = new Blob([svg.outerHTML], { type: 'image/svg+xml' });
         downloadBlob(svgBlob, `canvas-${Date.now()}.svg`);
@@ -1125,8 +1132,14 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    // SVG Blob 通常在 click 后仍由浏览器异步读取，不能立即释放 Object URL。
+    window.setTimeout(() => {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 1000);
   };
 
   if (isLoading) {
@@ -1353,8 +1366,6 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
             </MainMenu.ItemCustom>
             <MainMenu.Separator />
             <MainMenu.DefaultItems.ClearCanvas />
-            <MainMenu.DefaultItems.Export />
-            <MainMenu.DefaultItems.SaveAsImage />
             <MainMenu.Separator />
             <MainMenu.ItemCustom>
               <button

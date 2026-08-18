@@ -14,6 +14,20 @@ const patches = [
     from: 'e.link&&!n.selectedElementIds[e.id]',
     to: '!e.link?.startsWith("beaver://")&&e.link&&!n.selectedElementIds[e.id]',
   },
+  // Excalidraw 0.18.1 没有公开配置官方图片导出的 padding，
+  // 将其内置默认值从 10px 调整为 100px，保留官方导出菜单和弹窗。
+  {
+    from: 'DEFAULT_EXPORT_PADDING = 10',
+    to: 'DEFAULT_EXPORT_PADDING = 100',
+  },
+  {
+    from: 'DEFAULT_EXPORT_PADDING=10',
+    to: 'DEFAULT_EXPORT_PADDING=100',
+  },
+  {
+    from: 'Cs=[1,2,3],Vi=10,OE=1440',
+    to: 'Cs=[1,2,3],Vi=100,OE=1440',
+  },
 ];
 
 async function javascriptFiles(directory) {

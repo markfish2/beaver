@@ -820,6 +820,32 @@ body,
 /* Excalidraw: 隐藏工具栏下方的操作提示 */
 .excalidraw .HintViewer { display: none !important; }
 
+/* 保持画布官方菜单的可读宽度，避免窄屏布局把菜单项拆成多行。 */
+.excalidraw-editor-wrapper .excalidraw .dropdown-menu--mobile {
+  width: 220px !important;
+  min-width: 220px !important;
+}
+.excalidraw-editor-wrapper .excalidraw .dropdown-menu--mobile .dropdown-menu-container {
+  width: 100%;
+}
+.excalidraw-editor-wrapper .excalidraw .dropdown-menu .dropdown-menu-container {
+  min-width: 220px !important;
+}
+.excalidraw-editor-wrapper .excalidraw .dropdown-menu .dropdown-menu-item__text {
+  white-space: nowrap;
+}
+/* 官方 manual-hover 默认禁用了鼠标 hover 背景，这里恢复菜单的视觉反馈。 */
+.excalidraw-editor-wrapper .excalidraw .dropdown-menu.manual-hover .dropdown-menu-item:hover {
+  background-color: #f3f4f6 !important;
+}
+.excalidraw-editor-wrapper .excalidraw .dropdown-menu.manual-hover .dropdown-menu-item--hovered {
+  background-color: #f3f4f6 !important;
+}
+.excalidraw-editor-wrapper .excalidraw .dropdown-menu .dropdown-menu-item-base > button:hover {
+  background-color: #f3f4f6 !important;
+  color: #1f2937 !important;
+}
+
 /* 幻灯片播放时将画布提升到窗口层级，彻底隔离编辑器工具栏。 */
 .excalidraw-editor-wrapper.presentation-active {
   position: fixed !important;

@@ -2212,6 +2212,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                             mimeType: 'image/png',
                             quality: 1,
                             scale: 2,
+                            exportPadding: 100,
                           });
                           const file = new File([pngBlob], `canvas-${Date.now()}.png`, { type: 'image/png' });
                           const uploadResult = await uploadFile(file);
