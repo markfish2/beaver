@@ -644,13 +644,13 @@ const MindMapModal = ({
             <button
               onClick={handleExportPDF}
               disabled={isExporting}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="editor-topbar-button is-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isExporting ? '导出中...' : '导出 PDF'}
             </button>
             <button
               onClick={onClose}
-              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+              className="editor-topbar-button editor-topbar-icon-button"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

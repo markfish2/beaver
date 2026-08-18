@@ -929,7 +929,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
                 setTimeout(() => handleSave(), 0);
               }}
               disabled={uploading}
-              className="editor-topbar-action inline-flex min-h-8 items-center gap-1.5 rounded-md px-2.5 py-1 text-sm text-white dark:text-gray-900 bg-gray-900 dark:bg-gray-100 hover:bg-gray-700 dark:hover:bg-gray-300 transition-colors disabled:opacity-40"
+              className="editor-topbar-button is-primary disabled:opacity-40"
             >
               <Check className="h-[14px] w-[14px]" />
               <span>保存</span>
@@ -940,7 +940,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
                 setEditContent(newContent);
                 setShowExpandEditor(false);
               }}
-              className="editor-topbar-action inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 transition-colors"
+              className="editor-topbar-button editor-topbar-icon-button"
             >
               <X className="h-[14px] w-[14px]" />
             </button>

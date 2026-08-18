@@ -217,7 +217,7 @@ export const SaveStatusIndicator: React.FC<SaveStatusIndicatorProps> = ({
       <button
         onClick={handleClick}
         className={clsx(
-          'flex items-center justify-center w-8 h-8 rounded-md backdrop-blur-sm shadow-sm border transition-all duration-300 cursor-pointer hover:scale-105',
+          'flex items-center justify-center w-8 h-8 rounded-md backdrop-blur-sm border transition-all duration-300 cursor-pointer hover:scale-105',
           getStatusColor(),
           animationState === 'animating' && 'animate-pulse'
         )}

@@ -593,7 +593,8 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   };
 
   const handleRootContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (viewMode !== 'all' && viewMode !== 'starred' && viewMode !== 'recent') return;
+    // 最近编辑和收藏是筛选结果列表，不能在空白区域创建新内容。
+    if (viewMode !== 'all') return;
     if ((e.target as HTMLElement).closest('[data-file-tree-item]')) return;
     e.preventDefault();
     setContextMenu(null);

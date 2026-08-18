@@ -2659,11 +2659,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                     if (showOutlineFilter) setSearchQuery('');
                     setShowOutlineFilter(v => !v);
                   }}
-                  className={`editor-topbar-action p-2 rounded-md transition-colors ${
-                    searchQuery
-                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700'
-                  }`}
+                  className={`editor-topbar-button editor-topbar-icon-button ${searchQuery ? 'is-active' : ''}`}
                   title={searchQuery ? `正在过滤: ${searchQuery}` : '过滤当前大纲'}
                 >
                   <Search className="w-5 h-5" />
@@ -2671,11 +2667,17 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
               </div>
               <button
                 onClick={() => setViewMode('mindmap')}
-                className="editor-topbar-action p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors"
+                className="editor-topbar-button editor-topbar-icon-button"
                 title="思维导图"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 48 48">
+                  <path d="M0 0h48v48H0z" fill="none" stroke="none" />
+                  <g fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth={4}>
+                    <path d="M26 24L42 24" />
+                    <path d="M26 38H42" />
+                    <path d="M26 10H42" />
+                    <path d="M18 24L6 24C6 24 7.65685 24 10 24M18 38C12 36 16 24 10 24M18 10C12 12 16 24 10 24" />
+                  </g>
                 </svg>
               </button>
               <button
@@ -2690,7 +2692,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                     execute(commands.createBatchTogglePropertyCommand(expandedNodeIds, 'is_collapsed', true));
                   }
                 }}
-                className="editor-topbar-action p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors"
+                className="editor-topbar-button editor-topbar-icon-button"
                 title={nodes.some(n => n.is_collapsed) ? "展开全部" : "折叠全部"}
               >
                 {nodes.some(n => n.is_collapsed) ? (

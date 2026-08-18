@@ -591,11 +591,7 @@ export default function ProjectView({ projectId, showArchived = false, archivedR
             <>
               <button
                 onClick={() => setShowGantt(!showGantt)}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  showGantt
-                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                    : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500'
-                }`}
+                className={`editor-topbar-button editor-topbar-icon-button ${showGantt ? 'is-active' : ''}`}
                 title="甘特图"
               >
                 <BarChart3 size={16} />
@@ -603,7 +599,7 @@ export default function ProjectView({ projectId, showArchived = false, archivedR
               {showGantt && (
                 <button
                   onClick={() => setGanttScale(ganttScale === 'day' ? 'week' : 'day')}
-                  className="px-2 py-1 text-xs rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                  className="editor-topbar-button"
                 >
                   {ganttScale === 'day' ? '天' : '周'}
                 </button>
@@ -616,7 +612,7 @@ export default function ProjectView({ projectId, showArchived = false, archivedR
           <button
             onClick={() => void handleExportPdf()}
             disabled={isExportingPdf}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs text-gray-600 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            className="editor-topbar-button shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
             title="导出项目为 PDF"
           >
             <Download size={14} />

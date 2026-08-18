@@ -920,7 +920,7 @@ function MindMapView({
         <div className="flex items-center gap-2">
           <button
             onClick={onBackToOutline}
-            className="editor-topbar-action inline-flex min-h-9 items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors text-sm font-medium"
+            className="editor-topbar-button"
           >
             <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -942,7 +942,7 @@ function MindMapView({
               <div className="relative">
                 <button
                   onClick={() => { setShowLevelMenu(!showLevelMenu); setShowColorMenu(false); setShowStyleMenu(false); }}
-                  className="editor-topbar-action inline-flex min-h-9 items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  className="editor-topbar-button"
                 >
                   <Layers className="w-[18px] h-[18px] text-gray-500 dark:text-gray-400" />
                   <span className="text-sm text-gray-700 dark:text-gray-300">
@@ -979,7 +979,7 @@ function MindMapView({
           <div className="relative">
             <button
               onClick={() => { setShowColorMenu(!showColorMenu); setShowStyleMenu(false); setShowLevelMenu(false); }}
-              className="editor-topbar-action inline-flex min-h-9 items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="editor-topbar-button"
             >
               <ColorThemePreview theme={currentColorTheme} isActive={false} />
               <span className="text-sm hidden sm:inline">{COLOR_THEMES[currentColorTheme].name}</span>
@@ -1020,7 +1020,7 @@ function MindMapView({
           <div className="relative">
             <button
               onClick={() => { setShowStyleMenu(!showStyleMenu); setShowColorMenu(false); setShowLevelMenu(false); }}
-              className="editor-topbar-action inline-flex min-h-9 items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="editor-topbar-button"
             >
               <LineStylePreview style={currentLineStyle} isActive={false} />
               <span className="text-sm hidden sm:inline">{LINE_STYLES[currentLineStyle].name}</span>
@@ -1060,7 +1060,7 @@ function MindMapView({
           <button
             onClick={handleExportPDF}
             disabled={isExporting}
-            className="editor-topbar-action inline-flex min-h-9 items-center px-2.5 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+            className="editor-topbar-button is-primary disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isExporting ? '导出中...' : '导出 PDF'}
           </button>

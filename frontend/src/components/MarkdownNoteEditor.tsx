@@ -939,7 +939,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
           <div className="relative" ref={exportMenuRef}>
             <button
               onClick={() => setShowExportMenu(v => !v)}
-              className="editor-topbar-action inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+              className="editor-topbar-button"
               title="导出"
             >
               <Download className="h-[14px] w-[14px]" />
@@ -967,18 +967,18 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
           </div>
           <button
             onClick={() => setShowShareDialog(true)}
-            className="editor-topbar-action inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+            className="editor-topbar-button"
             title="分享笔记"
           >
             <Share2 className="h-[14px] w-[14px]" />
             <span className="hidden lg:inline">分享</span>
           </button>
           <button onClick={() => setViewMode(viewMode === 'preview' ? 'edit' : 'preview')}
-            className={`editor-topbar-action inline-flex min-h-9 items-center gap-1.5 px-2.5 py-1.5 text-sm leading-none rounded-lg transition-colors ${viewMode === 'preview' ? 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>
+            className={`editor-topbar-button ${viewMode !== 'preview' ? 'is-active' : ''}`}>
             {viewMode === 'preview' ? <><Pencil className="h-[14px] w-[14px]" />编辑</> : <><Eye className="h-[14px] w-[14px]" />阅读</>}
           </button>
           <button onClick={() => setViewMode(viewMode === 'split' ? 'edit' : 'split')}
-            className={`editor-topbar-action inline-flex min-h-9 items-center gap-1 px-2.5 py-1.5 text-sm leading-none rounded-lg transition-colors ${viewMode === 'split' ? 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+            className={`editor-topbar-button ${viewMode === 'split' ? 'is-active' : ''}`}
             title="分屏模式"><Columns2 className="h-[14px] w-[14px]" /></button>
         </div>
       </div>

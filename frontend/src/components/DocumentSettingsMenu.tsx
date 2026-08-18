@@ -32,7 +32,7 @@ export default function DocumentSettingsMenu({
     <>
       <button
         onClick={handleDownload}
-        className="editor-topbar-action inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+        className="editor-topbar-button"
         title="导出 Markdown"
       >
         <Download className="h-[18px] w-[18px]" />
@@ -40,7 +40,7 @@ export default function DocumentSettingsMenu({
       </button>
       <button
         onClick={() => setShowShareDialog(true)}
-        className="editor-topbar-action inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+        className="editor-topbar-button"
         title="分享文档"
       >
         <Share2 className="h-[18px] w-[18px]" />

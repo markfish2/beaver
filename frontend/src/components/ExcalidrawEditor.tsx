@@ -1194,12 +1194,10 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           className="flex-1 text-lg font-medium text-gray-800 dark:text-gray-100 bg-transparent outline-none border-none placeholder-gray-400 dark:placeholder-gray-500"
           readOnly={readOnly}
         />
-        {/* 保存状态 */}
-        <SaveStatusIndicator status={saveStatus} />
         <button
           onClick={() => setShowPresentationPanel(value => !value)}
           disabled={frameElements.length === 0}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="editor-topbar-button disabled:cursor-not-allowed disabled:opacity-40"
           title={frameElements.length === 0 ? '请先创建画框' : '管理幻灯片'}
         >
           <Presentation className="w-4 h-4" />
@@ -1209,7 +1207,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         <div className="relative">
           <button
             onClick={() => setShowExportMenu(!showExportMenu)}
-            className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors text-sm"
+            className="editor-topbar-button"
           >
             <Download className="w-4 h-4" />
             <span>导出</span>
@@ -1241,6 +1239,8 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
             </div>
           )}
         </div>
+        {/* 保存状态：与大纲笔记一致，固定在顶部操作区最右侧 */}
+        <SaveStatusIndicator status={saveStatus} />
       </div>
 
       {showPresentationPanel && !isPresenting && (
