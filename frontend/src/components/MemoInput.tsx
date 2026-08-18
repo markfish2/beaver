@@ -1,10 +1,9 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { Send, Image, Paperclip, ChevronDown, Mic, Maximize2, X, Sparkles } from 'lucide-react';
 import { createMemo, uploadFile, uploadAudio, getMemoTags, createTodo, getAIConfigs } from '../api/data';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import VoiceRecordCard from './VoiceRecordCard';
-import AIChatPanel from './AIChatPanel';
 import { getPasteMarkdown } from '../utils/htmlToMarkdown';
 import { localizeMarkdownImages } from '../utils/markdownImageUpload';
 import { showToast } from '../utils/toast';
@@ -16,6 +15,8 @@ import type { PopupItem } from './TagMentionPopup';
 import { tagMentionExtension } from '../extensions/tagMentionExtension';
 import type { TagMentionState } from '../extensions/tagMentionExtension';
 import type { Memo, Document } from '../api/data';
+
+const AIChatPanel = lazy(() => import('./AIChatPanel'));
 
 interface MemoInputProps {
   onMemoCreated: (memo: Memo) => void;
@@ -359,13 +360,13 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
       {showVoiceCard && <VoiceRecordCard onClose={() => setShowVoiceCard(false)} onSaved={(audioUrl, durationFormatted) => { editorRef.current?.insertText(`🎙 录音 ${durationFormatted} ![](${audioUrl})`); showToast('录音已保存'); }} />}
 
       {showAIPanel && (
-        <AIChatPanel context={content}
+        <Suspense fallback={null}><AIChatPanel context={content}
           onWriteBack={(newContent) => {
             setContent(newContent);
             const activeEditor = showExpandEditor ? expandEditorRef.current : editorRef.current;
             activeEditor?.view?.dispatch({ changes: { from: 0, to: activeEditor.view.state.doc.length, insert: newContent } });
           }}
-          onClose={() => setShowAIPanel(false)} />
+          onClose={() => setShowAIPanel(false)} /></Suspense>
       )}
     </div>
   );

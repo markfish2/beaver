@@ -59,6 +59,67 @@ interface ExportSvgWithTagText {
   };
 }
 
+type MindMapConstructor = typeof import('simple-mind-map').default;
+
+let mindMapPluginsRegistered = false;
+let mindMapModulesPromise: Promise<MindMapConstructor> | null = null;
+type MindMapExportPlugins = {
+  exportPlugin: typeof import('simple-mind-map/src/plugins/Export.js').default;
+  exportPdfPlugin: typeof import('simple-mind-map/src/plugins/ExportPDF.js').default;
+};
+let mindMapExportPluginsPromise: Promise<MindMapExportPlugins> | null = null;
+
+function loadMindMapModules(): Promise<MindMapConstructor> {
+  if (!mindMapModulesPromise) {
+    mindMapModulesPromise = Promise.all([
+      import('simple-mind-map'),
+      import('simple-mind-map/src/plugins/TouchEvent.js'),
+    ]).then(([mindMapModule, touchEventModule]) => {
+      const MindMap = mindMapModule.default;
+      if (!mindMapPluginsRegistered) {
+        MindMap.usePlugin(touchEventModule.default);
+        mindMapPluginsRegistered = true;
+      }
+      return MindMap;
+    }).catch(error => {
+      mindMapModulesPromise = null;
+      throw error;
+    });
+  }
+  return mindMapModulesPromise;
+}
+
+async function loadMindMapExportPlugins(): Promise<MindMapExportPlugins> {
+  if (!mindMapExportPluginsPromise) {
+    mindMapExportPluginsPromise = loadMindMapModules().then(async MindMap => {
+      const [exportModule, exportPdfModule] = await Promise.all([
+        import('simple-mind-map/src/plugins/Export.js'),
+        import('simple-mind-map/src/plugins/ExportPDF.js'),
+      ]);
+      MindMap.usePlugin(exportModule.default);
+      MindMap.usePlugin(exportPdfModule.default);
+      return {
+        exportPlugin: exportModule.default,
+        exportPdfPlugin: exportPdfModule.default,
+      };
+    }).catch(error => {
+      mindMapExportPluginsPromise = null;
+      throw error;
+    });
+  }
+  return mindMapExportPluginsPromise;
+}
+
+function getMindMapNodesHash(nodes: Node[]): string {
+  return JSON.stringify(nodes.map(node => ({ id: node.id, content: node.content })));
+}
+
+function watchMindMapResize(container: HTMLDivElement, mindMap: MindMap): ResizeObserver {
+  const observer = new ResizeObserver(() => mindMap.resize());
+  observer.observe(container);
+  return observer;
+}
+
 /** simple-mind-map 的标签文字默认会输出为白色，导出 SVG 时显式设置可见颜色。 */
 function makeExportedTagTextReadable(svg: ExportSvgWithTagText, color: string): ExportSvgWithTagText {
   svg.find('rect + text').forEach(text => text.fill(color));
@@ -217,6 +278,7 @@ function MindMapView({
 }: MindMapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mindMapRef = useRef<MindMap | null>(null);
+  const mindMapResizeObserverRef = useRef<ResizeObserver | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [currentLineStyle, setCurrentLineStyle] = useState<LineStyleKey>(getStoredLineStyle);
   const [currentColorTheme, setCurrentColorTheme] = useState<ColorThemeKey>(getStoredColorTheme);
@@ -247,7 +309,18 @@ function MindMapView({
   }, [onNodeUpdate, onNodeAdd, onNodeDelete, onNodeMove]);
 
   const convertNodesToMindMapData = useCallback((nodes: Node[], collapseLvl: number = 0): MindMapNodeData => {
-    const rootNodes = nodes.filter(n => !n.parent_node_id);
+    const childrenByParent = new Map<string | null, Node[]>();
+    for (const node of nodes) {
+      const parentId = node.parent_node_id || null;
+      const children = childrenByParent.get(parentId);
+      if (children) children.push(node);
+      else childrenByParent.set(parentId, [node]);
+    }
+    for (const children of childrenByParent.values()) {
+      children.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    }
+
+    const rootNodes = childrenByParent.get(null) || [];
     const isColorful = currentColorTheme === 'colorful';
     const isDark = currentColorTheme === 'dark';
 
@@ -259,9 +332,7 @@ function MindMapView({
     // depth: 0 = root的子节点(二级节点), 1 = 二级节点的子节点(三级节点), 以此类推
     // branchIndex: 二级节点在兄弟中的索引，用于彩色主题分配颜色
     const buildChildren = (parentId: string, depth: number, branchIndex: number): MindMapNodeData[] => {
-      const children = nodes
-        .filter(n => n.parent_node_id === parentId)
-        .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+      const children = childrenByParent.get(parentId) || [];
 
       return children.map((child, i) => {
         let nodeText = child.content || '无标题';
@@ -395,9 +466,7 @@ function MindMapView({
 
     return {
       data: { text: documentTitle || '新文档', id: 'root' },
-      children: rootNodes
-        .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
-        .map((node, i) => {
+      children: rootNodes.map((node, i) => {
           let nodeText = node.content || '无标题';
           let nodeImage: string | undefined = undefined;
           let nodeImageSize: { width: number; height: number; custom?: boolean } | undefined = undefined;
@@ -498,20 +567,9 @@ function MindMapView({
     let isDestroyed = false;
     
     const initMindMap = async () => {
-      const MindMap = (await import('simple-mind-map')).default;
-      const Export = (await import('simple-mind-map/src/plugins/Export.js')).default;
-      const ExportPDF = (await import('simple-mind-map/src/plugins/ExportPDF.js')).default;
-      // 动态导入移动端触控插件
-      const TouchEvent = (await import('simple-mind-map/src/plugins/TouchEvent.js')).default;
+      const MindMap = await loadMindMapModules();
       
       if (isDestroyed) return;
-      
-      // 注册插件（使用静态方法）
-      const registerPlugin = MindMap.usePlugin.bind(MindMap);
-      registerPlugin(Export);
-      registerPlugin(ExportPDF);
-      // 注册移动端触控支持
-      registerPlugin(TouchEvent);
       
       const data = convertNodesToMindMapData(nodes, collapseLevel);
       const mergedTheme = buildMergedTheme(currentLineStyle, currentColorTheme);
@@ -534,7 +592,10 @@ function MindMapView({
       });
 
       mindMapRef.current = mindMap;
+      mindMapResizeObserverRef.current?.disconnect();
+      mindMapResizeObserverRef.current = watchMindMapResize(container, mindMap);
       container.style.backgroundColor = mergedTheme.backgroundColor;
+      prevNodesRef.current = `${getMindMapNodesHash(nodes)}|${currentColorTheme}|${collapseLevel}`;
 
       // 监听文本编辑完成事件
       mindMap.on('hide_text_edit', async (_textEditNode, _activeNodeList, node) => {
@@ -671,6 +732,8 @@ function MindMapView({
 
     return () => {
       isDestroyed = true;
+      mindMapResizeObserverRef.current?.disconnect();
+      mindMapResizeObserverRef.current = null;
       if (mindMapRef.current) {
         try {
           mindMapRef.current.destroy();
@@ -688,12 +751,12 @@ function MindMapView({
     // 跳过自己触发的更新
     if (skipNextNodesUpdateRef.current) {
       skipNextNodesUpdateRef.current = false;
-      prevNodesRef.current = JSON.stringify(nodes.map(n => ({ id: n.id, content: n.content }))) + '|' + currentColorTheme + '|' + collapseLevel;
+      prevNodesRef.current = `${getMindMapNodesHash(nodes)}|${currentColorTheme}|${collapseLevel}`;
       return;
     }
 
     // 检查节点是否真的发生了变化（新增或删除节点），或色彩主题/层级切换了
-    const currentNodesHash = JSON.stringify(nodes.map(n => ({ id: n.id, content: n.content })));
+    const currentNodesHash = getMindMapNodesHash(nodes);
     const currentHashWithTheme = currentNodesHash + '|' + currentColorTheme + '|' + collapseLevel;
     if (currentHashWithTheme === prevNodesRef.current) {
       return;
@@ -716,6 +779,8 @@ function MindMapView({
     if ((!hasIntersection && prevNodes.length > 0) || themeChanged) {
       // 文章切换或色彩主题切换，重新初始化思维导图
       try {
+        mindMapResizeObserverRef.current?.disconnect();
+        mindMapResizeObserverRef.current = null;
         mindMapRef.current.destroy();
       } catch {}
       mindMapRef.current = null;
@@ -726,15 +791,7 @@ function MindMapView({
         container.innerHTML = '';
         // 重新初始化
         const initMindMap = async () => {
-          const MindMap = (await import('simple-mind-map')).default;
-          const Export = (await import('simple-mind-map/src/plugins/Export.js')).default;
-          const ExportPDF = (await import('simple-mind-map/src/plugins/ExportPDF.js')).default;
-          const TouchEvent = (await import('simple-mind-map/src/plugins/TouchEvent.js')).default;
-
-          const registerPlugin = MindMap.usePlugin.bind(MindMap);
-          registerPlugin(Export);
-          registerPlugin(ExportPDF);
-          registerPlugin(TouchEvent);
+          const MindMap = await loadMindMapModules();
 
           const data = convertNodesToMindMapData(nodes, collapseLevel);
           const mergedTheme = buildMergedTheme(currentLineStyle, currentColorTheme);
@@ -757,6 +814,8 @@ function MindMapView({
           });
 
           mindMapRef.current = mindMap;
+          mindMapResizeObserverRef.current?.disconnect();
+          mindMapResizeObserverRef.current = watchMindMapResize(container, mindMap);
           container.style.backgroundColor = mergedTheme.backgroundColor;
 
           // 重新绑定事件
@@ -838,6 +897,9 @@ function MindMapView({
 
     setIsExporting(true);
     try {
+      const { exportPlugin, exportPdfPlugin } = await loadMindMapExportPlugins();
+      mindMapRef.current.addPlugin(exportPlugin, {});
+      mindMapRef.current.addPlugin(exportPdfPlugin, {});
       const pdf = await mindMapRef.current.export('pdf', true, documentTitle || '思维导图');
       return pdf;
     } catch (error) {
@@ -848,8 +910,8 @@ function MindMapView({
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-900">
+    <div className="flex min-w-0 min-h-0 w-full flex-1 flex-col">
+      <div className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-900">
         <div className="flex items-center gap-2">
           <button
             onClick={onBackToOutline}
@@ -1002,7 +1064,7 @@ function MindMapView({
       
       <div 
         ref={containerRef} 
-        className="flex-1 overflow-hidden touch-none"
+        className="relative flex min-h-0 min-w-0 w-full flex-1 overflow-hidden touch-none"
         style={{ 
           backgroundColor: COLOR_THEMES[currentColorTheme].backgroundColor,
           touchAction: 'none',

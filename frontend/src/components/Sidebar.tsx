@@ -308,104 +308,19 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       const detail = (e as CustomEvent).detail;
       if (detail?.view === 'projects') {
         setViewMode('projects');
-        if (detail.projectId) {
-          setSelectedProjectId(detail.projectId);
-        }
+        if (detail.projectId) setSelectedProjectId(detail.projectId);
       }
     };
     window.addEventListener('switch-view', handler);
     return () => window.removeEventListener('switch-view', handler);
   }, [setSelectedProjectId]);
 
-  // 监听从其他组件（如近7天计划）切换到项目视图的事件
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.view === 'projects') {
-        setViewMode('projects');
-        if (detail.projectId) {
-          setSelectedProjectId(detail.projectId);
-        }
-      }
-    };
-    window.addEventListener('switch-view', handler);
-    return () => window.removeEventListener('switch-view', handler);
-  }, [setSelectedProjectId]);
 
-  // 监听从其他组件（如近7天计划）切换到项目视图的事件
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.view === 'projects') {
-        setViewMode('projects');
-        if (detail.projectId) {
-          setSelectedProjectId(detail.projectId);
-        }
-      }
-    };
-    window.addEventListener('switch-view', handler);
-    return () => window.removeEventListener('switch-view', handler);
-  }, [setSelectedProjectId]);
 
-  // 监听从其他组件（如近7天计划）切换到项目视图的事件
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.view === 'projects') {
-        setViewMode('projects');
-        if (detail.projectId) {
-          setSelectedProjectId(detail.projectId);
-        }
-      }
-    };
-    window.addEventListener('switch-view', handler);
-    return () => window.removeEventListener('switch-view', handler);
-  }, [setSelectedProjectId]);
 
-  // 监听从其他组件（如近7天计划）切换到项目视图的事件
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.view === 'projects') {
-        setViewMode('projects');
-        if (detail.projectId) {
-          setSelectedProjectId(detail.projectId);
-        }
-      }
-    };
-    window.addEventListener('switch-view', handler);
-    return () => window.removeEventListener('switch-view', handler);
-  }, [setSelectedProjectId]);
 
-  // 监听从其他组件（如近7天计划）切换到项目视图的事件
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.view === 'projects') {
-        setViewMode('projects');
-        if (detail.projectId) {
-          setSelectedProjectId(detail.projectId);
-        }
-      }
-    };
-    window.addEventListener('switch-view', handler);
-    return () => window.removeEventListener('switch-view', handler);
-  }, [setSelectedProjectId]);
 
-  // 监听从其他组件（如近7天计划）切换到项目视图的事件
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.view === 'projects') {
-        setViewMode('projects');
-        if (detail.projectId) {
-          setSelectedProjectId(detail.projectId);
-        }
-      }
-    };
-    window.addEventListener('switch-view', handler);
-    return () => window.removeEventListener('switch-view', handler);
-  }, [setSelectedProjectId]);
+
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

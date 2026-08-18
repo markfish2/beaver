@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, useMemo, memo, Children, isValidElement, type TouchEvent as ReactTouchEvent } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo, memo, Children, isValidElement, lazy, Suspense, type TouchEvent as ReactTouchEvent } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
@@ -63,11 +63,12 @@ import type { TagMentionState } from '../extensions/tagMentionExtension';
 import { stripTags, stripAttachments, normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts, escapeCodeBlockHtml, getMarkdownTaskOrdinalAtLine, toggleMarkdownTaskByOrdinal } from '../utils/markdownPreprocess';
 import MemoToDocDialog from './MemoToDocDialog';
 import AudioPlayer from './AudioPlayer';
-import AIChatPanel from './AIChatPanel';
 import { useIsDark } from '../hooks/useIsDark';
 import { getMemoPalette, getMemoPaletteStyle, MEMO_TAG_COLORS, type MemoCardPalette } from './memoCardTheme';
 import { getPasteMarkdown } from '../utils/htmlToMarkdown';
 import { localizeMarkdownImages } from '../utils/markdownImageUpload';
+
+const AIChatPanel = lazy(() => import('./AIChatPanel'));
 
 function tagColorIndex(tag: string): number {
   let h = 0;
@@ -984,7 +985,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
 
   // AI 对话 portal
   const aiChatPanel = showAIPanel && createPortal(
-    <AIChatPanel
+    <Suspense fallback={null}><AIChatPanel
       context={editContent}
       onWriteBack={(newContent) => {
         setEditContent(newContent);
@@ -992,7 +993,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
         active?.view?.dispatch({ changes: { from: 0, to: active.view.state.doc.length, insert: newContent } });
       }}
       onClose={() => setShowAIPanel(false)}
-    />,
+    /></Suspense>,
     document.body
   );
 

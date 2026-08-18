@@ -1,12 +1,30 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import mermaid from 'mermaid';
-import elkLayouts from '@mermaid-js/layout-elk';
-import { renderMermaidSVG } from 'beautiful-mermaid';
 import { Maximize2, Minus, Plus, RotateCcw, X } from 'lucide-react';
 
 let initializedTheme: 'dark' | 'default' | null = null;
+type MermaidRuntime = typeof import('mermaid').default;
+type ElkLayouts = typeof import('@mermaid-js/layout-elk').default;
 
-async function initMermaid(dark?: boolean) {
+let beautifulMermaidPromise: Promise<typeof import('beautiful-mermaid')> | null = null;
+let mermaidRuntimePromise: Promise<{ mermaid: MermaidRuntime; elkLayouts: ElkLayouts }> | null = null;
+
+function loadBeautifulMermaid() {
+  beautifulMermaidPromise ??= import('beautiful-mermaid');
+  return beautifulMermaidPromise;
+}
+
+function loadMermaidRuntime() {
+  mermaidRuntimePromise ??= Promise.all([
+    import('mermaid'),
+    import('@mermaid-js/layout-elk'),
+  ]).then(([mermaidModule, elkModule]) => ({
+    mermaid: mermaidModule.default,
+    elkLayouts: elkModule.default,
+  }));
+  return mermaidRuntimePromise;
+}
+
+async function initMermaid(mermaid: MermaidRuntime, elkLayouts: ElkLayouts, dark?: boolean) {
   const theme = (dark ?? document.documentElement.classList.contains('dark')) ? 'dark' : 'default';
   if (initializedTheme === theme) return;
   // 注册 ELK 布局算法（registerExternalDiagrams 只注册图表检测器，布局算法需要单独注册）
@@ -58,6 +76,7 @@ async function renderSvg(code: string, dark?: boolean): Promise<string> {
   const trimmed = code.trim();
   if (BM_SUPPORTED.test(trimmed)) {
     try {
+      const { renderMermaidSVG } = await loadBeautifulMermaid();
       const svg = renderMermaidSVG(trimmed, {
         bg: isDark ? '#18181B' : '#FFFFFF',
         fg: isDark ? '#FAFAFA' : '#27272A',
@@ -75,7 +94,8 @@ async function renderSvg(code: string, dark?: boolean): Promise<string> {
     }
   }
   // 官方 mermaid 渲染（含 elk 布局）
-  await initMermaid(dark);
+  const { mermaid, elkLayouts } = await loadMermaidRuntime();
+  await initMermaid(mermaid, elkLayouts, dark);
   // mermaid 的 graph 检测器在 defaultRenderer=elk 时会拒绝图表，
   // 需要将 graph 替换为 flowchart（两者等价），ELK 布局才能生效。
   const normalized = code.trim()

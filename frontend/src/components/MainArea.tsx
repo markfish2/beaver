@@ -926,7 +926,13 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const fetchData = useCallback(async (id: string, fetchId?: number) => {
     setIsLoading(true);
     try {
-      const nodesData = await getNodes(id);
+      // 节点和文档元数据互不依赖，并行获取，避免文档不在 context 时多等待一轮 RTT。
+      const normalizedId = id.replace(/-/g, '');
+      const contextDoc = documentsRef.current.find(d => d.id.replace(/-/g, '') === normalizedId);
+      const documentPromise = contextDoc
+        ? Promise.resolve(contextDoc)
+        : getDocument(id).catch(() => null);
+      const [nodesData, foundDoc] = await Promise.all([getNodes(id), documentPromise]);
 
       // Check if this fetch is still current
       if (fetchId !== undefined && fetchId !== fetchIdRef.current) return;
@@ -949,21 +955,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       }
 
       setNodes(processedNodes);
-      // 先从 context 查找，找不到则从 API 获取（日记文档会被 context 过滤）
-      // Normalize: compare without hyphens
-      const normalizedId = id.replace(/-/g, '');
-      let foundDoc = documentsRef.current.find(d => d.id.replace(/-/g, '') === normalizedId);
-      if (!foundDoc) {
-        try {
-          foundDoc = await getDocument(id);
-        } catch {
-          // 文档可能已删除；保留节点结果并让空状态处理。
-        }
-      }
-
-      // Check again after async operations
-      if (fetchId !== undefined && fetchId !== fetchIdRef.current) return;
-
       if (foundDoc) {
         setCurrentDoc(foundDoc);
       }
@@ -2073,8 +2064,12 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     return rootNodes.map(r => serialize(r, 0)).join('\n');
   };
 
-  const sortedNodes = getSortedNodes(nodes);
-  const treeNodes = buildTree(sortedNodes);
+  // 大纲节点树只在节点、过滤条件或聚焦范围变化时重算，避免工具栏/保存状态变化时重复构建整棵树。
+  // React Compiler 当前无法保留这两个手动 memo，但它们依赖的是稳定的节点计算输入。
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  const sortedNodes = useMemo(() => getSortedNodes(nodes), [getSortedNodes, nodes]);
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  const treeNodes = useMemo(() => buildTree(sortedNodes), [sortedNodes]);
 
   // 幽灵锚点：用于保持移动端键盘打开
   const focusToGhostAnchor = useCallback(() => {
@@ -2735,7 +2730,12 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       {/* Note View - Markdown note editor */}
       {currentDoc?.type === 'note' && (
         <div className="main-content-area flex-1 overflow-hidden custom-scrollbar">
-          <MarkdownNoteEditor documentId={documentId!} isNew={currentDoc.title === '新笔记'} />
+          <MarkdownNoteEditor
+            documentId={documentId!}
+            isNew={currentDoc.title === '新笔记'}
+            initialNodes={nodes}
+            initialDocuments={documents}
+          />
         </div>
       )}
 

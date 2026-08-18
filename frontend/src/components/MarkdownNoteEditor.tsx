@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo, memo } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo, memo, lazy, Suspense } from 'react';
 import type { RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
@@ -52,7 +52,7 @@ SyntaxHighlighter.registerLanguage('yaml', yaml);
 import { Pencil, Eye, Save, Columns2, Copy, CheckCheck, Download, FileDown, Share2 } from 'lucide-react';
 import { getNodes, createNode, updateNode, uploadFile, getMemoTags, getDocuments, updateDocument, downloadAttachment } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
-import type { Document } from '../api/data';
+import type { Document, Node } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts, getMarkdownTaskOrdinalAtLine, toggleMarkdownTaskByOrdinal } from '../utils/markdownPreprocess';
 import { getPasteMarkdown } from '../utils/htmlToMarkdown';
@@ -66,14 +66,17 @@ import TagMentionPopup from './TagMentionPopup';
 import type { PopupItem } from './TagMentionPopup';
 import { tagMentionExtension } from '../extensions/tagMentionExtension';
 import type { TagMentionState } from '../extensions/tagMentionExtension';
-import AIChatPanel from './AIChatPanel';
 import ShareDialog from './ShareDialog';
 import { exportNotePdf } from '../utils/notePdf';
 import { showToast } from '../utils/toast';
 
+const AIChatPanel = lazy(() => import('./AIChatPanel'));
+
 interface Props {
   documentId: string;
   isNew?: boolean;
+  initialNodes?: Node[];
+  initialDocuments?: Document[];
 }
 
 function preprocess(content: string): string {
@@ -426,7 +429,7 @@ function NoteImage({ src, alt }: { src?: string; alt?: string }) {
   return <img src={src} alt={alt || ''} className="max-w-full rounded-lg my-2" loading="lazy" />;
 }
 
-export default function MarkdownNoteEditor({ documentId, isNew = false }: Props) {
+export default function MarkdownNoteEditor({ documentId, isNew = false, initialNodes, initialDocuments }: Props) {
   const { updateDocumentTitle } = useDocuments();
   const isMobile = usePhoneLayout();
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>(isNew ? 'edit' : 'preview');
@@ -587,7 +590,11 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
     (async () => {
       setLoading(true);
       try {
-        const [nodes, docs] = await Promise.all([getNodes(documentId), getDocuments()]);
+        // MainArea 已经加载过当前文档时直接复用，避免普通笔记再次请求同一批数据。
+        const [nodes, docs] = await Promise.all([
+          initialNodes ? Promise.resolve(initialNodes) : getNodes(documentId),
+          initialDocuments ? Promise.resolve(initialDocuments) : getDocuments(),
+        ]);
         if (cancelled) return;
         setDocuments(docs);
         const docMeta = docs.find(d => d.id === documentId);
@@ -608,7 +615,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
       finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [documentId]);
+  }, [documentId, initialNodes, initialDocuments]);
 
   useEffect(() => { getMemoTags().then(setAllTags).catch(() => {}); }, []);
 
@@ -1042,9 +1049,9 @@ export default function MarkdownNoteEditor({ documentId, isNew = false }: Props)
         onChange={(e) => { const files = e.target.files; if (files) { for (let i = 0; i < files.length; i++) { handleFileUpload(files[i], false); } } e.target.value = ''; }} />
 
       {showAIPanel && (
-        <AIChatPanel context={content}
+        <Suspense fallback={null}><AIChatPanel context={content}
           onWriteBack={(newContent) => { setContent(newContent); editorRef.current?.view?.dispatch({ changes: { from: 0, to: editorRef.current.view.state.doc.length, insert: newContent } }); scheduleSave(newContent); }}
-          onClose={() => setShowAIPanel(false)} />
+          onClose={() => setShowAIPanel(false)} /></Suspense>
       )}
       <ShareDialog
         key={`${documentId}-${showShareDialog}`}

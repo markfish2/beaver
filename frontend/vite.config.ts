@@ -70,7 +70,9 @@ export default defineConfig({
       srcDir: 'public',
       filename: 'sw-src.ts',
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff,woff2}', 'icons/**/*', 'beaver.png', 'apple-touch-icon.png', 'maskable-icon.png'],
+        // 只预缓存首屏必需的静态资源；可选页面和第三方大模块通过运行时缓存按需加载，
+        // 避免 Service Worker 安装/更新时一次下载整个应用的所有 JS chunk。
+        globPatterns: ['**/*.{css,html,svg,png,woff,woff2}', 'icons/**/*', 'beaver.png', 'apple-touch-icon.png', 'maskable-icon.png'],
         globIgnores: ['fonts/lxgw-wenkai-lite/**'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },

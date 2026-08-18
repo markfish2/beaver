@@ -29,33 +29,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const checkStatus = useCallback(async () => {
     setIsLoading(true);
-    try {
-      const status = await checkSetupStatus();
-      setIsSetupRequired(status.setup_required);
+    const token = localStorage.getItem('token');
 
-      if (status.setup_required) {
-        if (window.location.pathname !== '/setup') {
-          navigate('/setup');
+    // 启动时两个请求互不依赖，并行执行，避免登录恢复被 setup 状态检查额外阻塞一轮 RTT。
+    const setupStatusPromise = checkSetupStatus();
+    const userPromise = token ? getMe() : Promise.resolve(null);
+    try {
+      const [setupResult, userResult] = await Promise.allSettled([setupStatusPromise, userPromise]);
+
+      if (setupResult.status === 'fulfilled') {
+        const status = setupResult.value;
+        setIsSetupRequired(status.setup_required);
+        if (status.setup_required) {
+          if (window.location.pathname !== '/setup') navigate('/setup');
+          setIsLoading(false);
+          return;
         }
-        setIsLoading(false);
-        return;
+      }
+
+      // setup 检查失败时仍允许有效 token 恢复登录；getMe 失败则清理失效 token。
+      if (token && userResult.status === 'fulfilled' && userResult.value) {
+        setUser(userResult.value);
+        setIsAuthenticated(true);
+      } else if (token && userResult.status === 'rejected') {
+        localStorage.removeItem('token');
+        setIsAuthenticated(false);
       }
     } catch (error) {
-      // checkSetupStatus 失败不阻止登录恢复
-      console.warn('checkSetupStatus failed, trying token restore', error);
-    }
-
-    // 无论 checkSetupStatus 成功与否，都尝试用 token 恢复登录
-    try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        const userData = await getMe();
-        setUser(userData);
-        setIsAuthenticated(true);
-      }
-    } catch {
-      localStorage.removeItem('token');
-      setIsAuthenticated(false);
+      // Promise.allSettled 本身通常不会失败，保留兜底以防运行环境异常。
+      console.warn('auth bootstrap failed', error);
     } finally {
       setIsLoading(false);
     }
