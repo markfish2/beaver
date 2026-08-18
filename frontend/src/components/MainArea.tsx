@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo, Fragment, useRef, useCallback, lazy } from 'react';
+import { useState, useEffect, useMemo, Fragment, useRef, useCallback, lazy, startTransition } from 'react';
 import type { SetStateAction } from 'react';
-import { Menu, Search } from 'lucide-react';
+import { BriefcaseBusiness, Clock3, FolderOpen, Menu, Search, Star } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import NodeItem from './NodeItem';
 import MobileToolbar from './MobileToolbar';
 import { useMobileToolbar } from '../context/MobileToolbarContext';
@@ -10,6 +11,14 @@ import RecoveryDialog from './RecoveryDialog';
 import DropIndicator from './DropIndicator';
 import TableOfContents from './TableOfContents';
 import DocumentSettingsMenu from './DocumentSettingsMenu';
+import DocumentTabs from './DocumentTabs';
+import EditorActionPortal from './EditorActionPortal';
+import { getDocumentTabKey } from './documentTabTypes';
+import {
+  ACTIVE_DOCUMENT_TAB_STORAGE_KEY,
+  DOCUMENT_TABS_STORAGE_KEY,
+} from './documentTabTypes';
+import type { DocumentTab, DocumentTabMode } from './documentTabTypes';
 import DiaryDateBar from './DiaryDateBar';
 import UserProfileEditor from './UserProfileEditor';
 import AppearanceSettingsPage from './AppearanceSettingsPage';
@@ -45,6 +54,30 @@ const ExcalidrawEditor = lazy(() => import('./ExcalidrawEditor').then(module => 
 const AIChatMainView = lazy(() => import('./AIChatMainView'));
 const ProjectView = lazy(() => import('./ProjectView'));
 const MemoHome = lazy(() => import('./MemoHome'));
+
+type EmptyWorkspaceView = 'files' | 'recent' | 'starred' | 'projects';
+
+const EmptyDocumentWorkspace = ({ view }: { view: EmptyWorkspaceView }) => {
+  const content = {
+    files: { icon: FolderOpen, title: '请选择一篇笔记', description: '请在左侧文件列表中选择笔记查看或编辑' },
+    recent: { icon: Clock3, title: '请选择最近笔记', description: '请在左侧最近列表中选择笔记查看或编辑' },
+    starred: { icon: Star, title: '请选择收藏笔记', description: '请在左侧收藏列表中选择笔记查看或编辑' },
+    projects: { icon: BriefcaseBusiness, title: '请选择一个项目', description: '请在左侧项目列表中选择项目查看任务' },
+  }[view];
+  const EmptyIcon: LucideIcon = content.icon;
+
+  return (
+    <div className="flex h-full flex-1 items-center justify-center bg-[#f7f6f2] px-6 text-center dark:bg-gray-900">
+      <div className="-mt-16 flex max-w-sm flex-col items-center">
+        <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-[#e6eeeb] text-[#4d9383] dark:bg-[#31574f] dark:text-[#b7d8cf]" aria-hidden="true">
+          <EmptyIcon className="h-9 w-9" strokeWidth={1.5} />
+        </div>
+        <h2 className="text-lg font-medium text-gray-700 dark:text-gray-200">{content.title}</h2>
+        <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">{content.description}</p>
+      </div>
+    </div>
+  );
+};
 
 interface SerializedNode {
   content: string;
@@ -286,6 +319,26 @@ interface MainAreaProps {
 }
 
 const createSortOrder = () => Date.now();
+function loadDocumentTabs(): DocumentTab[] {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(DOCUMENT_TABS_STORAGE_KEY) || '[]') as DocumentTab[];
+    return Array.isArray(parsed) ? parsed.filter(tab => tab && typeof tab.key === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function getEmptyWorkspacePath(): string {
+  try {
+    const sidebarState = JSON.parse(sessionStorage.getItem('sidebar_panel_state') || '{}') as { viewMode?: string };
+    if (sidebarState.viewMode === 'recent') return '/?view=recent';
+    if (sidebarState.viewMode === 'starred') return '/?view=starred';
+    if (sidebarState.viewMode === 'projects') return '/?view=projects';
+  } catch {
+    // 使用默认文件工作区。
+  }
+  return '/?view=files';
+}
 
 const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, activeConvId = null }: MainAreaProps = {}) => {
   const { setActiveConvId, refreshConvList, selectedProjectId, setSelectedProjectId } = useUserView();
@@ -336,6 +389,16 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   }, [documentId, documents, loadedDoc]);
   const [isLoading, setIsLoading] = useState(false);
   const { saveStatus, pendingCount, isOnline, offlineQueueCount } = useSaveManager();
+  const [documentTabs, setDocumentTabs] = useState<DocumentTab[]>(loadDocumentTabs);
+  const [activeDocumentTabKey, setActiveDocumentTabKey] = useState<string | null>(() => {
+    try {
+      return sessionStorage.getItem(ACTIVE_DOCUMENT_TAB_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const pendingTabModeRef = useRef<DocumentTabMode | null>(null);
+  const closingDocumentIdsRef = useRef(new Set<string>());
   // Mobile state
   const isMobile = usePhoneLayout();
   const { scrollToElement } = useKeyboardScroll({ enabled: isMobile });
@@ -796,13 +859,116 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   // View Mode State - 'outline' or 'mindmap'
   const [viewModeState, setViewModeState] = useState<{ documentId: string | null; value: 'outline' | 'mindmap' }>({ documentId, value: 'outline' });
   const viewMode = viewModeState.documentId === documentId ? viewModeState.value : 'outline';
-  const setViewMode = useCallback((value: 'outline' | 'mindmap') => {
-    setViewModeState({ documentId: documentId ?? null, value });
+  const openDocumentTab = useCallback((mode: DocumentTabMode, targetDocument?: Document | null) => {
+    const doc = targetDocument || currentDoc;
+    if (!doc || (doc.type !== 'document' && doc.type !== 'note' && doc.type !== 'excalidraw')) return;
+    const key = getDocumentTabKey(doc.id, mode);
+    setDocumentTabs(previous => {
+      const existing = previous.find(tab => tab.key === key);
+      const nextTab: DocumentTab = {
+        key,
+        documentId: doc.id,
+        mode,
+        title: doc.title || '无标题',
+        type: doc.type,
+        dirty: existing?.dirty,
+      };
+      return existing
+        ? previous.map(tab => tab.key === key ? nextTab : tab)
+        : [...previous, nextTab];
+    });
+    setActiveDocumentTabKey(key);
+    setViewModeState({ documentId: doc.id, value: mode === 'mindmap' ? 'mindmap' : 'outline' });
+  }, [currentDoc]);
+
+  const setDocumentTabDirty = useCallback((tabDocumentId: string, mode: DocumentTabMode, dirty: boolean) => {
+    const key = getDocumentTabKey(tabDocumentId, mode);
+    setDocumentTabs(previous => previous.map(tab => tab.key === key ? { ...tab, dirty } : tab));
+  }, []);
+  const handleCurrentOutlineDirty = useCallback((dirty: boolean) => {
+    if (documentId) setDocumentTabDirty(documentId, 'outline', dirty);
+  }, [documentId, setDocumentTabDirty]);
+
+  useEffect(() => {
+    // 关闭最后一个 Tab 后进入空白工作区；下一次重新打开同一文档时，
+    // 不能再被上一次关闭流程的标记误判为“正在关闭”。
+    if (!documentId) {
+      closingDocumentIdsRef.current.clear();
+    }
   }, [documentId]);
+
+  useEffect(() => {
+    if (!currentDoc || !documentId || isDiaryDoc) return;
+    // 关闭当前 Tab 后路由切换尚未完成时，阻止旧文档被同步 effect 重新注册。
+    if (closingDocumentIdsRef.current.delete(currentDoc.id)) return;
+    const mode = pendingTabModeRef.current
+      ?? (activeDocumentTabKey?.startsWith(`${currentDoc.id}:mindmap`) ? 'mindmap' : 'outline');
+    pendingTabModeRef.current = null;
+    openDocumentTab(mode, currentDoc);
+  }, [currentDoc, documentId, isDiaryDoc, activeDocumentTabKey, openDocumentTab]);
+
+  // 不复用上一个文档的滚动位置，避免切换 Tab 后大纲内容从页面中部开始显示。
+  useEffect(() => {
+    if (!documentId || viewMode !== 'outline') return;
+    const frame = requestAnimationFrame(() => {
+      const outline = document.querySelector<HTMLElement>('.outline-content-scroll-area');
+      outline?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [documentId, viewMode]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(DOCUMENT_TABS_STORAGE_KEY, JSON.stringify(documentTabs));
+      if (activeDocumentTabKey) sessionStorage.setItem(ACTIVE_DOCUMENT_TAB_STORAGE_KEY, activeDocumentTabKey);
+      else sessionStorage.removeItem(ACTIVE_DOCUMENT_TAB_STORAGE_KEY);
+    } catch {
+      // sessionStorage 不可用时仍允许当前页面正常使用 Tab。
+    }
+  }, [documentTabs, activeDocumentTabKey]);
+
+  const handleDocumentTabSelect = useCallback((tab: DocumentTab) => {
+    if (tab.documentId === documentId) {
+      openDocumentTab(tab.mode, currentDoc);
+      return;
+    }
+    pendingTabModeRef.current = tab.mode;
+    startTransition(() => navigate(`/d/${tab.documentId}`));
+  }, [currentDoc, documentId, navigate, openDocumentTab]);
+
+  const handleDocumentTabClose = useCallback((tab: DocumentTab) => {
+    const hasPendingChanges = tab.dirty || (tab.documentId === documentId && (saveStatus === 'saving' || pendingCount > 0));
+    if (hasPendingChanges && !window.confirm('当前笔记还有未保存的修改，确定要关闭吗？')) return;
+
+    closingDocumentIdsRef.current.add(tab.documentId);
+    startTransition(() => {
+      setDocumentTabs(previous => previous.filter(item => item.key !== tab.key));
+      if (tab.key !== activeDocumentTabKey) return;
+
+      const remaining = documentTabs.filter(item => item.key !== tab.key);
+      const nextTab = remaining[remaining.length - 1];
+      if (!nextTab) {
+        setActiveDocumentTabKey(null);
+        navigate(getEmptyWorkspacePath());
+        return;
+      }
+      setActiveDocumentTabKey(nextTab.key);
+      pendingTabModeRef.current = nextTab.mode;
+      if (nextTab.documentId === documentId) {
+        setViewModeState({ documentId: nextTab.documentId, value: nextTab.mode });
+      } else {
+        navigate(`/d/${nextTab.documentId}`);
+      }
+    });
+  }, [activeDocumentTabKey, documentId, documentTabs, navigate, pendingCount, saveStatus]);
+  const setViewMode = useCallback((value: 'outline' | 'mindmap') => {
+    openDocumentTab(value, currentDoc);
+  }, [currentDoc, openDocumentTab]);
 
   const handleMindMapNodeUpdate = async (nodeId: string, content: string) => {
     const node = nodes.find(n => n.id === nodeId);
     if (!node || node.content === content) return;
+    if (documentId) setDocumentTabDirty(documentId, 'mindmap', true);
     execute(commands.createUpdateContentCommand(nodeId, node.content, content));
   };
 
@@ -829,6 +995,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       updated_at: new Date().toISOString()
     } as Node;
 
+    setDocumentTabDirty(documentId, 'mindmap', true);
     execute(commands.createCreateNodeCommand({
       document_id: documentId,
       content,
@@ -844,6 +1011,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     if (!node) return;
     
     const descendants = getDescendants(nodeId, nodes);
+    if (documentId) setDocumentTabDirty(documentId, 'mindmap', true);
     execute(commands.createDeleteNodeCommand(node, descendants));
   };
 
@@ -851,6 +1019,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
     
+    if (documentId) setDocumentTabDirty(documentId, 'mindmap', true);
     execute(commands.createMoveNodeCommand(
       nodeId,
       node.parent_node_id,
@@ -924,15 +1093,27 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   // documentId 变化时 useEffect 已自动加载数据
 
   const fetchData = useCallback(async (id: string, fetchId?: number) => {
-    setIsLoading(true);
+    const normalizedId = id.replace(/-/g, '');
+    const contextDoc = documentsRef.current.find(d => d.id.replace(/-/g, '') === normalizedId);
+    const isCanvasDocument = contextDoc?.type === 'excalidraw';
+    // getNodes 本身有持久化缓存，但这里提前同步读取，避免 Tab 切换时先显示整页 Loading。
+    const cachedNodes = isCanvasDocument ? [] : dataCache.get<Node[]>(`nodes:${id}`);
+    // 画布由自身加载场景数据，不要让主区域先切成整页 loading。
+    setIsLoading(!isCanvasDocument && !cachedNodes);
+    if (cachedNodes) {
+      setNodes(cachedNodes);
+    }
     try {
       // 节点和文档元数据互不依赖，并行获取，避免文档不在 context 时多等待一轮 RTT。
-      const normalizedId = id.replace(/-/g, '');
-      const contextDoc = documentsRef.current.find(d => d.id.replace(/-/g, '') === normalizedId);
+      // 画布的数据由 ExcalidrawEditor 单独加载，主区域不需要为它请求节点。
+      // 否则每次切换画布 Tab 都会先进入主区域 loading 状态，卸载画布并造成白屏。
       const documentPromise = contextDoc
         ? Promise.resolve(contextDoc)
         : getDocument(id).catch(() => null);
-      const [nodesData, foundDoc] = await Promise.all([getNodes(id), documentPromise]);
+      const [nodesData, foundDoc] = await Promise.all([
+        isCanvasDocument || cachedNodes ? Promise.resolve(cachedNodes || [] as Node[]) : getNodes(id),
+        documentPromise,
+      ]);
 
       // Check if this fetch is still current
       if (fetchId !== undefined && fetchId !== fetchIdRef.current) return;
@@ -2576,23 +2757,38 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   }
 
   if (!documentId) {
+    const emptyWorkspaceView = searchParams.get('view');
+    if (emptyWorkspaceView === 'files' || emptyWorkspaceView === 'recent' || emptyWorkspaceView === 'starred' || emptyWorkspaceView === 'projects') {
+      return <EmptyDocumentWorkspace view={emptyWorkspaceView} />;
+    }
     return <MemoHome sidebarOpen={sidebarOpen} isMobile={isMobile} />;
-  }
-
-  if (isLoading) {
-    return <LoadingSkeleton />;
   }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans h-full">
+      {/* 日记/日历复用文档内容区，但不属于文档 Tab 工作区。已有笔记 Tab 保留在状态中，返回文件时再恢复。 */}
+      {documentTabs.length > 0 && !isDiaryDoc && (
+        <div className="flex h-11 shrink-0 items-center border-b border-gray-200 bg-white px-4 dark:border-gray-700 dark:bg-gray-900">
+          <div className="min-w-0 w-[68%]">
+            <DocumentTabs
+              tabs={documentTabs}
+              activeKey={activeDocumentTabKey}
+              onSelect={handleDocumentTabSelect}
+              onClose={handleDocumentTabClose}
+            />
+          </div>
+          <div id="editor-action-slot" className="relative ml-auto flex min-w-0 items-center justify-end gap-2" />
+        </div>
+      )}
       {!document.documentElement.dataset.mobileLayout
         && currentDoc?.type !== 'note'
         && currentDoc?.type !== 'excalidraw'
         && !isDiaryDoc
         && viewMode === 'outline'
+        && !isLoading
         && (
-          <div className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-2 dark:border-gray-700 dark:bg-gray-900" style={{ paddingTop: isMobile ? 'env(safe-area-inset-top)' : undefined }}>
-            <div className="flex items-center flex-wrap gap-1">
+          <div className="hidden" style={{ paddingTop: isMobile ? 'env(safe-area-inset-top)' : undefined }}>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               {/* 移动端菜单按钮 */}
               {isMobile && (
                 <button
@@ -2606,8 +2802,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                   <Menu size={16} />
                 </button>
               )}
-              {/* 聚焦层级面包屑：始终从文档标题开始，避免聚焦后无法返回 */}
-              <div className="min-w-0 flex-1 flex items-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-none">
+              {/* 聚焦层级面包屑：仅在聚焦节点时显示，避免与 Tab 重复占用空间 */}
+              <div className={`${zoomedNodeId ? 'flex' : 'hidden'} min-w-0 max-w-[38%] items-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-none`}>
                 {focusBreadcrumbs.map((breadcrumb, index) => (
                   <Fragment key={breadcrumb.id}>
                     {index > 0 && <span className="editor-topbar-action shrink-0 text-sm text-gray-400 dark:text-gray-500">/</span>}
@@ -2635,6 +2831,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                 </div>
               )}
             </div>
+            <EditorActionPortal>
             <div className="flex items-center gap-2">
               {/* 大纲过滤：独立于全局搜索 */}
               <div className="flex items-center gap-1.5">
@@ -2712,9 +2909,16 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
               />
               <SaveStatusIndicator status={saveStatus} pendingCount={pendingCount} offlineQueueCount={offlineQueueCount} />
             </div>
+            </EditorActionPortal>
           </div>
         )}
 
+      {isLoading ? (
+        <div className="flex-1 min-h-0">
+          <LoadingSkeleton />
+        </div>
+      ) : (
+        <>
       {!isOnline && (
         <div className="bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 px-6 py-2">
           <div className="flex items-center justify-center gap-2 text-sm text-red-800 dark:text-red-200">
@@ -2737,6 +2941,12 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             isNew={currentDoc.title === '新笔记'}
             initialNodes={nodes}
             initialDocuments={documents}
+            documentTabs={documentTabs}
+            activeDocumentTabKey={activeDocumentTabKey}
+            showDocumentTabs={false}
+            onDocumentTabSelect={handleDocumentTabSelect}
+            onDocumentTabClose={handleDocumentTabClose}
+            onDirtyChange={handleCurrentOutlineDirty}
           />
         </div>
       )}
@@ -2746,10 +2956,16 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         <div className="main-content-area flex-1" style={{ minHeight: 0, position: 'relative' }}>
           <ExcalidrawEditor
             documentId={documentId!}
-            title={currentDoc?.title}
-            onTitleChange={isMobile ? undefined : handleTitleChange}
+            title={currentDoc.title}
             readOnly={isMobile}
             mobileViewOnly={isMobile}
+            documentTabs={documentTabs}
+            activeDocumentTabKey={activeDocumentTabKey}
+            showDocumentTabs={false}
+            isActive
+            onDocumentTabSelect={handleDocumentTabSelect}
+            onDocumentTabClose={handleDocumentTabClose}
+            onDirtyChange={handleCurrentOutlineDirty}
           />
         </div>
       )}
@@ -2967,7 +3183,10 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                   const isDateNode = node.heading === 'h1' && /^\d{4}年\d{1,2}月\d{1,2}日\s+星期[一二三四五六日]$/.test(node.content || '');
                   const needsGap = !!currentDoc?.diary_date && isDateNode && index > 0;
                   return (
-                    <div key={node.id} className={needsGap ? 'mt-5' : ''}>
+                    <div
+                      key={node.id}
+                      className={`outline-node-render-row ${needsGap ? 'mt-5' : ''}`}
+                    >
                       <NodeItem
                         node={node}
                         childrenNodes={node.children}
@@ -3293,8 +3512,14 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           onNodeAdd={handleMindMapNodeAdd}
           onNodeDelete={handleMindMapNodeDelete}
           onNodeMove={handleMindMapNodeMove}
-          onBackToOutline={() => setViewMode('outline')}
+          documentTabs={documentTabs}
+          activeDocumentTabKey={activeDocumentTabKey}
+          showDocumentTabs={false}
+          onDocumentTabSelect={handleDocumentTabSelect}
+          onDocumentTabClose={handleDocumentTabClose}
         />
+      )}
+        </>
       )}
       
       {/* 幽灵锚点：用于保持移动端键盘打开 */}

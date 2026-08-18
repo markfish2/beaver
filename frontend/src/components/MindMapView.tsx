@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Layers, ChevronDown } from 'lucide-react';
+import { Layers, ChevronDown, Download } from 'lucide-react';
 import type { Node } from '../api/data';
 import { getThumbnailUrl } from '../api/data';
 import type MindMap from 'simple-mind-map';
 import { ColorThemePreview, LineStylePreview } from './MindMapStylePreview';
 import type { ColorThemeKey, LineStyleKey } from './MindMapStylePreview';
+import DocumentTabs from './DocumentTabs';
+import EditorActionPortal from './EditorActionPortal';
+import type { DocumentTab } from './documentTabTypes';
 
 interface MindMapViewProps {
   nodes: Node[];
@@ -13,7 +16,11 @@ interface MindMapViewProps {
   onNodeAdd: (parentId: string | null, content: string) => Promise<Node | null>;
   onNodeDelete: (id: string) => void;
   onNodeMove: (id: string, newParentId: string | null) => void;
-  onBackToOutline: () => void;
+  documentTabs?: DocumentTab[];
+  activeDocumentTabKey?: string | null;
+  showDocumentTabs?: boolean;
+  onDocumentTabSelect?: (tab: DocumentTab) => void;
+  onDocumentTabClose?: (tab: DocumentTab) => void;
 }
 
 interface MindMapNodeData {
@@ -274,7 +281,11 @@ function MindMapView({
   onNodeAdd,
   onNodeDelete,
   onNodeMove,
-  onBackToOutline
+  documentTabs = [],
+  activeDocumentTabKey = null,
+  showDocumentTabs = true,
+  onDocumentTabSelect,
+  onDocumentTabClose,
 }: MindMapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mindMapRef = useRef<MindMap | null>(null);
@@ -916,23 +927,21 @@ function MindMapView({
 
   return (
     <div className="flex min-w-0 min-h-0 w-full flex-1 flex-col">
-      <div className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-900">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onBackToOutline}
-            className="editor-topbar-button"
-          >
-            <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            返回大纲
-          </button>
-          <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2" />
-          <span className="text-lg font-semibold text-gray-800 dark:text-gray-100">
-            {documentTitle}
-          </span>
+      <div className="hidden">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          {showDocumentTabs && onDocumentTabSelect && onDocumentTabClose && documentTabs.length > 1 ? (
+            <DocumentTabs
+              tabs={documentTabs}
+              activeKey={activeDocumentTabKey}
+              onSelect={onDocumentTabSelect}
+              onClose={onDocumentTabClose}
+            />
+          ) : documentTabs.length <= 1 || showDocumentTabs ? (
+            <span className="truncate text-lg font-semibold text-gray-800 dark:text-gray-100">{documentTitle}</span>
+          ) : <span className="min-w-0 flex-1" />}
         </div>
         
+        <EditorActionPortal>
         <div className="flex items-center gap-2">
           {/* 层级过滤器 */}
           {(() => {
@@ -1060,11 +1069,13 @@ function MindMapView({
           <button
             onClick={handleExportPDF}
             disabled={isExporting}
-            className="editor-topbar-button is-primary disabled:cursor-not-allowed disabled:opacity-50"
+            className="editor-topbar-button disabled:cursor-not-allowed disabled:opacity-50"
+            title="导出 PDF"
           >
-            {isExporting ? '导出中...' : '导出 PDF'}
+            <Download className="h-[14px] w-[14px]" />
           </button>
         </div>
+        </EditorActionPortal>
       </div>
       
       <div 

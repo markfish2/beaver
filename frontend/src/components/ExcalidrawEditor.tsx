@@ -122,6 +122,9 @@ class ExcalidrawErrorBoundary extends Component<
   }
 }
 import { SaveStatusIndicator } from './SaveStatusIndicator';
+import DocumentTabs from './DocumentTabs';
+import EditorActionPortal from './EditorActionPortal';
+import type { DocumentTab } from './documentTabTypes';
 
 // 简单的 debounce 实现（带 cancel 方法）
 const debounce = <TArgs extends unknown[]>(func: (...args: TArgs) => void, wait: number) => {
@@ -147,7 +150,13 @@ interface ExcalidrawEditorProps {
   readOnly?: boolean;
   mobileViewOnly?: boolean;
   title?: string;
-  onTitleChange?: (newTitle: string) => void;
+  documentTabs?: DocumentTab[];
+  activeDocumentTabKey?: string | null;
+  showDocumentTabs?: boolean;
+  isActive?: boolean;
+  onDocumentTabSelect?: (tab: DocumentTab) => void;
+  onDocumentTabClose?: (tab: DocumentTab) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
@@ -155,7 +164,13 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   readOnly = false,
   mobileViewOnly = false,
   title = '',
-  onTitleChange,
+  documentTabs = [],
+  activeDocumentTabKey = null,
+  showDocumentTabs = true,
+  isActive = true,
+  onDocumentTabSelect,
+  onDocumentTabClose,
+  onDirtyChange,
 }) => {
   const excalidrawRef = useRef<ExcalidrawImperativeAPI>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -177,7 +192,6 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   const [frameElements, setFrameElements] = useState<FrameElement[]>([]);
   const [presentation, setPresentation] = useState<PresentationConfig>({ slides: [] });
   const [dragOverSlideId, setDragOverSlideId] = useState<string | null>(null);
-  const [localTitle, setLocalTitle] = useState(title);
   const isMobile = usePhoneLayout();
   const [showNotePicker, setShowNotePicker] = useState(false);
   // 缓存已渲染的笔记引用，避免拖动时每帧重建 React 组件
@@ -308,11 +322,6 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
       window.history.replaceState = origReplace;
     };
   }, []);
-
-  // 同步标题
-  useEffect(() => {
-    setLocalTitle(title);
-  }, [title]);
 
   // 加载画布数据，设置 initialData 供 Excalidraw 首次渲染
   useEffect(() => {
@@ -775,6 +784,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
             pendingElementsRef.current = null;
             pendingAppStateRef.current = null;
             hasUnsavedChangesRef.current = false;
+            onDirtyChange?.(false);
           }
           // 图片保存成功后，将 pending 状态的图片元素更新为 saved
           if (filesWereSaved && excalidrawRef.current) {
@@ -812,7 +822,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           }
         }
       }, 2000),
-    [reloadCanvas]
+    [onDirtyChange, reloadCanvas]
   );
 
   // 切换标签页时检查是否有新版本，自动刷新
@@ -872,7 +882,6 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           presentationExportCacheRef.current.clear();
           setPresentationSceneVersion(version => version + 1);
         }
-        syncPresentationFrames(elements);
         const fp = fingerprint(elements);
         // 初次挂载时 Excalidraw 可能会重新整理元素并触发 onChange。
         // 以整理后的场景作为基线，避免打开画布后立刻出现“未保存”。
@@ -882,6 +891,8 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           pendingElementsRef.current = null;
           pendingAppStateRef.current = null;
           hasUnsavedChangesRef.current = false;
+          syncPresentationFrames(elements);
+          onDirtyChange?.(false);
           return;
         }
 
@@ -896,10 +907,12 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           filesDirtyRef.current = true;
         }
         hasUnsavedChangesRef.current = true;
+        syncPresentationFrames(elements);
+        onDirtyChange?.(true);
         saveDataRef.current(elements, appState);
       }
     },
-    [syncPresentationFrames]
+    [onDirtyChange, syncPresentationFrames]
   );
 
   // 导出功能
@@ -1175,25 +1188,22 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     );
   }
 
-  const handleTitleBlur = () => {
-    if (onTitleChange && localTitle !== title) {
-      onTitleChange(localTitle);
-    }
-  };
-
   return (
     <div className={`excalidraw-editor-wrapper ${isPresenting ? 'presentation-active' : ''}`} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
       {/* 标题栏 */}
-      <div className="presentation-editor-chrome flex items-center gap-3 px-4 py-2 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shrink-0">
-        <input
-          type="text"
-          value={localTitle}
-          onChange={(e) => setLocalTitle(e.target.value)}
-          onBlur={handleTitleBlur}
-          placeholder="无标题画布"
-          className="flex-1 text-lg font-medium text-gray-800 dark:text-gray-100 bg-transparent outline-none border-none placeholder-gray-400 dark:placeholder-gray-500"
-          readOnly={readOnly}
-        />
+      <div className="presentation-editor-chrome hidden">
+        {showDocumentTabs && onDocumentTabSelect && onDocumentTabClose && documentTabs.length > 1 ? (
+          <DocumentTabs
+            tabs={documentTabs}
+            activeKey={activeDocumentTabKey}
+            onSelect={onDocumentTabSelect}
+            onClose={onDocumentTabClose}
+          />
+        ) : documentTabs.length <= 1 || showDocumentTabs ? (
+          <span className="min-w-0 flex-1 truncate text-lg font-medium text-gray-800 dark:text-gray-100">{title || '无标题画布'}</span>
+        ) : <span className="min-w-0 flex-1" />}
+        <EditorActionPortal>
+        <div className="flex items-center gap-2">
         <button
           onClick={() => setShowPresentationPanel(value => !value)}
           disabled={frameElements.length === 0}
@@ -1241,6 +1251,8 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         </div>
         {/* 保存状态：与大纲笔记一致，固定在顶部操作区最右侧 */}
         <SaveStatusIndicator status={saveStatus} />
+        </div>
+        </EditorActionPortal>
       </div>
 
       {showPresentationPanel && !isPresenting && (
@@ -1396,7 +1408,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           <div ref={presentationPreviewRef} className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center" aria-hidden="true" />
           <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between px-4 pt-4">
             <span className="presentation-chip pointer-events-auto max-w-[30vw] truncate px-3 py-1.5 text-sm font-medium">
-              {localTitle.trim() || '无标题画布'}
+              {title.trim() || '无标题画布'}
             </span>
             <span className="presentation-chip pointer-events-auto absolute left-1/2 max-w-[40vw] -translate-x-1/2 truncate px-4 py-1.5 text-sm font-medium">
               {availableSlides[presentationIndex] && getFrameTitle(

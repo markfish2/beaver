@@ -31,6 +31,7 @@ import { useFontSettings } from './FontSettings';
 import { useIsDark } from '../hooks/useIsDark';
 import { logNavigation } from '../utils/navigationDebug';
 import { showToast } from '../utils/toast';
+import { getStoredActiveDocumentTab } from './documentTabTypes';
 
 interface SidebarProps {
   onDocumentSelect?: () => void;
@@ -41,6 +42,7 @@ interface SidebarProps {
 const SIDEBAR_WIDTH_KEY = 'sidebar_width';
 const SIDEBAR_PANEL_STATE_KEY = 'sidebar_panel_state';
 const SIDEBAR_FOLDERS_STATE_KEY = 'sidebar_folders_state';
+const PROJECT_WORKSPACE_STORAGE_KEY = 'beaver:project-workspace:v1';
 const ICON_RAIL_WIDTH = 48;
 
 const DEFAULT_PANEL_WIDTH = 212;  // 260 - 48 = 212 (total visual width stays 260)
@@ -135,6 +137,16 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   });
   const { userSubView, setUserSubView: setUserSubViewContext, activeConvId, setActiveConvId, selectedProjectId, setSelectedProjectId } = useUserView();
   const [showNewMenu, setShowNewMenu] = useState(false);
+
+  // 离开项目视图时保留最近打开的项目，返回“项目”时恢复到任务视图。
+  useEffect(() => {
+    if (!selectedProjectId) return;
+    try {
+      sessionStorage.setItem(PROJECT_WORKSPACE_STORAGE_KEY, selectedProjectId);
+    } catch {
+      // sessionStorage 不可用时仍不影响项目页面使用。
+    }
+  }, [selectedProjectId]);
 
   useEffect(() => {
     try {
@@ -686,6 +698,67 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     setContentExpanded(true);
   };
 
+  const openFilesOrRestoreDocumentTab = () => {
+    const activeTab = getStoredActiveDocumentTab();
+
+    if (!activeTab) {
+      toggleViewPanel('all');
+      if (!(viewMode === 'all' && contentExpanded)) navigate('/?view=files');
+      return;
+    }
+
+    if (viewMode === 'all' && contentExpanded) {
+      toggleViewPanel('all');
+      return;
+    }
+
+    logNavigation('sidebar-restore-document-tab', {
+      documentId: activeTab.documentId,
+      mode: activeTab.mode,
+    });
+    setIsSearchMode(false);
+    setUserSubViewContext(null);
+    // 项目视图由 MainArea 根据 selectedProjectId 优先渲染；返回文件时同步清除，
+    // 避免等待 viewMode effect 导致项目页面短暂遮住要恢复的文档 Tab。
+    setSelectedProjectId(null);
+    closeArchivedProjects();
+    setViewMode('all');
+    setContentExpanded(true);
+    navigate(`/d/${activeTab.documentId}`);
+    onDocumentSelect?.();
+    if (isMobile) setContentExpanded(false);
+  };
+
+  const openListView = (nextView: 'recent' | 'starred') => {
+    const isClosing = viewMode === nextView && contentExpanded;
+    toggleViewPanel(nextView);
+    if (!isClosing) navigate(`/?view=${nextView}`);
+  };
+
+  const openProjectsOrRestoreWorkspace = () => {
+    setIsSearchMode(false);
+    setUserSubViewContext(null);
+    if (viewMode === 'projects' && contentExpanded) {
+      setContentExpanded(false);
+      return;
+    }
+
+    setViewMode('projects');
+    setContentExpanded(true);
+    try {
+      const lastProjectId = sessionStorage.getItem(PROJECT_WORKSPACE_STORAGE_KEY);
+      if (lastProjectId) {
+        setSelectedProjectId(lastProjectId);
+      } else {
+        setSelectedProjectId(null);
+        navigate('/?view=projects');
+      }
+    } catch {
+      setSelectedProjectId(null);
+      navigate('/?view=projects');
+    }
+  };
+
   const docResults = visibleSearchResults.filter(r => r.result_type === 'document' || r.result_type === 'document_title');
   const diaryResults = visibleSearchResults.filter(r => r.result_type === 'diary');
   const memoResults = visibleSearchResults.filter(r => r.result_type === 'memo');
@@ -1089,7 +1162,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           <NavigationIcon type="diary" className="h-6 w-6" />
         </button>
         <button
-          onClick={() => toggleViewPanel('projects')}
+          onClick={openProjectsOrRestoreWorkspace}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
             viewMode === 'projects' && contentExpanded && !isSearchMode
               ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
@@ -1100,7 +1173,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           <NavigationIcon type="project" className="h-6 w-6" />
         </button>
         <button
-          onClick={() => toggleViewPanel('all')}
+          onClick={openFilesOrRestoreDocumentTab}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
             viewMode === 'all' && contentExpanded && !isSearchMode
               ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
@@ -1111,7 +1184,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           <NavigationIcon type="files" className="h-6 w-6" />
         </button>
         <button
-          onClick={() => toggleViewPanel('recent')}
+          onClick={() => openListView('recent')}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
             viewMode === 'recent' && contentExpanded && !isSearchMode
               ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
@@ -1122,7 +1195,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           <NavigationIcon type="recent" className="h-6 w-6" />
         </button>
         <button
-          onClick={() => toggleViewPanel('starred')}
+          onClick={() => openListView('starred')}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
             viewMode === 'starred' && contentExpanded && !isSearchMode
               ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'

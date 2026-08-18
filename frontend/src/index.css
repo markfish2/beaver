@@ -396,6 +396,17 @@ body,
     color: #374151;
   }
 
+  /* 统一顶部 Shell 使用图标按钮，给 Tab 标题留出更多空间；保留 title 作为提示。 */
+  #editor-action-slot .editor-topbar-button > span {
+    display: none !important;
+  }
+
+  #editor-action-slot .editor-topbar-button {
+    min-width: 32px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
   .dark .editor-topbar-button {
     color: #9ca3af;
   }
@@ -713,9 +724,22 @@ body,
 .memo-content h4 { font-size: 1em; margin-top: 0.65em; color: #6b7280; }
 .dark .memo-content h4 { color: #9ca3af; }
 .memo-content h5, .memo-content h6 { font-size: 1em; font-weight: 600; margin-top: 1em; }
+/* 普通笔记的文档标题应比正文中的一级标题再大一级。 */
+:root[data-markdown-style] .markdown-note-preview > .markdown-note-title,
+.markdown-note-preview > .markdown-note-title {
+  font-size: 2.25em !important;
+  margin-top: 0 !important;
+}
 /* 段落 */
 .memo-content p { margin-bottom: 1em; }
 .memo-content p:last-child { margin-bottom: 0; }
+
+/* 大纲节点很多时，让浏览器跳过视口外节点的布局与绘制。React 数据和编辑行为不变。 */
+.outline-node-render-row {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 44px;
+}
+
 /* 列表 - 覆盖 Tailwind preflight 的 list-style: none */
 .memo-content ul { list-style: disc inside !important; padding-left: 1.4em; margin-bottom: 1em; }
 .memo-content ol { list-style: decimal inside !important; padding-left: 1.4em; margin-bottom: 1em; }
@@ -1180,4 +1204,12 @@ body,
     scrollbar-width: auto;
     scrollbar-color: auto;
   }
+}
+
+/* 必须放在所有 Markdown 风格规则之后，确保普通笔记文档标题不会被正文 H1 覆盖。 */
+:root .markdown-note-preview > h1.markdown-note-title {
+  font-size: 2.5rem !important;
+  line-height: 1.2 !important;
+  margin-top: 0 !important;
+  margin-bottom: 20px !important;
 }

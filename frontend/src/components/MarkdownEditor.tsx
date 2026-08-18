@@ -57,7 +57,7 @@ function buildTheme(isDark: boolean, scrollable: boolean, compact: boolean) {
     ? { overflow: 'auto' as const, height: '100%' }
     : compact
       ? { flex: '1 1 auto', minHeight: '0', overflowY: 'auto' as const }
-      : { overflow: 'auto' as const, height: 'auto' };
+      : { overflow: 'visible' as const, height: 'auto' };
 
   return EditorView.theme({
     '&': { backgroundColor: bg, color: fg, ...rootStyle },
@@ -342,8 +342,14 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
     position: 'relative',
   };
   if (!compact) {
-    editorStyle.flex = 1;
-    editorStyle.minHeight = 0;
+    if (scrollable) {
+      editorStyle.flex = 1;
+      editorStyle.minHeight = 0;
+    } else {
+      // 普通笔记由外层内容区统一滚动，避免 CodeMirror 内部滚动导致外层 sticky 失效。
+      editorStyle.flex = 'none';
+      editorStyle.minHeight = 'auto';
+    }
   } else {
     // compact 模式：作为 flex 列容器，配合 .cm-scroller 的 flex:1 + minHeight:0 实现 maxHeight 内部滚动
     editorStyle.display = 'flex';

@@ -49,7 +49,7 @@ SyntaxHighlighter.registerLanguage('cpp', cpp);
 SyntaxHighlighter.registerLanguage('go', go);
 SyntaxHighlighter.registerLanguage('rust', rust);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
-import { Pencil, Eye, Save, Columns2, Copy, CheckCheck, Download, FileDown, Share2 } from 'lucide-react';
+import { Pencil, Eye, Save, Columns2, Copy, CheckCheck, Download, Share2 } from 'lucide-react';
 import { getNodes, createNode, updateNode, uploadFile, getMemoTags, getDocuments, updateDocument, downloadAttachment } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
 import type { Document, Node } from '../api/data';
@@ -69,6 +69,9 @@ import type { TagMentionState } from '../extensions/tagMentionExtension';
 import ShareDialog from './ShareDialog';
 import { exportNotePdf } from '../utils/notePdf';
 import { showToast } from '../utils/toast';
+import DocumentTabs from './DocumentTabs';
+import EditorActionPortal from './EditorActionPortal';
+import type { DocumentTab } from './documentTabTypes';
 
 const AIChatPanel = lazy(() => import('./AIChatPanel'));
 
@@ -77,6 +80,12 @@ interface Props {
   isNew?: boolean;
   initialNodes?: Node[];
   initialDocuments?: Document[];
+  documentTabs?: DocumentTab[];
+  activeDocumentTabKey?: string | null;
+  showDocumentTabs?: boolean;
+  onDocumentTabSelect?: (tab: DocumentTab) => void;
+  onDocumentTabClose?: (tab: DocumentTab) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function preprocess(content: string): string {
@@ -84,6 +93,8 @@ function preprocess(content: string): string {
 }
 
 const BLOCK_CODE_FONT_SIZE = 'var(--markdown-block-code-font-size)';
+const MARKDOWN_REMARK_PLUGINS = [remarkGfm, remarkBreaks, remarkMath];
+const MARKDOWN_REHYPE_PLUGINS = [rehypeRaw, preserveCodeBlocks, rehypeKatex];
 
 const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => {
   // 非默认主题的暗色模式不设置内联背景，让 CSS 主题变量控制
@@ -429,7 +440,7 @@ function NoteImage({ src, alt }: { src?: string; alt?: string }) {
   return <img src={src} alt={alt || ''} className="max-w-full rounded-lg my-2" loading="lazy" />;
 }
 
-export default function MarkdownNoteEditor({ documentId, isNew = false, initialNodes, initialDocuments }: Props) {
+export default function MarkdownNoteEditor({ documentId, isNew = false, initialNodes, initialDocuments, documentTabs = [], activeDocumentTabKey = null, showDocumentTabs = true, onDocumentTabSelect, onDocumentTabClose, onDirtyChange }: Props) {
   const { updateDocumentTitle } = useDocuments();
   const isMobile = usePhoneLayout();
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>(isNew ? 'edit' : 'preview');
@@ -604,38 +615,41 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
           setNodeId(root.id);
           setContent(root.content || '');
           lastSavedRef.current = root.content || '';
+          onDirtyChange?.(false);
         } else {
           const newNode = await createNode(documentId, '', null);
           if (cancelled) return;
           setNodeId(newNode.id);
           setContent('');
           lastSavedRef.current = '';
+          onDirtyChange?.(false);
         }
       } catch (e) { console.error('Failed to load note', e); }
       finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [documentId, initialNodes, initialDocuments]);
+  }, [documentId, initialNodes, initialDocuments, onDirtyChange]);
 
   useEffect(() => { getMemoTags().then(setAllTags).catch(() => {}); }, []);
 
   const scheduleSave = useCallback((newContent: string) => {
-    if (newContent === lastSavedRef.current) { pendingSaveRef.current = null; return; }
+    if (newContent === lastSavedRef.current) { pendingSaveRef.current = null; onDirtyChange?.(false); return; }
+    onDirtyChange?.(true);
     pendingSaveRef.current = newContent;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
       if (!nodeId) return;
       setSaving(true);
-      try { await updateNode(nodeId, { content: newContent }); lastSavedRef.current = newContent; pendingSaveRef.current = null; }
+      try { await updateNode(nodeId, { content: newContent }); lastSavedRef.current = newContent; pendingSaveRef.current = null; onDirtyChange?.(false); }
       catch (e) { console.error('Failed to save note', e); }
       finally { setSaving(false); }
     }, 500);
-  }, [nodeId]);
+  }, [nodeId, onDirtyChange]);
 
   const saveTitle = useCallback(async (newTitle: string) => {
-    try { updateDocumentTitle(documentId, newTitle); await updateDocument(documentId, { title: newTitle }); }
+      try { await updateDocumentTitle(documentId, newTitle); await updateDocument(documentId, { title: newTitle }); onDirtyChange?.(false); }
     catch (e) { console.error('Failed to save title', e); }
-  }, [documentId, updateDocumentTitle]);
+  }, [documentId, onDirtyChange, updateDocumentTitle]);
 
   const handleFileUpload = useCallback(async (file: File, isImage: boolean) => {
     if (file.size > 50 * 1024 * 1024) { alert('文件大小不能超过 50MB'); return; }
@@ -926,15 +940,20 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
 
   return (
     <div className="flex flex-col h-full bg-[var(--app-canvas)]">
-      <div className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-900">
+      <div className="hidden">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
-            onBlur={() => { if (title.trim()) saveTitle(title.trim()); }}
-            className="text-lg font-semibold text-gray-900 dark:text-gray-100 bg-transparent border-none outline-none placeholder-gray-400 dark:placeholder-gray-500 flex-1 min-w-0 truncate"
-            placeholder="笔记标题" />
+          {showDocumentTabs && onDocumentTabSelect && onDocumentTabClose && (
+            <DocumentTabs
+              tabs={documentTabs}
+              activeKey={activeDocumentTabKey}
+              onSelect={onDocumentTabSelect}
+              onClose={onDocumentTabClose}
+            />
+          )}
           {saving && <span className="text-xs text-gray-400 shrink-0"><Save className="w-3 h-3 inline mr-0.5" />保存中</span>}
           {uploading && <span className="text-xs text-blue-500 shrink-0">上传中...</span>}
         </div>
+        <EditorActionPortal>
         <div className="flex items-center gap-1 shrink-0 ml-4">
           <div className="relative" ref={exportMenuRef}>
             <button
@@ -959,7 +978,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
                   disabled={exportingPdf}
                   className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-700"
                 >
-                  <FileDown className="h-4 w-4" />
+                  <Download className="h-4 w-4" />
                   {exportingPdf ? '导出中...' : '导出 PDF'}
                 </button>
               </div>
@@ -975,34 +994,46 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
           </button>
           <button onClick={() => setViewMode(viewMode === 'preview' ? 'edit' : 'preview')}
             className={`editor-topbar-button ${viewMode !== 'preview' ? 'is-active' : ''}`}>
-            {viewMode === 'preview' ? <><Pencil className="h-[14px] w-[14px]" />编辑</> : <><Eye className="h-[14px] w-[14px]" />阅读</>}
+            {viewMode === 'preview' ? <Pencil className="h-[14px] w-[14px]" /> : <Eye className="h-[14px] w-[14px]" />}
           </button>
           <button onClick={() => setViewMode(viewMode === 'split' ? 'edit' : 'split')}
             className={`editor-topbar-button ${viewMode === 'split' ? 'is-active' : ''}`}
             title="分屏模式"><Columns2 className="h-[14px] w-[14px]" /></button>
         </div>
+        </EditorActionPortal>
       </div>
 
       <div className="toc-layout-container flex-1 min-h-0 flex">
         {(viewMode === 'edit' || viewMode === 'split') && (
           <div className={`${viewMode === 'split' ? 'w-1/2 border-r border-gray-200 dark:border-gray-700' : 'flex-1 min-w-0 h-full'} flex flex-col`}>
-            {/* Markdown 快捷工具栏：与编辑器同一宽度容器，固定在滚动区外，下滑时始终可见 */}
-            <div className="shrink-0 overflow-x-auto">
-              <div className={viewMode === 'split' ? 'w-full' : 'flex justify-center'}>
-                <div className={viewMode === 'split' ? 'w-full' : 'w-full max-w-[768px]'}>
-                  <EditorToolbar
-                    editorRef={editorRef}
-                    onUploadImage={() => imageInputRef.current?.click()}
-                    onUploadFile={() => fileInputRef.current?.click()}
-                    onOpenAI={() => setShowAIPanel(true)}
-                  />
+            {/* 编辑模式固定头部：标题和快捷工具栏不参与正文滚动。 */}
+            <div className={`shrink-0 ${viewMode === 'split' ? 'w-full' : 'flex justify-center'}`}>
+              <div className={`w-full ${viewMode === 'split' ? '' : 'max-w-[768px]'}`}>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => { setTitle(e.target.value); onDirtyChange?.(true); }}
+                  onBlur={() => { if (title.trim()) saveTitle(title.trim()); }}
+                  className="w-full bg-transparent px-6 pb-[15px] pt-[15px] text-xl font-semibold leading-tight text-gray-900 outline-none placeholder:text-gray-400 dark:text-gray-100"
+                  placeholder="笔记标题"
+                  aria-label="笔记标题"
+                />
+                <div className="w-full bg-[var(--app-canvas)]">
+                  <div className="overflow-x-auto">
+                    <EditorToolbar
+                      editorRef={editorRef}
+                      onUploadImage={() => imageInputRef.current?.click()}
+                      onUploadFile={() => fileInputRef.current?.click()}
+                      onOpenAI={() => setShowAIPanel(true)}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
             <div ref={editorScrollRef} className={`flex-1 min-h-0 overflow-y-auto custom-scrollbar ${viewMode === 'split' ? '' : 'flex justify-center'}`}>
               <div className={`flex flex-col ${viewMode === 'split' ? 'w-full' : 'w-full max-w-[768px]'}`} onPasteCapture={handlePaste}>
                 <MarkdownEditor ref={editorRef} value={content} onChange={(val) => { setContent(val); scheduleSave(val); }}
-                  compact={false} placeholder="开始书写... (支持 Markdown，输入 # 添加标签，@ 链接笔记)" className="flex-1 min-h-0 px-6 pt-6"
+                  compact={false} placeholder="开始书写... (支持 Markdown，输入 # 添加标签，@ 链接笔记)" className="min-h-0 px-6 pt-5"
                   extensions={[tmExtension]}
                 />
               </div>
@@ -1027,8 +1058,9 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
               style={{ lineHeight: '1.75' }}
 
             >
+              <h1 className="markdown-note-title mb-6 text-3xl font-semibold leading-tight text-gray-900 dark:text-gray-100">{title || '无标题'}</h1>
               {content.trim() ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]} components={mdComponents}>{processedContent}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} rehypePlugins={MARKDOWN_REHYPE_PLUGINS} components={mdComponents}>{processedContent}</ReactMarkdown>
               ) : <p className="text-gray-400 dark:text-gray-500 italic">空笔记</p>}
             </div>
           </div>
@@ -1069,8 +1101,8 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
       >
         {content.trim() ? (
           <ReactMarkdown
-            remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
-            rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]}
+            remarkPlugins={MARKDOWN_REMARK_PLUGINS}
+            rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
             components={mdComponents}
           >
             {processedContent}

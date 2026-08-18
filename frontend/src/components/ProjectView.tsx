@@ -614,9 +614,9 @@ export default function ProjectView({ projectId, showArchived = false, archivedR
             disabled={isExportingPdf}
             className="editor-topbar-button shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
             title="导出项目为 PDF"
+            aria-label="导出项目为 PDF"
           >
-            <Download size={14} />
-            {isExportingPdf ? '导出中...' : '导出 PDF'}
+            <Download size={14} aria-hidden="true" />
           </button>
         </div>
       </div>
