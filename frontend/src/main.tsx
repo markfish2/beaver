@@ -96,18 +96,12 @@ async function clearDevelopmentServiceWorker(): Promise<boolean> {
   return true;
 }
 
-// ── 自定义 title tooltip：胶囊形状 + 主题绿色 + 跟随鼠标右下角 ──
-// 行为参考原生 tooltip：hover 停留后显示，鼠标移动时保持可见，静止后自动消失，移出立刻消失
+// 图标按钮不显示悬浮提示；文字按钮保留主题化的提示。
 {
-  const SHOW_DELAY = 400;   // hover 后延迟显示（与原生一致）
-  const IDLE_HIDE = 2500;   // 鼠标静止后自动隐藏（与原生一致）
-
+  const SHOW_DELAY = 400;
   let tooltipEl: HTMLDivElement | null = null;
   let activeTarget: HTMLElement | null = null;
   let showTimer = 0;
-  let idleTimer = 0;
-  let mouseX = 0;
-  let mouseY = 0;
 
   function ensureTooltip(): HTMLDivElement {
     if (!tooltipEl) {
@@ -118,77 +112,46 @@ async function clearDevelopmentServiceWorker(): Promise<boolean> {
     return tooltipEl;
   }
 
-  function shouldShowCustomTooltip(el: HTMLElement): boolean {
-    // 仅给没有文字说明的图标控件补充提示；文字按钮保留浏览器原生 title。
+  function isIconOnly(el: HTMLElement): boolean {
     return Boolean(el.querySelector('svg, [data-icon]')) && !el.textContent?.trim();
   }
 
-  function show(target: HTMLElement) {
-    const tip = ensureTooltip();
-    tip.textContent = target.dataset.tooltip ?? '';
-    tip.style.left = `${mouseX + 12}px`;
-    tip.style.top = `${mouseY + 12}px`;
-    tip.classList.add('visible');
-    resetIdleTimer();
-  }
-
-  function hide() {
-    window.clearTimeout(idleTimer);
-    if (tooltipEl) tooltipEl.classList.remove('visible');
-  }
-
-  function resetIdleTimer() {
-    window.clearTimeout(idleTimer);
-    idleTimer = window.setTimeout(hide, IDLE_HIDE);
+  function hideTooltip(): void {
+    window.clearTimeout(showTimer);
+    activeTarget = null;
+    tooltipEl?.classList.remove('visible');
   }
 
   document.addEventListener('mouseover', (e) => {
-    const me = e as MouseEvent;
-    const el = (me.target as HTMLElement).closest('[title]') as HTMLElement | null;
-    if (!el || !shouldShowCustomTooltip(el)) return;
-    el.dataset.tooltip = el.getAttribute('title') ?? '';
+    const el = (e.target as HTMLElement).closest('[title]') as HTMLElement | null;
+    if (!el) return;
+    const title = el.getAttribute('title') ?? '';
+    if (!el.getAttribute('aria-label') && title) el.setAttribute('aria-label', title);
     el.removeAttribute('title');
+
+    if (isIconOnly(el)) return;
     activeTarget = el;
-    mouseX = me.clientX;
-    mouseY = me.clientY;
     window.clearTimeout(showTimer);
-    showTimer = window.setTimeout(() => { if (activeTarget === el) show(el); }, SHOW_DELAY);
+    showTimer = window.setTimeout(() => {
+      if (activeTarget !== el) return;
+      const tip = ensureTooltip();
+      tip.textContent = title;
+      tip.style.left = `${e.clientX + 12}px`;
+      tip.style.top = `${e.clientY + 12}px`;
+      tip.classList.add('visible');
+    }, SHOW_DELAY);
   });
 
   document.addEventListener('mousemove', (e) => {
-    mouseX = e.clientX;
-    mouseY = e.clientY;
-    if (!activeTarget) return;
-    // 鼠标在动 → 更新位置 + 重置静止计时
-    if (tooltipEl?.classList.contains('visible')) {
-      tooltipEl.style.left = `${mouseX + 12}px`;
-      tooltipEl.style.top = `${mouseY + 12}px`;
-      resetIdleTimer();
-    }
+    if (!activeTarget || !tooltipEl?.classList.contains('visible')) return;
+    tooltipEl.style.left = `${e.clientX + 12}px`;
+    tooltipEl.style.top = `${e.clientY + 12}px`;
   });
 
   document.addEventListener('mouseout', (e) => {
-    const el = (e.target as HTMLElement).closest('[data-tooltip]') as HTMLElement | null;
-    if (!el) return;
-    el.setAttribute('title', el.dataset.tooltip ?? '');
-    delete el.dataset.tooltip;
-    if (activeTarget === el) {
-      activeTarget = null;
-      window.clearTimeout(showTimer);
-      hide();
-    }
+    const el = (e.target as HTMLElement).closest('[aria-label]') as HTMLElement | null;
+    if (el && el === activeTarget && !el.matches(':hover')) hideTooltip();
   });
-
-  // 页面切换时 hover 目标可能被 React 直接卸载，不一定会触发 mouseout。
-  // 监听 DOM 移除，避免旧 tooltip 残留在鼠标旁直到超时才消失。
-  const tooltipObserver = new MutationObserver(() => {
-    if (activeTarget && !activeTarget.isConnected) {
-      activeTarget = null;
-      window.clearTimeout(showTimer);
-      hide();
-    }
-  });
-  tooltipObserver.observe(document.body, { childList: true, subtree: true });
 }
 
 void clearDevelopmentServiceWorker().then(shouldRender => {
