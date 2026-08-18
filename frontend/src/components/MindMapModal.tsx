@@ -439,6 +439,8 @@ const MindMapModal = ({
         themeConfig: styleConfig.theme,
         enableFreeDrag: false,
         nodeTextEditZIndex: 1000,
+        fit: true,
+        fitPadding: 40,
       });
 
       container.style.backgroundColor = styleConfig.theme.backgroundColor;

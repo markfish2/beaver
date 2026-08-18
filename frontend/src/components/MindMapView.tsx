@@ -585,6 +585,9 @@ function MindMapView({
         textAutoWrapWidth: 99999,
         minZoom: 0.5,
         maxZoom: 2,
+        // 首次打开时将整张思维导图适配到可视区域，避免默认停留在 100%。
+        fit: true,
+        fitPadding: 40,
         enableDblclickReset: true,
         enableDragWithInertia: true,
         enableDrag: true,
@@ -807,6 +810,8 @@ function MindMapView({
             textAutoWrapWidth: 99999,
             minZoom: 0.5,
             maxZoom: 2,
+            fit: true,
+            fitPadding: 40,
             enableDblclickReset: true,
             enableDragWithInertia: true,
             enableDrag: true,
