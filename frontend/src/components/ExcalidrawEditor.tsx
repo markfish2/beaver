@@ -167,7 +167,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   documentTabs = [],
   activeDocumentTabKey = null,
   showDocumentTabs = true,
-  isActive = true,
+  isActive: _isActive = true,
   onDocumentTabSelect,
   onDocumentTabClose,
   onDirtyChange,
@@ -180,7 +180,10 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   type ScenePayload = { elements: SceneElements; appState: Partial<AppState>; files?: BinaryFiles; presentation?: PresentationConfig };
 
   const [initialData, setInitialData] = useState<ExcalidrawInitialDataState | null>(null);
-  const [filesLoadVersion, setFilesLoadVersion] = useState(0);
+  // Excalidraw 只在挂载时读取 initialData。文档切换后场景是异步到达的，
+  // 用版本号确保新场景到达后重新挂载实例，而不是只更新一个不会再被读取的 prop。
+  const [sceneInstanceVersion, setSceneInstanceVersion] = useState(0);
+  const [sceneReady, setSceneReady] = useState(false);
   const [mobilePreview, setMobilePreview] = useState<'idle' | 'ready' | 'error'>('idle');
   const mobilePreviewRef = useRef<HTMLDivElement>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error' | 'conflict'>('idle');
@@ -329,6 +332,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     hasLoadedInitialData.current = false;
     isHydratingSceneRef.current = false;
     setInitialData(null);
+    setSceneReady(false);
     hasFittedContent.current = false;
     filesRef.current = null;
     filesDirtyRef.current = false;
@@ -360,34 +364,38 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         if (data?.scene_data) {
           versionRef.current = data.version || 0;
           const sceneData = JSON.parse(data.scene_data);
+          const files = await loadExcalidrawFiles(loadedDocId);
+          if (cancelled || documentIdRef.current !== loadedDocId) return;
           const loadedFrames = getFrameElements(sceneData.elements || []);
           const loadedPresentation = normalizePresentation(sceneData.presentation, loadedFrames);
           sceneElementsRef.current = sceneData.elements || [];
           presentationRef.current = loadedPresentation;
           setFrameElements(loadedFrames);
           setPresentation(loadedPresentation);
-          if (sceneData.elements?.length > 0) {
-            const restAppState = omitViewportState(sceneData.appState || {});
-
-            const scenePayload = { elements: sceneData.elements, appState: restAppState } as ExcalidrawInitialDataState;
-            // 先挂载场景，图片文件在后台加载，避免大图或多图阻塞画布首次显示。
-            setInitialData(scenePayload);
-            setIsLoading(false);
-            hasLoadedInitialData.current = true;
-            isHydratingSceneRef.current = true;
-            savedFingerprintRef.current = fingerprint(sceneData.elements);
-
-            void loadExcalidrawFiles(loadedDocId).then(files => {
-              if (cancelled || documentIdRef.current !== loadedDocId || Object.keys(files).length === 0) return;
-              filesRef.current = files;
-              setFilesLoadVersion(version => version + 1);
-            }).catch(() => {
-              // 场景本身仍可正常使用，图片加载失败不阻塞画布。
-            });
-          }
+          const elements = sceneData.elements || [];
+          const restAppState = omitViewportState(sceneData.appState || {});
+          const scenePayload = { elements, appState: restAppState, files } as ExcalidrawInitialDataState;
+          // 图片、场景和空画布都在实例首次挂载前准备完成，避免切换文档时复用旧场景。
+          setInitialData(scenePayload);
+          setSceneInstanceVersion(version => version + 1);
+          setSceneReady(true);
+          setIsLoading(false);
+          hasLoadedInitialData.current = true;
+          isHydratingSceneRef.current = true;
+          savedFingerprintRef.current = fingerprint(elements);
+          filesRef.current = files;
+        } else {
+          setInitialData({ elements: [], appState: {} });
+          setSceneInstanceVersion(version => version + 1);
+          setSceneReady(true);
         }
       } catch (error) {
         console.error('[Excalidraw] 加载失败:', error);
+        if (!cancelled && documentIdRef.current === documentId) {
+          setInitialData({ elements: [], appState: {} });
+          setSceneInstanceVersion(version => version + 1);
+          setSceneReady(true);
+        }
       } finally {
         if (!cancelled) {
           hasLoadedInitialData.current = true;
@@ -488,18 +496,6 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
       cancelled = true;
       if (frameId !== null) cancelAnimationFrame(frameId);
     };
-  }, [initialData, filesLoadVersion]);
-
-  // 图片注入：initialData 设置后，将 files 注入已挂载的 Excalidraw
-  // Excalidraw 只在 componentDidMount 处理 initialData.files，
-  // 但 setInitialData 是异步调用的，此时组件已挂载，需要显式调用 addFiles
-  useEffect(() => {
-    if (!initialData || !excalidrawRef.current || !filesRef.current) return;
-    const files = filesRef.current;
-    if (Object.keys(files).length > 0) {
-      excalidrawRef.current.addFiles(Object.values(files));
-    }
-    filesRef.current = null;
   }, [initialData]);
 
   // 保存锁、files 缓存、待保存数据
@@ -880,7 +876,9 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         if (nextSceneFingerprint !== presentationSceneFingerprintRef.current) {
           presentationSceneFingerprintRef.current = nextSceneFingerprint;
           presentationExportCacheRef.current.clear();
-          setPresentationSceneVersion(version => version + 1);
+          if (isPresenting || showPresentationPanel) {
+            setPresentationSceneVersion(version => version + 1);
+          }
         }
         const fp = fingerprint(elements);
         // 初次挂载时 Excalidraw 可能会重新整理元素并触发 onChange。
@@ -912,7 +910,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         saveDataRef.current(elements, appState);
       }
     },
-    [onDirtyChange, syncPresentationFrames]
+    [isPresenting, onDirtyChange, showPresentationPanel, syncPresentationFrames]
   );
 
   // 导出功能
@@ -1343,8 +1341,8 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
       >
         <ExcalidrawErrorBoundary onRetry={() => setInitialData(prev => ({ ...prev }))}>
         <Suspense fallback={<div className="flex-1 flex items-center justify-center text-gray-400"><Loader2 className="w-6 h-6 animate-spin" /></div>}>
-        <Excalidraw
-          key={documentId}
+        {sceneReady && initialData ? <Excalidraw
+          key={`${documentId}-${sceneInstanceVersion}`}
           excalidrawAPI={(api) => {
             excalidrawRef.current = api;
             _excalidrawApiInstance = api;
@@ -1388,7 +1386,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
               </button>
             </MainMenu.ItemCustom>
           </MainMenu>
-        </Excalidraw>
+        </Excalidraw> : <div className="flex h-full items-center justify-center text-gray-400"><Loader2 className="h-6 w-6 animate-spin" /></div>}
         </Suspense>
         </ExcalidrawErrorBoundary>
       </div>

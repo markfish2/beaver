@@ -883,7 +883,11 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
 
   const setDocumentTabDirty = useCallback((tabDocumentId: string, mode: DocumentTabMode, dirty: boolean) => {
     const key = getDocumentTabKey(tabDocumentId, mode);
-    setDocumentTabs(previous => previous.map(tab => tab.key === key ? { ...tab, dirty } : tab));
+    setDocumentTabs(previous => {
+      const tab = previous.find(item => item.key === key);
+      if (!tab || tab.dirty === dirty) return previous;
+      return previous.map(item => item.key === key ? { ...item, dirty } : item);
+    });
   }, []);
   const handleCurrentOutlineDirty = useCallback((dirty: boolean) => {
     if (documentId) setDocumentTabDirty(documentId, 'outline', dirty);
@@ -1096,17 +1100,13 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     const normalizedId = id.replace(/-/g, '');
     const contextDoc = documentsRef.current.find(d => d.id.replace(/-/g, '') === normalizedId);
     const isCanvasDocument = contextDoc?.type === 'excalidraw';
-    // getNodes 本身有持久化缓存，但这里提前同步读取，避免 Tab 切换时先显示整页 Loading。
     const cachedNodes = isCanvasDocument ? [] : dataCache.get<Node[]>(`nodes:${id}`);
-    // 画布由自身加载场景数据，不要让主区域先切成整页 loading。
     setIsLoading(!isCanvasDocument && !cachedNodes);
     if (cachedNodes) {
       setNodes(cachedNodes);
     }
     try {
       // 节点和文档元数据互不依赖，并行获取，避免文档不在 context 时多等待一轮 RTT。
-      // 画布的数据由 ExcalidrawEditor 单独加载，主区域不需要为它请求节点。
-      // 否则每次切换画布 Tab 都会先进入主区域 loading 状态，卸载画布并造成白屏。
       const documentPromise = contextDoc
         ? Promise.resolve(contextDoc)
         : getDocument(id).catch(() => null);
@@ -2965,7 +2965,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             isActive
             onDocumentTabSelect={handleDocumentTabSelect}
             onDocumentTabClose={handleDocumentTabClose}
-            onDirtyChange={handleCurrentOutlineDirty}
           />
         </div>
       )}
