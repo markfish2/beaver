@@ -63,10 +63,10 @@ export default function DocumentTabs({ tabs, activeKey, onSelect, onClose }: Doc
               key={tab.key}
               role="tab"
               aria-selected={isActive}
-              className={`group flex h-8 max-w-[220px] min-w-[120px] items-center gap-1.5 rounded-t-xl px-2 text-sm transition-colors ${
+              className={`group flex h-8 max-w-[220px] min-w-[120px] items-center gap-1.5 rounded-md px-2 text-sm transition-colors ${
                 isActive
-                  ? 'relative z-10 -mb-px translate-y-1.5 border border-gray-200 border-b-[#ffffff] bg-[#ffffff] font-medium text-[#285f52] shadow-[0_-1px_3px_rgba(0,0,0,0.04)] dark:border-gray-700 dark:border-b-gray-900 dark:bg-gray-900 dark:text-white'
-                  : 'text-gray-500 hover:bg-white/70 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-800/70 dark:hover:text-gray-200'
+                  ? 'bg-[#c9ddd7] font-medium text-[#285f52] dark:bg-[#3f7468] dark:text-white'
+                  : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'
               }`}
             >
               <button
