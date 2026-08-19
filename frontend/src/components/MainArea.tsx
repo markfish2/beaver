@@ -2785,7 +2785,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     <div className="flex-1 flex flex-col overflow-hidden relative bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans h-full">
       {/* 日记/日历复用文档内容区，但不属于文档 Tab 工作区。已有笔记 Tab 保留在状态中，返回文件时再恢复。 */}
       {documentTabs.length > 0 && !isDiaryDoc && (
-        <div className="flex h-11 shrink-0 items-center border-b border-gray-200 bg-[#f1f2f1] px-4 dark:border-gray-700 dark:bg-gray-900">
+        <div className="flex h-11 shrink-0 items-center border-b border-gray-200 bg-[#ffffff] px-4 dark:border-gray-700 dark:bg-gray-900">
           <div className="min-w-0 w-[68%]">
             <DocumentTabs
               tabs={documentTabs}
