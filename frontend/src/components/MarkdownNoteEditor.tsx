@@ -939,7 +939,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   const showMentionPopup = mentionState.type === 'mention' && filteredDocs.length > 0 && mentionState.coords;
 
   return (
-    <div className="flex flex-col h-full bg-[var(--app-canvas)]">
+    <div className="note-editor-white-surface flex flex-col h-full">
       <div className="hidden">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {showDocumentTabs && onDocumentTabSelect && onDocumentTabClose && (

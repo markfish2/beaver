@@ -245,6 +245,18 @@ body,
   background-color: var(--app-surface);
 }
 
+/* 普通笔记和大纲笔记正文使用纯白纸面；不能依赖 bg-white，
+   因为主题层会把 Tailwind 的 bg-white 重映射为应用表面色。 */
+.note-editor-white-surface,
+.note-outline-content {
+  background: #fff !important;
+}
+
+.dark .note-editor-white-surface,
+.dark .note-outline-content {
+  background: var(--app-canvas) !important;
+}
+
 ::selection {
   background: var(--app-selection);
 }
