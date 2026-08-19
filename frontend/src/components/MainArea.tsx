@@ -931,6 +931,23 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     }
   }, [documentTabs, activeDocumentTabKey]);
 
+  // 左侧列表删除文档后同步清理已经打开的失效 Tab。
+  // documents 初始加载阶段可能暂时为空，不能因此误删 sessionStorage 中的 Tab。
+  useEffect(() => {
+    if (documents.length === 0) return;
+    const validDocumentIds = new Set(documents.map(doc => doc.id));
+    setDocumentTabs(previous => {
+      const next = previous.filter(tab => validDocumentIds.has(tab.documentId));
+      return next.length === previous.length ? previous : next;
+    });
+    setActiveDocumentTabKey(previous => {
+      if (!previous) return previous;
+      return documentTabs.some(tab => tab.key === previous && validDocumentIds.has(tab.documentId))
+        ? previous
+        : null;
+    });
+  }, [documents, documentTabs]);
+
   const handleDocumentTabSelect = useCallback((tab: DocumentTab) => {
     if (tab.documentId === documentId) {
       openDocumentTab(tab.mode, currentDoc);

@@ -644,7 +644,8 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
         removeDocument(deletedId);
       }
       if (documentId === deletedId) {
-        navigate('/');
+        // 删除当前打开的笔记后回到文件列表的空白提示页，而不是默认 Memo 首页。
+        navigate('/?view=files');
       }
       setDeleteDialog({ ...deleteDialog, show: false });
       await deleteDocument(deletedId, deleteChildren);
