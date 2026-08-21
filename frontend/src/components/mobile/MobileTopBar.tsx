@@ -15,11 +15,12 @@ import NavigationIcon from '../NavigationIcon';
 interface MobileTopBarProps {
   title: string;
   showBack?: boolean;
+  isDocumentPage?: boolean;
   onBack?: () => void;
   onSearch?: (query: string) => void;
 }
 
-export default function MobileTopBar({ title, showBack, onBack, onSearch }: MobileTopBarProps) {
+export default function MobileTopBar({ title, showBack, isDocumentPage = false, onBack, onSearch }: MobileTopBarProps) {
   const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
@@ -93,15 +94,17 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
         }}
       >
         {/* 左侧：头像（圆形胶囊） */}
-        <div ref={userMenuRef} className="relative shrink-0">
+        <div
+          ref={userMenuRef}
+          className={`relative shrink-0 flex items-center ${isDocumentPage ? 'h-[36px] rounded-full bg-white/75 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)] backdrop-blur-2xl dark:bg-gray-800/75' : ''}`}
+        >
           {showBack ? (
             <button
               onClick={() => onBack?.()}
-              className="flex items-center justify-center w-[36px] h-[36px] rounded-full
-                         bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
-                         shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]
+              className={`flex items-center justify-center w-[36px] h-[36px] rounded-full
+                         ${isDocumentPage ? '' : 'bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]'}
                          text-gray-600 dark:text-gray-300
-                         active:scale-95 transition-transform"
+                         active:scale-95 transition-transform`}
             >
               <ArrowLeft className="w-[18px] h-[18px]" />
             </button>
@@ -157,6 +160,14 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
               )}
             </>
           )}
+
+          {isDocumentPage && (
+            <div
+              id="mobile-editor-action-slot"
+              className="relative flex min-w-0 items-center gap-0.5 pr-1"
+              aria-label="笔记操作"
+            />
+          )}
         </div>
 
         {/* 中间：标题（胶囊长条形，缩小一半，居中） */}
@@ -170,7 +181,8 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
         </div>
 
         {/* 右侧：日/夜切换 + 搜索（胶囊容器） */}
-        <div className="relative shrink-0 flex items-center h-[36px] rounded-full
+        {!isDocumentPage && (
+          <div className="relative shrink-0 flex items-center h-[36px] rounded-full
                         bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
                         shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]">
           {/* 日/夜切换按钮 */}
@@ -205,11 +217,12 @@ export default function MobileTopBar({ title, showBack, onBack, onSearch }: Mobi
               <Search className="w-[16px] h-[16px]" />
             </button>
           )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* 搜索展开面板 */}
-      {showSearch && (
+      {showSearch && !isDocumentPage && (
         <form
           onSubmit={(e) => { e.preventDefault(); handleSearchSubmit(); }}
           className="fixed left-3 right-3 z-30 px-3 py-2

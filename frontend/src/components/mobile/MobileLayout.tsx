@@ -219,6 +219,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       <MobileTopBar
         title={getTopBarTitle()}
         showBack={isEditing || !!userSubView}
+        isDocumentPage={isEditing && activeTab !== 'diary'}
         onBack={handleBack}
         onSearch={handleSearch}
       />
