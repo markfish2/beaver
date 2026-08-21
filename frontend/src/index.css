@@ -794,6 +794,18 @@ body,
   line-height: 1 !important;
 }
 
+/*
+ * Markdown 任务复选框位于任务项第一行的绝对定位层中。
+ * 不使用固定的 top: 5px：鸿蒙浏览器的字体度量与桌面浏览器不同，
+ * 固定像素会让复选框相对文字下沉。用当前字体的 em 定位，能随字号、
+ * 行高和 Markdown 风格一起缩放，并在移动浏览器上保持视觉居中。
+ */
+.memo-content li > button[role="checkbox"] {
+  top: 0.15em !important;
+  transform: translateY(-1px);
+  vertical-align: middle;
+}
+
 .memo-content .markdown-code-block,
 :root[data-markdown-style] .memo-content .markdown-code-block {
   max-width: 100%;
