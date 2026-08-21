@@ -171,20 +171,29 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
         </div>
 
         {/* 中间：标题（胶囊长条形，缩小一半，居中） */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center h-[36px] px-4
-                        bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
-                        rounded-full
-                        shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]">
-          <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200 truncate max-w-[160px]">
-            {title}
-          </span>
-        </div>
+        {!isDocumentPage && (
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center h-[36px] px-4
+                          bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
+                          rounded-full
+                          shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]">
+            <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200 truncate max-w-[160px]">
+              {title}
+            </span>
+          </div>
+        )}
 
         {/* 右侧：日/夜切换 + 搜索（胶囊容器） */}
-        {!isDocumentPage && (
-          <div className="relative shrink-0 flex items-center h-[36px] rounded-full
+        <div className="relative shrink-0 flex items-center h-[36px] rounded-full
                         bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
                         shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]">
+          {isDocumentPage && (
+            <>
+              <span className="px-3 text-[13px] font-semibold text-gray-800 dark:text-gray-200">
+                {title}
+              </span>
+              <div className="w-px h-4 bg-gray-200 dark:bg-gray-600" />
+            </>
+          )}
           {/* 日/夜切换按钮 */}
           <button
             onClick={toggleDark}
@@ -217,12 +226,11 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
               <Search className="w-[16px] h-[16px]" />
             </button>
           )}
-          </div>
-        )}
+        </div>
       </div>
 
       {/* 搜索展开面板 */}
-      {showSearch && !isDocumentPage && (
+      {showSearch && (
         <form
           onSubmit={(e) => { e.preventDefault(); handleSearchSubmit(); }}
           className="fixed left-3 right-3 z-30 px-3 py-2
