@@ -60,10 +60,12 @@ const MobileToolbar = memo(function MobileToolbar({
 }: MobileToolbarProps) {
   // 用 top 定位，锚定在 visualViewport 底部边缘
   const [top, setTop] = useState(() => window.innerHeight - TAB_BAR_HEIGHT);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   const updatePosition = useCallback(() => {
     const viewport = window.visualViewport;
     if (!viewport) {
+      setKeyboardOpen(false);
       setTop(window.innerHeight - (hasTabBar ? TAB_BAR_HEIGHT : 0) - 44);
       window.dispatchEvent(new CustomEvent('keyboard-change', { detail: { open: false } }));
       return;
@@ -72,6 +74,7 @@ const MobileToolbar = memo(function MobileToolbar({
     const viewportBottom = viewport.offsetTop + viewport.height;
     const keyboardHeight = window.innerHeight - viewport.height;
     const isOpen = keyboardHeight > 50;
+    setKeyboardOpen(isOpen);
 
     if (isOpen) {
       // 键盘弹出：工具栏顶部 = 可视视口底部 - 工具栏高度（紧贴键盘上方）
@@ -104,7 +107,9 @@ const MobileToolbar = memo(function MobileToolbar({
     };
   }, [isVisible, updatePosition]);
 
-  if (!isVisible) return null;
+  // 工具栏只服务于正在编辑的节点，并且只在输入法键盘可见时显示。
+  // 键盘收起后必须卸载，不能继续固定在页面底部遮挡内容。
+  if (!isVisible || !keyboardOpen) return null;
 
   return (
     <div

@@ -22,7 +22,11 @@ interface MobileLayoutProps {
 
 // ToolbarSlot reads from MobileToolbarContext and renders MobileToolbar
 // Toolbar is position: fixed at bottom, above keyboard
-function ToolbarSlot({ showZoom, hasTabBar }: { showZoom?: boolean; hasTabBar?: boolean }) {
+function ToolbarSlot({ showZoom, hasTabBar, keyboardOpen }: {
+  showZoom?: boolean;
+  hasTabBar?: boolean;
+  keyboardOpen: boolean;
+}) {
   const { isVisible, handlers } = useMobileToolbar();
   return (
     <>
@@ -40,7 +44,7 @@ function ToolbarSlot({ showZoom, hasTabBar }: { showZoom?: boolean; hasTabBar?: 
         showZoom={showZoom}
         hasTabBar={hasTabBar}
       />
-      {isVisible && <div className="h-10 shrink-0" />}
+      {isVisible && keyboardOpen && <div className="h-10 shrink-0" />}
     </>
   );
 }
@@ -227,7 +231,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
           // Document editor mode: toolbar below topbar, then content
           <>
             <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 58px)', flexShrink: 0 }} />
-            <ToolbarSlot showZoom={true} hasTabBar={false} />
+            <ToolbarSlot showZoom={true} hasTabBar={false} keyboardOpen={keyboardOpen} />
             {children}
           </>
         ) : activeTab === 'diary' ? (
@@ -239,7 +243,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
                 <MobileTodos />
               </Suspense>
             </div>
-            <ToolbarSlot showZoom={false} hasTabBar={true} />
+            <ToolbarSlot showZoom={false} hasTabBar={true} keyboardOpen={keyboardOpen} />
             <div className="flex-1 min-h-0 overflow-y-auto scrollbar-none">
               {diaryDocId ? (
                 <DiaryMainArea diaryDocId={diaryDocId} onDiaryDocChange={setDiaryDocId} />
