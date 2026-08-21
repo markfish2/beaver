@@ -250,7 +250,6 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
         ) : isEditing && activeTab !== 'diary' ? (
           // Document editor mode: toolbar below topbar, then content
           <>
-            <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 58px)', flexShrink: 0 }} />
             <ToolbarSlot showZoom={true} hasTabBar={false} keyboardOpen={keyboardOpen} />
             {children}
           </>

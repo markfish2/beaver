@@ -121,7 +121,7 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
     <>
       {/* 悬浮胶囊顶栏 */}
       <div
-        className="fixed left-3 right-3 z-30 flex items-center justify-between"
+        className="pointer-events-none fixed left-3 right-3 z-30 flex items-center justify-between"
         style={{
           top: `calc(8px + env(safe-area-inset-top, 0px))`,
           height: '44px',
@@ -130,13 +130,13 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
         {/* 左侧：头像（圆形胶囊） */}
         <div
           ref={userMenuRef}
-          className={`relative shrink-0 flex items-center ${isDocumentPage && editorActionsReady ? 'h-[36px] rounded-full bg-white/75 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)] backdrop-blur-2xl dark:bg-gray-800/75' : ''}`}
+          className={`pointer-events-auto relative shrink-0 flex items-center ${isDocumentPage && editorActionsReady ? 'h-[36px] rounded-full border border-white/80 bg-white/65 shadow-[0_4px_18px_-6px_rgba(15,23,42,0.22)] backdrop-blur-xl backdrop-saturate-150 dark:border-white/10 dark:bg-gray-800/65' : ''}`}
         >
           {showBack && (!isDocumentPage || editorActionsReady) ? (
             <button
               onClick={() => onBack?.()}
               className={`flex items-center justify-center w-[36px] h-[36px] rounded-full
-                         ${isDocumentPage ? '' : 'bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]'}
+                         ${isDocumentPage ? '' : 'border border-white/80 bg-white/65 shadow-[0_4px_18px_-6px_rgba(15,23,42,0.22)] backdrop-blur-xl backdrop-saturate-150 dark:border-white/10 dark:bg-gray-800/65'}
                          text-gray-600 dark:text-gray-300
                          active:scale-95 transition-transform`}
             >
@@ -147,8 +147,9 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="flex items-center justify-center w-[36px] h-[36px] rounded-full
-                           bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
-                           shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]
+                           border border-white/80 bg-white/65 backdrop-blur-xl backdrop-saturate-150
+                           shadow-[0_4px_18px_-6px_rgba(15,23,42,0.22)]
+                           dark:border-white/10 dark:bg-gray-800/65
                            overflow-hidden
                            active:scale-95 transition-transform"
               >
@@ -217,9 +218,10 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
         )}
 
         {/* 右侧：日/夜切换 + 搜索（胶囊容器） */}
-        <div className="relative shrink-0 flex items-center h-[36px] rounded-full
-                        bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
-                        shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]">
+        <div className="pointer-events-auto relative shrink-0 flex items-center h-[36px] rounded-full
+                        border border-white/80 bg-white/65 backdrop-blur-xl backdrop-saturate-150
+                        shadow-[0_4px_18px_-6px_rgba(15,23,42,0.22)]
+                        dark:border-white/10 dark:bg-gray-800/65">
           {/* 日/夜切换按钮 */}
           <button
             onClick={toggleDark}

@@ -1007,7 +1007,10 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
         {(viewMode === 'edit' || viewMode === 'split') && (
           <div className={`${viewMode === 'split' ? 'w-1/2 border-r border-gray-200 dark:border-gray-700' : 'flex-1 min-w-0 h-full'} flex flex-col`}>
             {/* 编辑模式固定头部：标题和快捷工具栏不参与正文滚动。 */}
-            <div className={`shrink-0 ${viewMode === 'split' ? 'w-full' : 'flex justify-center'}`}>
+            <div
+              className={`shrink-0 ${viewMode === 'split' ? 'w-full' : 'flex justify-center'}`}
+              style={isMobile ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 58px)' } : undefined}
+            >
               <div className={`w-full ${viewMode === 'split' ? '' : 'max-w-[768px]'}`}>
                 <input
                   type="text"
@@ -1051,7 +1054,11 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
           </div>
         )}
         {(viewMode === 'preview' || viewMode === 'split') && (
-          <div ref={previewRef} className={`${viewMode === 'split' ? 'w-1/2' : 'flex-1 min-w-0 h-full'} overflow-y-auto custom-scrollbar flex flex-col items-center`}>
+          <div
+            ref={previewRef}
+            className={`${viewMode === 'split' ? 'w-1/2' : 'flex-1 min-w-0 h-full'} overflow-y-auto custom-scrollbar flex flex-col items-center`}
+            style={isMobile ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 58px)' } : undefined}
+          >
             <div
               onDoubleClick={handlePreviewDoubleClick}
               className="markdown-note-preview memo-content max-w-[768px] w-full cursor-text text-base text-gray-700 dark:text-gray-300 p-6"
