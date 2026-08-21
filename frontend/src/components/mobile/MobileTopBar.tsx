@@ -186,14 +186,6 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
         <div className="relative shrink-0 flex items-center h-[36px] rounded-full
                         bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
                         shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]">
-          {isDocumentPage && (
-            <>
-              <span className="px-3 text-[13px] font-semibold text-gray-800 dark:text-gray-200">
-                {title}
-              </span>
-              <div className="w-px h-4 bg-gray-200 dark:bg-gray-600" />
-            </>
-          )}
           {/* 日/夜切换按钮 */}
           <button
             onClick={toggleDark}
