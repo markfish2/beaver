@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from . import models, schemas, auth
 import uuid
 import re
@@ -1198,16 +1198,48 @@ def get_memo_tags(db: Session):
     return result
 
 # Search
+def _english_word_variants(token: str) -> list[str]:
+    """返回简单英文词形变体，覆盖常见单复数而不引入额外依赖。"""
+    if not re.fullmatch(r'[a-zA-Z]+', token):
+        return [token]
+
+    variants = {token}
+    lower_token = token.lower()
+    if lower_token.endswith('ies') and len(token) > 4:
+        variants.add(token[:-3] + ('Y' if token[-1].isupper() else 'y'))
+    elif lower_token.endswith(('sses', 'shes', 'ches', 'xes', 'zes')) and len(token) > 4:
+        variants.add(token[:-2])
+    elif lower_token.endswith('s') and not lower_token.endswith(('ss', 'us', 'is')) and len(token) > 3:
+        variants.add(token[:-1])
+    elif not lower_token.endswith('s'):
+        variants.add(token + 's')
+    return list(variants)
+
+
+def _search_tokens(query: str) -> list[str]:
+    return [token for token in query.strip().split() if token]
+
+
+def _like_match(column, query: str):
+    """按搜索词分别粗筛，避免多词查询必须在数据库中连续出现。"""
+    clauses = [
+        column.like(f'%{variant}%')
+        for token in _search_tokens(query)
+        for variant in _english_word_variants(token)
+    ]
+    return or_(*clauses) if clauses else column.like(f'%{query}%')
+
+
 def _build_word_boundary_pattern(query: str) -> re.Pattern:
-    """为搜索词构建正则：英文用词边界匹配，中文用包含匹配"""
-    tokens = query.strip().split()
+    """为搜索词构建正则：英文支持常见词形，中文使用包含匹配。"""
+    tokens = _search_tokens(query)
     if not tokens:
         tokens = [query.strip()]
     pattern_parts = []
     for token in tokens:
         if re.search(r'[a-zA-Z0-9]', token):
-            # 英文/数字：词边界匹配，忽略大小写
-            pattern_parts.append(r'(?<![a-zA-Z0-9])' + re.escape(token) + r'(?![a-zA-Z0-9])')
+            variants = '|'.join(re.escape(item) for item in _english_word_variants(token))
+            pattern_parts.append(r'(?<![a-zA-Z0-9])(?:' + variants + r')(?![a-zA-Z0-9])')
         else:
             # 中文：直接包含
             pattern_parts.append(re.escape(token))
@@ -1236,13 +1268,11 @@ def _extract_snippet(text: str, pattern: re.Pattern, context_chars: int = 60) ->
 
 def unified_search(db: Session, query: str, limit: int = 50) -> list:
     pattern = _build_word_boundary_pattern(query)
-    # LIKE 粗筛用原始 query
-    search_pattern = f"%{query}%"
     results = []
 
     # 1. Document title matches (non-diary)
     title_matches = db.query(models.Document).filter(
-        models.Document.title.like(search_pattern),
+        _like_match(models.Document.title, query),
         models.Document.diary_date.is_(None),
         (models.Document.type == 'document') | (models.Document.type == 'note')
     ).limit(30).all()
@@ -1263,8 +1293,8 @@ def unified_search(db: Session, query: str, limit: int = 50) -> list:
         .filter(
             models.Document.diary_date.is_(None),
             (models.Document.type == 'document') | (models.Document.type == 'note'),
-            (models.Node.content.like(search_pattern) |
-             models.Node.note.like(search_pattern))
+            (_like_match(models.Node.content, query) |
+             _like_match(models.Node.note, query))
         )
         .limit(50).all()
     )
@@ -1288,8 +1318,8 @@ def unified_search(db: Session, query: str, limit: int = 50) -> list:
         .join(models.Document, models.Node.document_id == models.Document.id)
         .filter(
             models.Document.diary_date.isnot(None),
-            (models.Node.content.like(search_pattern) |
-             models.Node.note.like(search_pattern))
+            (_like_match(models.Node.content, query) |
+             _like_match(models.Node.note, query))
         )
         .limit(50).all()
     )
@@ -1309,7 +1339,7 @@ def unified_search(db: Session, query: str, limit: int = 50) -> list:
 
     # 4. Memo content matches
     memo_matches = db.query(models.Memo).filter(
-        models.Memo.content.like(search_pattern),
+        _like_match(models.Memo.content, query),
         models.Memo.is_archived == False,
         models.Memo.deleted_at.is_(None)
     ).limit(30).all()
