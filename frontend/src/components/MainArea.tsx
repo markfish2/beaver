@@ -989,6 +989,24 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     openDocumentTab(value, currentDoc);
   }, [currentDoc, openDocumentTab]);
 
+  useEffect(() => {
+    const handleMobileOutlineBack = (event: Event) => {
+      const detail = (event as CustomEvent<{ documentId?: string }>).detail;
+      if (
+        !detail?.documentId
+        || detail.documentId !== documentId
+        || viewMode !== 'mindmap'
+        || !currentDoc
+      ) {
+        return;
+      }
+      openDocumentTab('outline', currentDoc);
+    };
+
+    window.addEventListener('mobile-outline-back', handleMobileOutlineBack);
+    return () => window.removeEventListener('mobile-outline-back', handleMobileOutlineBack);
+  }, [currentDoc, documentId, openDocumentTab, viewMode]);
+
   const handleMindMapNodeUpdate = async (nodeId: string, content: string) => {
     const node = nodes.find(n => n.id === nodeId);
     if (!node || node.content === content) return;
@@ -2926,7 +2944,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                 currentDoc={currentDoc}
                 generateMarkdownPreview={generateMarkdownPreview}
               />
-              <SaveStatusIndicator status={saveStatus} pendingCount={pendingCount} offlineQueueCount={offlineQueueCount} />
+              <SaveStatusIndicator borderless status={saveStatus} pendingCount={pendingCount} offlineQueueCount={offlineQueueCount} />
             </div>
             </EditorActionPortal>
           </div>

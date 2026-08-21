@@ -13,6 +13,8 @@ interface PendingOperation {
 
 interface SaveStatusIndicatorProps {
   status: SaveStatus;
+  /** Render only the status icon without the surrounding rounded button chrome. */
+  borderless?: boolean;
   pendingCount?: number;
   pendingOperations?: PendingOperation[];
   offlineQueueCount?: number;
@@ -23,6 +25,7 @@ interface SaveStatusIndicatorProps {
 
 export const SaveStatusIndicator: React.FC<SaveStatusIndicatorProps> = ({
   status: externalStatus,
+  borderless = false,
   pendingCount = 0,
   pendingOperations = [],
   offlineQueueCount = 0,
@@ -217,8 +220,11 @@ export const SaveStatusIndicator: React.FC<SaveStatusIndicatorProps> = ({
       <button
         onClick={handleClick}
         className={clsx(
-          'flex items-center justify-center w-8 h-8 rounded-md backdrop-blur-sm border transition-all duration-300 cursor-pointer hover:scale-105',
-          getStatusColor(),
+          'flex items-center justify-center w-8 h-8 transition-all duration-300 cursor-pointer hover:scale-105',
+          borderless
+            ? 'rounded-none border-0 bg-transparent shadow-none backdrop-blur-none'
+            : 'rounded-md backdrop-blur-sm border',
+          !borderless && getStatusColor(),
           animationState === 'animating' && 'animate-pulse'
         )}
         title={getTooltip()}

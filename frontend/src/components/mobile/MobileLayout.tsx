@@ -149,6 +149,24 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       setUserSubView(null);
       return;
     }
+
+    // 大纲与思维导图共用同一条文档路由。返回时先回到同一篇笔记的大纲，
+    // 避免把思维导图误当成文档入口直接退回列表。
+    const documentMatch = location.pathname.match(/^\/d\/([^/]+)$/);
+    if (documentMatch) {
+      try {
+        const activeTabKey = sessionStorage.getItem('beaver:active-document-tab:v1');
+        if (activeTabKey === `${documentMatch[1]}:mindmap`) {
+          window.dispatchEvent(new CustomEvent('mobile-outline-back', {
+            detail: { documentId: documentMatch[1] },
+          }));
+          return;
+        }
+      } catch {
+        // sessionStorage 不可用时继续使用普通返回逻辑。
+      }
+    }
+
     const target = resolveMobileBackTarget(location.key, location.state, window.history.length);
     if (target.kind === 'history') {
       navigate(-1);
@@ -161,7 +179,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       replace: true,
       state: target.tab ? { mobileReturnTab: target.tab } : undefined,
     });
-  }, [location.key, location.state, navigate, setUserSubView, userSubView]);
+  }, [location.key, location.pathname, location.state, navigate, setUserSubView, userSubView]);
 
   const handleSearch = useCallback((query: string) => {
     navigate(`/search?q=${encodeURIComponent(query)}`, {
@@ -220,6 +238,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
         title={getTopBarTitle()}
         showBack={isEditing || !!userSubView}
         isDocumentPage={isEditing && activeTab !== 'diary'}
+        documentKey={isEditing ? location.pathname : undefined}
         onBack={handleBack}
         onSearch={handleSearch}
       />

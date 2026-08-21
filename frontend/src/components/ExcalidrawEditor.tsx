@@ -1248,7 +1248,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           )}
         </div>
         {/* 保存状态：与大纲笔记一致，固定在顶部操作区最右侧 */}
-        <SaveStatusIndicator status={saveStatus} />
+        <SaveStatusIndicator borderless status={saveStatus} />
         </div>
         </EditorActionPortal>
       </div>
