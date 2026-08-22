@@ -173,6 +173,7 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
 
   const renderDocItem = (doc: Document, depth: number) => {
     const isFolder = doc.type === 'folder';
+    const isUnfiledNote = !starredOnly && depth === 0 && !isFolder && doc.parent_id === null;
     const isExpanded = expandedFolders.has(doc.id);
 
     return (
@@ -201,6 +202,9 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
             e.currentTarget.addEventListener('touchmove', cleanup, { once: true });
           }}
         >
+          {isUnfiledNote && (
+            <span aria-hidden="true" className="absolute left-4 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-[#4d9383]" />
+          )}
           {isFolder ? (
             <>
               <ChevronRight className={`w-[18px] h-[18px] text-gray-400 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />

@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
+import type { Root } from 'hast';
 import { EditorView } from '@codemirror/view';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -96,6 +97,20 @@ const BLOCK_CODE_FONT_SIZE = 'var(--markdown-block-code-font-size)';
 const MARKDOWN_REMARK_PLUGINS = [remarkGfm, remarkBreaks, remarkMath];
 const MARKDOWN_REHYPE_PLUGINS = [rehypeRaw, preserveCodeBlocks, rehypeKatex];
 
+// 预览模式按顶层 Markdown 块延迟挂载，避免长笔记首次打开时一次性执行全部重渲染。
+function wrapMarkdownBlocks() {
+  return (tree: Root) => {
+    tree.children = tree.children.map((child) => ({
+      type: 'element' as const,
+      tagName: 'div',
+      properties: { 'data-markdown-block': 'true' },
+      children: [child],
+    }));
+  };
+}
+
+const LAZY_MARKDOWN_REHYPE_PLUGINS = [...MARKDOWN_REHYPE_PLUGINS, wrapMarkdownBlocks];
+
 const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => {
   // 非默认主题的暗色模式不设置内联背景，让 CSS 主题变量控制
   const mdStyle = typeof document !== 'undefined' ? document.documentElement.dataset.markdownStyle : '';
@@ -147,6 +162,46 @@ function PlainCodeWithLineNumbers({ code, isDark }: { code: string; isDark: bool
         ))}
       </code>
     </pre>
+  );
+}
+
+type MarkdownDivProps = Parameters<NonNullable<Components['div']>>[0];
+
+function DeferredMarkdownBlock({
+  children,
+  minHeight,
+  rootRef,
+}: {
+  children: React.ReactNode;
+  minHeight: number;
+  rootRef: RefObject<HTMLElement | null>;
+}) {
+  const blockRef = useRef<HTMLDivElement>(null);
+  const [isNearViewport, setIsNearViewport] = useState(false);
+
+  useEffect(() => {
+    const element = blockRef.current;
+    if (!element || typeof IntersectionObserver === 'undefined') {
+      setIsNearViewport(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        setIsNearViewport(true);
+        observer.disconnect();
+      },
+      { root: rootRef.current, rootMargin: '600px 0px' },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [rootRef]);
+
+  return (
+    <div ref={blockRef} style={{ minHeight: isNearViewport ? undefined : minHeight }}>
+      {isNearViewport ? children : null}
+    </div>
   );
 }
 
@@ -770,6 +825,23 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   }, [content, processedContent, scheduleSave]);
 
   const mdComponents = useMemo((): Components => ({
+    div: ({ node, children, ...props }: MarkdownDivProps) => {
+      const properties = (node as { properties?: Record<string, unknown> } | undefined)?.properties;
+      if (properties?.['data-markdown-block'] === 'true') {
+        const startLine = getNodeStartLine((node as { children?: unknown[] }).children?.[0]);
+        const endLine = (node as { children?: Array<{ position?: { end?: { line?: number } } }> }).children?.[0]?.position?.end?.line;
+        const estimatedLines = startLine && endLine && endLine >= startLine ? endLine - startLine + 1 : 2;
+        return (
+          <DeferredMarkdownBlock
+            minHeight={Math.max(44, Math.min(420, estimatedLines * 28))}
+            rootRef={previewRef}
+          >
+            {children}
+          </DeferredMarkdownBlock>
+        );
+      }
+      return <div {...props}>{children}</div>;
+    },
     code: (props: MarkdownCodeProps) => {
       const match = /language-(\w+)/.exec(props.className || '');
       if (match && match[1] === 'mermaid') return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
@@ -1056,7 +1128,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
         {(viewMode === 'preview' || viewMode === 'split') && (
           <div
             ref={previewRef}
-            className={`${viewMode === 'split' ? 'w-1/2' : 'flex-1 min-w-0 h-full'} overflow-y-auto custom-scrollbar flex flex-col items-center`}
+            className={`${viewMode === 'split' ? 'w-1/2' : 'flex-1 min-w-0 h-full'} overflow-x-hidden overflow-y-auto custom-scrollbar flex flex-col items-center`}
             style={isMobile ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 58px)' } : undefined}
           >
             <div
@@ -1067,7 +1139,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
             >
               <h1 className="markdown-note-title mb-6 text-3xl font-semibold leading-tight text-gray-900 dark:text-gray-100">{title || '无标题'}</h1>
               {content.trim() ? (
-                <ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} rehypePlugins={MARKDOWN_REHYPE_PLUGINS} components={mdComponents}>{processedContent}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} rehypePlugins={LAZY_MARKDOWN_REHYPE_PLUGINS} components={mdComponents}>{processedContent}</ReactMarkdown>
               ) : <p className="text-gray-400 dark:text-gray-500 italic">空笔记</p>}
             </div>
           </div>
@@ -1103,7 +1175,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
       <div
         ref={exportSurfaceRef}
         className="markdown-note-preview memo-content"
-        style={{ position: 'fixed', left: -99999, top: 0, width: 768, background: '#ffffff', color: '#1f2937', lineHeight: 1.75, zIndex: -1, pointerEvents: 'none' }}
+        style={{ position: 'fixed', left: -99999, top: 0, width: 768, background: '#ffffff', color: '#1f2937', lineHeight: 1.75, zIndex: -1, pointerEvents: 'none', visibility: 'hidden', overflow: 'hidden', contain: 'layout paint style' }}
         aria-hidden="true"
       >
         {content.trim() ? (

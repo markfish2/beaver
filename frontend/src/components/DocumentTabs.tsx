@@ -42,19 +42,16 @@ export default function DocumentTabs({ tabs, activeKey, onSelect, onClose }: Doc
     window.setTimeout(updateScrollState, 220);
   };
 
+  const hasOverflow = canScrollLeft || canScrollRight;
+
   return (
-    <div className="flex min-w-0 flex-1 items-center" role="tablist" aria-label="已打开的笔记">
-      <button
-        type="button"
-        onClick={() => scrollTabs('left')}
-        disabled={!canScrollLeft}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:pointer-events-none disabled:opacity-0 dark:hover:bg-gray-800 dark:hover:text-gray-200"
-        aria-label="查看前面的笔记 Tab"
+    <div className="relative flex min-w-0 flex-1 items-center" role="tablist" aria-label="已打开的笔记">
+      <div
+        ref={scrollRef}
+        onScroll={updateScrollState}
+        className={`document-tabs min-w-0 flex-1 overflow-x-auto scrollbar-none ${hasOverflow ? 'px-7' : ''}`}
       >
-        <ChevronLeft className="h-4 w-4" />
-      </button>
-      <div ref={scrollRef} onScroll={updateScrollState} className="document-tabs min-w-0 flex-1 overflow-x-auto scrollbar-none">
-      <div className="flex min-w-max items-center gap-1 px-1">
+      <div className="flex min-w-full items-center gap-1 px-1">
         {tabs.map(tab => {
           const isActive = tab.key === activeKey;
           const iconType = tab.mode === 'mindmap' ? 'document' : tab.type;
@@ -63,7 +60,7 @@ export default function DocumentTabs({ tabs, activeKey, onSelect, onClose }: Doc
               key={tab.key}
               role="tab"
               aria-selected={isActive}
-              className={`group flex h-8 max-w-[220px] min-w-[120px] items-center gap-1.5 rounded-md px-2 text-sm transition-colors ${
+              className={`group flex h-8 min-w-[96px] max-w-[220px] flex-1 basis-[140px] items-center gap-1.5 rounded-md px-2 text-sm transition-colors ${
                 isActive
                   ? 'bg-[#c9ddd7] font-medium text-[#285f52] dark:bg-[#3f7468] dark:text-white'
                   : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'
@@ -96,15 +93,28 @@ export default function DocumentTabs({ tabs, activeKey, onSelect, onClose }: Doc
         })}
       </div>
       </div>
-      <button
-        type="button"
-        onClick={() => scrollTabs('right')}
-        disabled={!canScrollRight}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:pointer-events-none disabled:opacity-0 dark:hover:bg-gray-800 dark:hover:text-gray-200"
-        aria-label="查看后面的笔记 Tab"
-      >
-        <ChevronRight className="h-4 w-4" />
-      </button>
+      {hasOverflow && (
+        <>
+          <button
+            type="button"
+            onClick={() => scrollTabs('left')}
+            disabled={!canScrollLeft}
+            className="absolute left-0 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md bg-[var(--app-canvas)] text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+            aria-label="查看前面的笔记 Tab"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollTabs('right')}
+            disabled={!canScrollRight}
+            className="absolute right-0 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md bg-[var(--app-canvas)] text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+            aria-label="查看后面的笔记 Tab"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </>
+      )}
     </div>
   );
 }

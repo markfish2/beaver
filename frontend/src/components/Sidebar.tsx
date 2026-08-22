@@ -51,6 +51,19 @@ const MAX_PANEL_WIDTH = 460;
 const navigationNonce = () => Date.now();
 const DOCUMENT_ITEM_TYPES = new Set<DocType['type']>(['document', 'note', 'excalidraw']);
 
+const ProjectListIcon = ({ className = '' }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="M0 0h24v24H0z" fill="none" />
+    <path fill="currentColor" d="M4 2H2v19c0 .55.45 1 1 1h19v-2H4z" />
+    <path fill="currentColor" d="M6 8h6v2H6zm3 4h6v2H9zm4 4h6v2h-6zM11 4h8v2h-8z" />
+  </svg>
+);
+
 const compareFolderTitle = (a: DocType, b: DocType) =>
   (a.title || '').localeCompare(b.title || '', 'zh-CN', {
     numeric: true,
@@ -952,6 +965,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       <div className="space-y-px">
         {children.map((doc) => {
           const isFolder = doc.type === 'folder';
+          const isUnfiledNote = viewMode === 'all' && level === 0 && !isFolder && doc.parent_id === null;
           const folderIconType = isFolder && isExpanded[doc.id] ? 'folder-open' : doc.type;
           return (
             <div key={doc.id}>
@@ -963,7 +977,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, doc)}
                 onDragEnd={handleDragEnd}
-                className={`flex items-center px-2 py-1.5 rounded-full cursor-pointer group transition-all ${
+                className={`relative flex items-center px-2 py-1.5 rounded-full cursor-pointer group transition-all ${
                   documentId === doc.id
                     ? 'bg-[#f1f1f1] text-gray-900 dark:bg-gray-700 dark:text-gray-100 font-medium'
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200/50 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-gray-200'
@@ -1000,6 +1014,9 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                 onTouchEnd={cancelLongPress}
                 onTouchMove={cancelLongPress}
               >
+                {isUnfiledNote && (
+                  <span aria-hidden="true" className="absolute left-[10px] top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-[#4d9383]" />
+                )}
                 <span className="flex items-center mr-1.5 shrink-0 relative">
                   {isFolder && (
                     isExpanded[doc.id] ? <ChevronDown className="w-3.5 h-3.5 mr-0.5 text-gray-400 dark:text-gray-500" /> : <ChevronRight className="w-3.5 h-3.5 mr-0.5 text-gray-400 dark:text-gray-500" />
@@ -1505,7 +1522,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                                     ? 'bg-[#E0E0D8] dark:bg-gray-700'
                                     : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
                                 }`}>
-                                <DocumentTypeIcon type="project" className="h-4 w-4" />
+                                <ProjectListIcon className="h-4 w-4" />
                                 {editingProjectId === p.id ? (
                                   <input
                                     type="text"
@@ -1803,7 +1820,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                                       ? 'bg-[#E0E0D8] dark:bg-gray-700'
                                       : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
                                   }`}>
-                                  <DocumentTypeIcon type="project" className="h-4 w-4" />
+                                  <ProjectListIcon className="h-4 w-4" />
                                   {editingProjectId === p.id ? (
                                     <input
                                       type="text"

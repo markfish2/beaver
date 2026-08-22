@@ -127,6 +127,7 @@ export default function MermaidBlock({ code, dark }: MermaidBlockProps) {
 
   useEffect(() => {
     let cancelled = false;
+    const container = containerRef.current;
 
     const render = async () => {
       try {
@@ -150,7 +151,12 @@ export default function MermaidBlock({ code, dark }: MermaidBlockProps) {
     };
 
     void render();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      // Mermaid 渲染是异步的。组件在切换笔记或关闭 Tab 时，主动清理旧 SVG，
+      // 避免异步完成后的残留节点影响页面尺寸或出现在正文区域外。
+      container?.replaceChildren();
+    };
   }, [code, dark]);
 
   useEffect(() => {
@@ -206,7 +212,7 @@ export default function MermaidBlock({ code, dark }: MermaidBlockProps) {
 
   return (
     <>
-      <div className="mermaid-surface group relative my-2 overflow-hidden rounded-xl border border-gray-200/80 p-3 dark:border-gray-700/80">
+      <div className="mermaid-surface isolate relative my-2 max-w-full overflow-hidden rounded-xl border border-gray-200/80 p-3 dark:border-gray-700/80">
         <div
           ref={containerRef}
           className="mermaid-diagram flex max-h-none justify-center overflow-auto"
