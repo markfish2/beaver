@@ -714,7 +714,9 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
       const url = res.file_path.replace(/^\/api/, '');
       const text = isImage ? `![${res.file_name}](${url})` : `[${res.file_name}](${url})`;
       editorRef.current?.insertText(text);
-      scheduleSave(editorRef.current?.getValue() ?? content);
+      const newContent = editorRef.current?.getValue() ?? content;
+      setContent(newContent);
+      scheduleSave(newContent);
     } catch (e) { console.error('Upload failed', e); alert('上传失败'); }
     finally { setUploading(false); }
   }, [scheduleSave, content]);
@@ -751,6 +753,9 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
       e.preventDefault();
       editorRef.current?.insertText(md);
       const newContent = editorRef.current?.getValue() ?? content;
+      // CodeMirror 的 updateListener 与 React 状态更新可能不在同一批次，
+      // 显式同步，确保粘贴后立即切换预览时使用最新内容。
+      setContent(newContent);
       scheduleSave(newContent);
       if (md.includes('![')) {
         setUploading(true);
@@ -761,6 +766,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
           let updated = view.state.doc.toString();
           if (result.markdown !== md) updated = updated.replace(md, result.markdown);
           if (updated !== view.state.doc.toString()) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: updated } });
+          setContent(updated);
           scheduleSave(updated);
           if (result.failedUrls.length > 0) alert(`${result.failedUrls.length} 张图片未能自动上传，已保留原地址`);
         } finally {
