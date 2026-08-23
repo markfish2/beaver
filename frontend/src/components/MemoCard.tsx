@@ -418,7 +418,14 @@ const MemoImage = memo(function MemoImage({ src, alt, onPreview }: { src?: strin
       src={getThumbnailUrl(src)}
       alt={alt || ''}
       className="cursor-pointer hover:opacity-80 transition-opacity"
-      onClick={() => onPreview(src)}
+      onClick={(event) => {
+        // Imported articles may already contain [![image](src)](article-url).
+        // Prevent the legacy outer anchor from navigating away and use the
+        // same MemoCard image viewer for both old and newly imported content.
+        event.preventDefault();
+        event.stopPropagation();
+        onPreview(src);
+      }}
     />
   );
 });

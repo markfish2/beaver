@@ -208,18 +208,19 @@ function cleanCellContent(html) {
       }
     });
 
-    // Handle links wrapping images: output as [![alt](img)](link) on one line
+    // Handle links wrapping images: an article often wraps its image with a link
+    // to the article page or the original image. The memo should own the image
+    // interaction, so keep only the image itself and discard the outer link.
     td.addRule('linkedImages', {
       filter: function(node) {
         return node.nodeName === 'A' && node.querySelector('img');
       },
       replacement: function(_, node) {
-        var href = node.getAttribute('href') || '';
         var img = node.querySelector('img');
         var src = img.getAttribute('src') || img.getAttribute('data-src') || img.getAttribute('data-original') || '';
         var alt = img.getAttribute('alt') || '图片';
         if (!src || src.indexOf('data:image/gif') === 0) return '';
-        return '[' + '![' + alt + '](' + src + ')' + '](' + href + ')';
+        return '![' + alt + '](' + src + ')';
       }
     });
 

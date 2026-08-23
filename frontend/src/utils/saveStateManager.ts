@@ -97,6 +97,7 @@ class SaveStateManager {
   private listeners: Set<() => void> = new Set();
   private online: boolean;
   private syncInProgress: boolean = false;
+  private retryTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   constructor() {
     this.online = navigator.onLine;
@@ -104,6 +105,7 @@ class SaveStateManager {
     window.addEventListener('offline', this.handleOffline);
     this.loadFromLocal();
     this.loadOfflineQueue();
+    this.restoreFailedOperations();
   }
 
   private handleOnline = () => {
@@ -166,11 +168,10 @@ class SaveStateManager {
     if (operation) {
       operation.status = 'error';
       operation.error = error;
-      if (!navigator.onLine && !this.offlineQueue.some(item => item.id === id)) {
+      if (!navigator.onLine) {
         this.online = false;
-        this.offlineQueue.push(operation);
-        this.saveOfflineQueue();
       }
+      this.enqueueForRetry(operation);
       this.saveToLocal();
       this.notifyListeners();
     }
@@ -306,6 +307,48 @@ class SaveStateManager {
     }
   }
 
+  private restoreFailedOperations(): void {
+    for (const operation of this.operations.values()) {
+      if (operation.status !== 'error') continue;
+      this.enqueueForRetry(operation);
+    }
+    if (this.online && this.offlineQueue.length > 0) {
+      this.scheduleRetry();
+    }
+  }
+
+  private enqueueForRetry(operation: PendingOperation): void {
+    if (!this.offlineQueue.some(item => item.id === operation.id)) {
+      this.offlineQueue.push(operation);
+      this.saveOfflineQueue();
+    }
+    if (this.online) this.scheduleRetry(operation.id);
+  }
+
+  private scheduleRetry(operationId?: string): void {
+    if (!this.online) return;
+    const id = operationId || '__queue__';
+    if (this.retryTimers.has(id)) return;
+
+    const operation = operationId ? this.operations.get(operationId) : undefined;
+    const retryCount = operation?.retryCount ?? 0;
+    const delay = Math.min(60_000, 2_000 * Math.pow(2, Math.min(retryCount, 5)));
+    if (operation) {
+      operation.retryCount = retryCount + 1;
+      this.saveToLocal();
+    }
+
+    const timer = setTimeout(() => {
+      this.retryTimers.delete(id);
+      if (this.syncInProgress) {
+        this.scheduleRetry(operationId);
+        return;
+      }
+      void this.syncOfflineOperations();
+    }, delay);
+    this.retryTimers.set(id, timer);
+  }
+
   private clearOfflineQueue(): void {
     this.offlineQueue = [];
     try {
@@ -327,6 +370,11 @@ class SaveStateManager {
 
     for (const op of operations) {
       try {
+        const existingOp = this.operations.get(op.id);
+        if (existingOp) {
+          existingOp.status = 'saving';
+          this.notifyListeners();
+        }
         await this.retryOperation(op);
         this.operations.delete(op.id);
         this.saveToLocal();
@@ -341,6 +389,7 @@ class SaveStateManager {
         }
         this.offlineQueue.push(op);
         this.saveOfflineQueue();
+        this.scheduleRetry(op.id);
       }
     }
 
@@ -484,6 +533,8 @@ class SaveStateManager {
   destroy(): void {
     window.removeEventListener('online', this.handleOnline);
     window.removeEventListener('offline', this.handleOffline);
+    this.retryTimers.forEach(timer => clearTimeout(timer));
+    this.retryTimers.clear();
     this.listeners.clear();
   }
 }

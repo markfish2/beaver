@@ -142,11 +142,11 @@
         td.addRule('linkedImages', {
           filter: function(node) { return node.nodeName === 'A' && node.querySelector('img'); },
           replacement: function(_, node) {
-            var href = node.getAttribute('href') || '';
             var img = node.querySelector('img');
             var src = img.getAttribute('src') || img.getAttribute('data-src') || '';
             var alt = img.getAttribute('alt') || '图片';
-            return src ? '[![' + alt + '](' + src + ')](' + href + ')' : '';
+            // 图片交互由 Beaver MemoCard 负责，不保留文章外层的跳转链接。
+            return src ? '![' + alt + '](' + src + ')' : '';
           }
         });
         td.addRule('lazyImages', {
