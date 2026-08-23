@@ -415,7 +415,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
   }, []);
 
   return (
-    <div className={`overflow-y-auto bg-[var(--app-canvas)] custom-scrollbar ${document.documentElement.dataset.mobileLayout ? 'flex-1' : 'flex-1 h-full'} ${
+    <div className={`overflow-y-auto bg-[var(--app-canvas)] custom-scrollbar scrollbar-auto-hide ${document.documentElement.dataset.mobileLayout ? 'flex-1' : 'flex-1 h-full'} ${
       showPinnedPanel ? pinnedPanelCls.pageScrollLock : ''
     }`}
       style={document.documentElement.dataset.mobileLayout ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 44px)', paddingBottom: '52px' } : undefined}
@@ -716,7 +716,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
       {showRightPanel && document.documentElement.dataset.mobileLayout && (
         <div className="lg:hidden fixed inset-0 z-30" onClick={() => setShowRightPanel(false)}>
           <div
-            className="absolute right-0 w-72 bg-[var(--app-sidebar)] shadow-xl overflow-y-auto custom-scrollbar p-4 space-y-4"
+            className="absolute right-0 w-72 bg-[var(--app-sidebar)] shadow-xl overflow-y-auto custom-scrollbar scrollbar-auto-hide p-4 space-y-4"
             style={{
               top: document.documentElement.dataset.mobileLayout
                 ? 'calc(env(safe-area-inset-top, 0px) + 44px)'

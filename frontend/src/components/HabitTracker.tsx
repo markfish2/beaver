@@ -325,10 +325,10 @@ const HabitRow = memo(function HabitRow({
                 onClick={() => onToggle(habit.id, date)}
                 className={`w-[18px] h-[18px] rounded-full flex items-center justify-center transition-all ${
                   checked
-                    ? 'bg-[#4d9383] dark:bg-[#75b4a4] scale-110'
+                    ? 'bg-[var(--app-link)] dark:bg-[var(--app-link-soft)] scale-110'
                     : today
-                      ? 'border-2 border-[#4d9383] dark:border-[#75b4a4] bg-transparent'
-                      : 'border border-gray-300 dark:border-gray-600 bg-transparent hover:border-[#4d9383] dark:hover:border-[#75b4a4]'
+                      ? 'border-2 border-[var(--app-link)] dark:border-[var(--app-link-soft)] bg-transparent'
+                      : 'border border-gray-300 dark:border-gray-600 bg-transparent hover:border-[var(--app-link)] dark:hover:border-[var(--app-link-soft)]'
                 }`}
                 title={`${date}${checked ? ' ✓' : ''}`}
               >

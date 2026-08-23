@@ -60,6 +60,7 @@ import TagMentionPopup from './TagMentionPopup';
 import type { PopupItem } from './TagMentionPopup';
 import { tagMentionExtension } from '../extensions/tagMentionExtension';
 import type { TagMentionState } from '../extensions/tagMentionExtension';
+import { isMentionableDocument } from '../utils/documentMention';
 import { stripTags, stripAttachments, normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts, escapeCodeBlockHtml, getMarkdownTaskOrdinalAtLine, toggleMarkdownTaskByOrdinal } from '../utils/markdownPreprocess';
 import MemoToDocDialog from './MemoToDocDialog';
 import AudioPlayer from './AudioPlayer';
@@ -571,7 +572,7 @@ const markdownComponents = (
             aria-checked={checked}
             className={`absolute left-0 top-[5px] z-20 inline-flex items-center justify-center w-[14px] h-[14px] rounded-full border cursor-pointer shrink-0 transition-colors ${
               checked
-                ? 'bg-[#4d9383] border-[#4d9383]'
+                ? 'bg-[var(--app-link)] border-[var(--app-link)]'
                 : ''
             }`}
             style={checked ? undefined : { background: palette.surface, borderColor: palette.surfaceBorder }}
@@ -651,10 +652,11 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const filteredDocs = useMemo(() => {
     if (!mentionState.type || mentionState.type !== 'mention' || !documents) return [];
     const kw = mentionState.query.toLowerCase();
-    if (!kw) return documents.slice(0, 8);
+    const mentionableDocuments = documents.filter(isMentionableDocument);
+    if (!kw) return mentionableDocuments.slice(0, 8);
     const prefixMatches: Document[] = [];
     const containsMatches: Document[] = [];
-    for (const doc of documents) {
+    for (const doc of mentionableDocuments) {
       const name = (doc.title || '').toLowerCase();
       if (name.startsWith(kw)) prefixMatches.push(doc);
       else if (name.includes(kw)) containsMatches.push(doc);

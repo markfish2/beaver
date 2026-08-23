@@ -257,7 +257,7 @@ body,
   position: fixed;
   padding: 4px 10px;
   border-radius: 9999px;
-  background: #4d9383;
+  background: var(--app-link);
   color: #fff;
   font-size: 12px;
   line-height: 1.4;
@@ -1241,6 +1241,33 @@ body,
     scrollbar-width: auto;
     scrollbar-color: auto;
   }
+}
+
+/* 左侧列表滚动时显示滚动条，停止滚动后隐藏；不影响正文和代码区。 */
+.scrollbar-auto-hide {
+  /* 始终预留窄滚动条槽位，避免显示/隐藏时内容区域发生横向跳动。 */
+  scrollbar-width: thin !important;
+  scrollbar-gutter: stable;
+  scrollbar-color: transparent transparent !important;
+}
+.scrollbar-auto-hide::-webkit-scrollbar {
+  width: 1px !important;
+  height: 3px !important;
+}
+.scrollbar-auto-hide::-webkit-scrollbar-thumb {
+  background: transparent !important;
+}
+.scrollbar-auto-hide.is-scrolling {
+  /* 宽度与空闲状态一致，只切换滑块颜色。 */
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--app-link) transparent !important;
+}
+.scrollbar-auto-hide.is-scrolling::-webkit-scrollbar {
+  width: 1px !important;
+  height: 3px !important;
+}
+.scrollbar-auto-hide.is-scrolling::-webkit-scrollbar-thumb {
+  background: var(--app-link) !important;
 }
 
 /* 必须放在所有 Markdown 风格规则之后，确保普通笔记文档标题不会被正文 H1 覆盖。 */

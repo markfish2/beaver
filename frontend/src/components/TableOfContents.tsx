@@ -179,15 +179,15 @@ export default function TableOfContents({ nodes, documentId }: TableOfContentsPr
           </button>
         </div>
         {/* Items */}
-        <div ref={tocListRef} className="relative flex-1 overflow-y-auto custom-scrollbar py-0.5 pl-2">
+        <div ref={tocListRef} className="relative flex-1 overflow-y-auto custom-scrollbar scrollbar-auto-hide py-0.5 pl-2">
           <div className="absolute left-[10px] top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700" aria-hidden="true" />
           {visibleRange.end >= visibleRange.start && (
             <div
-              className="pointer-events-none absolute left-[10px] z-20 w-px bg-[#46745b] dark:bg-[#8fc5a5]"
+              className="pointer-events-none absolute left-[10px] z-20 w-px bg-[var(--app-link)]"
               style={{ top: visibleRail.top, height: visibleRail.height }}
               aria-hidden="true"
             >
-              <span className="absolute left-1/2 bottom-[-2px] h-1 w-1 -translate-x-1/2 rounded-full bg-[#46745b] dark:bg-[#8fc5a5]" />
+              <span className="absolute left-1/2 bottom-[-2px] h-1 w-1 -translate-x-1/2 rounded-full bg-[var(--app-link)]" />
             </div>
           )}
           {tocItems.map((item, index) => {
@@ -198,7 +198,7 @@ export default function TableOfContents({ nodes, documentId }: TableOfContentsPr
                 onClick={() => scrollToHeading(item.id)}
                 className={`relative z-10 w-full text-left leading-tight py-1 pr-2 pl-5 transition-all duration-150 truncate ${
                   index >= visibleRange.start && index <= visibleRange.end
-                    ? 'text-[#46745b] dark:text-[#8fc5a5] font-medium'
+                    ? 'text-[var(--app-link)] font-medium'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                 }`}
                 style={{ paddingLeft: `${20 + LEVEL_INDENT[item.level]}px`, fontSize: '13px' }}

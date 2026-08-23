@@ -1,13 +1,16 @@
 import React, { useRef, useEffect, useLayoutEffect, useState, useCallback, useMemo, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import type { Node, Document } from '../api/data';
 import { getFileUrl, getThumbnailUrl, getNodes, createMemo } from '../api/data';
 import { ArrowUpRight } from 'lucide-react';
 import { nodesToMemoMarkdown } from '../utils/convertNode';
-import MentionDropdown from './MentionDropdown';
+import TagMentionPopup from './TagMentionPopup';
+import type { PopupItem } from './TagMentionPopup';
 import ImageViewer from './ImageViewer';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
 import { isPhoneLayout } from '../utils/deviceLayout';
+import { isMentionableDocument } from '../utils/documentMention';
 
 interface NodeItemProps {
   node: NodeWithTreeMeta;
@@ -37,6 +40,44 @@ type NodeWithTreeMeta = Node & {
   children?: NodeWithTreeMeta[];
   subtreeVersion?: string;
   subtreeNodeIds?: string[];
+};
+
+/** 返回 contentEditable 中光标相对于纯文本内容的偏移量。 */
+const getTextOffset = (root: HTMLElement, container: globalThis.Node, offset: number): number => {
+  const walker = document.createTreeWalker(root, globalThis.NodeFilter.SHOW_TEXT);
+  let total = 0;
+  let current: globalThis.Node | null;
+  while ((current = walker.nextNode())) {
+    if (current === container) return total + offset;
+    total += current.textContent?.length ?? 0;
+  }
+  return total;
+};
+
+/** 将 contentEditable 的光标放到纯文本偏移处，避免嵌套链接/标签导致光标失效。 */
+const setTextCaret = (root: HTMLElement, offset: number): void => {
+  const selection = window.getSelection();
+  if (!selection) return;
+  const walker = document.createTreeWalker(root, globalThis.NodeFilter.SHOW_TEXT);
+  let remaining = offset;
+  let current: globalThis.Node | null;
+  while ((current = walker.nextNode())) {
+    const length = current.textContent?.length ?? 0;
+    if (remaining <= length) {
+      const range = document.createRange();
+      range.setStart(current, remaining);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return;
+    }
+    remaining -= length;
+  }
+  const range = document.createRange();
+  range.selectNodeContents(root);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
 };
 
 const selectedSignatureForSubtree = (selectedNodeIds: string[] | undefined, node: NodeWithTreeMeta): string => {
@@ -109,6 +150,7 @@ const NodeItem = memo(({
   const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
   const [mentionSearchText, setMentionSearchText] = useState('');
   const [mentionStartOffset, setMentionStartOffset] = useState<number | null>(null);
+  const [mentionDropdownIndex, setMentionDropdownIndex] = useState(0);
   const mentionTriggerRef = useRef<boolean>(false);
 
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -128,6 +170,15 @@ const NodeItem = memo(({
   }, [node.is_collapsed]);
 
   const hasChildren = childrenNodes.length > 0;
+
+  const filteredMentionDocuments = useMemo(() => {
+    const query = mentionSearchText.trim().toLowerCase();
+    const mentionableDocuments = documents.filter(isMentionableDocument);
+    const matches = query
+      ? mentionableDocuments.filter(doc => (doc.title || '').toLowerCase().includes(query))
+      : mentionableDocuments;
+    return matches.slice(0, 8);
+  }, [documents, mentionSearchText]);
 
   const generateHtmlContent = useCallback((content: string) => {
     if (!content) return '';
@@ -321,49 +372,23 @@ const NodeItem = memo(({
   // @提及功能：处理选择文章
   const handleMentionSelect = useCallback((doc: Document) => {
     if (!contentRef.current || mentionStartOffset === null) return;
-    
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
-    
-    // 创建文章链接文本
+
     const linkText = `@[${doc.title || '无标题'}](${doc.id})`;
-    
-    // 获取当前文本内容
     const textContent = contentRef.current.textContent || '';
-    
-    // mentionStartOffset 是 @ 符号的位置
-    // mentionSearchText 是 @ 后面的搜索文本
     const searchTextLength = mentionSearchText.length;
-    const mentionEndOffset = mentionStartOffset + 1 + searchTextLength; // +1 是 @ 符号
-    
-    // 构建新内容：@ 之前 + 链接文本 + 搜索文本之后
+    const mentionEndOffset = mentionStartOffset + 1 + searchTextLength;
     const beforeAt = textContent.substring(0, mentionStartOffset);
     const afterMention = textContent.substring(mentionEndOffset);
+    const nextContent = beforeAt + linkText + afterMention;
+    contentRef.current.innerHTML = generateHtmlContent(nextContent);
+    setTextCaret(contentRef.current, beforeAt.length + linkText.length);
+    onContentChange(node.id, nextContent);
 
-    // 设置新的内容
-    contentRef.current.textContent = beforeAt + linkText + afterMention;
-    
-    // 将光标移动到链接后面
-    const newOffset = beforeAt.length + linkText.length;
-    const newRange = document.createRange();
-    const textNode = contentRef.current.firstChild;
-    
-    if (textNode) {
-      newRange.setStart(textNode, Math.min(newOffset, textNode.textContent?.length || 0));
-      newRange.setEnd(textNode, Math.min(newOffset, textNode.textContent?.length || 0));
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-    }
-    
-    // 触发内容更新
-    onContentChange(node.id, contentRef.current.textContent || '');
-    
-    // 关闭下拉框
     setShowMention(false);
     setMentionSearchText('');
     setMentionStartOffset(null);
     mentionTriggerRef.current = false;
-  }, [mentionStartOffset, mentionSearchText, node.id, onContentChange]);
+  }, [generateHtmlContent, mentionStartOffset, mentionSearchText, node.id, onContentChange]);
 
   // @提及功能：处理输入事件
   const handleInputForMention = useCallback((e: React.FormEvent<HTMLDivElement>) => {
@@ -373,7 +398,8 @@ const NodeItem = memo(({
     if (!selection || selection.rangeCount === 0) return;
 
     const range = selection.getRangeAt(0);
-    const cursorOffset = range.startOffset;
+    if (!contentRef.current.contains(range.startContainer)) return;
+    const cursorOffset = getTextOffset(contentRef.current, range.startContainer, range.startOffset);
 
     // 查找光标前最近的 @ 符号
     let atOffset = -1;
@@ -401,12 +427,14 @@ const NodeItem = memo(({
 
       setMentionSearchText(searchText);
       setMentionStartOffset(atOffset);
+      setMentionDropdownIndex(0);
+      mentionTriggerRef.current = true;
 
       // 计算下拉框位置
       const rect = range.getBoundingClientRect();
       setMentionPosition({
-        top: rect.bottom + window.scrollY + 4,
-        left: rect.left + window.scrollX
+        top: rect.bottom + 4,
+        left: rect.left
       });
 
       if (!showMention) {
@@ -417,6 +445,39 @@ const NodeItem = memo(({
       mentionTriggerRef.current = false;
     }
   }, [showMention]);
+
+  const handleMentionKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>): boolean => {
+    if (!showMention || filteredMentionDocuments.length === 0) return false;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      e.stopPropagation();
+      setMentionDropdownIndex(index => Math.min(index + 1, filteredMentionDocuments.length - 1));
+      return true;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      e.stopPropagation();
+      setMentionDropdownIndex(index => Math.max(index - 1, 0));
+      return true;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      const selected = filteredMentionDocuments[mentionDropdownIndex];
+      if (selected) handleMentionSelect(selected);
+      return true;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      setShowMention(false);
+      setMentionSearchText('');
+      setMentionStartOffset(null);
+      mentionTriggerRef.current = false;
+      return true;
+    }
+    return false;
+  }, [filteredMentionDocuments, handleMentionSelect, mentionDropdownIndex, showMention]);
 
   const getHeadingClass = () => {
     switch (node.heading) {
@@ -673,10 +734,10 @@ const NodeItem = memo(({
                 aria-checked={node.is_completed || false}
                 className={`absolute left-0 top-[5px] z-20 inline-flex items-center justify-center w-4 h-4 rounded-full border cursor-pointer shrink-0 transition-colors ${
                   (node.is_completed || false)
-                    ? 'bg-emerald-500 border-emerald-500'
+                    ? 'bg-[var(--app-link)] border-[var(--app-link)]'
                     : (node.is_in_progress || false)
-                      ? 'bg-white dark:bg-gray-700 border-blue-400'
-                      : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-500'
+                      ? 'bg-white dark:bg-gray-700 border-[var(--app-link)]'
+                      : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-500 hover:border-[var(--app-link)]'
                 }`}
                 onMouseDown={(e) => {
                   e.preventDefault();
@@ -700,7 +761,7 @@ const NodeItem = memo(({
                     <path d="M3.5 8.5L6.5 11.5L12.5 4.5" />
                   </svg>
                 ) : (node.is_in_progress || false) ? (
-                  <span className="w-2 h-0.5 bg-blue-400 rounded-full"></span>
+                  <span className="w-2 h-0.5 bg-[var(--app-link)] rounded-full"></span>
                 ) : null}
               </button>
             )}
@@ -731,7 +792,10 @@ const NodeItem = memo(({
                   onEndEditing?.(node.id);
                   onBlurToolbar?.();
                 }}
-                onKeyDown={(e) => onKeyDown(e, node, 'content')}
+                onKeyDown={(e) => {
+                  if (handleMentionKeyDown(e)) return;
+                  onKeyDown(e, node, 'content');
+                }}
                 onInput={(e) => {
                   handleInputForMention(e);
                   handleContentInput(e);
@@ -846,10 +910,18 @@ const NodeItem = memo(({
           </div>
 
           {/* @提及下拉框 */}
-          {showMention && (
-            <MentionDropdown
-              documents={documents}
-              onSelect={handleMentionSelect}
+          {showMention && filteredMentionDocuments.length > 0 && createPortal(
+            <TagMentionPopup
+              items={filteredMentionDocuments.map((doc): PopupItem => ({
+                label: doc.title || '无标题',
+                value: doc.id,
+                detail: doc.type,
+              }))}
+              selectedIndex={mentionDropdownIndex}
+              onSelect={(item) => {
+                const doc = filteredMentionDocuments.find(candidate => candidate.id === item.value);
+                if (doc) handleMentionSelect(doc);
+              }}
               onClose={() => {
                 setShowMention(false);
                 setMentionSearchText('');
@@ -857,8 +929,8 @@ const NodeItem = memo(({
                 mentionTriggerRef.current = false;
               }}
               position={mentionPosition}
-              searchText={mentionSearchText}
-            />
+              type="mention"
+            />, document.body
           )}
           
           {/* Note */}

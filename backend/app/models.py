@@ -13,6 +13,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String, unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String)
     theme: Mapped[str] = mapped_column(String, default="system")
+    theme_color: Mapped[str] = mapped_column(String(20), default="green")
     font_family: Mapped[str] = mapped_column(String, default="system")
     font_size: Mapped[str] = mapped_column(String, default="medium")
     markdown_style: Mapped[str] = mapped_column(String, default="default")

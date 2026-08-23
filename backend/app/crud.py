@@ -32,6 +32,8 @@ def update_user_settings(db: Session, user_id: uuid.UUID, settings: schemas.User
         return None
     if settings.theme:
         db_user.theme = settings.theme
+    if settings.theme_color:
+        db_user.theme_color = settings.theme_color
     if settings.font_family:
         db_user.font_family = settings.font_family
     if settings.font_size:

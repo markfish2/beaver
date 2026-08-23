@@ -67,6 +67,7 @@ import TagMentionPopup from './TagMentionPopup';
 import type { PopupItem } from './TagMentionPopup';
 import { tagMentionExtension } from '../extensions/tagMentionExtension';
 import type { TagMentionState } from '../extensions/tagMentionExtension';
+import { isMentionableDocument } from '../utils/documentMention';
 import ShareDialog from './ShareDialog';
 import { exportNotePdf } from '../utils/notePdf';
 import { showToast } from '../utils/toast';
@@ -395,15 +396,15 @@ function NoteTableOfContents({
             </svg>
           </button>
         </div>
-        <div ref={tocListRef} className="relative flex-1 overflow-y-auto custom-scrollbar py-0.5 pl-2">
+        <div ref={tocListRef} className="relative flex-1 overflow-y-auto custom-scrollbar scrollbar-auto-hide py-0.5 pl-2">
           <div className="absolute left-[10px] top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700" aria-hidden="true" />
           {visibleRange.end >= visibleRange.start && (
             <div
-              className="pointer-events-none absolute left-[10px] z-20 w-px bg-[#46745b] dark:bg-[#8fc5a5]"
+              className="pointer-events-none absolute left-[10px] z-20 w-px bg-[var(--app-link)]"
               style={{ top: visibleRail.top, height: visibleRail.height }}
               aria-hidden="true"
             >
-              <span className="absolute left-1/2 bottom-[-2px] h-1 w-1 -translate-x-1/2 rounded-full bg-[#46745b] dark:bg-[#8fc5a5]" />
+              <span className="absolute left-1/2 bottom-[-2px] h-1 w-1 -translate-x-1/2 rounded-full bg-[var(--app-link)]" />
             </div>
           )}
           {items.map((item, index) => {
@@ -415,7 +416,7 @@ function NoteTableOfContents({
                 onClick={() => onJump(item)}
                 className={`relative z-10 w-full text-left leading-tight py-1 pr-2 pl-5 transition-all duration-150 truncate ${
                   index >= visibleRange.start && index <= visibleRange.end
-                    ? 'text-[#46745b] dark:text-[#8fc5a5] font-medium'
+                    ? 'text-[var(--app-link)] font-medium'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                 }`}
                 style={{ paddingLeft: `${20 + TOC_LEVEL_INDENT[item.level]}px`, fontSize: '13px' }}
@@ -529,7 +530,7 @@ function RelatedNotes({ notes, onOpen }: { notes: RelatedNote[]; onOpen: (note: 
   return (
     <section className="related-notes mt-12 border-t border-gray-200 pt-6 dark:border-gray-700" aria-label="相关笔记">
       <div className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
-        <span className="h-4 w-1 rounded-full bg-[#4d9383]" aria-hidden="true" />
+        <span className="h-4 w-1 rounded-full bg-[var(--app-link)]" aria-hidden="true" />
         <span>相关笔记</span>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -543,9 +544,9 @@ function RelatedNotes({ notes, onOpen }: { notes: RelatedNote[]; onOpen: (note: 
               event.stopPropagation();
               onOpen(note);
             }}
-            className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 text-left transition-colors hover:border-[#4d9383] hover:bg-[#f5faf8] dark:border-gray-700 dark:bg-gray-800 dark:hover:border-[#4d9383] dark:hover:bg-gray-750"
+            className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 text-left transition-colors hover:border-[var(--app-link)] hover:bg-[#f5faf8] dark:border-gray-700 dark:bg-gray-800 dark:hover:border-[var(--app-link)] dark:hover:bg-gray-750"
           >
-            <span className="mb-2 block text-[11px] text-[#4d9383]">{typeLabel[note.type]}</span>
+            <span className="mb-2 block text-[11px] text-[var(--app-link)]">{typeLabel[note.type]}</span>
             <span className="block truncate text-sm font-medium text-gray-800 dark:text-gray-100">{note.title || '无标题'}</span>
             <span className="mt-2 block max-h-10 overflow-hidden text-xs leading-5 text-gray-500 dark:text-gray-400">{shorten(note.snippet) || '暂无摘要'}</span>
           </button>
@@ -668,10 +669,11 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   const filteredDocs = useMemo(() => {
     if (!mentionState.type || mentionState.type !== 'mention') return [];
     const kw = mentionState.query.toLowerCase();
-    if (!kw) return documents.slice(0, 8);
+    const mentionableDocuments = documents.filter(isMentionableDocument);
+    if (!kw) return mentionableDocuments.slice(0, 8);
     const prefixMatches: Document[] = [];
     const containsMatches: Document[] = [];
-    for (const doc of documents) {
+    for (const doc of mentionableDocuments) {
       const name = (doc.title || '').toLowerCase();
       if (name.startsWith(kw)) prefixMatches.push(doc);
       else if (name.includes(kw)) containsMatches.push(doc);
@@ -1023,7 +1025,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
             aria-checked={checked}
             className={`absolute left-0 top-[5px] z-20 inline-flex h-[14px] w-[14px] shrink-0 cursor-pointer items-center justify-center rounded-full border transition-colors ${
               checked
-                ? 'border-[#4d9383] bg-[#4d9383]'
+                ? 'border-[var(--app-link)] bg-[var(--app-link)]'
                 : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800'
             }`}
             onMouseDown={(e) => {
@@ -1191,7 +1193,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
                 </div>
               </div>
             </div>
-            <div ref={editorScrollRef} className={`flex-1 min-h-0 overflow-y-auto custom-scrollbar ${viewMode === 'split' ? '' : 'flex justify-center'}`}>
+            <div ref={editorScrollRef} className={`flex-1 min-h-0 overflow-y-auto custom-scrollbar scrollbar-auto-hide ${viewMode === 'split' ? '' : 'flex justify-center'}`}>
               <div className={`flex flex-col ${viewMode === 'split' ? 'w-full' : 'w-full max-w-[768px]'}`} onPasteCapture={handlePaste}>
                 <MarkdownEditor ref={editorRef} value={content} onChange={(val) => { setContent(val); scheduleSave(val); }}
                   compact={false} placeholder="开始书写... (支持 Markdown，输入 # 添加标签，@ 链接笔记)" className="min-h-0 px-6 pt-5"
@@ -1214,7 +1216,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
         {(viewMode === 'preview' || viewMode === 'split') && (
           <div
             ref={previewRef}
-            className={`${viewMode === 'split' ? 'w-1/2' : 'flex-1 min-w-0 h-full'} overflow-x-hidden overflow-y-auto custom-scrollbar flex flex-col items-center`}
+            className={`${viewMode === 'split' ? 'w-1/2' : 'flex-1 min-w-0 h-full'} overflow-x-hidden overflow-y-auto custom-scrollbar scrollbar-auto-hide flex flex-col items-center`}
             style={isMobile ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 58px)' } : undefined}
           >
             <div

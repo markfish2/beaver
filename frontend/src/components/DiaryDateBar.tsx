@@ -187,7 +187,7 @@ export default function DiaryDateBar({ docYear, docMonth, diaryDays, onDayClick,
               onClick={() => handleDayClick(day)}
               className={`relative flex-shrink-0 flex flex-col items-center justify-center w-10 h-14 rounded-lg text-xs transition-colors ${
                 isToday
-                  ? 'bg-[#4d9383] dark:bg-[#4d9383] text-white dark:text-white font-bold'
+                  ? 'bg-[var(--app-link)] dark:bg-[var(--app-link)] text-white dark:text-white font-bold'
                   : hasContent
                     ? 'text-gray-800 dark:text-gray-200 font-medium hover:bg-gray-100 dark:hover:bg-gray-800'
                     : 'text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800/50'

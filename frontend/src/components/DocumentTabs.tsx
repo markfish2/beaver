@@ -62,7 +62,7 @@ export default function DocumentTabs({ tabs, activeKey, onSelect, onClose }: Doc
               aria-selected={isActive}
               className={`group flex h-8 min-w-[96px] max-w-[220px] flex-1 basis-[140px] items-center gap-1.5 rounded-md px-2 text-sm transition-colors ${
                 isActive
-                  ? 'bg-[#c9ddd7] font-medium text-[#285f52] dark:bg-[#3f7468] dark:text-white'
+                  ? 'bg-[var(--app-link)] font-medium text-white dark:bg-[var(--app-link-dark)] dark:text-white'
                   : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'
               }`}
             >
@@ -72,10 +72,10 @@ export default function DocumentTabs({ tabs, activeKey, onSelect, onClose }: Doc
                 onClick={() => onSelect(tab)}
                 aria-label={tab.mode === 'mindmap' ? `${tab.title} · 思维导图` : tab.title || '无标题'}
               >
-                <DocumentTypeIcon type={iconType} className="h-4 w-4" />
+                <DocumentTypeIcon type={iconType} className={`h-4 w-4 ${isActive ? 'text-white' : ''}`} />
                 <span className="truncate">{tab.title || '无标题'}</span>
                 {tab.mode === 'mindmap' && <span className="shrink-0 text-[10px] opacity-60">图</span>}
-                {tab.dirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#4d9383]" aria-label="有未保存修改" />}
+                {tab.dirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--app-link)]" aria-label="有未保存修改" />}
               </button>
               <button
                 type="button"

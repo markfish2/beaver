@@ -42,7 +42,7 @@ export default function AudioPlayer({ src, themed = false }: AudioPlayerProps) {
       <button
         onClick={togglePlay}
         className="shrink-0 transition-opacity hover:opacity-75"
-        style={themed ? { color: 'var(--memo-link)' } : { color: '#4d9383' }}
+        style={themed ? { color: 'var(--memo-link)' } : { color: 'var(--app-link)' }}
       >
         {playing
           ? <Pause className="w-3.5 h-3.5" fill="currentColor" />
@@ -56,7 +56,7 @@ export default function AudioPlayer({ src, themed = false }: AudioPlayerProps) {
       >
         <div
           className="absolute inset-y-0 left-0 rounded-full"
-        style={{ width: `${progress}%`, background: themed ? 'var(--memo-link)' : '#4d9383' }}
+        style={{ width: `${progress}%`, background: themed ? 'var(--memo-link)' : 'var(--app-link)' }}
         />
       </div>
     </div>

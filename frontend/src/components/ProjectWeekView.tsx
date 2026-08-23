@@ -22,7 +22,7 @@ function getFreshCachedTasks(): WeekTask[] | null {
   return cachedTasks && Date.now() - cacheTime <= CACHE_TTL ? cachedTasks : null;
 }
 
-const BAR_COLOR = 'bg-[#75b4a4] dark:bg-[#4d9383]';
+const BAR_COLOR = 'bg-[var(--app-link-soft)] dark:bg-[var(--app-link)]';
 
 const DAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -147,7 +147,7 @@ export default function ProjectWeekView({ embedded = false }: ProjectWeekViewPro
               key={i}
               className={`flex-1 text-center leading-tight py-0.5 rounded-sm ${
                 isToday
-                  ? 'bg-[#75b4a4] dark:bg-[#4d9383] text-white font-medium'
+                  ? 'bg-[var(--app-link-soft)] dark:bg-[var(--app-link)] text-white font-medium'
                   : isWeekend
                     ? 'text-gray-400 dark:text-gray-500'
                     : 'text-gray-500 dark:text-gray-400'

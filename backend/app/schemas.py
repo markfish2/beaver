@@ -19,6 +19,7 @@ class UserCreate(UserBase):
 class User(UserBase):
     id: UUID
     theme: str
+    theme_color: str = "green"
     font_family: str
     font_size: str
     markdown_style: str = "default"
@@ -33,6 +34,7 @@ class User(UserBase):
 
 class UserSettingsUpdate(BaseModel):
     theme: Optional[str] = None
+    theme_color: Optional[str] = None
     font_family: Optional[str] = None
     font_size: Optional[str] = None
     markdown_style: Optional[str] = None

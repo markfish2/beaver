@@ -14,6 +14,7 @@ import TagMentionPopup from './TagMentionPopup';
 import type { PopupItem } from './TagMentionPopup';
 import { tagMentionExtension } from '../extensions/tagMentionExtension';
 import type { TagMentionState } from '../extensions/tagMentionExtension';
+import { isMentionableDocument } from '../utils/documentMention';
 import type { Memo, Document } from '../api/data';
 
 const AIChatPanel = lazy(() => import('./AIChatPanel'));
@@ -64,10 +65,11 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
   const filteredDocs = useMemo(() => {
     if (!mentionState.type || mentionState.type !== 'mention' || !documents) return [];
     const kw = mentionState.query.toLowerCase();
-    if (!kw) return documents.slice(0, 8);
+    const mentionableDocuments = documents.filter(isMentionableDocument);
+    if (!kw) return mentionableDocuments.slice(0, 8);
     const prefixMatches: Document[] = [];
     const containsMatches: Document[] = [];
-    for (const doc of documents) {
+    for (const doc of mentionableDocuments) {
       const name = (doc.title || '').toLowerCase();
       if (name.startsWith(kw)) prefixMatches.push(doc);
       else if (name.includes(kw)) containsMatches.push(doc);

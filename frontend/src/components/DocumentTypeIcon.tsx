@@ -9,6 +9,7 @@ interface DocumentTypeIconProps extends SVGProps<SVGSVGElement> {
 
 // Notion-like glyphs: few geometric shapes, one neutral color, no decorative details.
 export default function DocumentTypeIcon({ type, className = '', ...props }: DocumentTypeIconProps) {
+  const hasExplicitTextColor = /(?:^|\s)text-[^\s]+/.test(className);
   return (
     <svg
       {...props}
@@ -18,7 +19,7 @@ export default function DocumentTypeIcon({ type, className = '', ...props }: Doc
       strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={`text-gray-500 dark:text-gray-400 shrink-0 ${className}`}
+      className={`${hasExplicitTextColor ? '' : 'text-gray-500 dark:text-gray-400'} shrink-0 ${className}`}
       aria-hidden="true"
     >
       {type === 'folder' && <>

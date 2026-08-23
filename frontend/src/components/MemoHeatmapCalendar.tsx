@@ -15,9 +15,9 @@ function getFirstDayOfWeek(year: number, month: number) {
 
 function getIntensity(count: number): string {
   if (count === 0) return '';
-  if (count === 1) return 'bg-[#b9d9d0] dark:bg-[#2f554e]';
-  if (count <= 3) return 'bg-[#75b4a4] dark:bg-[#4d9383]';
-  return 'bg-[#4d9383] dark:bg-[#75b4a4]';
+  if (count === 1) return 'bg-[var(--app-link-pale)] dark:bg-[var(--app-link-dark)]';
+  if (count <= 3) return 'bg-[var(--app-link-soft)] dark:bg-[var(--app-link)]';
+  return 'bg-[var(--app-link)] dark:bg-[var(--app-link-soft)]';
 }
 
 export default function MemoHeatmapCalendar({ embedded = false }: { embedded?: boolean } = {}) {
@@ -86,7 +86,7 @@ export default function MemoHeatmapCalendar({ embedded = false }: { embedded?: b
               className="aspect-square flex items-center justify-center"
               title={`${day}日: ${count}条`}
             >
-              <span className={`w-[80%] aspect-square rounded-[5px] flex items-center justify-center text-[10px] ${
+              <span className={`w-[92%] h-[92%] rounded-[7px] flex items-center justify-center text-[10px] ${
                 intensity || 'bg-[#f4f2ec] dark:bg-gray-800'
               } ${count > 0 ? 'text-white dark:text-gray-900 font-medium' : 'text-gray-400 dark:text-gray-500'}`}>
                 {day}
@@ -98,10 +98,10 @@ export default function MemoHeatmapCalendar({ embedded = false }: { embedded?: b
 
       <div className="flex items-center justify-end gap-1 mt-2">
         <span className="text-[9px] text-gray-400">少</span>
-        <div className="w-3 h-3 rounded-[5px] bg-[#f4f2ec] dark:bg-gray-800" />
-        <div className="w-3 h-3 rounded-[5px] bg-[#b9d9d0] dark:bg-[#2f554e]" />
-        <div className="w-3 h-3 rounded-[5px] bg-[#75b4a4] dark:bg-[#4d9383]" />
-        <div className="w-3 h-3 rounded-[5px] bg-[#4d9383] dark:bg-[#75b4a4]" />
+        <div className="w-3 h-3 rounded-[7px] bg-[#f4f2ec] dark:bg-gray-800" />
+        <div className="w-3 h-3 rounded-[7px] bg-[var(--app-link-pale)] dark:bg-[var(--app-link-dark)]" />
+        <div className="w-3 h-3 rounded-[7px] bg-[var(--app-link-soft)] dark:bg-[var(--app-link)]" />
+        <div className="w-3 h-3 rounded-[7px] bg-[var(--app-link)] dark:bg-[var(--app-link-soft)]" />
         <span className="text-[9px] text-gray-400">多</span>
       </div>
     </div>

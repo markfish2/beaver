@@ -1015,7 +1015,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                 onTouchMove={cancelLongPress}
               >
                 {isUnfiledNote && (
-                  <span aria-hidden="true" className="absolute left-[10px] top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-[#4d9383]" />
+                  <span aria-hidden="true" className="absolute left-[10px] top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-[var(--app-link)]" />
                 )}
                 <span className="flex items-center mr-1.5 shrink-0 relative">
                   {isFolder && (
@@ -1397,7 +1397,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                         />
                       </div>
                     </div>
-                    <div className="flex-1 overflow-y-auto px-2 pb-2 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto px-2 pb-2 custom-scrollbar scrollbar-auto-hide">
                       {visibleSearchResults.length > 0 ? (
                         (() => {
                           const grouped: Record<string, typeof visibleSearchResults> = {};
@@ -1451,7 +1451,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                         <ChevronLeft className="w-4 h-4" />
                       </button>
                     </div>
-                    <div className="flex-1 overflow-y-auto custom-scrollbar" onContextMenu={handleRootContextMenu}>
+                    <div className="flex-1 overflow-y-auto custom-scrollbar scrollbar-auto-hide" onContextMenu={handleRootContextMenu}>
                       {viewMode === 'user' ? (
                         <div className="py-2">
                           <button onClick={() => { setUserSubView('profile'); onDocumentSelect?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors">
@@ -1504,7 +1504,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                               <span>已归档项目</span>
                             </button>
                           </div>
-                          <div className="flex-1 overflow-y-auto">
+                          <div className="flex-1 overflow-y-auto scrollbar-auto-hide">
                             {projects.map(p => (
                               <div key={p.id}
                                 onClick={() => {
@@ -1647,7 +1647,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                         <ChevronLeft className="w-4 h-4" />
                       </button>
                     </div>
-                    <div className="flex-1 overflow-y-auto px-2 pb-2 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto px-2 pb-2 custom-scrollbar scrollbar-auto-hide">
                       {searchLoading ? (
                         <div className="p-4 text-xs text-gray-400 text-center">搜索中...</div>
                       ) : !sidebarSearchQuery.trim() ? (
@@ -1716,7 +1716,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                       </button>
                     </div>
                     <div className="flex-1 relative overflow-hidden bg-[var(--app-sidebar)]">
-                      <div ref={listRef} className="absolute inset-0 overflow-y-auto custom-scrollbar" onDragOver={(e) => e.preventDefault()} onDrop={handleRootDrop} onClick={() => setSelectedFolderId(null)} onContextMenu={handleRootContextMenu}>
+                      <div ref={listRef} className="absolute inset-0 overflow-y-auto custom-scrollbar scrollbar-auto-hide" onDragOver={(e) => e.preventDefault()} onDrop={handleRootDrop} onClick={() => setSelectedFolderId(null)} onContextMenu={handleRootContextMenu}>
                         {viewMode === 'user' ? (
                           <div className="py-2">
                             {/* 个人资料 */}
@@ -1802,7 +1802,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                                 <span>已归档项目</span>
                               </button>
                             </div>
-                            <div className="flex-1 overflow-y-auto">
+                            <div className="flex-1 overflow-y-auto scrollbar-auto-hide">
                               {projects.map(p => (
                                 <div key={p.id}
                                   onClick={() => {
@@ -2102,7 +2102,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                 <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">移动到...</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{moveDialog.docTitle}</p>
               </div>
-              <div className="flex-1 overflow-y-auto px-2 py-2 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto px-2 py-2 custom-scrollbar scrollbar-auto-hide">
                 <button
                   onClick={() => setMoveTargetFolder(null)}
                   className={`w-full py-2 text-left text-sm flex items-center gap-2 transition-colors rounded px-2 ${

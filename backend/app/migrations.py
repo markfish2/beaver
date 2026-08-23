@@ -21,7 +21,8 @@ COLUMNS: dict[str, dict[str, str]] = {
         "version": "INTEGER DEFAULT 1", "updated_at": "TIMESTAMP",
     },
     "users": {
-        "theme": "VARCHAR(50) DEFAULT 'system'", "font_family": "VARCHAR(50) DEFAULT 'system'",
+        "theme": "VARCHAR(50) DEFAULT 'system'", "theme_color": "VARCHAR(20) DEFAULT 'green'",
+        "font_family": "VARCHAR(50) DEFAULT 'system'",
         "font_size": "VARCHAR(20) DEFAULT 'medium'", "markdown_style": "VARCHAR(50) DEFAULT 'default'",
         "memo_columns": "INTEGER DEFAULT 1",
         "nickname": "VARCHAR(50)", "email": "VARCHAR(100)", "phone": "VARCHAR(20)",

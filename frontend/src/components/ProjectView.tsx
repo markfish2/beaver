@@ -548,7 +548,7 @@ export default function ProjectView({ projectId, showArchived = false, archivedR
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto scrollbar-auto-hide">
           {showArchived ? (
             archivedProjects.length === 0 ? (
               <div className="flex items-center justify-center h-full text-gray-400 dark:text-gray-500">
@@ -640,8 +640,8 @@ export default function ProjectView({ projectId, showArchived = false, archivedR
           ref={!isMobile && showGantt ? taskTableScrollRef : undefined}
           className={
             !isMobile && showGantt
-              ? 'overflow-y-auto custom-scrollbar bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700'
-              : 'overflow-y-auto p-4 space-y-1 flex-1 min-w-0'
+              ? 'overflow-y-auto custom-scrollbar scrollbar-auto-hide bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700'
+              : 'overflow-y-auto scrollbar-auto-hide p-4 space-y-1 flex-1 min-w-0'
           }
           style={!isMobile && showGantt ? { width: `${splitRatio * 100}%`, flexShrink: 0 } : undefined}
         >

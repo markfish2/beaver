@@ -2975,7 +2975,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
 
       {/* Note View - Markdown note editor */}
       {currentDoc?.type === 'note' && (
-        <div className="main-content-area flex-1 overflow-hidden custom-scrollbar">
+        <div className="main-content-area flex-1 overflow-hidden custom-scrollbar scrollbar-auto-hide">
           <MarkdownNoteEditor
             documentId={documentId!}
             isNew={currentDoc.title === '新笔记'}
@@ -3022,7 +3022,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         <>
         <div className="toc-layout-container flex-1 min-h-0 flex overflow-hidden">
         <div
-          className="main-content-area outline-content-scroll-area min-w-0 flex-1 overflow-y-auto px-8 py-8 custom-scrollbar"
+          className="main-content-area outline-content-scroll-area min-w-0 flex-1 overflow-y-auto px-8 py-8 custom-scrollbar scrollbar-auto-hide"
           style={isMobile ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 58px)' } : undefined}
           onClick={() => updateSelectedNodeIds([])}
         >

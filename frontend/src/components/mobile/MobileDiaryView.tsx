@@ -91,7 +91,7 @@ export default function MobileDiaryView() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto custom-scrollbar">
+    <div className="flex-1 overflow-y-auto custom-scrollbar scrollbar-auto-hide">
       <MobileTodos />
       <div className="border-b border-gray-200 dark:border-gray-700">
         <DiaryDateBar

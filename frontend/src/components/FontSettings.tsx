@@ -9,12 +9,14 @@ import { syncThemeChrome } from '../utils/themeChrome';
 type FontSize = 'small' | 'medium' | 'large';
 type FontFamily = 'system' | 'sans' | 'serif' | 'mono' | 'lxgw';
 type Theme = 'system' | 'dark';
+type ThemeColor = 'green' | 'blue' | 'purple' | 'orange' | 'rose';
 type MarkdownStyle = 'default' | 'pie' | 'markamd' | 'lapis' | 'claude' | 'border';
 
 interface FontSettings {
   fontSize: FontSize;
   fontFamily: FontFamily;
   theme: Theme;
+  themeColor: ThemeColor;
   markdownStyle: MarkdownStyle;
 }
 
@@ -98,6 +100,17 @@ const MARKDOWN_STYLE_LABELS: Record<MarkdownStyle, { name: string; description: 
 };
 
 const normalizeTheme = (theme: unknown): Theme => theme === 'dark' ? 'dark' : 'system';
+const normalizeThemeColor = (color: unknown): ThemeColor => {
+  switch (color) {
+    case 'blue':
+    case 'purple':
+    case 'orange':
+    case 'rose':
+      return color;
+    default:
+      return 'green';
+  }
+};
 const normalizeFontFamily = (fontFamily: unknown): FontFamily => {
   switch (fontFamily) {
     case 'sans':
@@ -158,12 +171,21 @@ const THEMES: Record<Theme, {
   }
 };
 
+const THEME_COLORS: Record<ThemeColor, { name: string; light: string; dark: string; preview: string }> = {
+  green: { name: '主题绿', light: '#4d9383', dark: '#75b4a4', preview: '#4d9383' },
+  blue: { name: '雾霾蓝', light: '#3578dd', dark: '#78a7ed', preview: '#3578dd' },
+  purple: { name: '丁香紫', light: '#000000', dark: '#555555', preview: '#000000' },
+  orange: { name: '暖橙色', light: '#df6b29', dark: '#f19a68', preview: '#df6b29' },
+  rose: { name: '玫瑰红', light: '#5f686d', dark: '#9ca6ab', preview: '#5f686d' },
+};
+
 const STORAGE_KEY = 'outline-font-settings';
 const PENDING_SYNC_KEY = 'outline-font-settings-pending-sync';
 const PENDING_SYNC_EVENT = 'appearance-pending-sync-change';
 
 type SettingsUpdate = Partial<{
   theme: Theme;
+  theme_color: ThemeColor;
   font_family: FontFamily;
   font_size: FontSize;
   markdown_style: MarkdownStyle;
@@ -189,6 +211,7 @@ const readPendingSync = (): SettingsUpdate => {
     const parsed = JSON.parse(raw);
     const pending: SettingsUpdate = {};
     if (parsed.theme) pending.theme = normalizeTheme(parsed.theme);
+    if (parsed.theme_color) pending.theme_color = normalizeThemeColor(parsed.theme_color);
     if (parsed.font_family) pending.font_family = normalizeFontFamily(parsed.font_family);
     if (parsed.font_size === 'small' || parsed.font_size === 'medium' || parsed.font_size === 'large') {
       pending.font_size = parsed.font_size;
@@ -226,6 +249,7 @@ const clearPendingSync = (synced: SettingsUpdate) => {
 const pendingToSettings = (pending: SettingsUpdate): Partial<FontSettings> => {
   const settings: Partial<FontSettings> = {};
   if (pending.theme) settings.theme = pending.theme;
+  if (pending.theme_color) settings.themeColor = pending.theme_color;
   if (pending.font_family) settings.fontFamily = pending.font_family;
   if (pending.font_size) settings.fontSize = pending.font_size;
   if (pending.markdown_style) settings.markdownStyle = pending.markdown_style;
@@ -234,6 +258,7 @@ const pendingToSettings = (pending: SettingsUpdate): Partial<FontSettings> => {
 
 const updateConfirmedByUser = (next: SettingsUpdate, user: Awaited<ReturnType<typeof updateSettings>>) => (
   (!next.theme || user.theme === next.theme)
+  && (!next.theme_color || user.theme_color === next.theme_color)
   && (!next.font_family || normalizeFontFamily(user.font_family) === next.font_family)
   && (!next.font_size || user.font_size === next.font_size)
   && (!next.markdown_style || normalizeMarkdownStyle(user.markdown_style) === next.markdown_style)
@@ -244,6 +269,7 @@ interface AppearanceContextValue {
   setFontSize: (fontSize: FontSize) => void;
   setFontFamily: (fontFamily: FontFamily) => void;
   setTheme: (theme: Theme) => void;
+  setThemeColor: (color: ThemeColor) => void;
   setMarkdownStyle: (style: MarkdownStyle) => void;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
@@ -271,6 +297,7 @@ const AppearanceStateProvider = ({
           fontSize: parsed.fontSize || 'medium',
           fontFamily: normalizeFontFamily(parsed.fontFamily),
           theme,
+          themeColor: normalizeThemeColor(parsed.themeColor ?? parsed.theme_color),
           markdownStyle: normalizeMarkdownStyle(parsed.markdownStyle),
         };
       } catch {
@@ -278,13 +305,13 @@ const AppearanceStateProvider = ({
       }
     }
     // 无保存设置时，检测系统暗色模式
-    return { fontSize: 'medium', fontFamily: 'system', theme: 'system', markdownStyle: 'default' };
+    return { fontSize: 'medium', fontFamily: 'system', theme: 'system', themeColor: 'green', markdownStyle: 'default' };
   });
 
   const [isOpen, setIsOpen] = useState(false);
 
   // 应用主题 CSS 变量和样式
-  const applyTheme = useCallback((themeKey: Theme) => {
+  const applyTheme = useCallback((themeKey: Theme, themeColor: ThemeColor) => {
     const systemDark = themeKey === 'system'
       && window.matchMedia('(prefers-color-scheme: dark)').matches;
     const resolvedKey = themeKey === 'system'
@@ -302,14 +329,32 @@ const AppearanceStateProvider = ({
           isDark: true,
         }
       : THEMES[themeKey];
+    const accent = THEME_COLORS[themeColor][theme.isDark ? 'dark' : 'light'];
     const root = document.documentElement;
     root.dataset.theme = resolvedKey;
     root.style.setProperty('--outline-bg-color', theme.bg);
     root.style.setProperty('--outline-text-color', theme.text);
     root.style.setProperty('--outline-secondary-text', theme.secondaryText);
-    root.style.setProperty('--outline-accent-color', theme.accent);
+    root.style.setProperty('--outline-accent-color', accent);
     root.style.setProperty('--outline-guide-color', theme.guideColor || 'transparent');
     root.style.setProperty('--outline-heading-color', theme.headingColor || theme.text);
+    root.style.setProperty('--app-link', accent);
+    root.style.setProperty('--app-link-pale', `color-mix(in srgb, ${accent} 28%, white)`);
+    root.style.setProperty('--app-link-soft', `color-mix(in srgb, ${accent} 72%, white)`);
+    root.style.setProperty('--app-link-dark', `color-mix(in srgb, ${accent} 78%, black)`);
+    const accentScale: Record<string, string> = {
+      50: `color-mix(in srgb, ${accent} 8%, white)`,
+      100: `color-mix(in srgb, ${accent} 16%, white)`,
+      200: `color-mix(in srgb, ${accent} 28%, white)`,
+      300: `color-mix(in srgb, ${accent} 44%, white)`,
+      400: `color-mix(in srgb, ${accent} 68%, white)`,
+      500: accent,
+      600: `color-mix(in srgb, ${accent} 82%, black)`,
+      700: `color-mix(in srgb, ${accent} 68%, black)`,
+      800: `color-mix(in srgb, ${accent} 54%, black)`,
+      900: `color-mix(in srgb, ${accent} 40%, black)`,
+    };
+    Object.entries(accentScale).forEach(([shade, value]) => root.style.setProperty(`--color-blue-${shade}`, value));
 
     const mainContent = document.querySelector('.main-content-area');
     if (mainContent) {
@@ -331,10 +376,10 @@ const AppearanceStateProvider = ({
   // 只有“跟随系统”会响应设备模式变化，不覆盖用户明确选择的主题。
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = () => settings.theme === 'system' && applyTheme('system');
+    const handler = () => settings.theme === 'system' && applyTheme('system', settings.themeColor);
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
-  }, [applyTheme, settings.theme]);
+  }, [applyTheme, settings.theme, settings.themeColor]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
@@ -357,10 +402,10 @@ const AppearanceStateProvider = ({
     document.body.style.fontWeight = '400';
 
     // 应用主题颜色
-    applyTheme(settings.theme);
+    applyTheme(settings.theme, settings.themeColor);
   }, [applyTheme, settings]);
 
-  const persist = useCallback(async (next: Partial<{ theme: Theme; font_family: FontFamily; font_size: FontSize; markdown_style: MarkdownStyle }>) => {
+  const persist = useCallback(async (next: Partial<{ theme: Theme; theme_color: ThemeColor; font_family: FontFamily; font_size: FontSize; markdown_style: MarkdownStyle }>) => {
     writePendingSync(next);
     try {
       const updatedUser = await updateSettings(next);
@@ -390,6 +435,11 @@ const AppearanceStateProvider = ({
     void persist({ theme });
   }, [persist]);
 
+  const setThemeColor = useCallback((themeColor: ThemeColor) => {
+    setSettings(prev => ({ ...prev, themeColor }));
+    void persist({ theme_color: themeColor });
+  }, [persist]);
+
   const setMarkdownStyle = useCallback((markdownStyle: MarkdownStyle) => {
     setSettings(prev => ({ ...prev, markdownStyle }));
     void persist({ markdown_style: markdownStyle });
@@ -400,10 +450,11 @@ const AppearanceStateProvider = ({
     setFontSize,
     setFontFamily,
     setTheme,
+    setThemeColor,
     setMarkdownStyle,
     isOpen,
     setIsOpen
-  }), [isOpen, setFontFamily, setFontSize, setMarkdownStyle, setTheme, settings]);
+  }), [isOpen, setFontFamily, setFontSize, setMarkdownStyle, setTheme, setThemeColor, settings]);
 
   return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>;
 };
@@ -454,6 +505,7 @@ export const AppearanceProvider = ({ children }: { children: ReactNode }) => {
 
   const serverSettings = user ? {
     theme: normalizeTheme(user.theme),
+    themeColor: normalizeThemeColor(user.theme_color),
     fontFamily: normalizeFontFamily(user.font_family),
     fontSize: (user.font_size as FontSize) || 'medium',
     markdownStyle: normalizeMarkdownStyle(user.markdown_style),
@@ -463,7 +515,7 @@ export const AppearanceProvider = ({ children }: { children: ReactNode }) => {
     ...pendingToSettings(pendingSync),
   } : undefined;
   const accountKey = user
-    ? `${user.id}:${user.theme}:${user.font_family}:${user.font_size}:${user.markdown_style}:${JSON.stringify(pendingSync)}`
+    ? `${user.id}:${user.theme}:${user.theme_color}:${user.font_family}:${user.font_size}:${user.markdown_style}:${JSON.stringify(pendingSync)}`
     : 'local';
 
   return (
@@ -484,6 +536,7 @@ interface FontSettingsPanelProps {
   setFontSize: (size: FontSize) => void;
   setFontFamily: (family: FontFamily) => void;
   setMarkdownStyle: (style: MarkdownStyle) => void;
+  setThemeColor: (color: ThemeColor) => void;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   hideButton?: boolean;
@@ -496,6 +549,33 @@ const GlobalThemeInfo = () => (
       <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
         全局主题
       </label>
+    </div>
+  </div>
+);
+
+const ThemeColorSection = ({ value, onChange }: { value: ThemeColor; onChange: (color: ThemeColor) => void }) => (
+  <div className="mb-4">
+    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">主题色</label>
+    <div className="grid grid-cols-5 gap-2">
+      {(Object.keys(THEME_COLORS) as ThemeColor[]).map((color) => {
+        const item = THEME_COLORS[color];
+        return (
+          <button
+            key={color}
+            type="button"
+            onClick={() => onChange(color)}
+            aria-label={item.name}
+            title={item.name}
+            className={`flex items-center justify-center rounded-lg border-2 p-2 transition-all ${
+              value === color
+                ? 'border-gray-700 bg-gray-100 dark:border-gray-200 dark:bg-gray-700'
+                : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-700'
+            }`}
+          >
+            <span className="h-7 w-full rounded-md border border-black/10" style={{ backgroundColor: item.preview }} />
+          </button>
+        );
+      })}
     </div>
   </div>
 );
@@ -550,6 +630,7 @@ export const FontSettingsPanel = ({
   settings,
   setFontSize,
   setFontFamily,
+  setThemeColor,
   setMarkdownStyle,
   isOpen,
   setIsOpen,
@@ -560,6 +641,8 @@ export const FontSettingsPanel = ({
     return (
       <div>
         <GlobalThemeInfo />
+
+        <ThemeColorSection value={settings.themeColor} onChange={setThemeColor} />
 
         <MarkdownStyleSection value={settings.markdownStyle} onChange={setMarkdownStyle} />
 
@@ -635,6 +718,8 @@ export const FontSettingsPanel = ({
           />
           <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 p-4 max-h-[80vh] overflow-y-auto">
             <GlobalThemeInfo />
+
+            <ThemeColorSection value={settings.themeColor} onChange={setThemeColor} />
 
             <div className="border-t border-gray-200 dark:border-gray-700 my-4" />
 

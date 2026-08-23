@@ -11,6 +11,7 @@ import { AppearanceProvider } from './components/FontSettings';
 import { usePhoneLayout } from './hooks/usePhoneLayout';
 import { getDeviceLayoutSnapshot, isTabletDevice } from './utils/deviceLayout';
 import { logNavigation } from './utils/navigationDebug';
+import { useAutoHideScrollbars } from './hooks/useAutoHideScrollbars';
 
 const SetupPage = lazy(() => import('./pages/SetupPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -167,6 +168,8 @@ function AppRoutes() {
 }
 
 function App() {
+  useAutoHideScrollbars();
+
   return (
     <Router>
       <AuthProvider>
