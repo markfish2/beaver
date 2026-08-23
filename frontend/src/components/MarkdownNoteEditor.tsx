@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo, memo, lazy, Suspense } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo, memo, lazy, Suspense, Children, isValidElement } from 'react';
 import type { RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
@@ -73,6 +73,7 @@ import { showToast } from '../utils/toast';
 import DocumentTabs from './DocumentTabs';
 import EditorActionPortal from './EditorActionPortal';
 import type { DocumentTab } from './documentTabTypes';
+import ImageViewer from './ImageViewer';
 
 const AIChatPanel = lazy(() => import('./AIChatPanel'));
 
@@ -491,9 +492,29 @@ const CodeBlock = memo(function CodeBlock({ className, children, ...props }: Mar
   return <code className={className} {...props}>{children}</code>;
 });
 
-function NoteImage({ src, alt }: { src?: string; alt?: string }) {
+function NoteImage({ src, alt, onPreview }: { src?: string; alt?: string; onPreview: (src: string) => void }) {
   if (!src) return null;
-  return <img src={src} alt={alt || ''} className="max-w-full rounded-lg my-2" loading="lazy" />;
+  return (
+    <img
+      src={src}
+      alt={alt || ''}
+      className="max-w-full rounded-lg my-2 cursor-pointer hover:opacity-80 transition-opacity"
+      loading="lazy"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onPreview(src);
+      }}
+    />
+  );
+}
+
+function containsNoteImage(children: React.ReactNode): boolean {
+  return Children.toArray(children).some((child) => {
+    if (!isValidElement<{ children?: React.ReactNode }>(child)) return false;
+    if (child.type === NoteImage) return true;
+    return child.props.children ? containsNoteImage(child.props.children) : false;
+  });
 }
 
 function RelatedNotes({ notes, onOpen }: { notes: RelatedNote[]; onOpen: (note: RelatedNote) => void }) {
@@ -550,6 +571,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   const [exportingPdf, setExportingPdf] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [relatedNotesState, setRelatedNotesState] = useState<{ key: string; notes: RelatedNote[] }>({ key: '', notes: [] });
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const editorScrollRef = useRef<HTMLDivElement>(null);
@@ -829,6 +851,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   }, [handleFileUpload, scheduleSave, content]);
 
   const navigate_fn = useNavigate();
+  const handleImagePreview = useCallback((src: string) => setPreviewImage(src), []);
   const processedContent = useMemo(() => preprocess(content), [content]);
   const renderedHeadings = useMemo(() => extractMarkdownHeadings(processedContent), [processedContent]);
   const headingIdByLine = useMemo(() => {
@@ -935,8 +958,13 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
       const id = line == null ? undefined : headingIdByLine.get(line);
       return <h6 {...props} id={id} data-note-heading-id={id}>{children}</h6>;
     },
-    img: ({ src, alt }) => <NoteImage src={src} alt={alt} />,
+    img: ({ src, alt }) => <NoteImage src={src} alt={alt} onPreview={handleImagePreview} />,
     a: ({ href, children, ...props }) => {
+      // 兼容旧笔记中 [![图片](图片地址)](原文章地址) 的格式，
+      // 图片不应继续继承外层文章链接。
+      if (containsNoteImage(children)) {
+        return <span className="note-image-link-contents">{children}</span>;
+      }
       if (href?.startsWith('/d/')) {
         const docId = href.replace('/d/', '');
         return <a href={href} className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-1 rounded cursor-pointer"
@@ -1015,7 +1043,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
       }
       return <input type={type} checked={checked} className={className} {...props} />;
     },
-  }), [handlePreviewTaskToggle, headingIdByLine, navigate_fn]);
+  }), [handleImagePreview, handlePreviewTaskToggle, headingIdByLine, navigate_fn]);
 
   // Scroll sync: bidirectional editor ↔ preview in split mode (from markamd)
   useEffect(() => {
@@ -1223,6 +1251,13 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
           />
         )}
       </div>
+
+      <ImageViewer
+        src={previewImage || ''}
+        alt="笔记图片"
+        isOpen={previewImage !== null}
+        onClose={() => setPreviewImage(null)}
+      />
 
       <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden"
         onChange={(e) => { const files = e.target.files; if (files) { for (let i = 0; i < files.length; i++) { handleFileUpload(files[i], true); } } e.target.value = ''; }} />

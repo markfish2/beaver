@@ -430,6 +430,14 @@ const MemoImage = memo(function MemoImage({ src, alt, onPreview }: { src?: strin
   );
 });
 
+function containsMemoImage(children: React.ReactNode): boolean {
+  return Children.toArray(children).some((child) => {
+    if (!isValidElement<{ children?: React.ReactNode }>(child)) return false;
+    if (child.type === MemoImage) return true;
+    return child.props.children ? containsMemoImage(child.props.children) : false;
+  });
+}
+
 type MarkdownAstNodeWithPosition = {
   position?: {
     start?: {
@@ -471,6 +479,12 @@ const markdownComponents = (
       return <MemoImage src={src} alt={alt} onPreview={onPreview} />;
     },
     a: ({ href, children, ...props }) => {
+      // 兼容旧笔记：历史导入可能保存为
+      // [![图片](图片地址)](原文章地址)。图片链接由 MemoCard 自己处理，
+      // 不应继续保留外层文章跳转。
+      if (containsMemoImage(children)) {
+        return <span className="memo-image-link-contents">{children}</span>;
+      }
       if (href?.startsWith('/d/')) {
         return (
           <a
