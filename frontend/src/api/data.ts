@@ -23,6 +23,14 @@ export interface Document {
   updated_at?: string | null;
 }
 
+export interface RelatedNote {
+  id: string;
+  title: string;
+  type: 'memo' | 'document' | 'note';
+  snippet: string;
+  distance?: number | null;
+}
+
 export interface Node {
   id: string;
   document_id: string;
@@ -83,6 +91,11 @@ export const getRecentDocuments = async (limit: number = 20): Promise<Document[]
 
 export const getDocument = async (id: string): Promise<Document> => {
   const response = await api.get<Document>(`/documents/${id}`);
+  return response.data;
+};
+
+export const getRelatedNotes = async (documentId: string, limit: number = 3): Promise<RelatedNote[]> => {
+  const response = await api.get<RelatedNote[]>(`/documents/${documentId}/related`, { params: { limit } });
   return response.data;
 };
 

@@ -31,7 +31,7 @@ import type { UserSubView } from '../context/UserViewContext';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { getNodes, getDocument, updateNode, updateDocument, deleteNode, createNode, createNodesBatch, uploadFile, batchUpdateNodes, batchMoveNodes, batchDeleteNodes, moveNode, getDiaryDayDates, getOrCreateDayNode, getMonthlyDiary } from '../api/data';
 import { dataCache } from '../api/cache';
-import type { Node, Document } from '../api/data';
+import type { Node, Document, RelatedNote } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
 import { useSearch } from '../context/SearchContext';
 import { useDiary } from '../context/DiaryContext';
@@ -2983,6 +2983,14 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             showDocumentTabs={false}
             onDocumentTabSelect={handleDocumentTabSelect}
             onDocumentTabClose={handleDocumentTabClose}
+            onRelatedNoteOpen={(note: RelatedNote) => {
+              if (note.type === 'memo') {
+                startTransition(() => navigate(`/?view=wanderer&memoId=${note.id}`));
+                return;
+              }
+              pendingTabModeRef.current = 'outline';
+              startTransition(() => navigate(`/d/${note.id}`));
+            }}
             onDirtyChange={handleCurrentOutlineDirty}
           />
         </div>

@@ -51,9 +51,9 @@ SyntaxHighlighter.registerLanguage('go', go);
 SyntaxHighlighter.registerLanguage('rust', rust);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
 import { Pencil, Eye, Save, Columns2, Copy, CheckCheck, Download, Share2 } from 'lucide-react';
-import { getNodes, createNode, updateNode, uploadFile, getMemoTags, getDocuments, updateDocument, downloadAttachment } from '../api/data';
+import { getNodes, createNode, updateNode, uploadFile, getMemoTags, getDocuments, updateDocument, downloadAttachment, getRelatedNotes } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
-import type { Document, Node } from '../api/data';
+import type { Document, Node, RelatedNote } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts, getMarkdownTaskOrdinalAtLine, toggleMarkdownTaskByOrdinal } from '../utils/markdownPreprocess';
 import { getPasteMarkdown } from '../utils/htmlToMarkdown';
@@ -86,6 +86,7 @@ interface Props {
   showDocumentTabs?: boolean;
   onDocumentTabSelect?: (tab: DocumentTab) => void;
   onDocumentTabClose?: (tab: DocumentTab) => void;
+  onRelatedNoteOpen?: (note: RelatedNote) => void;
   onDirtyChange?: (dirty: boolean) => void;
 }
 
@@ -495,7 +496,45 @@ function NoteImage({ src, alt }: { src?: string; alt?: string }) {
   return <img src={src} alt={alt || ''} className="max-w-full rounded-lg my-2" loading="lazy" />;
 }
 
-export default function MarkdownNoteEditor({ documentId, isNew = false, initialNodes, initialDocuments, documentTabs = [], activeDocumentTabKey = null, showDocumentTabs = true, onDocumentTabSelect, onDocumentTabClose, onDirtyChange }: Props) {
+function RelatedNotes({ notes, onOpen }: { notes: RelatedNote[]; onOpen: (note: RelatedNote) => void }) {
+  if (notes.length === 0) return null;
+  const typeLabel: Record<RelatedNote['type'], string> = {
+    memo: 'Memo',
+    note: '普通笔记',
+    document: '大纲笔记',
+  };
+  const shorten = (value: string) => value.replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/[#>*_`~]/g, '').replaceAll('[', '').replaceAll(']', '').replace(/\s+/g, ' ').trim();
+
+  return (
+    <section className="related-notes mt-12 border-t border-gray-200 pt-6 dark:border-gray-700" aria-label="相关笔记">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+        <span className="h-4 w-1 rounded-full bg-[#4d9383]" aria-hidden="true" />
+        <span>相关笔记</span>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {notes.map((note) => (
+          <button
+            key={`${note.type}:${note.id}`}
+            type="button"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onOpen(note);
+            }}
+            className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 text-left transition-colors hover:border-[#4d9383] hover:bg-[#f5faf8] dark:border-gray-700 dark:bg-gray-800 dark:hover:border-[#4d9383] dark:hover:bg-gray-750"
+          >
+            <span className="mb-2 block text-[11px] text-[#4d9383]">{typeLabel[note.type]}</span>
+            <span className="block truncate text-sm font-medium text-gray-800 dark:text-gray-100">{note.title || '无标题'}</span>
+            <span className="mt-2 block max-h-10 overflow-hidden text-xs leading-5 text-gray-500 dark:text-gray-400">{shorten(note.snippet) || '暂无摘要'}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export default function MarkdownNoteEditor({ documentId, isNew = false, initialNodes, initialDocuments, documentTabs = [], activeDocumentTabKey = null, showDocumentTabs = true, onDocumentTabSelect, onDocumentTabClose, onRelatedNoteOpen, onDirtyChange }: Props) {
   const { updateDocumentTitle } = useDocuments();
   const isMobile = usePhoneLayout();
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>(isNew ? 'edit' : 'preview');
@@ -511,6 +550,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   const [exportingPdf, setExportingPdf] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
+  const [relatedNotesState, setRelatedNotesState] = useState<{ key: string; notes: RelatedNote[] }>({ key: '', notes: [] });
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const editorScrollRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -528,6 +568,18 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
     previousDocumentIdRef.current = documentId;
     setViewMode(isNew ? 'edit' : 'preview');
   }, [documentId, isNew]);
+
+  useEffect(() => {
+    const relatedQueryKey = `${documentId}:${viewMode}:${content}`;
+    if (viewMode !== 'preview' || isNew || content.trim().length < 30) {
+      return;
+    }
+    let cancelled = false;
+    getRelatedNotes(documentId, 3)
+      .then((notes) => { if (!cancelled) setRelatedNotesState({ key: relatedQueryKey, notes }); })
+      .catch(() => { if (!cancelled) setRelatedNotesState({ key: relatedQueryKey, notes: [] }); });
+    return () => { cancelled = true; };
+  }, [content, documentId, isNew, viewMode]);
 
   const handleDownload = useCallback(() => {
     const currentContent = editorRef.current?.getValue() ?? content;
@@ -1147,6 +1199,18 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
               {content.trim() ? (
                 <ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} rehypePlugins={LAZY_MARKDOWN_REHYPE_PLUGINS} components={mdComponents}>{processedContent}</ReactMarkdown>
               ) : <p className="text-gray-400 dark:text-gray-500 italic">空笔记</p>}
+              {viewMode === 'preview' && relatedNotesState.key === `${documentId}:${viewMode}:${content}` && (
+                <RelatedNotes
+                  notes={relatedNotesState.notes}
+                  onOpen={(note) => {
+                    if (onRelatedNoteOpen) {
+                      onRelatedNoteOpen(note);
+                      return;
+                    }
+                    navigate(note.type === 'memo' ? `/?view=wanderer&memoId=${note.id}` : `/d/${note.id}`);
+                  }}
+                />
+              )}
             </div>
           </div>
         )}

@@ -81,6 +81,13 @@ class Document(DocumentBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+class RelatedNote(BaseModel):
+    id: str
+    title: str
+    type: str
+    snippet: str
+    distance: Optional[float] = None
+
 class NodeBase(BaseModel):
     document_id: UUID
     parent_node_id: Optional[UUID] = None
