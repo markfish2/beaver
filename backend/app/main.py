@@ -18,7 +18,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS - only allow specific origins
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost,https://localhost,http://localhost:8080,http://localhost:5173,http://localhost:*")
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost,https://localhost,http://localhost:8080,http://localhost:*")
 origins = [origin.strip() for origin in CORS_ORIGINS.split(",") if origin.strip()]
 
 app.add_middleware(

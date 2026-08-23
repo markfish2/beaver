@@ -664,6 +664,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
                   hasMore={memos.length < memoTotal}
                   highlightId={highlightMemoId}
                   documents={documents}
+                  deferOffscreen={isMobile}
                 />
             )}
           </div>

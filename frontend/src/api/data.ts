@@ -90,7 +90,12 @@ export const getRecentDocuments = async (limit: number = 20): Promise<Document[]
 };
 
 export const getDocument = async (id: string): Promise<Document> => {
+  const cacheKey = `document:${id}`;
+  const cached = dataCache.get<Document>(cacheKey);
+  if (cached) return cached;
+
   const response = await api.get<Document>(`/documents/${id}`);
+  dataCache.set(cacheKey, response.data, 2 * 60 * 1000);
   return response.data;
 };
 
@@ -115,6 +120,7 @@ export const updateDocument = async (id: string, data: Partial<Document> & { exp
   try {
     const response = await api.put<Document>(`/documents/${id}`, data);
     dataCache.invalidate('documents:');
+    dataCache.invalidate(`document:${id}`);
     return response.data;
   } catch (error: unknown) {
     if (axios.isAxiosError<{ detail?: ConflictDetail }>(error) && error.response?.status === 409) {
@@ -134,6 +140,7 @@ export const updateDocument = async (id: string, data: Partial<Document> & { exp
 export const deleteDocument = async (id: string, deleteChildren: boolean = false) => {
   await api.delete(`/documents/${id}`, { params: { delete_children: deleteChildren } });
   dataCache.invalidate('documents:');
+  dataCache.invalidate(`document:${id}`);
 };
 
 // Nodes

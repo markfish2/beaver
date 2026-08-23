@@ -11,17 +11,17 @@ import { useFontSettings } from '../FontSettings';
 import { useIsDark } from '../../hooks/useIsDark';
 import AppearanceSettingsPage from '../AppearanceSettingsPage';
 import NavigationIcon from '../NavigationIcon';
+import { MobileEditorActionsSlot } from '../EditorActionPortal';
 
 interface MobileTopBarProps {
   title: string;
   showBack?: boolean;
   isDocumentPage?: boolean;
-  documentKey?: string;
   onBack?: () => void;
   onSearch?: (query: string) => void;
 }
 
-export default function MobileTopBar({ title, showBack, isDocumentPage = false, documentKey, onBack, onSearch }: MobileTopBarProps) {
+export default function MobileTopBar({ title, showBack, isDocumentPage = false, onBack, onSearch }: MobileTopBarProps) {
   const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
@@ -31,40 +31,6 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
   const userMenuRef = useRef<HTMLDivElement>(null);
   const { setTheme } = useFontSettings();
   const isDark = useIsDark();
-  const [editorActionsReady, setEditorActionsReady] = useState(!isDocumentPage);
-
-  // 文档页等待对应编辑器的操作按钮挂载后，再显示左侧胶囊，避免加载阶段先闪出一个孤立返回按钮。
-  useEffect(() => {
-    if (!isDocumentPage) {
-      const frame = window.requestAnimationFrame(() => setEditorActionsReady(true));
-      return () => window.cancelAnimationFrame(frame);
-    }
-
-    let cancelled = false;
-    const host = document.getElementById('mobile-editor-action-slot');
-    const updateReady = () => {
-      if (!cancelled && host?.childElementCount) setEditorActionsReady(true);
-    };
-    const observer = host ? new MutationObserver(updateReady) : null;
-    observer?.observe(host, { childList: true });
-    const resetFrame = window.requestAnimationFrame(() => {
-      if (!cancelled) {
-        setEditorActionsReady(false);
-        updateReady();
-      }
-    });
-    const fallback = window.setTimeout(() => {
-      if (!cancelled) setEditorActionsReady(true);
-    }, 1500);
-
-    return () => {
-      cancelled = true;
-      observer?.disconnect();
-      window.cancelAnimationFrame(resetFrame);
-      window.clearTimeout(fallback);
-    };
-  }, [documentKey, isDocumentPage]);
-
   // 切换暗色/亮色
   const toggleDark = useCallback(() => {
     setTheme(isDark ? 'system' : 'dark');
@@ -130,12 +96,12 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
         {/* 左侧：头像（圆形胶囊） */}
         <div
           ref={userMenuRef}
-          className={`pointer-events-auto relative shrink-0 flex items-center ${isDocumentPage && editorActionsReady ? 'h-[36px] rounded-full border border-white/80 bg-white/65 shadow-[0_4px_18px_-6px_rgba(15,23,42,0.22)] backdrop-blur-xl backdrop-saturate-150 dark:border-white/10 dark:bg-gray-800/65' : ''}`}
+          className={`pointer-events-auto relative shrink-0 flex items-center ${isDocumentPage ? 'h-[36px] rounded-full border border-white/80 bg-white/65 shadow-[0_4px_18px_-6px_rgba(15,23,42,0.22)] backdrop-blur-xl backdrop-saturate-150 dark:border-white/10 dark:bg-gray-800/65' : ''}`}
         >
-          {showBack && (!isDocumentPage || editorActionsReady) ? (
+          {showBack ? (
             <button
               onClick={() => onBack?.()}
-              className={`flex items-center justify-center w-[36px] h-[36px] rounded-full
+              className={`flex items-center justify-center w-[44px] h-[44px] rounded-full
                          ${isDocumentPage ? '' : 'border border-white/80 bg-white/65 shadow-[0_4px_18px_-6px_rgba(15,23,42,0.22)] backdrop-blur-xl backdrop-saturate-150 dark:border-white/10 dark:bg-gray-800/65'}
                          text-gray-600 dark:text-gray-300
                          active:scale-95 transition-transform`}
@@ -196,13 +162,7 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
             </>
           )}
 
-          {isDocumentPage && (
-            <div
-              id="mobile-editor-action-slot"
-              className="relative flex min-w-0 items-center gap-0.5 pr-1"
-              aria-label="笔记操作"
-            />
-          )}
+          {isDocumentPage && <MobileEditorActionsSlot className="relative flex min-w-0 items-center gap-0.5 pr-1" />}
         </div>
 
         {/* 中间：标题（胶囊长条形，缩小一半，居中） */}
@@ -225,7 +185,7 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
           {/* 日/夜切换按钮 */}
           <button
             onClick={toggleDark}
-            className="flex items-center justify-center w-[36px] h-[36px] rounded-full
+            className="flex items-center justify-center w-[44px] h-[44px] rounded-full
                        text-gray-500 dark:text-gray-400
                        active:scale-95 transition-transform"
             aria-label={isDark ? '切换到日间模式' : '切换到夜间模式'}
@@ -238,7 +198,7 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
           {showSearch ? (
             <button
               onClick={() => { setShowSearch(false); setSearchQuery(''); }}
-              className="flex items-center justify-center w-[36px] h-[36px] rounded-full
+            className="flex items-center justify-center w-[44px] h-[44px] rounded-full
                          text-gray-500 dark:text-gray-400
                          active:scale-95 transition-transform"
             >

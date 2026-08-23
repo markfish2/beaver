@@ -36,11 +36,12 @@ export const useKeyboardScroll = (options: UseKeyboardScrollOptions = {}) => {
     const visibleBottom = viewportHeight - safeAreaBottom;
     
     if (elementTop < visibleTop || elementBottom > visibleBottom) {
-      const scrollTarget = elementTop - safeAreaTop - extraOffset / 2;
-      
-      window.scrollTo({
-        top: window.scrollY + scrollTarget,
-        behavior: 'smooth'
+      // 让浏览器选择真正承载内容的滚动容器，而不是只滚动 window。
+      // 日记和大纲在移动端都使用内部 overflow-y-auto 容器。
+      element.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'nearest',
       });
     }
   }, [enabled, extraOffset]);

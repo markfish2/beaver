@@ -58,7 +58,7 @@ export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBot
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className="relative flex items-center justify-center flex-1 h-full
+                className="relative flex items-center justify-center flex-1 h-full min-h-[44px]
                            min-w-0 transition-[transform,color] duration-200 z-10
                            active:scale-90"
               >

@@ -4,6 +4,7 @@ import MobileTopBar from './MobileTopBar';
 import MobileBottomTabBar, { type MobileTab } from './MobileBottomTabBar';
 import MobileToolbar from '../MobileToolbar';
 import { MobileToolbarProvider, useMobileToolbar } from '../../context/MobileToolbarContext';
+import { MobileEditorActionsProvider } from '../EditorActionPortal';
 import { getMonthlyDiary, getOrCreateDayNode } from '../../api/data';
 import NewMenuPopup from './NewMenuPopup';
 import AIChatMainView from '../AIChatMainView';
@@ -12,6 +13,7 @@ import { useUserView } from '../../context/UserViewContext';
 import { MessageSquare } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { createMobileDocumentState, getMobileTabFromState, resolveMobileBackTarget } from '../../utils/mobileNavigation';
+import { useViewportMetrics } from '../../hooks/useViewportMetrics';
 
 const FileTreeView = lazy(() => import('./FileTreeView'));
 const MobileTodos = lazy(() => import('./MobileTodos'));
@@ -20,12 +22,10 @@ interface MobileLayoutProps {
   children: ReactNode;
 }
 
-// ToolbarSlot reads from MobileToolbarContext and renders MobileToolbar
-// Toolbar is position: fixed at bottom, above keyboard
-function ToolbarSlot({ showZoom, hasTabBar, keyboardOpen }: {
+  // ToolbarSlot 是根 Flex 容器的底部子节点，键盘缩小 100dvh 后自然位于键盘上方。
+function ToolbarSlot({ showZoom, hasTabBar }: {
   showZoom?: boolean;
   hasTabBar?: boolean;
-  keyboardOpen: boolean;
 }) {
   const { isVisible, handlers } = useMobileToolbar();
   return (
@@ -44,7 +44,6 @@ function ToolbarSlot({ showZoom, hasTabBar, keyboardOpen }: {
         showZoom={showZoom}
         hasTabBar={hasTabBar}
       />
-      {isVisible && keyboardOpen && <div className="h-10 shrink-0" />}
     </>
   );
 }
@@ -60,12 +59,40 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   const [showAIHistory, setShowAIHistory] = useState(false);
   const prevTabRef = useRef<MobileTab>('memos');
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const { keyboardOpen: viewportKeyboardOpen } = useViewportMetrics();
 
-  // 监听键盘状态（由 MobileToolbar 通过 CustomEvent 通知）
+  // 编辑区获得焦点后，始终把光标所在节点滚到可视范围；不能用焦点状态
+  // 全局隐藏底部 Tab，普通笔记、画布、Memo 等编辑区域仍应保留导航。
   useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      setKeyboardOpen(detail?.open ?? false);
+    const isEditableTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false;
+      return target.isContentEditable
+        || target.tagName === 'INPUT'
+        || target.tagName === 'TEXTAREA';
+    };
+    const handleFocusIn = (event: FocusEvent) => {
+      if (isEditableTarget(event.target) && event.target instanceof HTMLElement) {
+        const focusedElement = event.target;
+        window.setTimeout(() => {
+          focusedElement.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest',
+            inline: 'nearest',
+          });
+        }, 300);
+      }
+    };
+    document.addEventListener('focusin', handleFocusIn);
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn);
+    };
+  }, []);
+
+  // 键盘弹出时统一隐藏底部 Tab，键盘收起后恢复；不依赖编辑框是否失焦。
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const open = (event as CustomEvent<{ open?: boolean }>).detail?.open ?? false;
+      setKeyboardOpen(open);
     };
     window.addEventListener('keyboard-change', handler);
     return () => window.removeEventListener('keyboard-change', handler);
@@ -121,6 +148,21 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     document.documentElement.dataset.mobileLayout = 'true';
     return () => { delete document.documentElement.dataset.mobileLayout; };
   }, []);
+
+  // URL 是移动端入口状态的可恢复来源；点击文件/项目等入口后，避免仍停留在上一次的随想视图。
+  useEffect(() => {
+    const view = new URLSearchParams(location.search).get('view');
+    const nextTab: MobileTab | null = view === 'diary'
+      ? 'diary'
+      : view === 'files' || view === 'projects' || view === 'recent' || view === 'starred'
+        ? 'files'
+        : view === 'ai'
+          ? 'ai'
+          : null;
+    if (nextTab && !isEditing) {
+      window.setTimeout(() => setActiveTab(nextTab), 0);
+    }
+  }, [isEditing, location.search]);
 
   const prevEditingRef = useRef(false);
   useEffect(() => {
@@ -228,17 +270,23 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     }
   };
 
-  const showTabBar = (!isEditing || activeTab === 'diary') && !keyboardOpen;
+  // 只要键盘弹出，所有界面都隐藏底部 Tab；键盘收起后恢复。
+  // 编辑框焦点本身不参与判断，避免普通编辑区域因焦点残留而永久隐藏。
+  const showTabBar = (!isEditing || activeTab === 'diary')
+    && !keyboardOpen
+    && !viewportKeyboardOpen;
+  const mobileView = new URLSearchParams(location.search).get('view');
+  const fileViewMode = mobileView === 'recent' ? 'recent' : mobileView === 'starred' ? 'starred' : 'all';
 
 
   return (
     <MobileToolbarProvider>
-    <div className="flex flex-col bg-white dark:bg-gray-900" style={{ height: '100dvh' }}>
+    <MobileEditorActionsProvider>
+    <div className="app-container flex flex-col bg-white dark:bg-gray-900" style={{ height: '100dvh', width: '100vw', overflow: 'hidden' }}>
       <MobileTopBar
         title={getTopBarTitle()}
         showBack={isEditing || !!userSubView}
         isDocumentPage={isEditing && activeTab !== 'diary'}
-        documentKey={isEditing ? location.pathname : undefined}
         onBack={handleBack}
         onSearch={handleSearch}
       />
@@ -250,7 +298,6 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
         ) : isEditing && activeTab !== 'diary' ? (
           // Document editor mode: toolbar below topbar, then content
           <>
-            <ToolbarSlot showZoom={true} hasTabBar={false} keyboardOpen={keyboardOpen} />
             {children}
           </>
         ) : activeTab === 'diary' ? (
@@ -262,7 +309,6 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
                 <MobileTodos />
               </Suspense>
             </div>
-            <ToolbarSlot showZoom={false} hasTabBar={true} keyboardOpen={keyboardOpen} />
             <div className="flex-1 min-h-0 overflow-y-auto scrollbar-none">
               {diaryDocId ? (
                 <DiaryMainArea diaryDocId={diaryDocId} onDiaryDocChange={setDiaryDocId} />
@@ -271,10 +317,13 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
               )}
             </div>
           </div>
+        ) : mobileView === 'projects' ? (
+          // 项目详情由 MainArea/ProjectView 负责，不能误降级成文件树。
+          children
         ) : activeTab === 'files' ? (
           <Suspense fallback={<div className="flex-1 flex items-center justify-center text-gray-400 text-sm">加载中...</div>}>
             <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 58px)', flexShrink: 0 }} />
-            <FileTreeView />
+            <FileTreeView viewMode={fileViewMode} />
           </Suspense>
         ) : activeTab === 'ai' ? (
           // AI 问答 - 全屏，导航栏悬浮覆盖
@@ -315,6 +364,12 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
         )}
       </div>
 
+      {/* 键盘快捷工具栏必须位于根 Flex 容器底部，不能悬浮在编辑区之外。 */}
+      <ToolbarSlot
+        showZoom={isEditing && activeTab !== 'diary'}
+        hasTabBar={activeTab === 'diary'}
+      />
+
       {/* Fixed bottom tab bar */}
       {showTabBar && (
         <MobileBottomTabBar
@@ -330,6 +385,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
         />
       )}
     </div>
+    </MobileEditorActionsProvider>
     </MobileToolbarProvider>
   );
 }

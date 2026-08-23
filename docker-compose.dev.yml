@@ -1,26 +1,30 @@
-# 开发模式：前端用 Vite dev server + 热更新，改代码秒级生效
-# 使用方式：docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# 本地开发只运行后端容器；前端必须在宿主机用 Vite 热更新。
+#
+# 启动后端：
+#   docker compose -f docker-compose.dev.yml up -d
+# 启动前端：
+#   cd frontend && npm run dev
+# 浏览器统一访问：http://127.0.0.1:8080
 
 services:
-  frontend:
-    build: null
-    image: node:20-alpine
-    container_name: miniflowy-frontend
+  backend:
+    image: beaver-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: beaver-backend-dev
     restart: unless-stopped
-    working_dir: /app
+    platform: linux/amd64
+    ports:
+      - "8000:8000"
     volumes:
-      - ./frontend:/app
-      - frontend-node-modules:/app/node_modules
-    command: sh -c "npm install --registry=https://registry.npmmirror.com && npx vite --host 0.0.0.0 --port 5173"
+      - ./backend/data:/app/data
     environment:
-      - NODE_OPTIONS=--max-old-space-size=2048
-    networks:
-      - miniflowy-network
-
-  nginx:
-    volumes:
-      - ./nginx/dev.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-
-volumes:
-  frontend-node-modules:
+      - DATABASE_URL=sqlite:///app/data/app.db
+      - SECRET_KEY=REDACTED_SECRET_REMOVED
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

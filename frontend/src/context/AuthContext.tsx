@@ -2,6 +2,8 @@ import { createContext, useContext, useState, useEffect, useMemo, useCallback, u
 import { checkSetupStatus, getMe, login as apiLogin, setupAdmin as apiSetupAdmin } from '../api/auth';
 import type { User } from '../api/auth';
 import { useNavigate } from 'react-router-dom';
+import { dataCache } from '../api/cache';
+import { clearMemosCache } from '../utils/pwaState';
 
 interface AuthContextType {
   user: User | null;
@@ -71,6 +73,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = useCallback(async (username: string, password: string) => {
     const data = await apiLogin(username, password);
+    dataCache.clear();
+    await clearMemosCache();
+    if ('caches' in window) {
+      const names = await caches.keys();
+      await Promise.all(names.filter(name => name === 'api-cache').map(name => caches.delete(name)));
+    }
     localStorage.setItem('token', data.access_token);
     const userData = await getMe();
     setUser(userData);
@@ -86,6 +94,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = useCallback(() => {
     localStorage.removeItem('token');
+    dataCache.clear();
+    void clearMemosCache();
+    void ('caches' in window ? caches.keys().then(names => Promise.all(names.filter(name => name === 'api-cache').map(name => caches.delete(name)))) : Promise.resolve());
     setUser(null);
     setIsAuthenticated(false);
     navigate('/login');

@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useCallback } from 'react';
+import { memo, useState, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import {
   ChevronRight, ChevronLeft, CheckSquare, MessageSquare,
@@ -42,7 +42,8 @@ function ToolbarButton({ icon, label, onClick, danger }: {
   );
 }
 
-const TAB_BAR_HEIGHT = 52;
+const isHarmonyBrowser = typeof navigator !== 'undefined'
+  && /HarmonyOS|OpenHarmony|ArkWeb|HUAWEI/i.test(navigator.userAgent);
 
 const MobileToolbar = memo(function MobileToolbar({
   isVisible,
@@ -56,36 +57,62 @@ const MobileToolbar = memo(function MobileToolbar({
   onUndo,
   onDelete,
   showZoom = true,
-  hasTabBar = false,
 }: MobileToolbarProps) {
-  // 用 top 定位，锚定在 visualViewport 底部边缘
-  const [top, setTop] = useState(() => window.innerHeight - TAB_BAR_HEIGHT);
+  // 工具栏固定在浏览器为键盘让出的布局底部。
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  // 必须在组件首次挂载时记录基准。鸿蒙上键盘可能先收缩视口，
+  // 然后才触发 focusedNode 状态更新；在 isVisible=true 时再记录会把键盘高度当成基准。
+  const layoutHeightRef = useRef(
+    Math.max(
+      window.innerHeight,
+      document.documentElement.clientHeight,
+      window.visualViewport?.height ?? 0,
+    ),
+  );
 
   const updatePosition = useCallback(() => {
     const viewport = window.visualViewport;
     if (!viewport) {
-      setKeyboardOpen(false);
-      setTop(window.innerHeight - (hasTabBar ? TAB_BAR_HEIGHT : 0) - 44);
-      window.dispatchEvent(new CustomEvent('keyboard-change', { detail: { open: false } }));
+      // 部分移动端浏览器（尤其是隐私模式/内置浏览器）没有 visualViewport，
+      // 但键盘弹出时仍会通过 window.resize 缩小布局视口。
+      const active = document.activeElement;
+      const isEditable = active instanceof HTMLElement && (
+        active.isContentEditable
+        || active.tagName === 'INPUT'
+        || active.tagName === 'TEXTAREA'
+      );
+      // 没有 visualViewport 时只能以编辑框焦点作为键盘可见的兜底信号；
+      // 键盘收起后编辑框通常会失焦，focusout 会再次刷新状态。
+      const isOpen = isEditable || isVisible;
+      setKeyboardOpen(isOpen);
+      window.dispatchEvent(new CustomEvent('keyboard-change', { detail: { open: isOpen } }));
       return;
     }
 
-    const viewportBottom = viewport.offsetTop + viewport.height;
-    const keyboardHeight = window.innerHeight - viewport.height;
-    const isOpen = keyboardHeight > 50;
+    // 鸿蒙部分版本会同时缩小 layout viewport 和 visual viewport，
+    // 因此不能只用 window.innerHeight - viewport.height 判断键盘。
+    const layoutHeight = layoutHeightRef.current;
+    const keyboardHeight = Math.max(
+      layoutHeight - window.innerHeight,
+      layoutHeight - viewport.height,
+      0,
+    );
+    // 鸿蒙部分 ArkWeb 版本不会同步更新 visualViewport，但编辑焦点是可靠的。
+    // isVisible 由 MainArea 的当前编辑节点控制，因此可以作为键盘附件栏的兜底信号。
+    const isOpen = keyboardHeight > 50 || (isHarmonyBrowser && isVisible);
     setKeyboardOpen(isOpen);
 
-    if (isOpen) {
-      // 键盘弹出：工具栏顶部 = 可视视口底部 - 工具栏高度（紧贴键盘上方）
-      setTop(viewportBottom - 44);
-    } else {
-      // 键盘收起：用布局视口计算，避开 Tab 栏
-      setTop(window.innerHeight - (hasTabBar ? TAB_BAR_HEIGHT : 0) - 44);
+    // 只有确认键盘关闭后才更新基准，避免把键盘收缩后的高度记录进去。
+    if (!isOpen) {
+      layoutHeightRef.current = Math.max(
+        window.innerHeight,
+        document.documentElement.clientHeight,
+        viewport.height,
+      );
     }
 
     window.dispatchEvent(new CustomEvent('keyboard-change', { detail: { open: isOpen } }));
-  }, [hasTabBar]);
+  }, [isVisible]);
 
   useEffect(() => {
     if (!isVisible) {
@@ -93,16 +120,21 @@ const MobileToolbar = memo(function MobileToolbar({
       return;
     }
     const viewport = window.visualViewport;
-    if (!viewport) return;
 
     const frame = window.requestAnimationFrame(updatePosition);
-    viewport.addEventListener('resize', updatePosition);
-    viewport.addEventListener('scroll', updatePosition);
+    window.addEventListener('resize', updatePosition);
+    document.addEventListener('focusin', updatePosition);
+    document.addEventListener('focusout', updatePosition);
+    viewport?.addEventListener('resize', updatePosition);
+    viewport?.addEventListener('scroll', updatePosition);
 
     return () => {
       window.cancelAnimationFrame(frame);
-      viewport.removeEventListener('resize', updatePosition);
-      viewport.removeEventListener('scroll', updatePosition);
+      window.removeEventListener('resize', updatePosition);
+      document.removeEventListener('focusin', updatePosition);
+      document.removeEventListener('focusout', updatePosition);
+      viewport?.removeEventListener('resize', updatePosition);
+      viewport?.removeEventListener('scroll', updatePosition);
       window.dispatchEvent(new CustomEvent('keyboard-change', { detail: { open: false } }));
     };
   }, [isVisible, updatePosition]);
@@ -115,10 +147,12 @@ const MobileToolbar = memo(function MobileToolbar({
     <div
       role="toolbar"
       aria-label="节点编辑工具栏"
-      className="fixed left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 z-50"
-      style={{ top: `${top}px` }}
+      className="keyboard-toolbar flex-none mx-3 mb-2 overflow-hidden rounded-full border border-white/70 bg-white/75 shadow-lg shadow-gray-400/15 backdrop-blur-xl dark:border-gray-700/70 dark:bg-gray-800/75 dark:shadow-black/20 z-50"
+      style={{ flex: '0 0 44px' }}
+      onMouseDown={(event) => event.preventDefault()}
+      onTouchStart={(event) => event.preventDefault()}
     >
-      <div className="flex items-center justify-around border-b border-gray-100 dark:border-gray-700">
+      <div className="flex h-full items-center justify-around">
         <ToolbarButton icon={<ChevronRight size={18} />} label="缩进" onClick={onIndent} />
         <ToolbarButton icon={<ChevronLeft size={18} />} label="提升" onClick={onOutdent} />
         <ToolbarButton icon={<CheckSquare size={18} />} label="待办" onClick={onToggleTodo} />

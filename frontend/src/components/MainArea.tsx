@@ -2480,8 +2480,11 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
 
   useEffect(() => {
     if (!isMobile) return;
-    publishToolbar(!!focusedNodeIdForToolbar, toolbarHandlers);
-  }, [isMobile, focusedNodeIdForToolbar, publishToolbar, toolbarHandlers]);
+    // 快捷节点工具栏只属于大纲文档和日记；普通笔记、画布等编辑器
+    // 即使内部存在可编辑控件，也不能把它们误判成大纲编辑状态。
+    const supportsNodeToolbar = currentDoc?.type === 'document' || isDiaryDoc;
+    publishToolbar(supportsNodeToolbar && !!focusedNodeIdForToolbar, toolbarHandlers);
+  }, [isMobile, isDiaryDoc, currentDoc?.type, focusedNodeIdForToolbar, publishToolbar, toolbarHandlers]);
 
   // 当窗口失焦或非应用复制时，清除内部剪贴板缓存
   // 避免从外部复制文字后粘贴仍使用旧的内部节点数据

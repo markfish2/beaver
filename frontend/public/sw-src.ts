@@ -2,7 +2,7 @@
 
 import { precacheAndRoute } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
-import { StaleWhileRevalidate, NetworkOnly } from 'workbox-strategies';
+import { NetworkFirst, StaleWhileRevalidate, NetworkOnly } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 
@@ -69,16 +69,29 @@ registerRoute(
   })
 );
 
-// API GET 请求：网络优先，离线返回缓存
+// API GET 请求：网络优先，离线返回最近一次成功的缓存。
+// 写请求不进入 Service Worker 缓存，避免把保存/同步请求变成陈旧数据。
 registerRoute(
-  ({ url, request }) => url.pathname.startsWith('/api/') && request.method === 'GET',
-  new NetworkOnly({
+  ({ url }) => url.pathname.startsWith('/api/')
+    && request.method === 'GET'
+    && !url.pathname.startsWith('/api/auth/')
+    && !url.pathname.startsWith('/api/setup')
+    && !url.pathname.startsWith('/api/search'),
+  new NetworkFirst({
     cacheName: 'api-cache',
     plugins: [
       new ExpirationPlugin({ maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 }),
       new CacheableResponsePlugin({ statuses: [0, 200] }),
     ],
   })
+);
+
+// 登录、初始化和搜索结果不能进入 Service Worker 缓存，避免账号切换或服务端更新后读到旧数据。
+registerRoute(
+  ({ url }) => url.pathname.startsWith('/api/auth/')
+    || url.pathname.startsWith('/api/setup')
+    || url.pathname.startsWith('/api/search'),
+  new NetworkOnly(),
 );
 
 // ============ Web Share Target 处理 ============

@@ -3,6 +3,7 @@ export type MobileTabTarget = 'memos' | 'diary' | 'files' | 'ai';
 export interface MobileNavigationState {
   mobileReturnTo?: string;
   mobileReturnTab?: MobileTabTarget;
+  mobileDocumentMode?: 'outline' | 'mindmap' | 'note' | 'canvas';
 }
 
 export type MobileBackTarget =

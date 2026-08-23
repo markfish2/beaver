@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronRight, MoreHorizontal, Copy, Trash2, Pencil } from 'lucide-react';
 import { useDocuments } from '../../context/DocumentContext';
-import { deleteDocument, updateDocument, copyDocument } from '../../api/data';
+import { deleteDocument, updateDocument, copyDocument, getRecentDocuments } from '../../api/data';
 import DeleteConfirmDialog from '../DeleteConfirmDialog';
 import type { Document } from '../../api/data';
 import { createMobileDocumentState } from '../../utils/mobileNavigation';
@@ -11,6 +11,7 @@ import NavigationIcon from '../NavigationIcon';
 
 interface FileTreeViewProps {
   starredOnly?: boolean;
+  viewMode?: 'all' | 'starred' | 'recent';
 }
 
 function getDocIcon(doc: Document, isExpanded = false) {
@@ -45,7 +46,7 @@ const compareFileMenuItem = (sortTimes: Map<string, number>) => (a: Document, b:
   return compareDocumentByLastEditedDesc(sortTimes)(a, b);
 };
 
-export default function FileTreeView({ starredOnly = false }: FileTreeViewProps) {
+export default function FileTreeView({ starredOnly = false, viewMode = starredOnly ? 'starred' : 'all' }: FileTreeViewProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { documents, refreshDocuments } = useDocuments();
@@ -56,9 +57,23 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
   const [editTitle, setEditTitle] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
 
-  const filteredDocs = starredOnly
-    ? documents.filter(d => d.is_starred)
-    : documents;
+  const [recentDocs, setRecentDocs] = useState<Document[]>([]);
+  useEffect(() => {
+    if (viewMode !== 'recent') return;
+    let cancelled = false;
+    getRecentDocuments(50).then(items => {
+      if (!cancelled) setRecentDocs(items);
+    }).catch(() => {
+      if (!cancelled) setRecentDocs([]);
+    });
+    return () => { cancelled = true; };
+  }, [viewMode]);
+
+  const filteredDocs = viewMode === 'recent'
+    ? recentDocs
+    : viewMode === 'starred' || starredOnly
+      ? documents.filter(d => d.is_starred)
+      : documents;
   const selectedDocumentId = location.pathname.match(/^\/d\/([^/]+)$/)?.[1];
 
   // 计算文档排序时间映射（与 PC 端 Sidebar 一致）
@@ -73,6 +88,18 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
   // 预排序比较函数（与 PC 端 Sidebar 一致）
   const compareByLastEdited = useMemo(() => compareDocumentByLastEditedDesc(documentSortTimes), [documentSortTimes]);
   const compareFileItem = useMemo(() => compareFileMenuItem(documentSortTimes), [documentSortTimes]);
+
+  // 预先按父目录建立索引，避免递归渲染时对整棵文档树重复 filter。
+  const childrenByParent = useMemo(() => {
+    const groups = new Map<string | null, Document[]>();
+    for (const doc of filteredDocs) {
+      const group = groups.get(doc.parent_id) ?? [];
+      group.push(doc);
+      groups.set(doc.parent_id, group);
+    }
+    for (const group of groups.values()) group.sort(compareFileItem);
+    return groups;
+  }, [compareFileItem, filteredDocs]);
 
   const handleToggleFolder = (folderId: string) => {
     setExpandedFolders(prev => {
@@ -173,7 +200,7 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
 
   const renderDocItem = (doc: Document, depth: number) => {
     const isFolder = doc.type === 'folder';
-    const isUnfiledNote = !starredOnly && depth === 0 && !isFolder && doc.parent_id === null;
+    const isUnfiledNote = viewMode === 'all' && !starredOnly && depth === 0 && !isFolder && doc.parent_id === null;
     const isExpanded = expandedFolders.has(doc.id);
 
     return (
@@ -252,14 +279,12 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
   };
 
   const renderTree = (parentId: string | null, depth: number) => {
-    const children = filteredDocs
-      .filter(d => d.parent_id === parentId)
-      .sort(compareFileItem);
+    const children = childrenByParent.get(parentId) ?? [];
 
     return children.map(doc => {
       const isFolder = doc.type === 'folder';
       const isExpanded = expandedFolders.has(doc.id);
-      const childDocs = filteredDocs.filter(d => d.parent_id === doc.id);
+      const childDocs = childrenByParent.get(doc.id) ?? [];
       const hasChildren = isFolder && childDocs.length > 0;
 
       return (
@@ -290,9 +315,9 @@ export default function FileTreeView({ starredOnly = false }: FileTreeViewProps)
     <div className="flex-1 overflow-y-auto px-2 py-2 custom-scrollbar">
       {filteredDocs.length === 0 ? (
         <div className="text-center text-gray-400 text-sm py-8">
-          {starredOnly ? '暂无收藏' : '暂无文档'}
+          {viewMode === 'starred' ? '暂无收藏' : viewMode === 'recent' ? '暂无最近编辑' : '暂无文档'}
         </div>
-      ) : starredOnly ? (
+      ) : viewMode === 'starred' || starredOnly ? (
         renderStarredList()
       ) : (
         renderTree(null, 0)

@@ -359,7 +359,7 @@ docker compose up -d --build
 
 #### 3. 访问应用
 
-打开浏览器访问 `http://your-server-ip:5173`
+打开浏览器访问 `http://your-server-ip:8080`
 
 首次访问会跳转到初始化页面，创建管理员账号。
 
@@ -370,7 +370,7 @@ docker compose up -d --build
 docker ps
 
 # 检查后端健康状态
-curl http://localhost:5173/api/health
+curl http://localhost:8080/api/health
 ```
 
 ### 开发环境
@@ -406,14 +406,16 @@ npm install
 npm run dev
 ```
 
-前端开发服务器：`http://localhost:5173`
+前端开发服务器：`http://localhost:8080`
 
-#### 开发环境 Docker Compose
+#### 开发环境
 
-根目录的 `docker-compose.yml` 映射端口 `5173:80`，适合本地开发：
+本地开发不在 Docker 中运行前端。Docker 只启动后端，前端由宿主机 Vite 提供热更新：
 
 ```bash
-docker compose up -d --build
+docker compose -f docker-compose.dev.yml up -d
+cd frontend
+npm run dev
 ```
 
 ---
@@ -466,7 +468,7 @@ docker compose build --no-cache
 docker compose up -d
 ```
 
-默认端口 `5173`。
+默认端口 `8080`。
 
 ### HTTPS 配置
 

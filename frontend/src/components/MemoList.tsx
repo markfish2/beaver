@@ -1,4 +1,4 @@
-import { useMemo, memo, useRef, useEffect, useCallback, useState } from 'react';
+import { useMemo, memo, useRef, useEffect, useCallback, useState, type ReactNode } from 'react';
 import { FileText, Loader2 } from 'lucide-react';
 import MemoCard from './MemoCard';
 import type { Memo, Document } from '../api/data';
@@ -17,6 +17,31 @@ interface MemoListProps {
   hasMore: boolean;
   highlightId?: string | null;
   documents?: Document[];
+  deferOffscreen?: boolean;
+}
+
+function DeferredMemoCard({ enabled, estimatedHeight, children }: { enabled: boolean; estimatedHeight: number; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(!enabled);
+
+  useEffect(() => {
+    if (!enabled || visible) return;
+    const element = ref.current;
+    if (!element || typeof IntersectionObserver === 'undefined') {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setVisible(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: '600px 0px' });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [enabled, visible]);
+
+  return <div ref={ref} style={!visible ? { minHeight: estimatedHeight } : undefined}>{visible ? children : null}</div>;
 }
 
 function estimateHeight(m: Memo, compact: boolean): number {
@@ -70,7 +95,7 @@ function LoadMoreSentinel({ onLoadMore, hasMore }: { onLoadMore: () => Promise<v
   );
 }
 
-const MemoList = memo(function MemoList({ memos, columns, onEdit, onDelete, onTogglePin, onToggleArchive, onTogglePublic, onToggleAI, onTagClick, onLoadMore, hasMore, highlightId, documents }: MemoListProps) {
+const MemoList = memo(function MemoList({ memos, columns, onEdit, onDelete, onTogglePin, onToggleArchive, onTogglePublic, onToggleAI, onTagClick, onLoadMore, hasMore, highlightId, documents, deferOffscreen = false }: MemoListProps) {
   const { leftCol, rightCol } = useMemo(() => {
     if (columns !== 2) return { leftCol: [], rightCol: [] };
     const left: Memo[] = [];
@@ -107,14 +132,14 @@ const MemoList = memo(function MemoList({ memos, columns, onEdit, onDelete, onTo
           <div className="space-y-3" style={{ contain: 'layout' }}>
             {leftCol.map(memo => (
               <div key={memo.id} id={`memo-${memo.id}`}>
-                <MemoCard memo={memo} onEdit={onEdit} onDelete={onDelete} onTogglePin={onTogglePin} onToggleArchive={onToggleArchive} onTogglePublic={onTogglePublic} onToggleAI={onToggleAI} onTagClick={onTagClick} isHighlighted={highlightId === memo.id} documents={documents} compact />
+                <DeferredMemoCard enabled={deferOffscreen} estimatedHeight={estimateHeight(memo, true)}><MemoCard memo={memo} onEdit={onEdit} onDelete={onDelete} onTogglePin={onTogglePin} onToggleArchive={onToggleArchive} onTogglePublic={onTogglePublic} onToggleAI={onToggleAI} onTagClick={onTagClick} isHighlighted={highlightId === memo.id} documents={documents} compact /></DeferredMemoCard>
               </div>
             ))}
           </div>
           <div className="space-y-3" style={{ contain: 'layout' }}>
             {rightCol.map(memo => (
               <div key={memo.id} id={`memo-${memo.id}`}>
-                <MemoCard memo={memo} onEdit={onEdit} onDelete={onDelete} onTogglePin={onTogglePin} onToggleArchive={onToggleArchive} onTogglePublic={onTogglePublic} onToggleAI={onToggleAI} onTagClick={onTagClick} isHighlighted={highlightId === memo.id} documents={documents} compact />
+                <DeferredMemoCard enabled={deferOffscreen} estimatedHeight={estimateHeight(memo, true)}><MemoCard memo={memo} onEdit={onEdit} onDelete={onDelete} onTogglePin={onTogglePin} onToggleArchive={onToggleArchive} onTogglePublic={onTogglePublic} onToggleAI={onToggleAI} onTagClick={onTagClick} isHighlighted={highlightId === memo.id} documents={documents} compact /></DeferredMemoCard>
               </div>
             ))}
           </div>
@@ -128,7 +153,7 @@ const MemoList = memo(function MemoList({ memos, columns, onEdit, onDelete, onTo
     <div className="space-y-3" style={{ contain: 'layout' }}>
       {memos.map(memo => (
         <div key={memo.id} id={`memo-${memo.id}`}>
-          <MemoCard
+          <DeferredMemoCard enabled={deferOffscreen} estimatedHeight={estimateHeight(memo, false)}><MemoCard
             memo={memo}
             onEdit={onEdit}
             onDelete={onDelete}
@@ -139,7 +164,7 @@ const MemoList = memo(function MemoList({ memos, columns, onEdit, onDelete, onTo
             onTagClick={onTagClick}
             isHighlighted={highlightId === memo.id}
             documents={documents}
-          />
+          /></DeferredMemoCard>
         </div>
       ))}
       <LoadMoreSentinel onLoadMore={onLoadMore} hasMore={hasMore} />
