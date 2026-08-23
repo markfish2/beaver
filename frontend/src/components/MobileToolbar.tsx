@@ -57,6 +57,7 @@ const MobileToolbar = memo(function MobileToolbar({
   onUndo,
   onDelete,
   showZoom = true,
+  hasTabBar = false,
 }: MobileToolbarProps) {
   // 工具栏固定在浏览器为键盘让出的布局底部。
   const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -83,7 +84,10 @@ const MobileToolbar = memo(function MobileToolbar({
       );
       // 没有 visualViewport 时只能以编辑框焦点作为键盘可见的兜底信号；
       // 键盘收起后编辑框通常会失焦，focusout 会再次刷新状态。
-      const isOpen = isEditable || isVisible;
+      const keyboardHeight = Math.max(0, layoutHeightRef.current - window.innerHeight);
+      // 日记有底部导航栏：不能用“仍然聚焦”作为键盘打开的依据，否则
+      // 鸿蒙收起键盘后 contenteditable 仍保持焦点，快捷栏会永久占住底部。
+      const isOpen = keyboardHeight > 50 || (!hasTabBar && (isEditable || isVisible));
       setKeyboardOpen(isOpen);
       window.dispatchEvent(new CustomEvent('keyboard-change', { detail: { open: isOpen } }));
       return;
@@ -99,7 +103,9 @@ const MobileToolbar = memo(function MobileToolbar({
     );
     // 鸿蒙部分 ArkWeb 版本不会同步更新 visualViewport，但编辑焦点是可靠的。
     // isVisible 由 MainArea 的当前编辑节点控制，因此可以作为键盘附件栏的兜底信号。
-    const isOpen = keyboardHeight > 50 || (isHarmonyBrowser && isVisible);
+    // 大纲笔记没有底部导航栏，保留鸿蒙上焦点兜底；日记必须以视口收缩为准，
+    // 键盘收起后立即卸载快捷栏，让底部导航栏恢复原位。
+    const isOpen = keyboardHeight > 50 || (isHarmonyBrowser && isVisible && !hasTabBar);
     setKeyboardOpen(isOpen);
 
     // 只有确认键盘关闭后才更新基准，避免把键盘收缩后的高度记录进去。
@@ -112,7 +118,7 @@ const MobileToolbar = memo(function MobileToolbar({
     }
 
     window.dispatchEvent(new CustomEvent('keyboard-change', { detail: { open: isOpen } }));
-  }, [isVisible]);
+  }, [hasTabBar, isVisible]);
 
   useEffect(() => {
     if (!isVisible) {

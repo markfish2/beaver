@@ -23,15 +23,16 @@ interface MobileLayoutProps {
 }
 
   // ToolbarSlot 是根 Flex 容器的底部子节点，键盘缩小 100dvh 后自然位于键盘上方。
-function ToolbarSlot({ showZoom, hasTabBar }: {
+function ToolbarSlot({ showZoom, hasTabBar, enabled }: {
   showZoom?: boolean;
   hasTabBar?: boolean;
+  enabled: boolean;
 }) {
   const { isVisible, handlers } = useMobileToolbar();
   return (
     <>
       <MobileToolbar
-        isVisible={isVisible}
+        isVisible={enabled && isVisible}
         onIndent={handlers?.onIndent ?? (() => {})}
         onOutdent={handlers?.onOutdent ?? (() => {})}
         onToggleTodo={handlers?.onToggleTodo ?? (() => {})}
@@ -180,6 +181,10 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       setShowNewMenu(true);
       return;
     }
+    // 离开日记编辑时，立即清理键盘/快捷栏状态，避免旧的工具栏
+    // 在文件、memo 或 AI 页面切换完成前暂时顶替底部导航栏。
+    setKeyboardOpen(false);
+    window.dispatchEvent(new CustomEvent('keyboard-change', { detail: { open: false } }));
     setActiveTab(tab);
     if (isEditing && tab !== 'diary') {
       navigate('/', { replace: true });
@@ -368,6 +373,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       <ToolbarSlot
         showZoom={isEditing && activeTab !== 'diary'}
         hasTabBar={activeTab === 'diary'}
+        enabled={isEditing || activeTab === 'diary'}
       />
 
       {/* Fixed bottom tab bar */}

@@ -34,7 +34,10 @@ const LoginPage = () => {
     }
   };
 
-  if (isLoading) return <div className="h-screen flex items-center justify-center text-gray-400">Loading...</div>;
+  // 认证状态已经切换后，路由跳转会在下一次渲染完成；此时不要再渲染一次登录表单。
+  if (isLoading || isAuthenticated) {
+    return <div className="min-h-screen bg-[var(--app-canvas)]" aria-hidden="true" />;
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--app-canvas)] px-4">
