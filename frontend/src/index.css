@@ -759,12 +759,6 @@ body,
 .memo-content p { margin-bottom: 1em; }
 .memo-content p:last-child { margin-bottom: 0; }
 
-/* 大纲节点很多时，让浏览器跳过视口外节点的布局与绘制。React 数据和编辑行为不变。 */
-.outline-node-render-row {
-  content-visibility: auto;
-  contain-intrinsic-size: 0 44px;
-}
-
 /* 列表 - 覆盖 Tailwind preflight 的 list-style: none */
 .memo-content ul { list-style: disc inside !important; padding-left: 1.4em; margin-bottom: 1em; }
 .memo-content ol { list-style: decimal inside !important; padding-left: 1.4em; margin-bottom: 1em; }

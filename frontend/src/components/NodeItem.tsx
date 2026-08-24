@@ -23,7 +23,9 @@ interface NodeItemProps {
   onCollapseToggle: (id: string, collapsed: boolean) => void;
   onStyleChange?: (id: string, styles: Partial<Node>) => void;
   focusedNodeId?: { id: string, field: 'content' | 'note' } | null;
-  onFocus?: (id: string) => void;
+  noteEditorRequest?: { id: string; requestId: number } | null;
+  onNoteEditorRequestHandled?: (id: string, requestId: number) => void;
+  onFocus?: (id: string, field: 'content' | 'note') => void;
   onDelete?: (id: string) => void;
   onZoom?: (id: string) => void;
   onPaste?: (e: React.ClipboardEvent, id: string) => void;
@@ -99,10 +101,27 @@ const selectedSignatureForSubtree = (selectedNodeIds: string[] | undefined, node
   return selectedInSubtree.length > 0 ? `${selectedNodeIds.length}:${selectedInSubtree.join(',')}` : '0';
 };
 
-const focusSignatureForNode = (
+// NodeItem 是递归 memo 组件。焦点或备注请求落在后代节点时，祖先也必须更新，
+// 否则 React 会在祖先处短路，不会把新 props 传给真正的目标节点。
+const focusSignatureForSubtree = (
   focusedNodeId: { id: string, field: 'content' | 'note' } | null | undefined,
-  nodeId: string
-): string => focusedNodeId?.id === nodeId ? focusedNodeId.field : '';
+  node: NodeWithTreeMeta
+): string => {
+  if (!focusedNodeId) return '';
+  const subtreeIds = node.subtreeNodeIds ?? [node.id];
+  return subtreeIds.includes(focusedNodeId.id) ? `${focusedNodeId.id}:${focusedNodeId.field}` : '';
+};
+
+const noteEditorRequestSignatureForSubtree = (
+  noteEditorRequest: { id: string; requestId: number } | null | undefined,
+  node: NodeWithTreeMeta
+): string => {
+  if (!noteEditorRequest) return '';
+  const subtreeIds = node.subtreeNodeIds ?? [node.id];
+  return subtreeIds.includes(noteEditorRequest.id)
+    ? `${noteEditorRequest.id}:${noteEditorRequest.requestId}`
+    : '';
+};
 
 const dragVisualSignatureForNode = (
   selectedNodeIds: string[] | undefined,
@@ -121,6 +140,8 @@ const NodeItem = memo(({
   onCollapseToggle,
   onStyleChange,
   focusedNodeId,
+  noteEditorRequest,
+  onNoteEditorRequestHandled,
   onFocus,
   onDelete,
   onZoom,
@@ -136,6 +157,7 @@ const NodeItem = memo(({
   const navigate = useNavigate();
   const [converting, setConverting] = useState(false);
   const shouldFocus = focusedNodeId?.id === node.id ? focusedNodeId.field : null;
+  const noteEditorRequestId = noteEditorRequest?.id === node.id ? noteEditorRequest.requestId : null;
   const isSelected = selectedNodeIds.includes(node.id);
   
   const contentRef = useRef<HTMLDivElement>(null);
@@ -143,6 +165,7 @@ const NodeItem = memo(({
   const isInitializedRef = useRef(false);
   const prevNodeIdRef = useRef<string>(node.id);
   const [isEditingNote, setIsEditingNote] = useState(false);
+  const handledNoteEditorRequestRef = useRef<number | null>(null);
   const [showToolbar, setShowToolbar] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
@@ -308,7 +331,27 @@ const NodeItem = memo(({
     };
   }, [showToolbar]);
 
+  // 样式菜单使用 fixed 定位，但触发按钮会随着大纲滚动。
+  // Tab 栏改变内容区高度后，这个问题更容易暴露；滚动/缩放时同步更新坐标，
+  // 避免菜单停留在旧位置。
   useEffect(() => {
+    if (!showToolbar) return;
+    const updateToolbarPosition = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      setToolbarPos({ top: rect.bottom + 4, left: rect.left });
+    };
+    window.addEventListener('scroll', updateToolbarPosition, true);
+    window.addEventListener('resize', updateToolbarPosition);
+    updateToolbarPosition();
+    return () => {
+      window.removeEventListener('scroll', updateToolbarPosition, true);
+      window.removeEventListener('resize', updateToolbarPosition);
+    };
+  }, [showToolbar]);
+
+  useLayoutEffect(() => {
     if (shouldFocus === 'content') {
       const el = document.getElementById(`node-${node.id}`);
       if (el) {
@@ -316,15 +359,24 @@ const NodeItem = memo(({
         moveCursorToEnd(el);
         scrollIntoViewSafe(el);
       }
-    } else if (shouldFocus === 'note') {
-      setIsEditingNote(true);
-      const el = document.getElementById(`note-${node.id}`);
-      if (el) {
-        el.focus({ preventScroll: true });
-        scrollIntoViewSafe(el);
-      }
     }
   }, [shouldFocus, node.id]);
+
+  // 备注打开请求与普通节点焦点分离。请求抵达时，当前 render 已经因为
+  // noteEditorRequest 挂载了输入框；在 layout effect 里聚焦可避免 DOM 尚未存在。
+  useLayoutEffect(() => {
+    if (noteEditorRequestId === null || handledNoteEditorRequestRef.current === noteEditorRequestId) return;
+
+    handledNoteEditorRequestRef.current = noteEditorRequestId;
+    setIsEditingNote(true);
+
+    const noteElement = noteRef.current;
+    if (!noteElement) return;
+    noteElement.focus({ preventScroll: true });
+    moveCursorToEnd(noteElement);
+    scrollIntoViewSafe(noteElement);
+    onNoteEditorRequestHandled?.(node.id, noteEditorRequestId);
+  }, [node.id, noteEditorRequestId, onNoteEditorRequestHandled]);
 
   const scrollIntoViewSafe = (el: HTMLElement) => {
     const isMobile = isPhoneLayout();
@@ -438,7 +490,8 @@ const NodeItem = memo(({
     if (!showTag || filteredTags.length === 0) return false;
     if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); setTagDropdownIndex(index => Math.min(index + 1, filteredTags.length - 1)); return true; }
     if (e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); setTagDropdownIndex(index => Math.max(index - 1, 0)); return true; }
-    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); const tag = filteredTags[tagDropdownIndex]; if (tag) handleTagSelect(tag); return true; }
+    // Shift+Enter 是大纲备注快捷键，不能被标签候选框当成确认键吞掉。
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); const tag = filteredTags[tagDropdownIndex]; if (tag) handleTagSelect(tag); return true; }
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setShowTag(false); return true; }
     return false;
   }, [filteredTags, handleTagSelect, showTag, tagDropdownIndex]);
@@ -536,7 +589,8 @@ const NodeItem = memo(({
       setMentionDropdownIndex(index => Math.max(index - 1, 0));
       return true;
     }
-    if (e.key === 'Enter') {
+    // Shift+Enter 由 MainArea 处理，用于打开节点备注。
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       e.stopPropagation();
       const selected = filteredMentionDocuments[mentionDropdownIndex];
@@ -708,7 +762,7 @@ const NodeItem = memo(({
                  // 使用宏任务队列，确保光标移动在浏览器原生焦点初始化逻辑之后执行
                  setTimeout(() => {
                    moveCursorToEnd(el);
-                   onFocus?.(node.id);
+                   onFocus?.(node.id, 'content');
                  }, 0);
              }
          }}
@@ -782,7 +836,7 @@ const NodeItem = memo(({
                 const el = document.getElementById(`node-${node.id}`);
                 if (el) {
                   el.focus();
-                  setTimeout(() => { moveCursorToEnd(el); onFocus?.(node.id); }, 0);
+                  setTimeout(() => { moveCursorToEnd(el); onFocus?.(node.id, 'content'); }, 0);
                 }
               }
             }}
@@ -852,7 +906,7 @@ const NodeItem = memo(({
                 suppressContentEditableWarning
                 onFocus={() => {
                   clearSelection?.();
-                  onFocus?.(node.id);
+                  onFocus?.(node.id, 'content');
                   onStartEditing?.(node.id);
                 }}
                 onBlur={(e) => {
@@ -1022,9 +1076,9 @@ const NodeItem = memo(({
           )}
           
           {/* Note */}
-          {(node.note && node.note.trim() !== '') || isEditingNote || shouldFocus === 'note' ? (
+          {(node.note && node.note.trim() !== '') || isEditingNote || noteEditorRequestId !== null ? (
             <div className="mt-0 leading-none">
-              {(isEditingNote || shouldFocus === 'note' || !node.note) ? (
+              {(isEditingNote || noteEditorRequestId !== null || !node.note) ? (
                 <div
                   ref={noteRef}
                   contentEditable
@@ -1033,7 +1087,7 @@ const NodeItem = memo(({
                   onFocus={() => {
                     clearSelection?.();
                     setIsEditingNote(true);
-                    onFocus?.(node.id);
+                    onFocus?.(node.id, 'note');
                     onStartEditing?.(node.id);
                   }}
                   onBlur={(e) => {
@@ -1246,6 +1300,8 @@ const NodeItem = memo(({
                  onCollapseToggle={onCollapseToggle}
                  onStyleChange={onStyleChange}
                  focusedNodeId={focusedNodeId}
+                 noteEditorRequest={noteEditorRequest}
+                 onNoteEditorRequestHandled={onNoteEditorRequestHandled}
                  onFocus={onFocus}
                  onDelete={onDelete}
                  onZoom={onZoom}
@@ -1284,9 +1340,15 @@ const NodeItem = memo(({
   );
 }, (prevProps, nextProps) => {
   return prevProps.node.subtreeVersion === nextProps.node.subtreeVersion &&
+    // 备注/内容可以通过本地乐观更新改变，而不一定同步改变 subtreeVersion。
+    // 若忽略这两个字段，备注创建后的第一次渲染会被 memo 拦截，
+    // 直到下一次操作才显示并获得焦点。
+    prevProps.node.content === nextProps.node.content &&
+    prevProps.node.note === nextProps.node.note &&
     selectedSignatureForSubtree(prevProps.selectedNodeIds, prevProps.node) === selectedSignatureForSubtree(nextProps.selectedNodeIds, nextProps.node) &&
     dragVisualSignatureForNode(prevProps.selectedNodeIds, prevProps.node.id, prevProps.isDragMoving) === dragVisualSignatureForNode(nextProps.selectedNodeIds, nextProps.node.id, nextProps.isDragMoving) &&
-    focusSignatureForNode(prevProps.focusedNodeId, prevProps.node.id) === focusSignatureForNode(nextProps.focusedNodeId, nextProps.node.id);
+    focusSignatureForSubtree(prevProps.focusedNodeId, prevProps.node) === focusSignatureForSubtree(nextProps.focusedNodeId, nextProps.node) &&
+    noteEditorRequestSignatureForSubtree(prevProps.noteEditorRequest, prevProps.node) === noteEditorRequestSignatureForSubtree(nextProps.noteEditorRequest, nextProps.node);
 });
 
 export default NodeItem;

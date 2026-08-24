@@ -81,6 +81,8 @@ const MentionDropdown: React.FC<MentionDropdownProps> = ({
           setSelectedIndex(prev => prev > 0 ? prev - 1 : prev);
           break;
         case 'Enter':
+          // Shift+Enter 属于大纲节点的备注快捷键，不能在 document 捕获阶段拦截。
+          if (e.shiftKey) break;
           e.preventDefault();
           e.stopPropagation();
           if (filteredDocs[selectedIndex]) {

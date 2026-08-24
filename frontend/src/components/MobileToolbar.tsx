@@ -25,13 +25,24 @@ function ToolbarButton({ icon, label, onClick, danger }: {
   onClick: () => void;
   danger?: boolean;
 }) {
+  const handledPointerRef = useRef(false);
+
   return (
     <button
-      onMouseDown={(e) => e.preventDefault()}
+      // 移动端不要等待 click：父级 touchstart 可能取消浏览器合成 click，
+      // 导致第一次点击只改变焦点，下一次点击才执行上一次命令。
+      // 在 pointerdown 阶段执行，同时阻止按钮抢走 contenteditable 的焦点。
+      onPointerDown={(e) => {
+        e.preventDefault();
+        handledPointerRef.current = true;
+        onClick();
+      }}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        onClick();
+        // pointerdown 已经处理鼠标/触摸；detail 为 0 表示键盘触发，仍需执行。
+        if (!handledPointerRef.current || e.detail === 0) onClick();
+        handledPointerRef.current = false;
       }}
       className={`flex-1 flex items-center justify-center py-2 active:bg-gray-200 dark:active:bg-gray-600 transition-colors ${danger ? 'text-red-500' : 'text-gray-600 dark:text-gray-300'}`}
       aria-label={label}
@@ -154,7 +165,6 @@ const MobileToolbar = memo(function MobileToolbar({
       className="keyboard-toolbar flex-none mx-3 mb-2 overflow-hidden rounded-full border border-white/35 bg-white/30 shadow-[0_2px_16px_-6px_rgba(15,23,42,0.18)] backdrop-blur-2xl backdrop-saturate-200 dark:border-white/10 dark:bg-gray-800/35 dark:shadow-black/20 z-50"
       style={{ flex: '0 0 44px' }}
       onMouseDown={(event) => event.preventDefault()}
-      onTouchStart={(event) => event.preventDefault()}
     >
       <div className="flex h-full items-center justify-around">
         <ToolbarButton icon={<ChevronRight size={18} />} label="缩进" onClick={onIndent} />

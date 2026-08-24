@@ -89,6 +89,8 @@ interface SerializedNode {
 }
 
 type TreeNode = Node & { children: TreeNode[]; subtreeVersion: string; subtreeNodeIds: string[] };
+type NodeKeyDownHandler = (e: React.KeyboardEvent, node: Node, type: 'content' | 'note') => void;
+type NoteEditorRequest = { id: string; requestId: number } | null;
 
 const getNodeOwnVersion = (node: Node): string => [
   node.id,
@@ -356,6 +358,12 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const [nodes, setNodes] = useState<Node[]>([]);
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  // NodeItem 使用 memo 避免大纲树整体重渲染，因此不能直接把每次渲染新建的
+  // handleKeyDown 传进去，否则节点可能长期持有切换 Tab 前的旧闭包。
+  const nodeKeyDownRef = useRef<NodeKeyDownHandler>(() => {});
+  const stableNodeKeyDown = useCallback<NodeKeyDownHandler>((...args) => {
+    nodeKeyDownRef.current(...args);
+  }, []);
   const [loadedDoc, setCurrentDoc] = useState<Document | null>(null);
   const documentsRef = useRef(documents);
   useEffect(() => { documentsRef.current = documents; }, [documents]);
@@ -426,6 +434,10 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     applyFocus();
   }, [scrollToElement]);
   const [focusedNodeId, setFocusedNodeId] = useState<{ id: string, field: 'content' | 'note' } | null>(null);
+  // 备注编辑是一次性的 UI 请求，不能与普通节点焦点共用状态：备注输入框可能尚未
+  // 挂载，而 onFocus 又会立刻覆盖通用焦点状态。requestId 确保同一节点可重复打开。
+  const [noteEditorRequest, setNoteEditorRequest] = useState<NoteEditorRequest>(null);
+  const noteEditorRequestIdRef = useRef(0);
 
   const [zoomedNodeState, setZoomedNodeState] = useState<{ documentId: string | null; nodeId: string | null }>({ documentId, nodeId: null });
   const zoomedNodeId = zoomedNodeState.documentId === documentId ? zoomedNodeState.nodeId : null;
@@ -856,6 +868,25 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const { execute, undo, redo } = useHistory();
   const commands = useMemo(() => createCommandFactory(setNodes), []);
 
+  const requestNoteEditor = useCallback((nodeId: string) => {
+    const node = nodesRef.current.find(item => item.id === nodeId);
+    if (!node) return;
+
+    // 节点数据只由命令系统更新，保留撤销、离线同步与失败回滚的既有链路。
+    // 不再额外 setNodes，避免一次 Shift+Enter 产生两次互相竞争的 state 更新。
+    if (node.note === null || node.note === undefined) {
+      execute(commands.createUpdateNoteCommand(node.id, '', ''));
+    }
+
+    setNoteEditorRequest({ id: node.id, requestId: ++noteEditorRequestIdRef.current });
+  }, [commands, execute]);
+
+  const handleNoteEditorRequestHandled = useCallback((nodeId: string, requestId: number) => {
+    setNoteEditorRequest(current => (
+      current?.id === nodeId && current.requestId === requestId ? null : current
+    ));
+  }, []);
+
   // View Mode State - 'outline' or 'mindmap'
   const [viewModeState, setViewModeState] = useState<{ documentId: string | null; value: 'outline' | 'mindmap' }>({ documentId, value: 'outline' });
   const viewMode = viewModeState.documentId === documentId ? viewModeState.value : 'outline';
@@ -1071,7 +1102,10 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     ));
   };
 
-  const handleFocus = (id: string) => {
+  const handleFocus = (id: string, field: 'content' | 'note') => {
+      // 同步记录真实焦点字段，避免用户从备注回点正文后仍残留 note 状态，
+      // 导致下一次 Shift+Enter 被 React.memo 判定为“状态未变化”。
+      setFocusedNodeId({ id, field });
       setFocusedNodeIdForToolbar(id);
   };
 
@@ -1669,9 +1703,14 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
 
   const lastEditRef = useRef<{ nodeId: string; timestamp: number; oldContent: string } | null>(null);
 
-  const handleKeyDown = async (e: React.KeyboardEvent, currentNode: Node, type: 'content' | 'note') => { 
+  // 节点快捷键必须保持同步：这里没有 await，声明为 async 会把事件处理变成
+  // Promise 链，和 Tab 场景下的稳定回调代理叠加后可能延迟状态提交到下一次输入。
+  const handleKeyDown = (e: React.KeyboardEvent, currentNode: Node, type: 'content' | 'note') => {
     // 拦截输入法组合状态
-    if (e.nativeEvent.isComposing || e.keyCode === 229) { 
+    // 中文输入法下 Shift+Enter 也可能携带 composing/229 状态，但它是应用
+    // 明确的备注快捷键，不能在这里提前 return；普通 Enter 仍需避免干扰输入法。
+    const isShiftEnter = e.key === 'Enter' && e.shiftKey;
+    if ((e.nativeEvent.isComposing || e.keyCode === 229) && !isShiftEnter) {
       return; 
     } 
 
@@ -1774,35 +1813,34 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       }
     }
 
-    if (e.key === 'Enter' && e.shiftKey && !e.nativeEvent.isComposing) {
+    if (isShiftEnter) {
+      // 备注快捷键必须完全接管事件，不能让 contentEditable 的原生换行或外层
+      // 快捷键监听继续参与竞争。
       e.preventDefault();
+      e.stopPropagation();
 
       // Shift+Enter: Add/edit note for current node
       if (type === 'content') {
-        // Check if cursor is at the end of content
+        // endOffset 只是当前 Text 节点内的偏移量；内容包含链接、标签或其他
+        // 富文本节点时，它不能代表整个 contenteditable 的光标位置。
+        // 计算从编辑区域开头到光标的纯文本长度，确保 PC 和移动端判断一致。
         const selection = window.getSelection();
         const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-        const endOffset = range ? range.endOffset : 0;
-        const contentLength = currentNode.content.length;
-        const isAtEnd = endOffset >= contentLength;
+        const currentElement = e.currentTarget as HTMLElement;
+        const contentLength = (currentElement.textContent || '').length;
+        let cursorOffset = 0;
+        if (range) {
+          const preCaretRange = range.cloneRange();
+          preCaretRange.selectNodeContents(currentElement);
+          preCaretRange.setEnd(range.endContainer, range.endOffset);
+          cursorOffset = preCaretRange.toString().length;
+        }
+        const isAtEnd = cursorOffset >= contentLength;
         
         // If cursor is at end or note already exists, show note
         const shouldShowNote = isAtEnd || (currentNode.note !== undefined && currentNode.note !== null);
-        
         if (shouldShowNote) {
-          // If note doesn't exist or is null/undefined, create empty note first
-          if (!currentNode.note && currentNode.note !== '') {
-            // Directly update nodes state to ensure note field is created
-            setNodes(prev => prev.map(n =>
-              n.id === currentNode.id ? { ...n, note: '' } : n
-            ));
-            // Also sync to backend
-            handleNoteChange(currentNode.id, '');
-          }
-          // Focus on note field after a short delay to ensure state is updated
-          setTimeout(() => {
-            setFocusedNodeId({ id: currentNode.id, field: 'note' });
-          }, 0);
+          requestNoteEditor(currentNode.id);
         }
       } else {
         // Already in note, go back to content
@@ -2025,8 +2063,14 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     }
   };
 
+  // NodeItem 的 memo 比较器忽略回调引用，因此通过稳定代理访问最新快捷键逻辑。
+  // 在 effect 中更新 ref，避免 render 阶段写 ref。
+  useEffect(() => {
+    nodeKeyDownRef.current = handleKeyDown;
+  }, [handleKeyDown]);
+
   const handleNoteChange = async (id: string, note: string | null) => {
-    const node = nodes.find(n => n.id === id);
+    const node = nodesRef.current.find(n => n.id === id);
     if (!node) return;
     if (node.note === note) return;
     execute(commands.createUpdateNoteCommand(id, node.note || '', note || ''));
@@ -2348,25 +2392,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const handleMobileAddNote = () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
     if (!nodeId) return;
-    const node = nodesRef.current.find(item => item.id === nodeId);
-    if (!node) return;
-    // 备注为空时先把字段写入节点，NodeItem 才会渲染出可编辑的备注 DOM。
-    if (node.note === null || node.note === undefined) {
-      setNodes(prev => prev.map(item => item.id === nodeId ? { ...item, note: '' } : item));
-      void handleNoteChange(nodeId, '');
-    }
-    // 先清除旧的 focus 请求，再重新发布 note 请求，确保同一节点已经处于
-    // content focus 时，React/NodeItem 也会重新执行备注挂载和聚焦 effect。
-    setFocusedNodeId(null);
-    window.requestAnimationFrame(() => {
-      setFocusedNodeId({ id: nodeId, field: 'note' });
-      window.requestAnimationFrame(() => {
-        const noteElement = document.getElementById(`note-${nodeId}`) as HTMLElement | null;
-        if (!noteElement) return;
-        noteElement.focus({ preventScroll: true });
-        noteElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
-    });
+    requestNoteEditor(nodeId);
   };
 
   const handleMobileTag = () => {
@@ -3286,12 +3312,14 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                         documents={documents}
                         onContentChange={handleNodeChange}
                         onNoteChange={handleNoteChange}
-                        onKeyDown={handleKeyDown}
+                        onKeyDown={stableNodeKeyDown}
                         onPaste={handlePaste}
                         onCompleteToggle={toggleComplete}
                         onCollapseToggle={handleCollapseToggle}
                         onStyleChange={handleStyleChange}
                         focusedNodeId={focusedNodeId}
+                        noteEditorRequest={noteEditorRequest}
+                        onNoteEditorRequestHandled={handleNoteEditorRequestHandled}
                         onFocus={handleFocus}
                         onBlurToolbar={handleBlurToolbar}
                         onDelete={handleDelete}
