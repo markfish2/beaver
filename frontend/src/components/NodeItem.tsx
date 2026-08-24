@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useLayoutEffect, useState, useCallback, useMe
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import type { Node, Document } from '../api/data';
-import { getFileUrl, getThumbnailUrl, getNodes, createMemo } from '../api/data';
+import { getFileUrl, getThumbnailUrl, getNodes, createMemo, getMemoTags } from '../api/data';
 import { ArrowUpRight } from 'lucide-react';
 import { nodesToMemoMarkdown } from '../utils/convertNode';
 import TagMentionPopup from './TagMentionPopup';
@@ -80,6 +80,17 @@ const setTextCaret = (root: HTMLElement, offset: number): void => {
   selection.addRange(range);
 };
 
+let memoTagsRequest: Promise<string[]> | null = null;
+const loadMemoTags = (): Promise<string[]> => {
+  if (!memoTagsRequest) {
+    memoTagsRequest = getMemoTags().catch(() => {
+      memoTagsRequest = null;
+      return [];
+    });
+  }
+  return memoTagsRequest;
+};
+
 const selectedSignatureForSubtree = (selectedNodeIds: string[] | undefined, node: NodeWithTreeMeta): string => {
   if (!selectedNodeIds || selectedNodeIds.length === 0) return '0';
   const subtreeIds = node.subtreeNodeIds ?? [node.id];
@@ -152,6 +163,12 @@ const NodeItem = memo(({
   const [mentionStartOffset, setMentionStartOffset] = useState<number | null>(null);
   const [mentionDropdownIndex, setMentionDropdownIndex] = useState(0);
   const mentionTriggerRef = useRef<boolean>(false);
+  const [showTag, setShowTag] = useState(false);
+  const [tagPosition, setTagPosition] = useState({ top: 0, left: 0 });
+  const [tagSearchText, setTagSearchText] = useState('');
+  const [tagStartOffset, setTagStartOffset] = useState<number | null>(null);
+  const [tagDropdownIndex, setTagDropdownIndex] = useState(0);
+  const [allTags, setAllTags] = useState<string[]>([]);
 
   const toolbarRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -170,6 +187,18 @@ const NodeItem = memo(({
   }, [node.is_collapsed]);
 
   const hasChildren = childrenNodes.length > 0;
+
+  useEffect(() => {
+    loadMemoTags().then(setAllTags);
+  }, []);
+
+  const filteredTags = useMemo(() => {
+    const query = tagSearchText.trim().toLowerCase();
+    const matches = query
+      ? allTags.filter(tag => tag.slice(1).toLowerCase().includes(query))
+      : allTags;
+    return matches.slice(0, 8);
+  }, [allTags, tagSearchText]);
 
   const filteredMentionDocuments = useMemo(() => {
     const query = mentionSearchText.trim().toLowerCase();
@@ -390,6 +419,30 @@ const NodeItem = memo(({
     mentionTriggerRef.current = false;
   }, [generateHtmlContent, mentionStartOffset, mentionSearchText, node.id, onContentChange]);
 
+  const handleTagSelect = useCallback((tag: string) => {
+    if (!contentRef.current || tagStartOffset === null) return;
+    const textContent = contentRef.current.textContent || '';
+    const endOffset = tagStartOffset + 1 + tagSearchText.length;
+    const beforeTag = textContent.substring(0, tagStartOffset);
+    const nextContent = beforeTag + tag + ' ' + textContent.substring(endOffset);
+    contentRef.current.innerHTML = generateHtmlContent(nextContent);
+    setTextCaret(contentRef.current, beforeTag.length + tag.length + 1);
+    onContentChange(node.id, nextContent);
+    setShowTag(false);
+    setTagSearchText('');
+    setTagStartOffset(null);
+    setTagDropdownIndex(0);
+  }, [generateHtmlContent, node.id, onContentChange, tagSearchText, tagStartOffset]);
+
+  const handleTagKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>): boolean => {
+    if (!showTag || filteredTags.length === 0) return false;
+    if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); setTagDropdownIndex(index => Math.min(index + 1, filteredTags.length - 1)); return true; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); setTagDropdownIndex(index => Math.max(index - 1, 0)); return true; }
+    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); const tag = filteredTags[tagDropdownIndex]; if (tag) handleTagSelect(tag); return true; }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setShowTag(false); return true; }
+    return false;
+  }, [filteredTags, handleTagSelect, showTag, tagDropdownIndex]);
+
   // @提及功能：处理输入事件
   const handleInputForMention = useCallback((e: React.FormEvent<HTMLDivElement>) => {
     const content = e.currentTarget.textContent || '';
@@ -445,6 +498,29 @@ const NodeItem = memo(({
       mentionTriggerRef.current = false;
     }
   }, [showMention]);
+
+  const handleInputForTag = useCallback((e: React.FormEvent<HTMLDivElement>) => {
+    const content = e.currentTarget.textContent || '';
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !contentRef.current) return;
+    const range = selection.getRangeAt(0);
+    if (!contentRef.current.contains(range.startContainer)) return;
+    const cursorOffset = getTextOffset(contentRef.current, range.startContainer, range.startOffset);
+    let hashOffset = -1;
+    for (let i = cursorOffset - 1; i >= 0; i -= 1) {
+      if (content[i] === '#') { hashOffset = i; break; }
+      if (content[i] === ' ' || content[i] === '\n') break;
+    }
+    if (hashOffset < 0 || hashOffset >= cursorOffset) { setShowTag(false); return; }
+    const query = content.substring(hashOffset + 1, cursorOffset);
+    if (/\s/.test(query)) { setShowTag(false); return; }
+    const rect = range.getBoundingClientRect();
+    setTagSearchText(query);
+    setTagStartOffset(hashOffset);
+    setTagDropdownIndex(0);
+    setTagPosition({ top: rect.bottom + 4, left: rect.left });
+    setShowTag(true);
+  }, []);
 
   const handleMentionKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>): boolean => {
     if (!showMention || filteredMentionDocuments.length === 0) return false;
@@ -793,10 +869,12 @@ const NodeItem = memo(({
                   onBlurToolbar?.();
                 }}
                 onKeyDown={(e) => {
+                  if (handleTagKeyDown(e)) return;
                   if (handleMentionKeyDown(e)) return;
                   onKeyDown(e, node, 'content');
                 }}
                 onInput={(e) => {
+                  handleInputForTag(e);
                   handleInputForMention(e);
                   handleContentInput(e);
                 }}
@@ -930,6 +1008,16 @@ const NodeItem = memo(({
               }}
               position={mentionPosition}
               type="mention"
+            />, document.body
+          )}
+          {showTag && filteredTags.length > 0 && createPortal(
+            <TagMentionPopup
+              items={filteredTags.map((tag): PopupItem => ({ label: tag, value: tag }))}
+              selectedIndex={tagDropdownIndex}
+              onSelect={(item) => handleTagSelect(item.value)}
+              onClose={() => { setShowTag(false); setTagSearchText(''); setTagStartOffset(null); }}
+              position={tagPosition}
+              type="tag"
             />, document.body
           )}
           

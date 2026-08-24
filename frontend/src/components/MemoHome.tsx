@@ -699,7 +699,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
       <button
         onClick={() => setShowRightPanel(!showRightPanel)}
         className="lg:hidden fixed right-4 z-40 p-2.5 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-        style={{ bottom: document.documentElement.dataset.mobileLayout ? 'calc(env(safe-area-inset-bottom, 0px) + 72px)' : 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
+        style={{ bottom: document.documentElement.dataset.mobileLayout ? 'calc(env(safe-area-inset-bottom, 0px) + 78px)' : 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
         title={showRightPanel ? '收起面板' : '展开日历和标签'}
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -716,13 +716,13 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
       {showRightPanel && document.documentElement.dataset.mobileLayout && (
         <div className="lg:hidden fixed inset-0 z-30" onClick={() => setShowRightPanel(false)}>
           <div
-            className="absolute right-0 w-72 bg-[var(--app-sidebar)] shadow-xl overflow-y-auto custom-scrollbar scrollbar-auto-hide p-4 space-y-4"
+            className="absolute right-3 w-72 rounded-[28px] border border-white/70 bg-[var(--app-sidebar)]/95 shadow-2xl overflow-y-auto custom-scrollbar scrollbar-auto-hide p-4 space-y-4 backdrop-blur-2xl backdrop-saturate-150 dark:border-gray-700/70"
             style={{
               top: document.documentElement.dataset.mobileLayout
-                ? 'calc(env(safe-area-inset-top, 0px) + 44px)'
+                ? 'calc(env(safe-area-inset-top, 0px) + 72px)'
                 : '0px',
               bottom: document.documentElement.dataset.mobileLayout
-                ? 'calc(env(safe-area-inset-bottom, 0px) + 52px)'
+                ? 'calc(env(safe-area-inset-bottom, 0px) + 78px)'
                 : '0px',
               paddingTop: document.documentElement.dataset.mobileLayout ? '16px' : 'calc(env(safe-area-inset-top) + 16px)',
             }}

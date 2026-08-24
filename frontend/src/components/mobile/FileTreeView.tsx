@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ChevronRight, MoreHorizontal, Copy, Trash2, Pencil } from 'lucide-react';
+import { ChevronRight, MoreHorizontal, Copy, Trash2, Pencil, Folder, Move } from 'lucide-react';
 import { useDocuments } from '../../context/DocumentContext';
 import { deleteDocument, updateDocument, copyDocument, getRecentDocuments } from '../../api/data';
 import DeleteConfirmDialog from '../DeleteConfirmDialog';
@@ -56,6 +56,8 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [moveDialog, setMoveDialog] = useState<{ id: string; title: string } | null>(null);
+  const [moveTargetFolder, setMoveTargetFolder] = useState<string | null>(null);
 
   const [recentDocs, setRecentDocs] = useState<Document[]>([]);
   useEffect(() => {
@@ -184,6 +186,24 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
     }
     setEditingId(null);
   };
+
+  const handleMoveToFolder = async () => {
+    if (!moveDialog) return;
+    await updateDocument(moveDialog.id, { parent_id: moveTargetFolder });
+    await refreshDocuments();
+    setMoveDialog(null);
+    setMoveTargetFolder(null);
+  };
+
+  const foldersById = useMemo(() => new Map(documents.filter(doc => doc.type === 'folder').map(folder => [folder.id, folder])), [documents]);
+  const folderTree = useMemo(() => {
+    const folders = documents.filter(doc => doc.type === 'folder');
+    const build = (parentId: string | null): Document[] => folders
+      .filter(folder => folder.parent_id === parentId)
+      .sort(compareFolderTitle)
+      .flatMap(folder => [folder, ...build(folder.id)]);
+    return build(null);
+  }, [documents]);
 
   // Close context menu on outside click
   useEffect(() => {
@@ -346,6 +366,12 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
               <Pencil className="w-4 h-4" />
               重命名
             </button>
+            {doc.type !== 'folder' && (
+              <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); setMoveDialog({ id: doc.id, title: doc.title || '无标题' }); setMoveTargetFolder(doc.parent_id); setContextMenu(null); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                <Move className="w-4 h-4" />
+                移动到文件夹
+              </button>
+            )}
             <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); void handleCopy(contextMenu.docId); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
               <Copy className="w-4 h-4" />
               复制
@@ -357,6 +383,35 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
           </div>
         );
       })()}
+
+      {moveDialog && (
+        <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/40 p-4" onClick={() => { setMoveDialog(null); setMoveTargetFolder(null); }}>
+          <div className="w-full max-w-sm max-h-[75dvh] flex flex-col rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800" onClick={e => e.stopPropagation()}>
+            <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">移动到文件夹</h3>
+              <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">{moveDialog.title}</p>
+            </div>
+            <div className="flex-1 overflow-y-auto px-2 py-2 custom-scrollbar">
+              <button type="button" onClick={() => setMoveTargetFolder(null)} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm ${moveTargetFolder === null ? 'bg-[var(--app-link)]/10 text-[var(--app-link)]' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'}`}>
+                <Folder className="h-4 w-4 shrink-0" />根目录
+              </button>
+              {folderTree.map(folder => {
+                const depth = (() => { let value = 0; let current = folder; while (current.parent_id) { value += 1; current = foldersById.get(current.parent_id) ?? current; if (current === folder) break; } return value; })();
+                return (
+                  <button key={folder.id} type="button" onClick={() => setMoveTargetFolder(folder.id)} className={`flex w-full items-center gap-2 rounded-lg py-2 pr-3 text-left text-sm ${moveTargetFolder === folder.id ? 'bg-[var(--app-link)]/10 text-[var(--app-link)]' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'}`} style={{ paddingLeft: `${12 + depth * 16}px` }}>
+                    <Folder className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{folder.title || '无标题'}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
+              <button type="button" onClick={() => { setMoveDialog(null); setMoveTargetFolder(null); }} className="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">取消</button>
+              <button type="button" onClick={() => void handleMoveToFolder()} className="rounded-lg bg-[var(--app-link)] px-3 py-1.5 text-sm text-white hover:opacity-90">移动</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <DeleteConfirmDialog
         isOpen={!!deleteTarget}

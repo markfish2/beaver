@@ -10,7 +10,6 @@ import NewMenuPopup from './NewMenuPopup';
 import AIChatMainView from '../AIChatMainView';
 import AIChatSidebar from '../AIChatSidebar';
 import { useUserView } from '../../context/UserViewContext';
-import { MessageSquare } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { createMobileDocumentState, getMobileTabFromState, resolveMobileBackTarget } from '../../utils/mobileNavigation';
 import { useViewportMetrics } from '../../hooks/useViewportMetrics';
@@ -37,6 +36,7 @@ function ToolbarSlot({ showZoom, hasTabBar, enabled }: {
         onOutdent={handlers?.onOutdent ?? (() => {})}
         onToggleTodo={handlers?.onToggleTodo ?? (() => {})}
         onAddNote={handlers?.onAddNote ?? (() => {})}
+        onTag={handlers?.onTag ?? (() => {})}
         onMoveUp={handlers?.onMoveUp ?? (() => {})}
         onMoveDown={handlers?.onMoveDown ?? (() => {})}
         onZoom={handlers?.onZoom ?? (() => {})}
@@ -294,6 +294,8 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
         isDocumentPage={isEditing && activeTab !== 'diary'}
         onBack={handleBack}
         onSearch={handleSearch}
+        showAIHistory={activeTab === 'ai' && !isEditing && !userSubView}
+        onAIHistory={() => setShowAIHistory(true)}
       />
 
       <div className="flex-1 overflow-hidden flex flex-col">
@@ -338,20 +340,18 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
                 conversationId={activeConvId}
                 onConversationCreated={(convId) => { setActiveConvId(convId); refreshConvList(); }}
               />
-              {/* 历史对话按钮 */}
-              <button
-                onClick={() => setShowAIHistory(true)}
-                className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center bg-white/80 dark:bg-gray-800/80 backdrop-blur border border-gray-200 dark:border-gray-700 rounded-full shadow-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors z-10"
-                title="历史对话"
-              >
-                <MessageSquare className="w-4 h-4" />
-              </button>
             </div>
             {/* 历史对话侧边栏 */}
             {showAIHistory && (
               <>
                 <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowAIHistory(false)} />
-                <div className="fixed top-0 right-0 bottom-0 w-72 bg-[var(--app-sidebar)] z-50 shadow-xl flex flex-col">
+                <div
+                  className="fixed left-3 z-50 flex w-[min(85vw,320px)] flex-col overflow-hidden rounded-[28px] border border-white/70 bg-[var(--app-sidebar)]/95 shadow-2xl backdrop-blur-2xl backdrop-saturate-150 dark:border-gray-700/70"
+                  style={{
+                    top: 'calc(env(safe-area-inset-top, 0px) + 72px)',
+                    bottom: 'calc(env(safe-area-inset-bottom, 0px) + 78px)',
+                  }}
+                >
                   <AIChatSidebar
                     activeConvId={activeConvId}
                     onSelectConversation={(convId) => {

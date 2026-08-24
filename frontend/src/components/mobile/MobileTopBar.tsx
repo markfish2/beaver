@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, X, ArrowLeft, LogOut, Key, Trash, User, Lock, Sun, Moon, Palette } from 'lucide-react';
+import { Search, X, ArrowLeft, LogOut, Key, Trash, User, Lock, Sun, Moon, Palette, MessageSquare } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import UserProfileEditor from '../UserProfileEditor';
 import TokenPanel from '../TokenPanel';
@@ -19,9 +19,11 @@ interface MobileTopBarProps {
   isDocumentPage?: boolean;
   onBack?: () => void;
   onSearch?: (query: string) => void;
+  showAIHistory?: boolean;
+  onAIHistory?: () => void;
 }
 
-export default function MobileTopBar({ title, showBack, isDocumentPage = false, onBack, onSearch }: MobileTopBarProps) {
+export default function MobileTopBar({ title, showBack, isDocumentPage = false, onBack, onSearch, showAIHistory = false, onAIHistory }: MobileTopBarProps) {
   const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
@@ -96,13 +98,13 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
         {/* 左侧：头像（圆形胶囊） */}
         <div
           ref={userMenuRef}
-          className={`pointer-events-auto relative shrink-0 flex items-center ${isDocumentPage ? 'h-[36px] rounded-full border border-white/80 bg-white/65 shadow-[0_4px_18px_-6px_rgba(15,23,42,0.22)] backdrop-blur-xl backdrop-saturate-150 dark:border-white/10 dark:bg-gray-800/65' : ''}`}
+          className={`pointer-events-auto relative shrink-0 flex items-center ${isDocumentPage ? 'h-[36px] rounded-full border border-white/55 bg-white/45 shadow-[0_4px_18px_-6px_rgba(15,23,42,0.22)] backdrop-blur-2xl backdrop-saturate-200 dark:border-white/10 dark:bg-gray-800/55' : ''}`}
         >
           {showBack ? (
             <button
               onClick={() => onBack?.()}
               className={`flex items-center justify-center w-[44px] h-[44px] rounded-full
-                         ${isDocumentPage ? '' : 'border border-white/80 bg-white/65 shadow-[0_4px_18px_-6px_rgba(15,23,42,0.22)] backdrop-blur-xl backdrop-saturate-150 dark:border-white/10 dark:bg-gray-800/65'}
+                         ${isDocumentPage ? '' : 'border border-white/55 bg-white/45 shadow-[0_4px_18px_-6px_rgba(15,23,42,0.22)] backdrop-blur-2xl backdrop-saturate-200 dark:border-white/10 dark:bg-gray-800/55'}
                          text-gray-600 dark:text-gray-300
                          active:scale-95 transition-transform`}
             >
@@ -113,9 +115,9 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="flex items-center justify-center w-[36px] h-[36px] rounded-full
-                           border border-white/80 bg-white/65 backdrop-blur-xl backdrop-saturate-150
+                           border border-white/55 bg-white/45 backdrop-blur-2xl backdrop-saturate-200
                            shadow-[0_4px_18px_-6px_rgba(15,23,42,0.22)]
-                           dark:border-white/10 dark:bg-gray-800/65
+                           dark:border-white/10 dark:bg-gray-800/55
                            overflow-hidden
                            active:scale-95 transition-transform"
               >
@@ -125,6 +127,18 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
                   <User className="w-[16px] h-[16px] text-gray-400 dark:text-gray-500" />
                 )}
               </button>
+
+              {showAIHistory && (
+                <button
+                  type="button"
+                  onClick={onAIHistory}
+                  aria-label="历史问答"
+                  title="历史问答"
+                  className="absolute left-0 top-[42px] flex h-[36px] w-[36px] items-center justify-center rounded-full border border-white/55 bg-white/45 text-gray-500 shadow-[0_4px_18px_-6px_rgba(15,23,42,0.22)] backdrop-blur-2xl backdrop-saturate-200 transition-transform active:scale-95 dark:border-white/10 dark:bg-gray-800/55 dark:text-gray-300"
+                >
+                  <MessageSquare className="h-[16px] w-[16px]" />
+                </button>
+              )}
 
               {showUserMenu && (
                 <div className="absolute left-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-2xl
@@ -168,7 +182,7 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
         {/* 中间：标题（胶囊长条形，缩小一半，居中） */}
         {!isDocumentPage && (
           <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center h-[36px] px-4
-                          bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
+                          border border-white/55 bg-white/45 dark:bg-gray-800/55 backdrop-blur-2xl backdrop-saturate-200
                           rounded-full
                           shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]">
             <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200 truncate max-w-[160px]">
@@ -179,9 +193,9 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
 
         {/* 右侧：日/夜切换 + 搜索（胶囊容器） */}
         <div className="pointer-events-auto relative shrink-0 flex items-center h-[36px] rounded-full
-                        border border-white/80 bg-white/65 backdrop-blur-xl backdrop-saturate-150
+                        border border-white/55 bg-white/45 backdrop-blur-2xl backdrop-saturate-200
                         shadow-[0_4px_18px_-6px_rgba(15,23,42,0.22)]
-                        dark:border-white/10 dark:bg-gray-800/65">
+                        dark:border-white/10 dark:bg-gray-800/55">
           {/* 日/夜切换按钮 */}
           <button
             onClick={toggleDark}
@@ -222,7 +236,7 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
         <form
           onSubmit={(e) => { e.preventDefault(); handleSearchSubmit(); }}
           className="fixed left-3 right-3 z-30 px-3 py-2
-                     bg-white/75 dark:bg-gray-800/75 backdrop-blur-2xl
+                     border border-white/55 bg-white/45 dark:bg-gray-800/55 backdrop-blur-2xl backdrop-saturate-200
                      rounded-2xl
                      shadow-[0_2px_12px_-4px_rgba(0,0,0,0.1)]"
           style={{

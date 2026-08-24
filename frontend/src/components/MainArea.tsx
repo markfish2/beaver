@@ -2350,6 +2350,17 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     if (nodeId) setFocusedNodeId({ id: nodeId, field: 'note' });
   };
 
+  const handleMobileTag = () => {
+    const nodeId = focusedNodeIdForToolbarRef.current;
+    if (!nodeId) return;
+    const element = document.getElementById(`node-${nodeId}`);
+    if (!element) return;
+    element.focus({ preventScroll: true });
+    moveCursorToEnd(element);
+    document.execCommand('insertText', false, '#');
+    element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: '#' }));
+  };
+
   const handleMobileDelete = async () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
     if (!nodeId) return;
@@ -2447,6 +2458,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     outdent: handleMobileOutdent,
     toggleTodo: handleMobileToggleComplete,
     addNote: handleMobileAddNote,
+    tag: handleMobileTag,
     moveUp: handleMobileMoveUp,
     moveDown: handleMobileMoveDown,
     zoom: handleMobileZoom,
@@ -2459,6 +2471,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       outdent: handleMobileOutdent,
       toggleTodo: handleMobileToggleComplete,
       addNote: handleMobileAddNote,
+      tag: handleMobileTag,
       moveUp: handleMobileMoveUp,
       moveDown: handleMobileMoveDown,
       zoom: handleMobileZoom,
@@ -2471,6 +2484,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     onOutdent: () => mobileActionsRef.current.outdent(),
     onToggleTodo: () => mobileActionsRef.current.toggleTodo(),
     onAddNote: () => mobileActionsRef.current.addNote(),
+    onTag: () => mobileActionsRef.current.tag(),
     onMoveUp: () => mobileActionsRef.current.moveUp(),
     onMoveDown: () => mobileActionsRef.current.moveDown(),
     onZoom: () => mobileActionsRef.current.zoom(),

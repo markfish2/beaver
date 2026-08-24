@@ -2,7 +2,7 @@ import { memo, useState, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import {
   ChevronRight, ChevronLeft, CheckSquare, MessageSquare,
-  ChevronUp, ChevronDown, Maximize2, Undo, Trash2
+  ChevronUp, ChevronDown, Maximize2, Undo, Trash2, Hash
 } from 'lucide-react';
 
 interface MobileToolbarProps {
@@ -11,6 +11,7 @@ interface MobileToolbarProps {
   onOutdent: () => void;
   onToggleTodo: () => void;
   onAddNote: () => void;
+  onTag: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onZoom: () => void;
@@ -51,6 +52,7 @@ const MobileToolbar = memo(function MobileToolbar({
   onOutdent,
   onToggleTodo,
   onAddNote,
+  onTag,
   onMoveUp,
   onMoveDown,
   onZoom,
@@ -153,7 +155,7 @@ const MobileToolbar = memo(function MobileToolbar({
     <div
       role="toolbar"
       aria-label="节点编辑工具栏"
-      className="keyboard-toolbar flex-none mx-3 mb-2 overflow-hidden rounded-full border border-white/70 bg-white/75 shadow-lg shadow-gray-400/15 backdrop-blur-xl dark:border-gray-700/70 dark:bg-gray-800/75 dark:shadow-black/20 z-50"
+      className="keyboard-toolbar flex-none mx-3 mb-2 overflow-hidden rounded-full border border-white/55 bg-white/45 shadow-lg shadow-gray-400/15 backdrop-blur-2xl backdrop-saturate-200 dark:border-gray-700/70 dark:bg-gray-800/55 dark:shadow-black/20 z-50"
       style={{ flex: '0 0 44px' }}
       onMouseDown={(event) => event.preventDefault()}
       onTouchStart={(event) => event.preventDefault()}
@@ -163,6 +165,7 @@ const MobileToolbar = memo(function MobileToolbar({
         <ToolbarButton icon={<ChevronLeft size={18} />} label="提升" onClick={onOutdent} />
         <ToolbarButton icon={<CheckSquare size={18} />} label="待办" onClick={onToggleTodo} />
         <ToolbarButton icon={<MessageSquare size={18} />} label="备注" onClick={onAddNote} />
+        <ToolbarButton icon={<Hash size={18} />} label="标签" onClick={onTag} />
         <ToolbarButton icon={<ChevronUp size={18} />} label="上移" onClick={onMoveUp} />
         <ToolbarButton icon={<ChevronDown size={18} />} label="下移" onClick={onMoveDown} />
         {showZoom && <ToolbarButton icon={<Maximize2 size={18} />} label="放大" onClick={onZoom} />}

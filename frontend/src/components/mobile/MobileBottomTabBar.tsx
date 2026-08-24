@@ -30,8 +30,8 @@ export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBot
         style={{ bottom: `calc(16px + env(safe-area-inset-bottom, 0px))` }}
       >
         <nav className="relative flex items-center h-[46px] w-[80%] max-w-[380px]
-                        bg-white/75 dark:bg-gray-800/75
-                        backdrop-blur-2xl
+                        bg-white/45 dark:bg-gray-800/55
+                        backdrop-blur-2xl backdrop-saturate-200
                         rounded-full
                         shadow-[0_2px_20px_-6px_rgba(0,0,0,0.12),0_0_0_0.5px_rgba(0,0,0,0.06)]
                         dark:shadow-[0_2px_20px_-6px_rgba(0,0,0,0.4),0_0_0_0.5px_rgba(255,255,255,0.08)]"

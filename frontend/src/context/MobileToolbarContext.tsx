@@ -6,6 +6,7 @@ export interface ToolbarHandlers {
   onOutdent: () => void;
   onToggleTodo: () => void;
   onAddNote: () => void;
+  onTag: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onZoom: () => void;
