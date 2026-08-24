@@ -30,11 +30,11 @@ export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBot
         style={{ bottom: `calc(16px + env(safe-area-inset-bottom, 0px))` }}
       >
         <nav className="relative flex items-center h-[46px] w-[80%] max-w-[380px]
-                        bg-white/45 dark:bg-gray-800/55
+                        border border-white/35 bg-white/30 dark:border-white/10 dark:bg-gray-800/35
                         backdrop-blur-2xl backdrop-saturate-200
                         rounded-full
-                        shadow-[0_2px_20px_-6px_rgba(0,0,0,0.12),0_0_0_0.5px_rgba(0,0,0,0.06)]
-                        dark:shadow-[0_2px_20px_-6px_rgba(0,0,0,0.4),0_0_0_0.5px_rgba(255,255,255,0.08)]"
+                        shadow-[0_2px_16px_-6px_rgba(15,23,42,0.18)]
+                        dark:shadow-[0_2px_16px_-6px_rgba(0,0,0,0.2)]"
         >
           {/* 扁胶囊指示器 */}
           <div

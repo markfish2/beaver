@@ -40,8 +40,6 @@ function ToolbarSlot({ showZoom, hasTabBar, enabled }: {
         onMoveUp={handlers?.onMoveUp ?? (() => {})}
         onMoveDown={handlers?.onMoveDown ?? (() => {})}
         onZoom={handlers?.onZoom ?? (() => {})}
-        onUndo={handlers?.onUndo ?? (() => {})}
-        onDelete={handlers?.onDelete ?? (() => {})}
         showZoom={showZoom}
         hasTabBar={hasTabBar}
       />

@@ -2347,7 +2347,26 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
 
   const handleMobileAddNote = () => {
     const nodeId = focusedNodeIdForToolbarRef.current;
-    if (nodeId) setFocusedNodeId({ id: nodeId, field: 'note' });
+    if (!nodeId) return;
+    const node = nodesRef.current.find(item => item.id === nodeId);
+    if (!node) return;
+    // 备注为空时先把字段写入节点，NodeItem 才会渲染出可编辑的备注 DOM。
+    if (node.note === null || node.note === undefined) {
+      setNodes(prev => prev.map(item => item.id === nodeId ? { ...item, note: '' } : item));
+      void handleNoteChange(nodeId, '');
+    }
+    // 先清除旧的 focus 请求，再重新发布 note 请求，确保同一节点已经处于
+    // content focus 时，React/NodeItem 也会重新执行备注挂载和聚焦 effect。
+    setFocusedNodeId(null);
+    window.requestAnimationFrame(() => {
+      setFocusedNodeId({ id: nodeId, field: 'note' });
+      window.requestAnimationFrame(() => {
+        const noteElement = document.getElementById(`note-${nodeId}`) as HTMLElement | null;
+        if (!noteElement) return;
+        noteElement.focus({ preventScroll: true });
+        noteElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
   };
 
   const handleMobileTag = () => {
@@ -2356,8 +2375,20 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     const element = document.getElementById(`node-${nodeId}`);
     if (!element) return;
     element.focus({ preventScroll: true });
-    moveCursorToEnd(element);
-    document.execCommand('insertText', false, '#');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    if (!document.execCommand('insertText', false, '#')) {
+      const textNode = document.createTextNode('#');
+      range.insertNode(textNode);
+      range.setStartAfter(textNode);
+      range.collapse(true);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
     element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: '#' }));
   };
 
@@ -3355,11 +3386,10 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           onOutdent={handleMobileOutdent}
           onToggleTodo={handleMobileToggleComplete}
           onAddNote={handleMobileAddNote}
+          onTag={handleMobileTag}
           onMoveUp={handleMobileMoveUp}
           onMoveDown={handleMobileMoveDown}
           onZoom={handleMobileZoom}
-          onUndo={handleMobileUndo}
-          onDelete={handleMobileDelete}
         />
       )}
 
