@@ -9,6 +9,7 @@ interface UseKeyboardScrollOptions {
 export const useKeyboardScroll = (options: UseKeyboardScrollOptions = {}) => {
   const { enabled = true, extraOffset = 100 } = options;
   const lastScrollTimeRef = useRef(0);
+  const viewportScrollTimerRef = useRef<number | null>(null);
 
   const scrollToElement = useCallback((elementId: string, field: 'content' | 'note' = 'content') => {
     if (!enabled) return;
@@ -57,9 +58,7 @@ export const useKeyboardScroll = (options: UseKeyboardScrollOptions = {}) => {
     const field = activeElement.id.startsWith('content-') ? 'content' : 'note';
     
     if (nodeId && field) {
-      setTimeout(() => {
-        scrollToElement(nodeId, field);
-      }, 100);
+      scrollToElement(nodeId, field);
     }
   }, [scrollToElement]);
 
@@ -69,7 +68,15 @@ export const useKeyboardScroll = (options: UseKeyboardScrollOptions = {}) => {
     const visualViewport = window.visualViewport;
     
     const handleResize = () => {
-      handleVisualViewportChange();
+      // visualViewport 在键盘动画期间会连续发出事件，只保留最后一次，
+      // 避免重复测量布局并排队多个 scrollIntoView。
+      if (viewportScrollTimerRef.current !== null) {
+        window.clearTimeout(viewportScrollTimerRef.current);
+      }
+      viewportScrollTimerRef.current = window.setTimeout(() => {
+        viewportScrollTimerRef.current = null;
+        handleVisualViewportChange();
+      }, 100);
     };
 
     visualViewport.addEventListener('resize', handleResize);
@@ -78,6 +85,10 @@ export const useKeyboardScroll = (options: UseKeyboardScrollOptions = {}) => {
     return () => {
       visualViewport.removeEventListener('resize', handleResize);
       visualViewport.removeEventListener('scroll', handleResize);
+      if (viewportScrollTimerRef.current !== null) {
+        window.clearTimeout(viewportScrollTimerRef.current);
+        viewportScrollTimerRef.current = null;
+      }
     };
   }, [enabled, handleVisualViewportChange]);
 

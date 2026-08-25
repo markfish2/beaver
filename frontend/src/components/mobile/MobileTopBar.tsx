@@ -21,9 +21,10 @@ interface MobileTopBarProps {
   onSearch?: (query: string) => void;
   showAIHistory?: boolean;
   onAIHistory?: () => void;
+  chromeHidden?: boolean;
 }
 
-export default function MobileTopBar({ title, showBack, isDocumentPage = false, onBack, onSearch, showAIHistory = false, onAIHistory }: MobileTopBarProps) {
+export default function MobileTopBar({ title, showBack, isDocumentPage = false, onBack, onSearch, showAIHistory = false, onAIHistory, chromeHidden = false }: MobileTopBarProps) {
   const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
@@ -93,6 +94,9 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
         style={{
           top: `calc(8px + env(safe-area-inset-top, 0px))`,
           height: '44px',
+          transform: chromeHidden ? 'translateY(-125%)' : 'translateY(0)',
+          opacity: chromeHidden ? 0 : 1,
+          transition: 'transform 400ms linear, opacity 400ms linear',
         }}
       >
         {/* 左侧：头像（圆形胶囊） */}

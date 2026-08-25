@@ -3093,8 +3093,10 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         <>
         <div className="toc-layout-container flex-1 min-h-0 flex overflow-hidden">
         <div
-          className="main-content-area outline-content-scroll-area min-w-0 flex-1 overflow-y-auto px-8 py-8 custom-scrollbar scrollbar-auto-hide"
-          style={isMobile ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 58px)' } : undefined}
+          className={`main-content-area outline-content-scroll-area min-w-0 flex-1 overflow-y-auto px-8 custom-scrollbar scrollbar-auto-hide ${isMobile && isDiaryDoc ? 'pt-0 pb-8' : 'py-8'}`}
+          // 移动端日记的外层 MobileLayout 已经预留顶部栏高度，避免日记内容区重复留白，
+          // 否则月视图吸顶后会停在待办区下方约 58px 的旧位置。
+          style={isMobile && !isDiaryDoc ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 58px)' } : undefined}
           onClick={() => updateSelectedNodeIds([])}
         >
           <div className="max-w-[900px] ml-auto mr-auto md:ml-16 md:mr-auto">
@@ -3125,25 +3127,30 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             {/* Diary date navigation bar */}
             {isDiaryDoc && diaryMonthMatch && (() => {
               return (
-                <DiaryDateBar
-                  docYear={diaryYear!}
-                  docMonth={diaryMonth!}
-                  diaryDays={diaryDays}
-                  onDayClick={handleDiaryDayClick}
-                  showMonthArrows={isMobile}
-                  onMonthNavigate={async (y, m) => {
-                    try {
-                      const data = await getMonthlyDiary(y, m);
-                      if (onDiaryDocChange) {
-                        onDiaryDocChange(data.document.id);
-                      } else {
-                        navigate(`/d/${data.document.id}`);
+                <div className={isMobile
+                  ? 'sticky top-0 z-50 -mx-8 px-8 bg-[var(--app-canvas)] dark:bg-gray-900'
+                  : undefined}
+                >
+                  <DiaryDateBar
+                    docYear={diaryYear!}
+                    docMonth={diaryMonth!}
+                    diaryDays={diaryDays}
+                    onDayClick={handleDiaryDayClick}
+                    showMonthArrows={isMobile}
+                    onMonthNavigate={async (y, m) => {
+                      try {
+                        const data = await getMonthlyDiary(y, m);
+                        if (onDiaryDocChange) {
+                          onDiaryDocChange(data.document.id);
+                        } else {
+                          navigate(`/d/${data.document.id}`);
+                        }
+                      } catch (e) {
+                        console.error('Failed to navigate to month', e);
                       }
-                    } catch (e) {
-                      console.error('Failed to navigate to month', e);
-                    }
-                  }}
-                />
+                    }}
+                  />
+                </div>
               );
             })()}
 

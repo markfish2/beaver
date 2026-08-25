@@ -68,6 +68,26 @@ export default function MobileTodos({ onTasksChanged }: MobileTodosProps) {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [activeMenuId]);
 
+  // 日记节点进入编辑状态时，键盘会占用移动端的可视区域；此时把顶部待办栏
+  // 收起，给正在编辑的日记内容让出空间。待办栏自身的输入框不触发收起，
+  // 否则编辑待办时会把正在输入的区域突然移走。
+  useEffect(() => {
+    const handleKeyboardChange = (event: Event) => {
+      const open = (event as CustomEvent<{ open?: boolean }>).detail?.open === true;
+      if (!open || editingId !== null) return;
+
+      const activeElement = document.activeElement;
+      if (!(activeElement instanceof HTMLElement)) return;
+      const isDiaryNodeEditor = (
+        activeElement.id.startsWith('node-') || activeElement.id.startsWith('note-')
+      ) && !!activeElement.closest('.outline-content-scroll-area');
+      if (isDiaryNodeEditor) setExpanded(false);
+    };
+
+    window.addEventListener('keyboard-change', handleKeyboardChange);
+    return () => window.removeEventListener('keyboard-change', handleKeyboardChange);
+  }, [editingId]);
+
   const handleAddTodo = async () => {
     const trimmed = newTodoText.trim();
     if (!trimmed) return;

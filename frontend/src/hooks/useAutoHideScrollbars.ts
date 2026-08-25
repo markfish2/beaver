@@ -33,12 +33,29 @@ export function useAutoHideScrollbars(): void {
       });
     };
 
-    const bindAll = (): void => {
-      document.querySelectorAll<HTMLElement>(SCROLLBAR_SELECTOR).forEach(bind);
+    const bindDescendants = (root: Node): void => {
+      if (root.nodeType !== Node.ELEMENT_NODE) return;
+      const element = root as HTMLElement;
+      if (element.matches(SCROLLBAR_SELECTOR)) bind(element);
+      element.querySelectorAll<HTMLElement>(SCROLLBAR_SELECTOR).forEach(bind);
     };
 
-    bindAll();
-    const observer = new MutationObserver(bindAll);
+    document.querySelectorAll<HTMLElement>(SCROLLBAR_SELECTOR).forEach(bind);
+    const observer = new MutationObserver((records) => {
+      // 页面中 Mermaid/编辑器等组件更新时，不再反复扫描整个 document，
+      // 只处理这批 mutation 新增的节点，避免滚动条 hook 变成全局热路径。
+      for (const record of records) {
+        record.addedNodes.forEach(bindDescendants);
+      }
+
+      // 移除组件后释放其定时器和监听，避免长时间打开多个 Tab 累积引用。
+      cleanups.forEach((cleanup, element) => {
+        if (!element.isConnected) {
+          cleanup();
+          cleanups.delete(element);
+        }
+      });
+    });
     observer.observe(document.documentElement, { childList: true, subtree: true });
 
     return () => {

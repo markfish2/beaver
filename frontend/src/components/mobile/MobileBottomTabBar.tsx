@@ -6,6 +6,7 @@ export type MobileTab = 'memos' | 'diary' | 'new' | 'files' | 'ai';
 interface MobileBottomTabBarProps {
   activeTab: MobileTab;
   onTabChange: (tab: MobileTab) => void;
+  chromeHidden?: boolean;
 }
 
 const tabs: { id: MobileTab; icon: NavigationIconType }[] = [
@@ -18,7 +19,7 @@ const tabs: { id: MobileTab; icon: NavigationIconType }[] = [
 
 const INDICATOR_WIDTH = 54;
 
-export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBottomTabBarProps) {
+export default function MobileBottomTabBar({ activeTab, onTabChange, chromeHidden = false }: MobileBottomTabBarProps) {
 
   const activeIndex = useMemo(() => tabs.findIndex(t => t.id === activeTab), [activeTab]);
   const tabCount = tabs.length;
@@ -27,7 +28,13 @@ export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBot
     <>
       <div
         className="fixed left-0 right-0 z-30 flex items-center justify-center"
-        style={{ bottom: `calc(16px + env(safe-area-inset-bottom, 0px))` }}
+        style={{
+          bottom: `calc(16px + env(safe-area-inset-bottom, 0px))`,
+          transform: chromeHidden ? 'translateY(150%)' : 'translateY(0)',
+          opacity: chromeHidden ? 0 : 1,
+          pointerEvents: chromeHidden ? 'none' : 'auto',
+          transition: 'transform 400ms linear, opacity 400ms linear',
+        }}
       >
         <nav className="relative flex items-center h-[46px] w-[80%] max-w-[380px]
                         border border-white/35 bg-white/30 dark:border-white/10 dark:bg-gray-800/35
@@ -91,7 +98,11 @@ export default function MobileBottomTabBar({ activeTab, onTabChange }: MobileBot
 
       <div
         className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 z-20 pointer-events-none"
-        style={{ height: 'env(safe-area-inset-bottom, 0px)' }}
+        style={{
+          height: 'env(safe-area-inset-bottom, 0px)',
+          opacity: chromeHidden ? 0 : 1,
+          transition: 'opacity 400ms linear',
+        }}
       />
     </>
   );

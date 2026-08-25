@@ -13,6 +13,8 @@ import { useUserView } from '../../context/UserViewContext';
 import type { ReactNode } from 'react';
 import { createMobileDocumentState, getMobileTabFromState, resolveMobileBackTarget } from '../../utils/mobileNavigation';
 import { useViewportMetrics } from '../../hooks/useViewportMetrics';
+import { useMobileScrollChrome } from '../../hooks/useMobileScrollChrome';
+import { setMobileStatusBarOverlay } from '../../utils/themeChrome';
 
 const FileTreeView = lazy(() => import('./FileTreeView'));
 const MobileTodos = lazy(() => import('./MobileTodos'));
@@ -59,6 +61,14 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   const prevTabRef = useRef<MobileTab>('memos');
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const { keyboardOpen: viewportKeyboardOpen } = useViewportMetrics();
+  const chromeHidden = useMobileScrollChrome(false, keyboardOpen || viewportKeyboardOpen);
+  const topChromeHidden = activeTab !== 'diary' && chromeHidden;
+
+  // 仅在浏览器支持动态 theme-color 时生效；不支持的平台会自动回退到主题色。
+  useEffect(() => {
+    setMobileStatusBarOverlay(topChromeHidden);
+    return () => setMobileStatusBarOverlay(false);
+  }, [topChromeHidden]);
 
   // 编辑区获得焦点后，始终把光标所在节点滚到可视范围；不能用焦点状态
   // 全局隐藏底部 Tab，普通笔记、画布、Memo 等编辑区域仍应保留导航。
@@ -285,7 +295,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   return (
     <MobileToolbarProvider>
     <MobileEditorActionsProvider>
-    <div className="app-container flex flex-col bg-white dark:bg-gray-900" style={{ height: '100dvh', width: '100vw', overflow: 'hidden' }}>
+    <div className="app-container flex flex-col bg-[var(--app-canvas)] dark:bg-gray-900" style={{ height: '100dvh', width: '100vw', overflow: 'hidden' }}>
       <MobileTopBar
         title={getTopBarTitle()}
         showBack={isEditing || !!userSubView}
@@ -294,6 +304,8 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
         onSearch={handleSearch}
         showAIHistory={activeTab === 'ai' && !isEditing && !userSubView}
         onAIHistory={() => setShowAIHistory(true)}
+        // 日记的实际内容滚动区在下方，顶部功能栏始终保留。
+        chromeHidden={topChromeHidden}
       />
 
       <div className="flex-1 overflow-hidden flex flex-col">
@@ -327,7 +339,14 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
           children
         ) : activeTab === 'files' ? (
           <Suspense fallback={<div className="flex-1 flex items-center justify-center text-gray-400 text-sm">加载中...</div>}>
-            <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 58px)', flexShrink: 0 }} />
+            <div
+              aria-hidden="true"
+              style={{
+                height: topChromeHidden ? '0px' : 'calc(env(safe-area-inset-top, 0px) + 58px)',
+                flexShrink: 0,
+                transition: 'height 400ms linear',
+              }}
+            />
             <FileTreeView viewMode={fileViewMode} />
           </Suspense>
         ) : activeTab === 'ai' ? (
@@ -379,6 +398,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
         <MobileBottomTabBar
           activeTab={activeTab}
           onTabChange={handleTabChange}
+          chromeHidden={chromeHidden}
         />
       )}
 

@@ -119,6 +119,7 @@ export default function MermaidBlock({ code, dark }: MermaidBlockProps) {
   const pinchRef = useRef<{ distance: number; scale: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [svgMarkup, setSvgMarkup] = useState<string | null>(null);
+  const [isNearViewport, setIsNearViewport] = useState(false);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [scale, setScale] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -126,8 +127,32 @@ export default function MermaidBlock({ code, dark }: MermaidBlockProps) {
   const svgNaturalSizeRef = useRef<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    if (!('IntersectionObserver' in window)) {
+      // IntersectionObserver 不可用时需要立即回退到渲染状态。
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsNearViewport(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some(entry => entry.isIntersecting)) return;
+      setIsNearViewport(true);
+      observer.disconnect();
+    }, { rootMargin: '600px 0px' });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!isNearViewport) return;
     let cancelled = false;
     const container = containerRef.current;
+    // 进入视口或代码变化时清空旧 SVG，避免短暂显示过期图。
+    setSvgMarkup(null);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setError(null);
 
     const render = async () => {
       try {
@@ -157,7 +182,7 @@ export default function MermaidBlock({ code, dark }: MermaidBlockProps) {
       // 避免异步完成后的残留节点影响页面尺寸或出现在正文区域外。
       container?.replaceChildren();
     };
-  }, [code, dark]);
+  }, [code, dark, isNearViewport]);
 
   useEffect(() => {
     if (!isViewerOpen) return;
@@ -215,7 +240,7 @@ export default function MermaidBlock({ code, dark }: MermaidBlockProps) {
       <div className="mermaid-surface isolate relative my-2 max-w-full overflow-hidden rounded-xl border border-gray-200/80 p-3 dark:border-gray-700/80">
         <div
           ref={containerRef}
-          className="mermaid-diagram flex max-h-none justify-center overflow-auto"
+          className="mermaid-diagram flex min-h-24 max-h-none justify-center overflow-auto"
         />
         {svgMarkup && (
           <button
