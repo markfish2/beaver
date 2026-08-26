@@ -62,7 +62,7 @@
 :root[data-markdown-style="pie"] .memo-content h5,
 :root[data-markdown-style="pie"] .memo-content h6 {
   color: var(--markdown-pie-text) !important;
-  font-family: inherit;
+  font-family: var(--prose-font-family) !important;
   line-height: 1.35;
   margin: 1.05em 0 0.65em;
   letter-spacing: 0;

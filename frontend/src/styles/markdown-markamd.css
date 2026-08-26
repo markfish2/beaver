@@ -64,7 +64,7 @@
 :root[data-markdown-style="markamd"] .memo-content h5,
 :root[data-markdown-style="markamd"] .memo-content h6 {
   color: var(--markdown-markamd-fg) !important;
-  font-family: inherit;
+  font-family: var(--prose-font-family) !important;
   font-weight: 600;
   letter-spacing: -0.015em;
   line-height: 1.25;

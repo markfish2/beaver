@@ -51,6 +51,17 @@ export function useMobileScrollChrome(disabled = false, keyboardOpen = false): b
         : Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
       const previous = snapshotRef.current;
 
+      // 短内容没有真实滚动空间时，浏览器仍可能在触摸回弹过程中派发
+      // scroll 事件。此时不能把手势方向当成页面滚动，否则顶部栏会被
+      // 隐藏后无法通过“向下滚动”恢复。
+      if (maxTop <= 2) {
+        snapshotRef.current = { target, top };
+        accumulatedRef.current = 0;
+        edgeRef.current = null;
+        setHidden(false);
+        return;
+      }
+
       if (previous.target !== target) {
         snapshotRef.current = { target, top };
         accumulatedRef.current = 0;
@@ -65,6 +76,14 @@ export function useMobileScrollChrome(disabled = false, keyboardOpen = false): b
       // 移动端到达滚动边界时可能产生回弹事件。锁住边界附近的方向，
       // 避免顶部栏和底部 Tab 在底部来回闪烁；离开边界 18px 后再恢复检测。
       if (edgeRef.current === 'bottom') {
+        // 在底部向下反向滑动时页面无法继续滚动，但这是明确的“返回顶部栏”
+        // 手势，必须立即恢复顶部/底部应用栏。
+        if (delta < 0) {
+          edgeRef.current = null;
+          accumulatedRef.current = 0;
+          setHidden(false);
+          return;
+        }
         if (maxTop - top <= 18) return;
         edgeRef.current = null;
         accumulatedRef.current = 0;

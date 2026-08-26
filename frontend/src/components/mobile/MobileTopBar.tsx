@@ -90,7 +90,7 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
     <>
       {/* 悬浮胶囊顶栏 */}
       <div
-        className="pointer-events-none fixed left-3 right-3 z-30 flex items-center justify-between"
+        className="pointer-events-none fixed left-3 right-3 z-[100] flex items-center justify-between"
         style={{
           top: `calc(8px + env(safe-area-inset-top, 0px))`,
           height: '44px',

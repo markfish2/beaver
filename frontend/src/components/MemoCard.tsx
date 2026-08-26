@@ -92,6 +92,8 @@ interface MemoCardProps {
   documents?: Document[];
   readOnly?: boolean;
   compact?: boolean;
+  /** 宽屏右侧置顶栏默认完整展示，用户仍可手动收起。 */
+  initiallyExpanded?: boolean;
 }
 
 const BLOCK_CODE_FONT_SIZE = 'var(--markdown-block-code-font-size)';
@@ -463,6 +465,7 @@ const markdownComponents = (
   navigate: (to: string) => void,
   palette: MemoCardPalette,
   compact: boolean,
+  documents: Document[],
 ): Components => {
   return {
     code: (props) => {
@@ -487,6 +490,14 @@ const markdownComponents = (
         return <span className="memo-image-link-contents">{children}</span>;
       }
       if (href?.startsWith('/d/')) {
+        const docId = href.replace('/d/', '');
+        const linkedDocument = documents.find(document => document.id === docId);
+        const childText = Children.toArray(children)
+          .filter((child): child is string => typeof child === 'string')
+          .join('');
+        const linkedLabel = linkedDocument
+          ? (childText.trimStart().startsWith('@') ? `@${linkedDocument.title || '无标题'}` : linkedDocument.title || '无标题')
+          : children;
         return (
           <a
             href={href}
@@ -501,7 +512,7 @@ const markdownComponents = (
               e.stopPropagation();
             }}
           >
-            {children}
+            {linkedLabel}
           </a>
         );
       }
@@ -597,7 +608,7 @@ const markdownComponents = (
   };
 };
 
-const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, onToggleArchive, onTogglePublic, onToggleAI, onTagClick, isHighlighted, documents, readOnly, compact = false }: MemoCardProps) {
+const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, onToggleArchive, onTogglePublic, onToggleAI, onTagClick, isHighlighted, documents, readOnly, compact = false, initiallyExpanded = false }: MemoCardProps) {
   const isDark = useIsDark();
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
@@ -616,7 +627,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(initiallyExpanded);
   const [isLong, setIsLong] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const palette = getMemoPalette(isDark, memo.color);
@@ -785,7 +796,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       onEdit(memo.id, newContent);
     }
   }, [memo.content, memo.id, onEdit, strippedContent]);
-  const mdComponents = markdownComponents(setPreviewImage, toggleCheckbox, navigate, palette, compact);
+  const mdComponents = markdownComponents(setPreviewImage, toggleCheckbox, navigate, palette, compact, documents ?? []);
 
   // CodeMirror 编辑器自动管理高度，无需手动调整
 

@@ -36,7 +36,7 @@ export default function MobileBottomTabBar({ activeTab, onTabChange, chromeHidde
           transition: 'transform 400ms linear, opacity 400ms linear',
         }}
       >
-        <nav className="relative flex items-center h-[46px] w-[80%] max-w-[380px]
+        <nav className="relative flex items-center h-[56px] w-[80%] max-w-[380px]
                         border border-white/35 bg-white/30 dark:border-white/10 dark:bg-gray-800/35
                         backdrop-blur-2xl backdrop-saturate-200
                         rounded-full
@@ -45,7 +45,7 @@ export default function MobileBottomTabBar({ activeTab, onTabChange, chromeHidde
         >
           {/* 扁胶囊指示器 */}
           <div
-            className="absolute top-[4px] h-[38px] rounded-full
+            className="absolute top-[4px] h-[48px] rounded-full
                         bg-blue-500/15 dark:bg-blue-400/25
                         backdrop-blur-sm
                         border border-blue-500/20 dark:border-blue-400/25
@@ -65,7 +65,7 @@ export default function MobileBottomTabBar({ activeTab, onTabChange, chromeHidde
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className="relative flex items-center justify-center flex-1 h-full min-h-[44px]
+                className="relative flex items-center justify-center flex-1 h-full min-h-[54px]
                            min-w-0 transition-[transform,color] duration-200 z-10
                            active:scale-90"
               >
@@ -73,16 +73,14 @@ export default function MobileBottomTabBar({ activeTab, onTabChange, chromeHidde
                   <div className={`flex items-center justify-center w-[34px] h-[34px] rounded-full
                                    shadow-[0_2px_8px_-2px_rgba(0,0,0,0.15)]
                                    transition-all duration-300
-                                   ${isActive
-                                     ? 'bg-blue-500 text-white shadow-[0_4px_14px_-2px_rgba(59,130,246,0.4)] scale-110'
-                                     : 'bg-gray-600 dark:bg-gray-400 text-white'
-                                   }`}>
-                    <NavigationIcon type={tab.icon} className="w-[18px] h-[18px] text-white" strokeWidth={2} />
+                                   bg-[var(--app-link)] text-white
+                                   ${isActive ? 'shadow-[0_4px_14px_-2px_rgba(0,0,0,0.22)] scale-110' : ''}`}>
+                    <NavigationIcon type={tab.icon} className="w-[22.5px] h-[22.5px] text-white" strokeWidth={2} />
                   </div>
                 ) : (
                   <NavigationIcon
                     type={tab.icon}
-                    className={`w-[22px] h-[22px] transition-all duration-300
+                    className={`w-[27.5px] h-[27.5px] transition-all duration-300
                                ${isActive
                                  ? 'text-blue-600 dark:text-blue-400 scale-110'
                                  : 'text-gray-400 dark:text-gray-500'

@@ -162,6 +162,7 @@ const NodeItem = memo(({
   
   const contentRef = useRef<HTMLDivElement>(null);
   const noteRef = useRef<HTMLDivElement>(null);
+  const docLinkMouseDownRef = useRef<string | null>(null);
   const isInitializedRef = useRef(false);
   const prevNodeIdRef = useRef<string>(node.id);
   const [isEditingNote, setIsEditingNote] = useState(false);
@@ -259,15 +260,20 @@ const NodeItem = memo(({
     html = html.replace(tagRegex, '<span class="text-blue-500 bg-blue-50 dark:bg-blue-900/30 px-0.5 rounded cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50" data-tag="$1">$1</span>');
     
     urlPlaceholders.forEach(({ placeholder, url }) => {
-      const linkHtml = `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:text-blue-600 underline" data-url="${url}" onclick="event.stopPropagation();">${url}</a>`;
+      const linkHtml = `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:text-blue-600 underline" data-url="${url}" contenteditable="false" onclick="event.stopPropagation();">${url}</a>`;
       html = html.replace(placeholder, linkHtml);
     });
     
+    const docTitleById = new Map((documents ?? []).map(document => [document.id, document.title || '无标题']));
     const docLinkRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
-    html = html.replace(docLinkRegex, '<a href="/d/$2" class="text-blue-500 hover:text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-1 rounded cursor-pointer" data-doc-link="$2" data-doc-title="$1" contenteditable="false" onclick="event.preventDefault(); event.stopPropagation(); window.dispatchEvent(new CustomEvent(\'doc-link-click\', { detail: \'$2\' }));">@$1</a>');
+    html = html.replace(docLinkRegex, (_match, storedTitle: string, docId: string) => {
+      const title = docTitleById.get(docId) || storedTitle;
+      const safeTitle = escapeHtml(title);
+      return `<a href="/d/${docId}" class="text-blue-500 hover:text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-1 rounded cursor-pointer" data-doc-link="${docId}" data-doc-title="${safeTitle}" contenteditable="false" onclick="event.preventDefault(); event.stopPropagation(); window.dispatchEvent(new CustomEvent('doc-link-click', { detail: '${docId}' }));">@${safeTitle}</a>`;
+    });
     
     return html;
-  }, []);
+  }, [documents]);
   
   const htmlContent = useMemo(() => generateHtmlContent(node.content), [node.content, generateHtmlContent]);
   const htmlNote = useMemo(() => generateHtmlContent(node.note), [node.note, generateHtmlContent]);
@@ -936,14 +942,38 @@ const NodeItem = memo(({
                   onPaste?.(e, node.id);
                 }}
                 id={`node-${node.id}`}
+                onMouseDown={(e) => {
+                  const target = e.target as HTMLElement;
+                  const docLinkEl = target.closest('[data-doc-link]');
+                  const docId = docLinkEl?.getAttribute('data-doc-link');
+                  if (!docId) return;
+                  // contentEditable 首次点击可能优先被浏览器处理成光标定位，
+                  // 在 mousedown 阶段处理可保证 @ 链接单击即可跳转。
+                  e.preventDefault();
+                  e.stopPropagation();
+                  docLinkMouseDownRef.current = docId;
+                  window.dispatchEvent(new CustomEvent('doc-link-click', { detail: docId }));
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
                   const target = e.target as HTMLElement;
+                  // 站外链接位于 contentEditable 内时，浏览器可能只进行光标定位，
+                  // 显式在用户点击事件中打开新窗口，避免被编辑区事件链路吞掉。
+                  const externalLink = target.closest('a[data-url]') as HTMLAnchorElement | null;
+                  if (externalLink) {
+                    e.preventDefault();
+                    window.open(externalLink.href, '_blank', 'noopener,noreferrer');
+                    return;
+                  }
                   // 处理文章链接点击
                   if (target.hasAttribute('data-doc-link')) {
                     e.preventDefault();
                     const docId = target.getAttribute('data-doc-link');
                     if (docId) {
+                      if (docLinkMouseDownRef.current === docId) {
+                        docLinkMouseDownRef.current = null;
+                        return;
+                      }
                       window.dispatchEvent(new CustomEvent('doc-link-click', { detail: docId }));
                       return;
                     }
@@ -953,6 +983,10 @@ const NodeItem = memo(({
                     e.preventDefault();
                     const docId = docLinkEl.getAttribute('data-doc-link');
                     if (docId) {
+                      if (docLinkMouseDownRef.current === docId) {
+                        docLinkMouseDownRef.current = null;
+                        return;
+                      }
                       window.dispatchEvent(new CustomEvent('doc-link-click', { detail: docId }));
                       return;
                     }

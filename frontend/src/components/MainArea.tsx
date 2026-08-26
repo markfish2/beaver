@@ -10,6 +10,7 @@ import { SaveStatusIndicator } from './SaveStatusIndicator';
 import RecoveryDialog from './RecoveryDialog';
 import DropIndicator from './DropIndicator';
 import TableOfContents from './TableOfContents';
+import Breadcrumbs from './Breadcrumbs';
 import DocumentSettingsMenu from './DocumentSettingsMenu';
 import DocumentTabs from './DocumentTabs';
 import EditorActionPortal from './EditorActionPortal';
@@ -69,7 +70,14 @@ const EmptyDocumentWorkspace = ({ view }: { view: EmptyWorkspaceView }) => {
   return (
     <div className="flex h-full flex-1 items-center justify-center bg-[#f7f6f2] px-6 text-center dark:bg-gray-900">
       <div className="-mt-16 flex max-w-sm flex-col items-center">
-        <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-[#e6eeeb] text-[#4d9383] dark:bg-[#31574f] dark:text-[#b7d8cf]" aria-hidden="true">
+        <div
+          className="mb-5 flex h-20 w-20 items-center justify-center rounded-3xl dark:bg-gray-800"
+          style={{
+            color: 'var(--app-link)',
+            backgroundColor: 'color-mix(in srgb, var(--app-link) 14%, transparent)',
+          }}
+          aria-hidden="true"
+        >
           <EmptyIcon className="h-9 w-9" strokeWidth={1.5} />
         </div>
         <h2 className="text-lg font-medium text-gray-700 dark:text-gray-200">{content.title}</h2>
@@ -934,6 +942,11 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
 
   useEffect(() => {
     if (!currentDoc || !documentId || isDiaryDoc) return;
+    // 关闭目标 Tab 后切换到其他文档时，清理上一次关闭流程留下的文档标记。
+    // 否则再次点击原文中的 @ 链接，会被误判为关闭中的文档而跳过 Tab 注册。
+    if (!closingDocumentIdsRef.current.has(currentDoc.id)) {
+      closingDocumentIdsRef.current.clear();
+    }
     // 关闭当前 Tab 后路由切换尚未完成时，阻止旧文档被同步 effect 重新注册。
     if (closingDocumentIdsRef.current.delete(currentDoc.id)) return;
     const mode = pendingTabModeRef.current
@@ -1146,6 +1159,10 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       const customEvent = e as CustomEvent;
       const docId = customEvent.detail;
       if (docId) {
+        // 大纲节点内的 @ 链接通过自定义事件导航。关闭目标 Tab 后再次点击时，
+        // 必须清掉关闭流程残留标记，并明确按大纲模式重新注册目标 Tab。
+        closingDocumentIdsRef.current.delete(docId);
+        pendingTabModeRef.current = 'outline';
         navigate(`/d/${docId}`);
       }
     };
@@ -2843,7 +2860,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     return (
       <div
         className="flex-1 h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-        style={document.documentElement.dataset.mobileLayout ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 44px)', paddingBottom: '52px' } : undefined}
+        style={document.documentElement.dataset.mobileLayout ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 44px)', paddingBottom: '62px' } : undefined}
       >
         {userSubView === 'profile' && <UserProfileEditor />}
         {userSubView === 'appearance' && <AppearanceSettingsPage />}
@@ -3100,7 +3117,21 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           onClick={() => updateSelectedNodeIds([])}
         >
           <div className="max-w-[900px] ml-auto mr-auto md:ml-16 md:mr-auto">
-            {currentDoc && !isDiaryDoc && (
+            {zoomedNodeId && (
+              <div className="mb-3 -ml-2">
+                <Breadcrumbs
+                  items={focusBreadcrumbs.map((breadcrumb) => ({
+                    id: breadcrumb.id,
+                    title: breadcrumb.label,
+                  }))}
+                  onNavigate={(id) => {
+                    setZoomedNodeId(id.startsWith('document:') ? null : id);
+                  }}
+                />
+              </div>
+            )}
+
+            {currentDoc && !isDiaryDoc && !zoomedNodeId && (
               <h1
                 className="text-4xl font-semibold mb-8 text-gray-800 dark:text-gray-100 outline-none leading-tight"
                 contentEditable

@@ -1,6 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo, Component, Suspense } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
-import { Excalidraw, MainMenu, exportToBlob, exportToSvg } from "@excalidraw/excalidraw";
+import { Excalidraw, MainMenu, exportToBlob, exportToSvg, FONT_FAMILY } from "@excalidraw/excalidraw";
 import type { AppState, BinaryFiles, ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from "@excalidraw/excalidraw/types";
 import { ChevronLeft, ChevronRight, Download, FileJson, FileText, GripVertical, Image, Loader2, Play, Presentation, StickyNote, Wand2, X } from 'lucide-react';
 import { getExcalidrawData, getExcalidrawDataFresh, updateExcalidrawData, loadExcalidrawFiles, VersionConflictError } from '../api/excalidraw';
@@ -13,6 +13,19 @@ let _excalidrawApiInstance: ExcalidrawImperativeAPI | null = null;
 
 // 导出图片时给元素四周保留稳定的呼吸空间，避免内容贴住图片边缘。
 const CANVAS_EXPORT_PADDING = 100;
+
+const CANVAS_FONT_OPTIONS = [
+  { value: FONT_FAMILY.Excalifont, label: 'Excalifont' },
+  { value: FONT_FAMILY.Helvetica, label: '系统默认' },
+] as const;
+
+const DEFAULT_CANVAS_FONT = FONT_FAMILY.Excalifont;
+
+function normalizeCanvasFont(fontFamily: unknown): AppState['currentItemFontFamily'] {
+  return CANVAS_FONT_OPTIONS.some(option => option.value === fontFamily)
+    ? fontFamily as AppState['currentItemFontFamily']
+    : DEFAULT_CANVAS_FONT;
+}
 
 function omitViewportState<T extends Record<string, unknown>>(appState: T): T {
   const result = { ...appState };
@@ -197,6 +210,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   const [dragOverSlideId, setDragOverSlideId] = useState<string | null>(null);
   const isMobile = usePhoneLayout();
   const [showNotePicker, setShowNotePicker] = useState(false);
+  const [canvasFontFamily, setCanvasFontFamily] = useState<AppState['currentItemFontFamily']>(DEFAULT_CANVAS_FONT);
   // 缓存已渲染的笔记引用，避免拖动时每帧重建 React 组件
   const embedCacheRef = useRef<Map<string, React.ReactNode>>(new Map());
   // 标记是否已加载初始数据
@@ -256,8 +270,9 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     const link = `beaver://note/${doc.id}?type=${noteType}&title=${encodeURIComponent(doc.title || '')}`;
 
     const appState = api.getAppState();
-    const centerX = (appState.scrollX || 0) + ((appState.width || 800) / 2);
-    const centerY = (appState.scrollY || 0) + ((appState.height || 600) / 2);
+    const lastPointer = lastCanvasPointerRef.current;
+    const centerX = lastPointer?.x ?? ((appState.scrollX || 0) + ((appState.width || 800) / 2));
+    const centerY = lastPointer?.y ?? ((appState.scrollY || 0) + ((appState.height || 600) / 2));
 
     const id = `embeddable_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const width = 320;
@@ -338,6 +353,8 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     filesDirtyRef.current = false;
     hasUnsavedChangesRef.current = false;
     savedFingerprintRef.current = '';
+    savedFontFamilyRef.current = null;
+    setCanvasFontFamily(DEFAULT_CANVAS_FONT);
     pendingElementsRef.current = null;
     versionRef.current = 0;
     pendingAppStateRef.current = null;
@@ -374,6 +391,9 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           setPresentation(loadedPresentation);
           const elements = sceneData.elements || [];
           const restAppState = omitViewportState(sceneData.appState || {});
+          const loadedFontFamily = normalizeCanvasFont(sceneData.appState?.currentItemFontFamily);
+          setCanvasFontFamily(loadedFontFamily);
+          savedFontFamilyRef.current = loadedFontFamily;
           const scenePayload = { elements, appState: restAppState, files } as ExcalidrawInitialDataState;
           // 图片、场景和空画布都在实例首次挂载前准备完成，避免切换文档时复用旧场景。
           setInitialData(scenePayload);
@@ -515,6 +535,8 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   const presentationSceneFingerprintRef = useRef('');
   const presentationExportCacheRef = useRef(new Map<string, string>());
   const presentationExportInFlightRef = useRef(new Map<string, Promise<string>>());
+  // 记录画布上最后一次有效点击的场景坐标，供嵌入笔记引用作为默认落点。
+  const lastCanvasPointerRef = useRef<{ x: number; y: number } | null>(null);
 
   // 移动端只查看画布时生成隔离 SVG，不挂载完整 Excalidraw React UI。
   // SVG 直接挂载到 DOM，避免 iOS/部分 Android WebView 无法解码 Blob SVG。
@@ -641,6 +663,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         appState: {
           viewBackgroundColor: appState?.viewBackgroundColor,
           gridSize: appState?.gridSize,
+          currentItemFontFamily: appState?.currentItemFontFamily,
         },
         presentation: presentationRef.current,
       };
@@ -656,6 +679,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
       pendingAppStateRef.current = null;
       hasUnsavedChangesRef.current = false;
       savedFingerprintRef.current = fingerprint(elements);
+      savedFontFamilyRef.current = appState?.currentItemFontFamily ?? null;
     } catch (error) {
       if (error instanceof VersionConflictError) {
         // 版本冲突：静默重新加载
@@ -722,6 +746,8 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   const hasUnsavedChangesRef = useRef(false);
   // 上次保存时的 elements 指纹（用于判断是否真正有变化）
   const savedFingerprintRef = useRef<string>('');
+  // 画布默认字体属于场景状态，单独记录它以便字体变化但元素未变化时仍能保存。
+  const savedFontFamilyRef = useRef<AppState['currentItemFontFamily'] | null>(null);
   // 防抖保存
   const saveData = useMemo(
     () =>
@@ -747,6 +773,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
             appState: {
               viewBackgroundColor: appState.viewBackgroundColor,
               gridSize: appState.gridSize,
+              currentItemFontFamily: appState.currentItemFontFamily,
             },
             presentation: presentationRef.current,
           };
@@ -762,6 +789,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           versionRef.current = result.version || versionRef.current + 1;
           // 保存成功，更新指纹
           savedFingerprintRef.current = fingerprint(elements);
+          savedFontFamilyRef.current = appState.currentItemFontFamily ?? null;
           setSaveStatus('saved');
           setTimeout(() => setSaveStatus('idle'), 2000);
           // 检查保存期间是否有新变更（竞态保护）
@@ -886,6 +914,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
         if (isHydratingSceneRef.current) {
           isHydratingSceneRef.current = false;
           savedFingerprintRef.current = fp;
+          savedFontFamilyRef.current = appState.currentItemFontFamily ?? null;
           pendingElementsRef.current = null;
           pendingAppStateRef.current = null;
           hasUnsavedChangesRef.current = false;
@@ -896,7 +925,8 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
 
         // 视口移动、缩放、选择等操作也会触发 onChange，但不会改变 elements。
         // 只有元素真正变化时才进入待保存队列；否则离开页面不应提示保存。
-        if (fp === savedFingerprintRef.current) return;
+        const fontFamilyChanged = appState.currentItemFontFamily !== savedFontFamilyRef.current;
+        if (fp === savedFingerprintRef.current && !fontFamilyChanged) return;
 
         pendingElementsRef.current = elements;
         pendingAppStateRef.current = appState;
@@ -912,6 +942,22 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     },
     [isPresenting, onDirtyChange, showPresentationPanel, syncPresentationFrames]
   );
+
+  const handleCanvasFontChange = useCallback((fontFamily: AppState['currentItemFontFamily']) => {
+    setCanvasFontFamily(fontFamily);
+    const api = excalidrawRef.current;
+    if (!api) return;
+    const elements = api.getSceneElements();
+    const updatedElements = elements.map(element => (
+      element.type === 'text'
+        ? { ...element, fontFamily }
+        : element
+    ));
+    api.updateScene({
+      elements: updatedElements,
+      appState: { currentItemFontFamily: fontFamily },
+    });
+  }, []);
 
   // 导出功能
   const handleExport = async (format: 'png' | 'svg' | 'json') => {
@@ -1355,6 +1401,9 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           validateEmbeddable={validateEmbeddable}
           renderEmbeddable={renderEmbeddable}
           onLinkOpen={handleLinkOpen}
+          onPointerDown={(_activeTool, pointerDownState) => {
+            lastCanvasPointerRef.current = { ...pointerDownState.origin };
+          }}
           UIOptions={{
             canvasActions: {
               changeViewBackgroundColor: true,
@@ -1373,6 +1422,28 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
                 <StickyNote className="w-4 h-4" />
                 嵌入笔记引用
               </button>
+            </MainMenu.ItemCustom>
+            <MainMenu.ItemCustom>
+              <label className="flex w-full items-center justify-between gap-3 px-3 py-2 text-sm">
+                <span className="flex items-center gap-2">
+                  <span className="inline-flex h-4 w-4 items-center justify-center text-xs font-semibold">A</span>
+                  画布字体
+                </span>
+                <select
+                  value={canvasFontFamily}
+                  onChange={event => {
+                    const fontFamily = Number(event.target.value) as AppState['currentItemFontFamily'];
+                    handleCanvasFontChange(fontFamily);
+                  }}
+                  onClick={event => event.stopPropagation()}
+                  className="max-w-[120px] rounded border border-gray-200 bg-white px-1.5 py-1 text-xs text-gray-700 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                  aria-label="画布字体"
+                >
+                  {CANVAS_FONT_OPTIONS.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
             </MainMenu.ItemCustom>
             <MainMenu.Separator />
             <MainMenu.DefaultItems.ClearCanvas />

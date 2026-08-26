@@ -969,8 +969,15 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
       }
       if (href?.startsWith('/d/')) {
         const docId = href.replace('/d/', '');
+        const linkedDocument = documents.find(document => document.id === docId);
+        const childText = Children.toArray(children)
+          .filter((child): child is string => typeof child === 'string')
+          .join('');
+        const linkedLabel = linkedDocument
+          ? (childText.trimStart().startsWith('@') ? `@${linkedDocument.title || '无标题'}` : linkedDocument.title || '无标题')
+          : children;
         return <a href={href} className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-1 rounded cursor-pointer"
-          onClick={(e) => { e.preventDefault(); navigate_fn(`/d/${docId}`); }}>{children}</a>;
+          onClick={(e) => { e.preventDefault(); navigate_fn(`/d/${docId}`); }}>{linkedLabel}</a>;
       }
       if (href?.startsWith('/uploads/')) {
         return (
@@ -1045,7 +1052,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
       }
       return <input type={type} checked={checked} className={className} {...props} />;
     },
-  }), [handleImagePreview, handlePreviewTaskToggle, headingIdByLine, navigate_fn]);
+  }), [documents, handleImagePreview, handlePreviewTaskToggle, headingIdByLine, navigate_fn]);
 
   // Scroll sync: bidirectional editor ↔ preview in split mode (from markamd)
   useEffect(() => {

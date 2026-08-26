@@ -46,11 +46,39 @@ const compareFileMenuItem = (sortTimes: Map<string, number>) => (a: Document, b:
   return compareDocumentByLastEditedDesc(sortTimes)(a, b);
 };
 
+type FileTreeViewMode = 'all' | 'starred' | 'recent';
+const MOBILE_FILE_TREE_EXPANDED_KEY = 'beaver-mobile-file-tree-expanded-v1';
+
+function readExpandedFolders(viewMode: FileTreeViewMode): Set<string> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MOBILE_FILE_TREE_EXPANDED_KEY) || '{}') as Record<string, unknown>;
+    const ids = saved[viewMode];
+    return Array.isArray(ids) ? new Set(ids.filter((id): id is string => typeof id === 'string')) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function persistExpandedFolders(viewMode: FileTreeViewMode, folders: Set<string>) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MOBILE_FILE_TREE_EXPANDED_KEY) || '{}') as Record<string, unknown>;
+    saved[viewMode] = Array.from(folders);
+    localStorage.setItem(MOBILE_FILE_TREE_EXPANDED_KEY, JSON.stringify(saved));
+  } catch {
+    // 隐私模式或存储空间不足时，展开状态仍保留在当前组件生命周期内。
+  }
+}
+
 export default function FileTreeView({ starredOnly = false, viewMode = starredOnly ? 'starred' : 'all' }: FileTreeViewProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { documents, refreshDocuments } = useDocuments();
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [expandedFoldersByView, setExpandedFoldersByView] = useState<Record<FileTreeViewMode, Set<string>>>(() => ({
+    all: readExpandedFolders('all'),
+    starred: readExpandedFolders('starred'),
+    recent: readExpandedFolders('recent'),
+  }));
+  const expandedFolders = expandedFoldersByView[viewMode];
   const [contextMenu, setContextMenu] = useState<{ docId: string; x: number; y: number } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -104,11 +132,12 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
   }, [compareFileItem, filteredDocs]);
 
   const handleToggleFolder = (folderId: string) => {
-    setExpandedFolders(prev => {
-      const next = new Set(prev);
+    setExpandedFoldersByView(prev => {
+      const next = new Set(prev[viewMode]);
       if (next.has(folderId)) next.delete(folderId);
       else next.add(folderId);
-      return next;
+      persistExpandedFolders(viewMode, next);
+      return { ...prev, [viewMode]: next };
     });
   };
 

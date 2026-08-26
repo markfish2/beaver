@@ -78,7 +78,7 @@
 :root[data-markdown-style="border"] .memo-content h6 {
   position: relative;
   color: var(--markdown-border-text) !important;
-  font-family: var(--prose-font-family);
+  font-family: var(--prose-font-family) !important;
   line-height: 1.24;
   padding: 0 0 0 13px;
   border: 0 !important;

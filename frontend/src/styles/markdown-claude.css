@@ -80,7 +80,7 @@
 :root[data-markdown-style="claude"] .memo-content h6 {
   position: relative;
   color: var(--markdown-claude-heading) !important;
-  font-family: var(--markdown-claude-font-serif);
+  font-family: var(--prose-font-family) !important;
   font-weight: 600;
   line-height: 1.3;
   letter-spacing: 0;

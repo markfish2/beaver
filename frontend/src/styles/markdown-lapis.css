@@ -62,7 +62,7 @@
 :root[data-markdown-style="lapis"] .memo-content h5,
 :root[data-markdown-style="lapis"] .memo-content h6 {
   color: var(--markdown-lapis-primary) !important;
-  font-family: var(--markdown-lapis-font-serif);
+  font-family: var(--prose-font-family) !important;
   font-weight: 700;
   line-height: 1.35;
   padding: 0;
