@@ -3393,6 +3393,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                     >
                       <NodeItem
                         node={node}
+                        isDiary={!!currentDoc?.diary_date}
                         childrenNodes={node.children}
                         documents={documents}
                         tagCandidates={tagCandidates}

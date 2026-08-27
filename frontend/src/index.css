@@ -1,9 +1,44 @@
 @import "tailwindcss";
+
 @import "./styles/markdown-markamd.css";
 @import "./styles/markdown-lapis.css";
 @import "./styles/markdown-claude.css";
 @import "./styles/markdown-border.css";
 @import "./styles/markdown-pie.css";
+
+.diary-time-prefix {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  position: relative;
+  top: -2px;
+  margin-right: 0.35rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  background: var(--app-link-pale);
+  color: var(--app-link);
+  font-size: 0.75em;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.diary-time-content:focus .diary-time-prefix {
+  display: inline;
+  top: 0;
+  margin-right: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+}
+
+.dark .diary-time-prefix {
+  background: var(--app-link-dark);
+  color: var(--app-link);
+}
 
 /* Mermaid 图统一使用中性灰阶，覆盖 Mermaid 生成的内联主题样式。 */
 .mermaid-diagram {

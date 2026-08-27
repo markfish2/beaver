@@ -11,9 +11,11 @@ import ImageViewer from './ImageViewer';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
 import { isPhoneLayout } from '../utils/deviceLayout';
 import { isMentionableDocument } from '../utils/documentMention';
+import { getDiaryTimePrefix } from '../utils/diaryTime';
 
 interface NodeItemProps {
   node: NodeWithTreeMeta;
+  isDiary?: boolean;
   childrenNodes?: NodeWithTreeMeta[];
   documents?: Document[];
   tagCandidates?: string[];
@@ -121,6 +123,7 @@ const dragVisualSignatureForNode = (
 
 const NodeItem = memo(({
   node,
+  isDiary = false,
   childrenNodes = [],
   documents = [],
   tagCandidates = [],
@@ -264,17 +267,32 @@ const NodeItem = memo(({
   
   const htmlContent = useMemo(() => generateHtmlContent(node.content), [node.content, generateHtmlContent]);
   const htmlNote = useMemo(() => generateHtmlContent(node.note), [node.note, generateHtmlContent]);
+  const diaryTimePrefix = useMemo(
+    () => isDiary ? getDiaryTimePrefix(node.content || '') : null,
+    [isDiary, node.content]
+  );
+  const addDiaryTimeMarker = useCallback((html: string, content: string): string => {
+    const prefix = isDiary ? getDiaryTimePrefix(content || '') : null;
+    if (!prefix) return html;
+    const prefixPattern = prefix.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const markerPattern = new RegExp(`^(\\s*)(${prefixPattern})`);
+    return html.replace(markerPattern, '$1<span class="diary-time-prefix">$2</span>');
+  }, [isDiary]);
+  const htmlContentWithTimeMarker = useMemo(
+    () => addDiaryTimeMarker(htmlContent, node.content),
+    [addDiaryTimeMarker, htmlContent, node.content]
+  );
 
   useEffect(() => {
     if (contentRef.current && !isInitializedRef.current) {
-      contentRef.current.innerHTML = htmlContent;
+      contentRef.current.innerHTML = htmlContentWithTimeMarker;
       if (noteRef.current) {
         noteRef.current.innerHTML = htmlNote;
       }
       isInitializedRef.current = true;
       prevNodeIdRef.current = node.id;
     }
-  }, [htmlContent, htmlNote, node.id]);
+  }, [htmlContentWithTimeMarker, htmlNote, node.id]);
 
   useEffect(() => {
     if (contentRef.current && isInitializedRef.current && document.activeElement !== contentRef.current) {
@@ -282,9 +300,9 @@ const NodeItem = memo(({
         prevNodeIdRef.current = node.id;
         return;
       }
-      contentRef.current.innerHTML = htmlContent;
+      contentRef.current.innerHTML = htmlContentWithTimeMarker;
     }
-  }, [htmlContent, node.id]);
+  }, [htmlContentWithTimeMarker, node.id]);
 
   useEffect(() => {
     if (noteRef.current && document.activeElement !== noteRef.current) {
@@ -662,12 +680,12 @@ const NodeItem = memo(({
   useLayoutEffect(() => {
     if (contentRef.current) {
       const el = contentRef.current;
-      el.className = contentClasses;
+      el.className = `${contentClasses}${diaryTimePrefix ? ' diary-time-content' : ''}`;
       // 直接操作 DOM style 属性，绕过 React 对 contentEditable 的渲染限制
       el.style.fontWeight = node.is_bold ? 'bold' : '';
       el.style.fontStyle = node.is_italic ? 'italic' : '';
     }
-  }, [contentClasses, node.is_bold, node.is_italic, node.color, node.highlight, node.heading]);
+  }, [contentClasses, diaryTimePrefix, node.is_bold, node.is_italic, node.color, node.highlight, node.heading]);
 
   // Check if this node is part of a multi-selection
   const isInMultiSelection = selectedNodeIds.length > 1 && selectedNodeIds.includes(node.id);
@@ -895,7 +913,7 @@ const NodeItem = memo(({
               <div
                 ref={contentRef}
                 contentEditable
-                className={contentClasses}
+                className={`${contentClasses}${diaryTimePrefix ? ' diary-time-content' : ''}`}
                 suppressContentEditableWarning
                 onFocus={() => {
                   clearSelection?.();
@@ -909,9 +927,7 @@ const NodeItem = memo(({
                   }
                   const textContent = extractTextContent(e.currentTarget);
                   onContentChange(node.id, textContent);
-                  if (contentRef.current) {
-                    contentRef.current.innerHTML = generateHtmlContent(textContent);
-                  }
+                  if (contentRef.current) contentRef.current.innerHTML = addDiaryTimeMarker(generateHtmlContent(textContent), textContent);
                   onEndEditing?.(node.id);
                   onBlurToolbar?.();
                 }}
@@ -1314,6 +1330,7 @@ const NodeItem = memo(({
                  node={child}
                  childrenNodes={'children' in child ? child.children : []}
                  documents={documents}
+                 isDiary={isDiary}
                  tagCandidates={tagCandidates}
                  onContentChange={onContentChange}
                  onNoteChange={onNoteChange}
@@ -1362,6 +1379,7 @@ const NodeItem = memo(({
   );
 }, (prevProps, nextProps) => {
   return prevProps.node.subtreeVersion === nextProps.node.subtreeVersion &&
+    prevProps.isDiary === nextProps.isDiary &&
     // 备注/内容可以通过本地乐观更新改变，而不一定同步改变 subtreeVersion。
     // 若忽略这两个字段，备注创建后的第一次渲染会被 memo 拦截，
     // 直到下一次操作才显示并获得焦点。
