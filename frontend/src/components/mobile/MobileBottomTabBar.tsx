@@ -98,8 +98,6 @@ export default function MobileBottomTabBar({ activeTab, onTabChange, chromeHidde
         className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 z-20 pointer-events-none"
         style={{
           height: 'env(safe-area-inset-bottom, 0px)',
-          opacity: chromeHidden ? 0 : 1,
-          transition: 'opacity 400ms linear',
         }}
       />
     </>

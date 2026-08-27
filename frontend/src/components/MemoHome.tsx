@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import type { ReactNode } from 'react';
 import { Menu, Archive, X, Globe, Shuffle, Image as ImageIcon, CalendarDays, ListTodo, AlertCircle } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import MemoInput from './MemoInput';
@@ -12,6 +13,7 @@ import MemoCard from './MemoCard';
 import { getMemos, getDiarySummary, updateMemo, deleteMemo, toggleMemoPinned, toggleMemoArchived, toggleMemoPublic, toggleMemoAI, updateNode, getTodos, updateTodo } from '../api/data';
 import type { Memo, Node, Todo } from '../api/data';
 import { parseTodoDueDate } from '../utils/todoDueDate';
+import { getDiaryTimePrefix } from '../utils/diaryTime';
 import { useDocuments } from '../context/DocumentContext';
 import { useAuth } from '../context/AuthContext';
 import { updateSettings } from '../api/auth';
@@ -20,6 +22,35 @@ import { saveViewState, loadViewState, saveMemosCache, loadMemosCache, clearMemo
 interface MemoHomeProps {
   sidebarOpen: boolean;
   isMobile: boolean;
+}
+
+/** 首页待办与 Memo 正文保持一致：时间前缀使用胶囊，标签使用主题色标记。 */
+function renderMemoTaskContent(value: string) {
+  const timePrefix = getDiaryTimePrefix(value);
+  const content = timePrefix ? value.slice(timePrefix.end) : value;
+  const parts: Array<string | ReactNode> = [];
+  if (timePrefix) {
+    parts.push(
+      <span className="diary-time-prefix memo-time-prefix" key="time">
+        {value.slice(timePrefix.start, timePrefix.end)}
+      </span>,
+    );
+  }
+
+  const tagPattern = /#[a-zA-Z0-9_\u4e00-\u9fa5]+/g;
+  let cursor = 0;
+  for (const match of content.matchAll(tagPattern)) {
+    const index = match.index ?? 0;
+    if (index > cursor) parts.push(content.slice(cursor, index));
+    parts.push(
+      <span className="memo-inline-tag" key={`tag-${index}`}>
+        {match[0]}
+      </span>,
+    );
+    cursor = index + match[0].length;
+  }
+  if (cursor < content.length) parts.push(content.slice(cursor));
+  return parts.length > 0 ? parts : value;
 }
 
 export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
@@ -553,7 +584,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
                             if (task.origin === 'diary') navigate(`/d/${(task as Node & { origin: 'diary' }).document_id}?nodeId=${task.id}`);
                           }}
                         >
-                          <span className="truncate">{displayText || '无标题任务'}</span>
+                          <span className="truncate">{renderMemoTaskContent(displayText || '无标题任务')}</span>
                           {/* 日期 + 过期图标，右对齐 */}
                           {dueLabel && (
                             <span className={`ml-auto shrink-0 flex items-center gap-0.5 text-xs whitespace-nowrap ${

@@ -14,7 +14,6 @@ import type { ReactNode } from 'react';
 import { createMobileDocumentState, getMobileTabFromState, resolveMobileBackTarget } from '../../utils/mobileNavigation';
 import { useViewportMetrics } from '../../hooks/useViewportMetrics';
 import { useMobileScrollChrome } from '../../hooks/useMobileScrollChrome';
-import { setMobileStatusBarOverlay } from '../../utils/themeChrome';
 
 const FileTreeView = lazy(() => import('./FileTreeView'));
 const MobileTodos = lazy(() => import('./MobileTodos'));
@@ -63,12 +62,6 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   const { keyboardOpen: viewportKeyboardOpen } = useViewportMetrics();
   const chromeHidden = useMobileScrollChrome(false, keyboardOpen || viewportKeyboardOpen);
   const topChromeHidden = activeTab !== 'diary' && chromeHidden;
-
-  // 仅在浏览器支持动态 theme-color 时生效；不支持的平台会自动回退到主题色。
-  useEffect(() => {
-    setMobileStatusBarOverlay(topChromeHidden);
-    return () => setMobileStatusBarOverlay(false);
-  }, [topChromeHidden]);
 
   // 编辑区获得焦点后，始终把光标所在节点滚到可视范围；不能用焦点状态
   // 全局隐藏底部 Tab，普通笔记、画布、Memo 等编辑区域仍应保留导航。
@@ -342,9 +335,10 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
             <div
               aria-hidden="true"
               style={{
-                height: topChromeHidden ? '0px' : 'calc(env(safe-area-inset-top, 0px) + 58px)',
+                // 顶部栏隐藏只改变自身视觉状态，不改变安全区占位；否则内容会
+                // 突然顶到状态栏边界，部分 Chrome PWA 会绘制一条分隔线。
+                height: 'calc(env(safe-area-inset-top, 0px) + 58px)',
                 flexShrink: 0,
-                transition: 'height 400ms linear',
               }}
             />
             <FileTreeView viewMode={fileViewMode} />
