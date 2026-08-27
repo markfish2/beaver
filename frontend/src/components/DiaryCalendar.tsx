@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronLeft, ChevronRight, ChevronDown, MoreHorizontal, CalendarDays, Trash2, Pencil, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, MoreHorizontal, CalendarDays, Trash2, Pencil, Plus, ListTodo, Archive } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getDiaryMonths, getMonthlyDiary, getOrCreateDayNode, getDiaryDayDates, deleteTodo, createNode, createTodo, updateTodo } from '../api/data';
 import type { Todo } from '../api/data';
@@ -427,7 +427,10 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
 
       {/* Pending todos */}
       <div className="px-2 py-2">
-        <div className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 px-1">待办</div>
+        <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-400 dark:text-gray-500 mb-3 px-1 uppercase tracking-wider">
+          <ListTodo className="w-4 h-4" />
+          待办
+        </div>
         <div className="space-y-1.5">
           {pendingTasks.map(task => {
               const isEditing = editingId === task.id;
@@ -567,8 +570,11 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
       <div className="border-t border-gray-200 dark:border-gray-700 mx-2" />
 
       {/* Year archive */}
-      <div className="overflow-y-auto px-2 py-2 custom-scrollbar scrollbar-auto-hide">
-        <div className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 px-1">归档</div>
+      <div className="px-2 py-2">
+        <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-400 dark:text-gray-500 mb-3 px-1 uppercase tracking-wider">
+          <Archive className="w-4 h-4" />
+          归档
+        </div>
         {monthItems.length === 0 ? (
           <div className="text-xs text-gray-400 text-center py-4">暂无日记</div>
         ) : (
@@ -603,7 +609,7 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
         )}
       </div>
 
-      <div className="px-2 py-2 border-t border-gray-200 dark:border-gray-700">
+      <div className="mx-2 py-2 border-t border-gray-200 dark:border-gray-700">
         <DiaryTagsPanel
           activeTag={activeTag}
           onTagClick={handleTagClick}

@@ -27,7 +27,7 @@ export default function DiaryTagsPanel({ onTagClick, activeTag, embedded = false
 
   return (
     <div className={wrapperClass}>
-      <div className="flex items-center gap-1.5 text-base font-medium text-gray-400 dark:text-gray-500 mb-2">
+      <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-400 dark:text-gray-500 mb-3 px-1 uppercase tracking-wider">
         <Tag className="w-4 h-4" />
         标签
       </div>
