@@ -91,11 +91,22 @@ const ROW_HEIGHT = 32;
 const HEADER_HEIGHT = 44;
 const DRAG_HANDLE_WIDTH = 5;
 
-const TASK_BAR_FILL = '#a9dcfb';
-const TASK_BAR_STROKE = '#60b8f3';
 const SUMMARY_BAR_FILL = '#d7d7d7';
 const SUMMARY_BAR_STROKE = '#b7b7b7';
 const DONE_COLOR = '#eef0f2';
+
+function getThemeColor(fallback: string): string {
+  if (typeof window === 'undefined') return fallback;
+  return getComputedStyle(document.documentElement).getPropertyValue('--app-link').trim() || fallback;
+}
+
+function mixWithWhite(color: string, amount: number): string {
+  const match = color.match(/^#([\da-f]{6})$/i);
+  if (!match) return color;
+  const channels = [0, 2, 4].map((offset) => parseInt(match[1].slice(offset, offset + 2), 16));
+  const mixed = channels.map((channel) => Math.round(channel + (255 - channel) * amount));
+  return `rgb(${mixed[0]} ${mixed[1]} ${mixed[2]})`;
+}
 
 /** 标准圆角矩形路径：四条直边 + 四个独立圆角，避免边向内弯曲 */
 function traceRoundedRect(
@@ -136,6 +147,13 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
   const [zoom, setZoom] = useState<number>(1);
   const [dragState, setDragState] = useState<DragState | null>(null);
+  const [themeVersion, setThemeVersion] = useState(0);
+
+  useEffect(() => {
+    const handleThemeChange = () => setThemeVersion((version) => version + 1);
+    window.addEventListener('theme-change', handleThemeChange);
+    return () => window.removeEventListener('theme-change', handleThemeChange);
+  }, []);
 
   // Derived data
   const flatTasks = flattenTasks(tasks, collapsedTaskIds);
@@ -203,6 +221,9 @@ const GanttChart: React.FC<GanttChartProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // 主题切换只改变 CSS 变量；读取版本号让 canvas 随主题事件重绘。
+    void themeVersion;
+
     const dpr = window.devicePixelRatio || 1;
     canvas.width = canvasWidth * dpr;
     canvas.height = canvasHeight * dpr;
@@ -211,6 +232,10 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    const themeColor = getThemeColor('#4d9383');
+    const taskBarFill = mixWithWhite(themeColor, 0.72);
+    const taskBarStroke = themeColor;
 
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
@@ -376,8 +401,8 @@ const GanttChart: React.FC<GanttChartProps> = ({
       const barWidth = Math.max(dayWidth, x2 - x1);
 
       const hasChildren = task.children && task.children.length > 0;
-      const barColor = task.is_done ? DONE_COLOR : hasChildren ? SUMMARY_BAR_FILL : TASK_BAR_FILL;
-      const strokeColor = task.is_done ? '#D1D5DB' : hasChildren ? SUMMARY_BAR_STROKE : TASK_BAR_STROKE;
+      const barColor = task.is_done ? DONE_COLOR : hasChildren ? SUMMARY_BAR_FILL : taskBarFill;
+      const strokeColor = task.is_done ? '#D1D5DB' : hasChildren ? SUMMARY_BAR_STROKE : taskBarStroke;
 
       // Drag preview: semi-transparent
       const isDragging = dragState && dragState.taskId === task.id;
@@ -412,7 +437,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
     // 6. Today line
     const todayX = dateToX(todayStr);
-    ctx.strokeStyle = '#4d9383';
+    ctx.strokeStyle = themeColor;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(todayX, 0);
@@ -430,6 +455,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
     dateToX,
     dragState,
     todayStr,
+    themeVersion,
   ]);
 
   // Redraw on changes

@@ -65,13 +65,23 @@ function estimateHeight(m: Memo, compact: boolean): number {
 
 function LoadMoreSentinel({ onLoadMore, hasMore }: { onLoadMore: () => Promise<void>; hasMore: boolean }) {
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const armedRef = useRef(true);
   const [loading, setLoading] = useState(false);
 
   const handleIntersect = useCallback(async (entries: IntersectionObserverEntry[]) => {
-    if (entries[0].isIntersecting && hasMore && !loading) {
+    const entry = entries[0];
+    if (!entry.isIntersecting) {
+      // 只有哨兵离开底部预加载区域后，下一次进入才允许加载下一页。
+      armedRef.current = true;
+      return;
+    }
+    if (armedRef.current && hasMore && !loading) {
+      armedRef.current = false;
       setLoading(true);
       try {
         await onLoadMore();
+      } catch (error: unknown) {
+        console.error('Failed to load more memos', error);
       } finally {
         setLoading(false);
       }

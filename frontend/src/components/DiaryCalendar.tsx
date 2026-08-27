@@ -9,6 +9,7 @@ import { showToast } from '../utils/toast';
 import { logNavigation } from '../utils/navigationDebug';
 import { getDiaryDayStats } from '../utils/diaryHeatmap';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
+import DiaryTagsPanel from './DiaryTagsPanel';
 
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
 
@@ -54,6 +55,7 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
   const [newTodoText, setNewTodoText] = useState('');
   const [showAddTodo, setShowAddTodo] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; content: string } | null>(null);
+  const [activeTag, setActiveTag] = useState<string | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const newTodoInputRef = useRef<HTMLInputElement>(null);
   const pendingDayClicksRef = useRef<Set<string>>(new Set());
@@ -272,6 +274,12 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
     }
   };
 
+  const handleTagClick = (tag: string) => {
+    const nextTag = activeTag === tag ? null : tag;
+    setActiveTag(nextTag);
+    window.dispatchEvent(new CustomEvent('diary-tag-click', { detail: nextTag }));
+  };
+
   // Click a day in calendar → navigate and create day node
   const handleDayClick = async (day: number) => {
     const pendingKey = `${year}-${month}-${day}`;
@@ -337,7 +345,7 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
   while (cells.length % 7 !== 0) cells.push(null);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-y-auto custom-scrollbar scrollbar-auto-hide">
       {/* Calendar */}
       <div className="px-4 py-3">
         {/* Month header */}
@@ -559,7 +567,7 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
       <div className="border-t border-gray-200 dark:border-gray-700 mx-2" />
 
       {/* Year archive */}
-      <div className="flex-1 overflow-y-auto px-2 py-2 custom-scrollbar scrollbar-auto-hide">
+      <div className="overflow-y-auto px-2 py-2 custom-scrollbar scrollbar-auto-hide">
         <div className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 px-1">归档</div>
         {monthItems.length === 0 ? (
           <div className="text-xs text-gray-400 text-center py-4">暂无日记</div>
@@ -593,6 +601,14 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
             </div>
           ))
         )}
+      </div>
+
+      <div className="px-2 py-2 border-t border-gray-200 dark:border-gray-700">
+        <DiaryTagsPanel
+          activeTag={activeTag}
+          onTagClick={handleTagClick}
+          embedded
+        />
       </div>
 
       {loading && (

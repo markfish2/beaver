@@ -10,6 +10,7 @@ import { SaveStatusIndicator } from './SaveStatusIndicator';
 import RecoveryDialog from './RecoveryDialog';
 import DropIndicator from './DropIndicator';
 import TableOfContents from './TableOfContents';
+import DiaryTagResultsView from './DiaryTagResultsView';
 import Breadcrumbs from './Breadcrumbs';
 import DocumentSettingsMenu from './DocumentSettingsMenu';
 import DocumentTabs from './DocumentTabs';
@@ -41,6 +42,7 @@ import { useSaveManager } from '../hooks/useSaveManager';
 import { useKeyboardScroll } from '../hooks/useKeyboardScroll';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { createCommandFactory } from '../commands/implementations';
+import { extractTagCandidates } from '../utils/tagCandidates';
 
 import { saveStateManager, sendBatchSaveRequest, PendingOperation } from '../utils/saveStateManager';
 import { saveViewState, saveScrollPosition, loadScrollPosition } from '../utils/pwaState';
@@ -488,6 +490,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       return { documentId: documentId ?? null, value };
     });
   }, [documentId]);
+  const [diaryTagFilter, setDiaryTagFilter] = useState<string | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const selectedNodeIdsRef = useRef(selectedNodeIds);
   useEffect(() => { selectedNodeIdsRef.current = selectedNodeIds; }, [selectedNodeIds]);
@@ -980,20 +983,31 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   useEffect(() => {
     if (documents.length === 0) return;
     const timer = window.setTimeout(() => {
-      const validDocumentIds = new Set(documents.map(doc => doc.id));
-      setDocumentTabs(previous => {
-        const next = previous.filter(tab => validDocumentIds.has(tab.documentId));
-        return next.length === previous.length ? previous : next;
-      });
-      setActiveDocumentTabKey(previous => {
-        if (!previous) return previous;
-        return documentTabs.some(tab => tab.key === previous && validDocumentIds.has(tab.documentId))
-          ? previous
-          : null;
-      });
+      const normalizeId = (id: string): string => id.replace(/-/g, '').toLowerCase();
+      const validDocumentIds = new Set(documents.map(doc => normalizeId(doc.id)));
+      const removedTabs = documentTabs.filter(tab => !validDocumentIds.has(normalizeId(tab.documentId)));
+      if (removedTabs.length === 0) return;
+
+      const removedKeys = new Set(removedTabs.map(tab => tab.key));
+      const remainingTabs = documentTabs.filter(tab => !removedKeys.has(tab.key));
+      setDocumentTabs(remainingTabs);
+
+      if (!activeDocumentTabKey || !removedKeys.has(activeDocumentTabKey)) return;
+
+      const nextTab = remainingTabs[remainingTabs.length - 1];
+      closingDocumentIdsRef.current.add(documentId || '');
+      if (!nextTab) {
+        setActiveDocumentTabKey(null);
+        navigate(getEmptyWorkspacePath());
+        return;
+      }
+
+      setActiveDocumentTabKey(nextTab.key);
+      pendingTabModeRef.current = nextTab.mode;
+      navigate(`/d/${nextTab.documentId}`);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [documents, documentTabs]);
+  }, [activeDocumentTabKey, documentId, documents, documentTabs, navigate]);
 
   const handleDocumentTabSelect = useCallback((tab: DocumentTab) => {
     if (tab.documentId === documentId) {
@@ -1175,12 +1189,32 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     const handleTagClick = (e: Event) => {
       const customEvent = e as CustomEvent;
       const tag = customEvent.detail;
-      if (!tag) return;
+      if (!tag) {
+        setTagFilter(null);
+        return;
+      }
       setTagFilter(prev => prev === tag ? null : tag);
     };
     window.addEventListener('tag-click', handleTagClick);
     return () => window.removeEventListener('tag-click', handleTagClick);
   }, [setTagFilter]);
+
+  // Diary tags are an aggregate view across every diary month, separate from
+  // the document-local tag filter used by memo/outline notes.
+  useEffect(() => {
+    const handleDiaryTagClick = (e: Event) => {
+      if (!isDiaryDoc) return;
+      const tag = (e as CustomEvent<string | null>).detail;
+      setDiaryTagFilter(tag || null);
+      setTagFilter(null);
+    };
+    window.addEventListener('diary-tag-click', handleDiaryTagClick);
+    return () => window.removeEventListener('diary-tag-click', handleDiaryTagClick);
+  }, [isDiaryDoc, setTagFilter]);
+
+  useEffect(() => {
+    if (!isDiaryDoc) setDiaryTagFilter(null);
+  }, [isDiaryDoc]);
 
   // 注意：不再在 sidebarClose 时重新 fetchData，
   // documentId 变化时 useEffect 已自动加载数据
@@ -2350,6 +2384,10 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const sortedNodes = useMemo(() => getSortedNodes(nodes), [getSortedNodes, nodes]);
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const treeNodes = useMemo(() => buildTree(sortedNodes), [sortedNodes]);
+  const tagCandidates = useMemo(
+    () => extractTagCandidates(nodes.flatMap(node => [node.content || '', node.note || ''])),
+    [nodes],
+  );
 
   // 幽灵锚点：用于保持移动端键盘打开
   const focusToGhostAnchor = useCallback(() => {
@@ -3116,6 +3154,15 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
           style={isMobile && !isDiaryDoc ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 58px)' } : undefined}
           onClick={() => updateSelectedNodeIds([])}
         >
+          {diaryTagFilter ? (
+            <DiaryTagResultsView
+              tag={diaryTagFilter}
+              onClear={() => {
+                setDiaryTagFilter(null);
+                window.dispatchEvent(new CustomEvent('diary-tag-click', { detail: null }));
+              }}
+            />
+          ) : (
           <div className="max-w-[900px] ml-auto mr-auto md:ml-16 md:mr-auto">
             {zoomedNodeId && (
               <div className="mb-3 -ml-2">
@@ -3348,6 +3395,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                         node={node}
                         childrenNodes={node.children}
                         documents={documents}
+                        tagCandidates={tagCandidates}
                         onContentChange={handleNodeChange}
                         onNoteChange={handleNoteChange}
                         onKeyDown={stableNodeKeyDown}
@@ -3404,8 +3452,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
                )}
             </div>
           </div>
+          )}
         </div>
-        {!isMobile && <TableOfContents nodes={sortedNodes} documentId={documentId} />}
+        {!isMobile && !diaryTagFilter && <TableOfContents nodes={sortedNodes} documentId={documentId} />}
         </div>
         </>
       )}

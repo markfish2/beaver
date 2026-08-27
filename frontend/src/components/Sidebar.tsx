@@ -1,4 +1,4 @@
-import { Search, FileText, ChevronDown, Plus, Trash, Star, LogOut, ChevronLeft, ChevronRight, Folder, Edit2, CalendarDays, MoreHorizontal, Copy, ArrowUpRight, FolderPlus, FilePlus, FileUp, Move, Frame, StickyNote, Key, Lock, Sparkles, User, Archive, Palette, SquarePen } from 'lucide-react';
+import { Search, FileText, ChevronDown, Plus, Trash, Star, LogOut, ChevronLeft, ChevronRight, Folder, Edit2, CalendarDays, MoreHorizontal, Copy, ArrowUpRight, FileUp, Move, StickyNote, Key, Lock, Sparkles, User, Archive, Palette } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createDocument, deleteDocument, updateDocument, copyDocument, getNodes, createNodesBatch, createMemo, uploadFile, search as apiSearch, getTodos, createTodo, updateTodo, getMonthlyDiary, getOrCreateDayNode } from '../api/data';
 import type { Document as DocType, SearchResultItem, Todo } from '../api/data';
@@ -43,9 +43,9 @@ const SIDEBAR_WIDTH_KEY = 'sidebar_width';
 const SIDEBAR_PANEL_STATE_KEY = 'sidebar_panel_state';
 const SIDEBAR_FOLDERS_STATE_KEY = 'sidebar_folders_state';
 const PROJECT_WORKSPACE_STORAGE_KEY = 'beaver:project-workspace:v1';
-const ICON_RAIL_WIDTH = 48;
+const ICON_RAIL_WIDTH = 53;
 
-const DEFAULT_PANEL_WIDTH = 212;  // 260 - 48 = 212 (total visual width stays 260)
+const DEFAULT_PANEL_WIDTH = 207;  // 260 - 53 = 207 (total visual width stays 260)
 const MIN_PANEL_WIDTH = 160;
 const MAX_PANEL_WIDTH = 460;
 const navigationNonce = () => Date.now();
@@ -149,7 +149,6 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     }
   });
   const { userSubView, setUserSubView: setUserSubViewContext, activeConvId, setActiveConvId, selectedProjectId, setSelectedProjectId } = useUserView();
-  const [showNewMenu, setShowNewMenu] = useState(false);
 
   // 离开项目视图时保留最近打开的项目，返回“项目”时恢复到任务视图。
   useEffect(() => {
@@ -209,7 +208,6 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     }
   }, [viewMode]);
   const [newMenuTarget] = useState<string | null>(null);
-  const newMenuRef = useRef<HTMLDivElement>(null);
   const markdownInputRef = useRef<HTMLInputElement>(null);
   const markdownImportParentRef = useRef<string | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ show: boolean; id: string; title: string; type: 'document' | 'folder'; deleteMode?: 'move' | 'all' }>({ show: false, id: '', title: '', type: 'document' });
@@ -357,9 +355,6 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       }
       if (rootContextMenuRef.current && !rootContextMenuRef.current.contains(event.target as Node)) {
         setRootContextMenu(null);
-      }
-      if (newMenuRef.current && !newMenuRef.current.contains(event.target as Node)) {
-        setShowNewMenu(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -1086,6 +1081,16 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   // 图标栏内容（桌面端直接渲染，移动端放入 fixed wrapper）
   const iconRailContent = (
     <>
+      <input
+        ref={markdownInputRef}
+        type="file"
+        accept=".md,.markdown,text/markdown"
+        multiple
+        onChange={handleMarkdownImport}
+        className="hidden"
+        aria-hidden="true"
+      />
+
       {/* 用户头像 */}
       <div className="relative mb-4">
         <div
@@ -1127,14 +1132,18 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           }
           navigate('/');
         }}
-        className="w-10 h-10 flex items-center justify-center rounded-lg transition-colors text-[#8B8B80] dark:text-gray-400 hover:text-[#5A5A52] dark:hover:text-gray-200 hover:bg-[#EDEDE8] dark:hover:bg-gray-800"
+        className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
+          viewMode === 'memo' && contentExpanded && !isSearchMode
+            ? 'bg-[var(--app-link-pale)] text-[var(--app-link)] dark:bg-[var(--app-link-dark)] dark:text-[var(--app-link)]'
+            : 'text-gray-500 dark:text-gray-400 hover:text-[var(--app-link)] dark:hover:text-[var(--app-link)] hover:bg-[var(--app-link-pale)] dark:hover:bg-[var(--app-link-dark)]'
+        }`}
         title="随想笔记"
       >
-        <NavigationIcon type="memo" className="h-6 w-6" />
+        <NavigationIcon type="memo" className="h-[25px] w-[25px]" />
       </button>
 
       {/* 导航图标 */}
-      <div className="flex flex-col items-center gap-1 flex-1">
+      <div className="flex flex-col items-center gap-[5px] flex-1">
         <button
           onClick={async () => {
             logNavigation('sidebar-diary-click', {
@@ -1172,56 +1181,56 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           }}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
             viewMode === 'diary' && contentExpanded && !isSearchMode
-              ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
-              : 'text-[#8B8B80] dark:text-gray-400 hover:text-[#5A5A52] dark:hover:text-gray-200 hover:bg-[#EDEDE8] dark:hover:bg-gray-800'
+              ? 'bg-[var(--app-link-pale)] dark:bg-[var(--app-link-dark)] text-[var(--app-link)]'
+              : 'text-gray-500 dark:text-gray-400 hover:text-[var(--app-link)] dark:hover:text-[var(--app-link)] hover:bg-[var(--app-link-pale)] dark:hover:bg-[var(--app-link-dark)]'
           }`}
           title="日记"
         >
-          <NavigationIcon type="diary" className="h-6 w-6" />
+          <NavigationIcon type="diary" className="h-[25px] w-[25px]" />
         </button>
         <button
           onClick={openProjectsOrRestoreWorkspace}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
             viewMode === 'projects' && contentExpanded && !isSearchMode
-              ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
-              : 'text-[#8B8B80] dark:text-gray-400 hover:text-[#5A5A52] dark:hover:text-gray-200 hover:bg-[#EDEDE8] dark:hover:bg-gray-800'
+              ? 'bg-[var(--app-link-pale)] dark:bg-[var(--app-link-dark)] text-[var(--app-link)]'
+              : 'text-gray-500 dark:text-gray-400 hover:text-[var(--app-link)] dark:hover:text-[var(--app-link)] hover:bg-[var(--app-link-pale)] dark:hover:bg-[var(--app-link-dark)]'
           }`}
           title="项目"
         >
-          <NavigationIcon type="project" className="h-6 w-6" />
+          <NavigationIcon type="project" className="h-[25px] w-[25px]" />
         </button>
         <button
           onClick={openFilesOrRestoreDocumentTab}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
             viewMode === 'all' && contentExpanded && !isSearchMode
-              ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
-              : 'text-[#8B8B80] dark:text-gray-400 hover:text-[#5A5A52] dark:hover:text-gray-200 hover:bg-[#EDEDE8] dark:hover:bg-gray-800'
+              ? 'bg-[var(--app-link-pale)] dark:bg-[var(--app-link-dark)] text-[var(--app-link)]'
+              : 'text-gray-500 dark:text-gray-400 hover:text-[var(--app-link)] dark:hover:text-[var(--app-link)] hover:bg-[var(--app-link-pale)] dark:hover:bg-[var(--app-link-dark)]'
           }`}
           title="文件"
         >
-          <NavigationIcon type="files" className="h-6 w-6" />
+          <NavigationIcon type="files" className="h-[25px] w-[25px]" />
         </button>
         <button
           onClick={() => openListView('recent')}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
             viewMode === 'recent' && contentExpanded && !isSearchMode
-              ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
-              : 'text-[#8B8B80] dark:text-gray-400 hover:text-[#5A5A52] dark:hover:text-gray-200 hover:bg-[#EDEDE8] dark:hover:bg-gray-800'
+              ? 'bg-[var(--app-link-pale)] dark:bg-[var(--app-link-dark)] text-[var(--app-link)]'
+              : 'text-gray-500 dark:text-gray-400 hover:text-[var(--app-link)] dark:hover:text-[var(--app-link)] hover:bg-[var(--app-link-pale)] dark:hover:bg-[var(--app-link-dark)]'
           }`}
           title="最近编辑"
         >
-          <NavigationIcon type="recent" className="h-6 w-6" />
+          <NavigationIcon type="recent" className="h-[25px] w-[25px]" />
         </button>
         <button
           onClick={() => openListView('starred')}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
             viewMode === 'starred' && contentExpanded && !isSearchMode
-              ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
-              : 'text-[#8B8B80] dark:text-gray-400 hover:text-[#5A5A52] dark:hover:text-gray-200 hover:bg-[#EDEDE8] dark:hover:bg-gray-800'
+              ? 'bg-[var(--app-link-pale)] dark:bg-[var(--app-link-dark)] text-[var(--app-link)]'
+              : 'text-gray-500 dark:text-gray-400 hover:text-[var(--app-link)] dark:hover:text-[var(--app-link)] hover:bg-[var(--app-link-pale)] dark:hover:bg-[var(--app-link-dark)]'
           }`}
           title="收藏"
         >
-          <NavigationIcon type="starred" className="h-6 w-6" />
+          <NavigationIcon type="starred" className="h-[25px] w-[25px]" />
         </button>
         <button
           onClick={() => {
@@ -1238,112 +1247,36 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           }}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
             viewMode === 'ai' && contentExpanded && !isSearchMode
-              ? 'bg-[#E0E0D8] dark:bg-gray-700 text-[#3D3D35] dark:text-white'
-              : 'text-[#8B8B80] dark:text-gray-400 hover:text-[#5A5A52] dark:hover:text-gray-200 hover:bg-[#EDEDE8] dark:hover:bg-gray-800'
+              ? 'bg-[var(--app-link-pale)] dark:bg-[var(--app-link-dark)] text-[var(--app-link)]'
+              : 'text-gray-500 dark:text-gray-400 hover:text-[var(--app-link)] dark:hover:text-[var(--app-link)] hover:bg-[var(--app-link-pale)] dark:hover:bg-[var(--app-link-dark)]'
           }`}
           title="AI 问答"
         >
-          <NavigationIcon type="ai" className="h-6 w-6" />
+          <NavigationIcon type="ai" className="h-[25px] w-[25px]" />
         </button>
       </div>
-
-      {/* 全局搜索 */}
-      <button
-        onClick={() => setSearchOpen(true)}
-        className="w-9 h-9 flex items-center justify-center rounded-lg text-[#8B8B80] hover:text-[#5A5A52] hover:bg-[#EDEDE8] dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800 transition-colors"
-        title="全局搜索 (Ctrl+K)"
-      >
-        <NavigationIcon type="search" className="h-6 w-6" />
-      </button>
 
       {/* 日/夜模式切换 */}
       <button
         onClick={toggleDark}
-        className="w-9 h-9 flex items-center justify-center text-[#8B8B80] hover:text-[#5A5A52] hover:bg-[#EDEDE8] dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors"
+        className="w-9 h-9 flex items-center justify-center text-gray-500 hover:text-[var(--app-link)] hover:bg-[var(--app-link-pale)] dark:text-gray-400 dark:hover:text-[var(--app-link)] dark:hover:bg-[var(--app-link-dark)] rounded-lg transition-colors"
         title={isDark ? '切换到日间模式' : '切换到夜间模式'}
       >
         <NavigationIcon
           type={isDark ? 'sun' : 'moon'}
-          className={`h-6 w-6 ${isDark ? '!text-gray-200' : '!text-[#5A5A52]'}`}
+          className="h-[25px] w-[25px]"
         />
       </button>
 
-      {/* 新建按钮 */}
-      <div ref={newMenuRef} className="relative">
-        <input
-          ref={markdownInputRef}
-          type="file"
-          accept=".md,.markdown,text/markdown"
-          multiple
-          onChange={handleMarkdownImport}
-          className="hidden"
-          aria-hidden="true"
-        />
-        <button
-          onClick={() => setShowNewMenu(!showNewMenu)}
-          className="relative z-20 flex h-9 w-10 items-center justify-center rounded-full bg-[#f1f1f1] px-0 text-[#5A5A52] transition-colors hover:bg-[#e7e7e7] dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
-          title="新建"
-        >
-          <SquarePen className="h-5 w-5 stroke-[1.8]" />
-        </button>
-        {showNewMenu && (
-          <div className="absolute left-full bottom-0 ml-2 mb-0 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50 w-48">
-            <button
-              onClick={() => { handleCreateDocument(); setShowNewMenu(false); }}
-              className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
-            >
-              <DocumentTypeIcon type="document" className="h-4 w-4" />
-              <span>新建大纲笔记</span>
-            </button>
-            <button
-              onClick={() => { handleCreateNote(); setShowNewMenu(false); }}
-              className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
-            >
-              <DocumentTypeIcon type="note" className="h-4 w-4" />
-              <span>新建普通笔记</span>
-            </button>
-            <button
-              onClick={() => { setShowTodoDialog(true); setShowNewMenu(false); }}
-              className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
-            >
-              <NavigationIcon type="todo" className="h-4 w-4" />
-              <span>新建待办</span>
-            </button>
-            <button
-              onClick={() => { handleCreateExcalidraw(); setShowNewMenu(false); }}
-              className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
-            >
-              <DocumentTypeIcon type="excalidraw" className="h-4 w-4" />
-              <span>新建画布</span>
-            </button>
-            <button
-              onClick={() => { setShowNewFolderDialog(true); setShowNewMenu(false); }}
-              className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
-            >
-              <DocumentTypeIcon type="folder" className="h-4 w-4" />
-              <span>新建文件夹</span>
-            </button>
-            <button
-              onClick={() => { setShowNewMenu(false); openMarkdownImport(null); }}
-              disabled={isImportingMarkdown}
-              className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2 disabled:opacity-50"
-            >
-              <FileUp className="h-4 w-4 text-gray-400" />
-              <span>批量导入 md</span>
-            </button>
-            <button
-              onClick={() => {
-                setShowNewMenu(false);
-                setShowNewProjectDialog(true);
-              }}
-              className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
-            >
-              <DocumentTypeIcon type="project" className="h-4 w-4" />
-              <span>新建项目计划</span>
-            </button>
-          </div>
-        )}
-      </div>
+      {/* 全局搜索 */}
+      <button
+        onClick={() => setSearchOpen(true)}
+        className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 dark:text-gray-400 hover:text-[var(--app-link)] dark:hover:text-[var(--app-link)] hover:bg-[var(--app-link-pale)] dark:hover:bg-[var(--app-link-dark)] transition-colors"
+        title="全局搜索 (Ctrl+K)"
+      >
+        <NavigationIcon type="search" className="h-[25px] w-[25px]" />
+      </button>
+
     </>
   );
 
@@ -1365,7 +1298,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
               style={{ zIndex: 58, width: `calc(80vw)` }}
             >
               {/* 图标栏 */}
-              <div className="h-full bg-[var(--app-icon-rail)] flex flex-col items-center py-3 select-none shrink-0 border-r border-gray-200 dark:border-gray-700"
+              <div className="h-full bg-[var(--app-icon-rail)] flex flex-col items-center gap-[5px] py-3 select-none shrink-0 border-r border-gray-200 dark:border-gray-700"
                    style={{ width: ICON_RAIL_WIDTH }}>
                 {iconRailContent}
               </div>
@@ -1597,7 +1530,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
         /* 桌面端：原有布局 */
         <>
           {/* 左侧图标栏 */}
-          <div className={`h-full bg-[var(--app-icon-rail)] flex flex-col items-center py-3 select-none shrink-0 ${contentExpanded ? 'border-r border-gray-200 dark:border-gray-700' : ''}`}
+          <div className={`h-full bg-[var(--app-icon-rail)] flex flex-col items-center gap-[5px] py-3 select-none shrink-0 ${contentExpanded ? 'border-r border-gray-200 dark:border-gray-700' : ''}`}
                style={{ width: ICON_RAIL_WIDTH }}>
             {iconRailContent}
           </div>
@@ -2190,7 +2123,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           className="fixed z-[9999] w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-xl dark:border-gray-700 dark:bg-gray-800"
           style={{
             left: Math.min(rootContextMenu.x, window.innerWidth - 184),
-            top: Math.min(rootContextMenu.y, window.innerHeight - 190),
+            top: Math.min(rootContextMenu.y, window.innerHeight - 230),
           }}
         >
           <button
@@ -2208,6 +2141,15 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           >
             <DocumentTypeIcon type="note" className="h-4 w-4" />
             <span>新建普通笔记</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { setRootContextMenu(null); openMarkdownImport(null); }}
+            disabled={isImportingMarkdown}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            <FileUp className="h-4 w-4 text-gray-400" />
+            <span>批量导入 md</span>
           </button>
           <button
             type="button"
@@ -2375,7 +2317,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                 }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
-                <FilePlus className="w-4 h-4 text-gray-400" />
+                <DocumentTypeIcon type="document" className="w-4 h-4" />
                 <span>新建大纲笔记</span>
               </button>
               <button
@@ -2385,7 +2327,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                 }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
-                <FileText className="w-4 h-4 text-gray-400" />
+                <DocumentTypeIcon type="note" className="w-4 h-4" />
                 <span>新建普通笔记</span>
               </button>
               <button
@@ -2406,7 +2348,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                 }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
-                <Frame className="w-4 h-4 text-gray-400" />
+                <DocumentTypeIcon type="excalidraw" className="w-4 h-4" />
                 <span>新建画布</span>
               </button>
               <button
@@ -2417,7 +2359,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                 }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
-                <FolderPlus className="w-4 h-4 text-gray-400" />
+                <DocumentTypeIcon type="folder" className="w-4 h-4" />
                 <span>新建子文件夹</span>
               </button>
               <div className="border-t border-gray-200 dark:border-gray-700 my-1" />

@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useLayoutEffect, useState, useCallback, useMe
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import type { Node, Document } from '../api/data';
-import { getFileUrl, getThumbnailUrl, getNodes, createMemo, getMemoTags } from '../api/data';
+import { getFileUrl, getThumbnailUrl, getNodes, createMemo } from '../api/data';
 import { ArrowUpRight } from 'lucide-react';
 import { nodesToMemoMarkdown } from '../utils/convertNode';
 import TagMentionPopup from './TagMentionPopup';
@@ -16,6 +16,7 @@ interface NodeItemProps {
   node: NodeWithTreeMeta;
   childrenNodes?: NodeWithTreeMeta[];
   documents?: Document[];
+  tagCandidates?: string[];
   onContentChange: (id: string, content: string) => void;
   onNoteChange: (id: string, note: string | null) => void;
   onKeyDown: (e: React.KeyboardEvent, node: Node, type: 'content' | 'note') => void;
@@ -82,17 +83,6 @@ const setTextCaret = (root: HTMLElement, offset: number): void => {
   selection.addRange(range);
 };
 
-let memoTagsRequest: Promise<string[]> | null = null;
-const loadMemoTags = (): Promise<string[]> => {
-  if (!memoTagsRequest) {
-    memoTagsRequest = getMemoTags().catch(() => {
-      memoTagsRequest = null;
-      return [];
-    });
-  }
-  return memoTagsRequest;
-};
-
 const selectedSignatureForSubtree = (selectedNodeIds: string[] | undefined, node: NodeWithTreeMeta): string => {
   if (!selectedNodeIds || selectedNodeIds.length === 0) return '0';
   const subtreeIds = node.subtreeNodeIds ?? [node.id];
@@ -133,6 +123,7 @@ const NodeItem = memo(({
   node,
   childrenNodes = [],
   documents = [],
+  tagCandidates = [],
   onContentChange,
   onNoteChange,
   onKeyDown,
@@ -192,7 +183,7 @@ const NodeItem = memo(({
   const [tagSearchText, setTagSearchText] = useState('');
   const [tagStartOffset, setTagStartOffset] = useState<number | null>(null);
   const [tagDropdownIndex, setTagDropdownIndex] = useState(0);
-  const [allTags, setAllTags] = useState<string[]>([]);
+  const allTags = tagCandidates;
 
   const toolbarRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -211,10 +202,6 @@ const NodeItem = memo(({
   }, [node.is_collapsed]);
 
   const hasChildren = childrenNodes.length > 0;
-
-  useEffect(() => {
-    loadMemoTags().then(setAllTags);
-  }, []);
 
   const filteredTags = useMemo(() => {
     const query = tagSearchText.trim().toLowerCase();
@@ -1327,6 +1314,7 @@ const NodeItem = memo(({
                  node={child}
                  childrenNodes={'children' in child ? child.children : []}
                  documents={documents}
+                 tagCandidates={tagCandidates}
                  onContentChange={onContentChange}
                  onNoteChange={onNoteChange}
                  onKeyDown={onKeyDown}
@@ -1379,6 +1367,7 @@ const NodeItem = memo(({
     // 直到下一次操作才显示并获得焦点。
     prevProps.node.content === nextProps.node.content &&
     prevProps.node.note === nextProps.node.note &&
+    prevProps.tagCandidates === nextProps.tagCandidates &&
     selectedSignatureForSubtree(prevProps.selectedNodeIds, prevProps.node) === selectedSignatureForSubtree(nextProps.selectedNodeIds, nextProps.node) &&
     dragVisualSignatureForNode(prevProps.selectedNodeIds, prevProps.node.id, prevProps.isDragMoving) === dragVisualSignatureForNode(nextProps.selectedNodeIds, nextProps.node.id, nextProps.isDragMoving) &&
     focusSignatureForSubtree(prevProps.focusedNodeId, prevProps.node) === focusSignatureForSubtree(nextProps.focusedNodeId, nextProps.node) &&

@@ -257,6 +257,87 @@ async def search_similar(db: Session, query: str, config, limit: int = 10) -> li
         return await _fallback_keyword_search_async(db, query, config, limit)
 
 
+def search_similar_from_stored_embedding(
+    db: Session,
+    source_id: str,
+    limit: int = 10,
+) -> list[dict]:
+    """只使用当前笔记已有的向量，在本地检索相似笔记。
+
+    相关笔记展示不应在每次打开页面时重新调用云端 embedding API。
+    当前笔记已完成索引时，使用其所有分块向量的平均向量作为查询向量；
+    未完成索引时返回空列表，由调用方决定是否使用本地关键词回退。
+    """
+    rows = db.execute(
+        text(
+            """
+            SELECT embedding
+            FROM note_embeddings
+            WHERE embedding IS NOT NULL
+              AND replace(source_id, '-', '') = replace(:source_id, '-', '')
+            """
+        ),
+        {"source_id": str(source_id)},
+    ).fetchall()
+    if not rows:
+        return []
+
+    vectors = [blob_to_embedding(row[0]) for row in rows if row[0]]
+    if not vectors:
+        return []
+    dimension = len(vectors[0])
+    if any(len(vector) != dimension for vector in vectors):
+        return []
+
+    centroid = [sum(vector[index] for vector in vectors) / len(vectors) for index in range(dimension)]
+    query_blob = embedding_to_blob(centroid)
+
+    try:
+        result_rows = db.execute(
+            text(
+                """
+                SELECT source_type, source_id, chunk_text,
+                       vec_distance_cosine(embedding, :query) AS distance
+                FROM note_embeddings
+                WHERE embedding IS NOT NULL
+                  AND replace(source_id, '-', '') != replace(:source_id, '-', '')
+                ORDER BY distance
+                LIMIT :limit
+                """
+            ),
+            {
+                "query": query_blob,
+                "source_id": str(source_id),
+                "limit": max(limit * 3, 12),
+            },
+        ).fetchall()
+    except Exception as exc:
+        logger.warning("本地向量检索失败: %s", exc)
+        return []
+
+    sources: list[dict] = []
+    seen_sources: set[str] = set()
+    for source_type, result_source_id, chunk_text, distance in result_rows:
+        if not chunk_text or len(chunk_text.strip()) < 30:
+            continue
+        source_key = f"{source_type}:{result_source_id}"
+        if source_key in seen_sources:
+            continue
+        seen_sources.add(source_key)
+        sources.append(
+            {
+                "id": result_source_id,
+                "title": _get_source_title(db, source_type, result_source_id),
+                "type": source_type,
+                "snippet": chunk_text[:200],
+                "distance": distance,
+            }
+        )
+        if len(sources) >= limit:
+            break
+    return sources
+
+
 def _fallback_keyword_search(db: Session, query: str, limit: int) -> list[dict]:
     """关键词搜索回退方案（基础版本，不依赖 AI）"""
     from .routers.ai_chat import _search_notes

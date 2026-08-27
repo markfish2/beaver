@@ -6,7 +6,7 @@ import re
 from .. import crud, models, schemas
 from ..database import get_db
 from ..dependencies import get_current_user_flexible as get_current_user
-from ..vector_search import get_embedding_config, search_similar
+from ..vector_search import search_similar_from_stored_embedding
 
 router = APIRouter()
 
@@ -137,8 +137,9 @@ async def read_related_documents(
     if len(query) < 30:
         return []
 
-    config = get_embedding_config(db)
-    results = await search_similar(db, query[:1800], config, limit=limit + 6) if config else []
+    # 相关笔记展示优先复用当前笔记已经建立的向量，避免每次打开预览
+    # 都把整篇笔记发送到云端 embedding API。
+    results = search_similar_from_stored_embedding(db, str(document_id), limit=limit + 6)
     related: list[dict] = []
     seen_ids = {str(document_id)}
     for result in results:

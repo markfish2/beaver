@@ -51,7 +51,7 @@ SyntaxHighlighter.registerLanguage('go', go);
 SyntaxHighlighter.registerLanguage('rust', rust);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
 import { Pencil, Eye, Save, Columns2, Copy, CheckCheck, Download, Share2 } from 'lucide-react';
-import { getNodes, createNode, updateNode, uploadFile, getMemoTags, getDocuments, updateDocument, downloadAttachment, getRelatedNotes } from '../api/data';
+import { getNodes, createNode, updateNode, uploadFile, getDocuments, updateDocument, downloadAttachment, getRelatedNotes } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
 import type { Document, Node, RelatedNote } from '../api/data';
 import MermaidBlock from './MermaidBlock';
@@ -67,6 +67,7 @@ import TagMentionPopup from './TagMentionPopup';
 import type { PopupItem } from './TagMentionPopup';
 import { tagMentionExtension } from '../extensions/tagMentionExtension';
 import type { TagMentionState } from '../extensions/tagMentionExtension';
+import { extractTagCandidates } from '../utils/tagCandidates';
 import { isMentionableDocument } from '../utils/documentMention';
 import ShareDialog from './ShareDialog';
 import { exportNotePdf } from '../utils/notePdf';
@@ -571,7 +572,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [allTags, setAllTags] = useState<string[]>([]);
+  const allTags = useMemo(() => extractTagCandidates([content]), [content]);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [relatedNotesState, setRelatedNotesState] = useState<{ key: string; notes: RelatedNote[] }>({ key: '', notes: [] });
   const editorRef = useRef<MarkdownEditorHandle>(null);
@@ -760,8 +761,6 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
     })();
     return () => { cancelled = true; };
   }, [documentId, initialNodes, initialDocuments, onDirtyChange]);
-
-  useEffect(() => { getMemoTags().then(setAllTags).catch(() => {}); }, []);
 
   const scheduleSave = useCallback((newContent: string) => {
     if (newContent === lastSavedRef.current) { pendingSaveRef.current = null; onDirtyChange?.(false); return; }

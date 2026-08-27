@@ -962,11 +962,12 @@ def get_diary_summary(db: Session):
         models.Node.is_completed == False
     ).all()
 
-    if not tasks_query:
-        return [], []
-
-    # Get all diary document IDs for tag extraction
-    doc_ids = list(set(t.Node.document_id for t in tasks_query))
+    # 标签必须从全部日记文档提取，不能依赖是否存在未完成待办。
+    # 否则没有待办的月份会被错误地排除，左侧标签集合也会为空。
+    doc_ids = [doc_id for (doc_id,) in db.query(models.Document.id).filter(
+        models.Document.diary_date.isnot(None),
+        models.Document.deleted_at.is_(None)
+    ).all()]
 
     # Batch fetch parent nodes to get their content (the day label)
     parent_ids = list(set(t.Node.parent_node_id for t in tasks_query if t.Node.parent_node_id))
@@ -992,7 +993,9 @@ def get_diary_summary(db: Session):
 
     import re
     tag_count = {}
-    tag_pattern = re.compile(r'#[a-zA-Z0-9_一-龥]+')
+    # 日记标签允许字母、数字、下划线及中文，兼容常见的连字符、斜杠和点号。
+    # 只在空白或标点处结束，避免漏掉如 #ai-agent、#前端/性能 这类标签。
+    tag_pattern = re.compile(r'#[^\s#，。！？、；：：）】）》>\],;!?]+')
     for content, note in all_nodes:
         if content:
             for tag in tag_pattern.findall(content):
@@ -1001,7 +1004,7 @@ def get_diary_summary(db: Session):
             for tag in tag_pattern.findall(note):
                 tag_count[tag] = tag_count.get(tag, 0) + 1
 
-    sorted_tags = sorted(tag_count.items(), key=lambda x: -x[1])[:20]
+    sorted_tags = sorted(tag_count.items(), key=lambda x: (-x[1], x[0]))
     return tasks, [tag for tag, _ in sorted_tags]
 
 

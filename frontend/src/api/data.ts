@@ -396,13 +396,69 @@ export const getDiaryDayDates = async (year: number, month: number): Promise<num
 };
 
 export const getDiarySummary = async (): Promise<{ tasks: Node[]; tags: string[] }> => {
-  const cacheKey = 'diary:summary';
+  const cacheKey = 'diary:summary:v2';
   const cached = dataCache.get<{ tasks: Node[]; tags: string[] }>(cacheKey);
   if (cached) return cached;
 
   const response = await api.get<{ tasks: Node[]; tags: string[] }>('/diary/summary');
   dataCache.set(cacheKey, response.data, 2 * 60 * 1000);
   return response.data;
+};
+
+export interface DiaryTagResult {
+  document_id: string;
+  diary_date: string;
+  date_nodes: Node[];
+  nodes: Node[];
+}
+
+export const getDiaryTagResults = async (tag: string): Promise<DiaryTagResult[]> => {
+  try {
+    const response = await api.get<{ items: DiaryTagResult[] }>(`/diary/tag/${encodeURIComponent(tag)}`);
+    if (response.data.items.length > 0) return response.data.items;
+  } catch {
+    // Older local backends may not have the aggregate endpoint yet.
+    // Fall back to the existing monthly APIs so the UI remains usable during HMR.
+  }
+
+  const months = await getDiaryMonths();
+  const monthPairs = months.flatMap(({ year, months: monthList }) =>
+    monthList.map(month => ({ year, month }))
+  );
+  const monthlyResults = await Promise.all(monthPairs.map(async ({ year, month }) => {
+    try {
+      return await getMonthlyDiary(year, month);
+    } catch {
+      return null;
+    }
+  }));
+
+  return monthlyResults.flatMap((monthly) => {
+    if (!monthly) return [];
+    const matched = monthly.nodes.filter(node =>
+      (node.content || '').includes(tag) || (node.note || '').includes(tag)
+    );
+    if (matched.length === 0) return [];
+    const nodeMap = new Map(monthly.nodes.map(node => [node.id, node]));
+    const dateNodes: Node[] = [];
+    const visibleIds = new Set<string>();
+    matched.forEach((node) => {
+      visibleIds.add(node.id);
+      let parent = node.parent_node_id ? nodeMap.get(node.parent_node_id) : undefined;
+      while (parent) {
+        visibleIds.add(parent.id);
+        if (!parent.parent_node_id) break;
+        parent = nodeMap.get(parent.parent_node_id);
+      }
+      if (parent && !dateNodes.some(dateNode => dateNode.id === parent?.id)) dateNodes.push(parent);
+    });
+    return [{
+      document_id: monthly.document.id,
+      diary_date: monthly.document.diary_date || '',
+      date_nodes: dateNodes,
+      nodes: monthly.nodes.filter(node => visibleIds.has(node.id) && !dateNodes.some(dateNode => dateNode.id === node.id)),
+    }];
+  });
 };
 
 // Memos
