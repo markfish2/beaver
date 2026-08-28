@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-import { X } from 'lucide-react';
 import { createDocument, createTodo } from '../../api/data';
 import { useDocuments } from '../../context/DocumentContext';
 import DocumentTypeIcon, { type DocumentIconType } from '../DocumentTypeIcon';
@@ -15,7 +14,14 @@ export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopu
   const [showInputDialog, setShowInputDialog] = useState(false);
   const [inputType, setInputType] = useState<string>('');
   const [inputText, setInputText] = useState('');
+  const [isClosing, setIsClosing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const closeMenu = () => {
+    if (isClosing) return;
+    setIsClosing(true);
+    window.setTimeout(onClose, 180);
+  };
 
   useEffect(() => {
     if (showInputDialog && inputRef.current) {
@@ -102,35 +108,24 @@ export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopu
   }
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center" onClick={onClose}>
+    <div className={`fixed inset-0 z-[10000] transition-opacity duration-200 ${isClosing ? 'opacity-0' : 'opacity-100'}`} onClick={closeMenu}>
       <div
-        className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-64 py-2 mx-4"
+        className={`absolute bottom-[calc(16px+env(safe-area-inset-bottom,0px)+64px)] left-[max(4vw,calc(50%_-_215px))] flex flex-col-reverse items-start gap-2 transition-[transform,opacity] duration-200 ease-out ${isClosing ? 'translate-y-3 scale-95 opacity-0' : 'translate-y-0 scale-100 opacity-100'}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-2 mb-1">
-          <span className="text-sm font-medium text-gray-800 dark:text-gray-200">新建</span>
+        {menuItems.map((item, index) => (
           <button
-            onClick={onClose}
-            className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            key={item.type}
+            onClick={() => handleCreate(item.type)}
+            style={{ animationDelay: `${index * 45}ms` }}
+            className={`flex h-10 min-w-[132px] animate-in slide-in-from-bottom-2 fade-in items-center justify-center gap-2 rounded-full border border-white/60 bg-white/75 px-4 text-sm text-gray-700 shadow-[0_4px_16px_-6px_rgba(15,23,42,0.35)] backdrop-blur-xl backdrop-saturate-150 transition-colors duration-150 hover:bg-white/90 dark:border-white/10 dark:bg-gray-800/75 dark:text-gray-200 dark:hover:bg-gray-800/90 ${isClosing ? 'animate-out fade-out slide-out-to-bottom-2' : ''}`}
           >
-            <X className="w-4 h-4" />
+            {'iconType' in item
+              ? <DocumentTypeIcon type={item.iconType} className="h-5 w-5" />
+              : <NavigationIcon type={item.navigationIcon} className="h-5 w-5" />}
+            <span>{item.label}</span>
           </button>
-        </div>
-
-        {menuItems.map(item => {
-          return (
-            <button
-              key={item.type}
-              onClick={() => handleCreate(item.type)}
-              className="w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 transition-colors"
-            >
-              {'iconType' in item
-                ? <DocumentTypeIcon type={item.iconType} className="h-5 w-5" />
-                : <NavigationIcon type={item.navigationIcon} className="h-5 w-5" />}
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
+        ))}
       </div>
     </div>
   );

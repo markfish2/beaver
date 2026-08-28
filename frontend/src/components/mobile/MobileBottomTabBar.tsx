@@ -1,12 +1,14 @@
 import { useMemo } from 'react';
 import NavigationIcon, { type NavigationIconType } from '../NavigationIcon';
+import { X } from 'lucide-react';
 
-export type MobileTab = 'memos' | 'diary' | 'new' | 'files' | 'ai';
+export type MobileTab = 'memos' | 'diary' | 'new' | 'files' | 'starred' | 'ai';
 
 interface MobileBottomTabBarProps {
   activeTab: MobileTab;
   onTabChange: (tab: MobileTab) => void;
   chromeHidden?: boolean;
+  newMenuOpen?: boolean;
 }
 
 const tabs: { id: MobileTab; icon: NavigationIconType }[] = [
@@ -14,15 +16,17 @@ const tabs: { id: MobileTab; icon: NavigationIconType }[] = [
   { id: 'diary',  icon: 'diary' },
   { id: 'new',    icon: 'add' },
   { id: 'files',  icon: 'files' },
+  { id: 'starred', icon: 'starred' },
   { id: 'ai',     icon: 'ai' },
 ];
 
 const INDICATOR_WIDTH = 54;
+const contentTabs = tabs.filter((tab) => tab.id !== 'new');
 
-export default function MobileBottomTabBar({ activeTab, onTabChange, chromeHidden = false }: MobileBottomTabBarProps) {
+export default function MobileBottomTabBar({ activeTab, onTabChange, chromeHidden = false, newMenuOpen = false }: MobileBottomTabBarProps) {
 
-  const activeIndex = useMemo(() => tabs.findIndex(t => t.id === activeTab), [activeTab]);
-  const tabCount = tabs.length;
+  const activeIndex = useMemo(() => contentTabs.findIndex(t => t.id === activeTab), [activeTab]);
+  const tabCount = contentTabs.length;
 
   return (
     <>
@@ -36,7 +40,24 @@ export default function MobileBottomTabBar({ activeTab, onTabChange, chromeHidde
           transition: 'transform 400ms linear, opacity 400ms linear',
         }}
       >
-        <nav className="relative flex items-center h-[56px] w-[80%] max-w-[380px]
+        <div className="flex w-[92%] max-w-[430px] items-center gap-2">
+          {/* 新建按钮独立于主导航胶囊，固定在底部左侧。 */}
+          <button
+            onClick={() => onTabChange('new')}
+            aria-label="新建"
+            className="flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-full
+                       border border-white/55 bg-white/35 text-white
+                       shadow-[0_2px_10px_-2px_rgba(15,23,42,0.22)]
+                       backdrop-blur-2xl backdrop-saturate-200 transition-transform duration-200 active:scale-90"
+          >
+            <span className="flex h-[44px] w-[44px] items-center justify-center rounded-full bg-[var(--app-link)] text-white">
+              {newMenuOpen
+                ? <X className="h-[24px] w-[24px]" strokeWidth={2} />
+                : <NavigationIcon type="add" className="h-[24px] w-[24px]" strokeWidth={2} />}
+            </span>
+          </button>
+
+        <nav className="relative flex h-[56px] min-w-0 flex-1 items-center
                         border border-white/35 bg-white/30 dark:border-white/10 dark:bg-gray-800/35
                         backdrop-blur-2xl backdrop-saturate-200
                         rounded-full
@@ -57,10 +78,8 @@ export default function MobileBottomTabBar({ activeTab, onTabChange, chromeHidde
             }}
           />
 
-          {tabs.map((tab) => {
+          {contentTabs.map((tab) => {
             const isActive = activeTab === tab.id;
-            const isNew = tab.id === 'new';
-
             return (
               <button
                 key={tab.id}
@@ -69,29 +88,20 @@ export default function MobileBottomTabBar({ activeTab, onTabChange, chromeHidde
                            min-w-0 transition-[transform,color] duration-200 z-10
                            active:scale-90"
               >
-                {isNew ? (
-                  <div className={`flex items-center justify-center w-[34px] h-[34px] rounded-full
-                                   shadow-[0_2px_8px_-2px_rgba(0,0,0,0.15)]
-                                   transition-all duration-300
-                                   bg-[var(--app-link)] text-white
-                                   ${isActive ? 'shadow-[0_4px_14px_-2px_rgba(0,0,0,0.22)] scale-110' : ''}`}>
-                    <NavigationIcon type={tab.icon} className="w-[22.5px] h-[22.5px] text-white" strokeWidth={2} />
-                  </div>
-                ) : (
-                  <NavigationIcon
-                    type={tab.icon}
-                    className={`w-[27.5px] h-[27.5px] transition-all duration-300
-                               ${isActive
-                                 ? 'text-blue-600 dark:text-blue-400 scale-110'
-                                 : 'text-gray-400 dark:text-gray-500'
-                               }`}
-                    strokeWidth={isActive ? 2.5 : 1.8}
-                  />
-                )}
+                <NavigationIcon
+                  type={tab.icon}
+                  className={`w-[27.5px] h-[27.5px] transition-all duration-300
+                             ${isActive
+                               ? 'text-blue-600 dark:text-blue-400 scale-110'
+                               : 'text-gray-400 dark:text-gray-500'
+                             }`}
+                  strokeWidth={isActive ? 2.5 : 1.8}
+                />
               </button>
             );
           })}
         </nav>
+        </div>
       </div>
 
       <div

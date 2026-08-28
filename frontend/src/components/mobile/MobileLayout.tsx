@@ -156,8 +156,10 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     const view = new URLSearchParams(location.search).get('view');
     const nextTab: MobileTab | null = view === 'diary'
       ? 'diary'
-      : view === 'files' || view === 'projects' || view === 'recent' || view === 'starred'
-        ? 'files'
+      : view === 'starred'
+        ? 'starred'
+        : view === 'files' || view === 'projects' || view === 'recent'
+          ? 'files'
         : view === 'ai'
           ? 'ai'
           : null;
@@ -187,7 +189,11 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     setKeyboardOpen(false);
     window.dispatchEvent(new CustomEvent('keyboard-change', { detail: { open: false } }));
     setActiveTab(tab);
-    if (isEditing && tab !== 'diary') {
+    if (tab === 'starred') {
+      navigate('/?view=starred', { replace: true });
+    } else if (tab === 'files') {
+      navigate('/', { replace: true });
+    } else if (isEditing && tab !== 'diary') {
       navigate('/', { replace: true });
     }
   }, [isEditing, navigate]);
@@ -271,6 +277,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       case 'memos': return '随想';
       case 'diary': return '日记';
       case 'files': return '文件';
+      case 'starred': return '收藏';
       case 'ai': return 'AI 问答';
       default: return '随想';
     }
@@ -339,7 +346,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
         ) : mobileView === 'projects' ? (
           // 项目详情由 MainArea/ProjectView 负责，不能误降级成文件树。
           children
-        ) : activeTab === 'files' ? (
+        ) : activeTab === 'files' || activeTab === 'starred' ? (
           <Suspense fallback={<div className="flex-1 flex items-center justify-center text-gray-400 text-sm">加载中...</div>}>
             <div
               aria-hidden="true"
@@ -402,6 +409,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
           activeTab={activeTab}
           onTabChange={handleTabChange}
           chromeHidden={chromeHidden}
+          newMenuOpen={showNewMenu}
         />
       )}
 

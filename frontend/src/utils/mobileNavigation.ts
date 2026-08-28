@@ -1,4 +1,4 @@
-export type MobileTabTarget = 'memos' | 'diary' | 'files' | 'ai';
+export type MobileTabTarget = 'memos' | 'diary' | 'files' | 'starred' | 'ai';
 
 export interface MobileNavigationState {
   mobileReturnTo?: string;
@@ -17,7 +17,7 @@ function isInternalPath(value: unknown): value is string {
 export function getMobileTabFromState(state: unknown): MobileTabTarget | undefined {
   if (!state || typeof state !== 'object') return undefined;
   const tab = (state as MobileNavigationState).mobileReturnTab;
-  return tab === 'memos' || tab === 'diary' || tab === 'files' || tab === 'ai'
+  return tab === 'memos' || tab === 'diary' || tab === 'files' || tab === 'starred' || tab === 'ai'
     ? tab
     : undefined;
 }
