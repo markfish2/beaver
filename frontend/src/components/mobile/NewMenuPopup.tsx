@@ -70,10 +70,10 @@ export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopu
   };
 
   const menuItems = [
-    { type: 'document', label: '大纲笔记', iconType: 'document' as DocumentIconType },
-    { type: 'note', label: '普通笔记', iconType: 'note' as DocumentIconType },
     { type: 'todo', label: '待办', navigationIcon: 'todo' as const },
     { type: 'folder', label: '文件夹', iconType: 'folder' as DocumentIconType },
+    { type: 'document', label: '大纲笔记', iconType: 'document' as DocumentIconType },
+    { type: 'note', label: '普通笔记', iconType: 'note' as DocumentIconType },
   ];
 
   if (showInputDialog) {
@@ -110,7 +110,7 @@ export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopu
   return (
     <div className={`fixed inset-0 z-[10000] transition-opacity duration-200 ${isClosing ? 'opacity-0' : 'opacity-100'}`} onClick={closeMenu}>
       <div
-        className={`absolute bottom-[calc(16px+env(safe-area-inset-bottom,0px)+64px)] left-[max(4vw,calc(50%_-_215px))] flex flex-col-reverse items-start gap-2 transition-[transform,opacity] duration-200 ease-out ${isClosing ? 'translate-y-3 scale-95 opacity-0' : 'translate-y-0 scale-100 opacity-100'}`}
+        className={`absolute bottom-[calc(16px+env(safe-area-inset-bottom,0px)+64px)] left-[max(4vw,calc(50%_-_215px))] flex flex-col items-start gap-2 transition-[transform,opacity] duration-200 ease-out ${isClosing ? 'translate-y-3 scale-95 opacity-0' : 'translate-y-0 scale-100 opacity-100'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {menuItems.map((item, index) => (
@@ -118,12 +118,12 @@ export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopu
             key={item.type}
             onClick={() => handleCreate(item.type)}
             style={{ animationDelay: `${index * 45}ms` }}
-            className={`flex h-10 min-w-[132px] animate-in slide-in-from-bottom-2 fade-in items-center justify-center gap-2 rounded-full border border-white/60 bg-white/75 px-4 text-sm text-gray-700 shadow-[0_4px_16px_-6px_rgba(15,23,42,0.35)] backdrop-blur-xl backdrop-saturate-150 transition-colors duration-150 hover:bg-white/90 dark:border-white/10 dark:bg-gray-800/75 dark:text-gray-200 dark:hover:bg-gray-800/90 ${isClosing ? 'animate-out fade-out slide-out-to-bottom-2' : ''}`}
+            className={`flex h-10 min-w-[132px] animate-in slide-in-from-bottom-2 fade-in items-center justify-start gap-2 rounded-full border border-white/30 bg-[var(--app-link)]/85 px-4 text-sm text-white shadow-[0_4px_16px_-6px_rgba(15,23,42,0.25)] backdrop-blur-xl backdrop-saturate-150 transition-colors duration-150 hover:bg-[var(--app-link)] dark:border-white/20 dark:bg-[var(--app-link)]/85 dark:text-white ${isClosing ? 'animate-out fade-out slide-out-to-bottom-2' : ''}`}
           >
             {'iconType' in item
-              ? <DocumentTypeIcon type={item.iconType} className="h-5 w-5" />
-              : <NavigationIcon type={item.navigationIcon} className="h-5 w-5" />}
-            <span>{item.label}</span>
+              ? <DocumentTypeIcon type={item.iconType} className="h-5 w-5 shrink-0 text-white" />
+              : <NavigationIcon type={item.navigationIcon} className="h-5 w-5 shrink-0 text-white" />}
+            <span className="whitespace-nowrap text-left text-white">{item.label}</span>
           </button>
         ))}
       </div>

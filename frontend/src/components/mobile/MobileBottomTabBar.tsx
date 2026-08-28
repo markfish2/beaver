@@ -50,7 +50,11 @@ export default function MobileBottomTabBar({ activeTab, onTabChange, chromeHidde
                        shadow-[0_2px_10px_-2px_rgba(15,23,42,0.22)]
                        backdrop-blur-2xl backdrop-saturate-200 transition-transform duration-200 active:scale-90"
           >
-            <span className="flex h-[44px] w-[44px] items-center justify-center rounded-full bg-[var(--app-link)] text-white">
+            <span
+              className="flex h-[44px] w-[44px] items-center justify-center rounded-full
+                         bg-[var(--app-link)]/75 text-white
+                         backdrop-blur-md backdrop-saturate-150"
+            >
               {newMenuOpen
                 ? <X className="h-[24px] w-[24px]" strokeWidth={2} />
                 : <NavigationIcon type="add" className="h-[24px] w-[24px]" strokeWidth={2} />}
