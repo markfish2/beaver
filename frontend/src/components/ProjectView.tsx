@@ -797,6 +797,7 @@ export default function ProjectView({ projectId, showArchived = false, archivedR
                   onDragStart={handleDragStart}
                   onDragOver={handleDragOver}
                   onDragEnd={handleDragEnd}
+                  isMobile={isMobile}
                 />
               ))}
             </div>

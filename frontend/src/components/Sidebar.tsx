@@ -1295,7 +1295,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           {contentExpanded && (
             <div
               className="fixed inset-y-0 left-0 flex shadow-xl bg-[var(--app-sidebar)]"
-              style={{ zIndex: 58, width: `calc(80vw)` }}
+              style={{ zIndex: 9990, width: `calc(80vw)` }}
             >
               {/* 图标栏 */}
               <div className="h-full bg-[var(--app-icon-rail)] flex flex-col items-center gap-[5px] py-3 select-none shrink-0 border-r border-gray-200 dark:border-gray-700"
@@ -1538,7 +1538,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           {/* 内容面板 - 可折叠 */}
           <div
             ref={sidebarRef}
-            className={`h-full bg-[var(--app-sidebar)] flex flex-col select-none text-sm relative border-r border-gray-200 dark:border-gray-700 ${
+            className={`h-full bg-[var(--app-sidebar)] flex flex-col select-none text-sm relative z-[9990] border-r border-gray-200 dark:border-gray-700 ${
               isResizing ? '' : 'transition-all duration-300 ease-in-out'
             } ${!contentExpanded ? 'overflow-hidden' : ''}`}
             style={{

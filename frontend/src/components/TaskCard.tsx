@@ -43,6 +43,7 @@ interface TaskCardProps {
   onDragStart?: (id: string) => void;
   onDragOver?: (id: string, position: 'before' | 'after' | 'inside') => void;
   onDragEnd?: () => void;
+  isMobile?: boolean;
 }
 
 // ==================== Date helpers ====================
@@ -108,6 +109,7 @@ export default function TaskCard({
   onDragOver,
   onDragEnd,
   isLastChild = true,
+  isMobile = false,
   parentTreeLines = [],
 }: TaskCardProps) {
   const [isEditing, setIsEditing] = useState(false);
@@ -466,6 +468,7 @@ export default function TaskCard({
               onDragStart={onDragStart}
               onDragOver={onDragOver}
               onDragEnd={onDragEnd}
+              isMobile={isMobile}
             />
           ))}
         </div>
@@ -478,6 +481,7 @@ export default function TaskCard({
         message={`确定要删除「${task.title}」吗？${hasChildren ? '子任务也会一并删除。' : ''}`}
         onConfirm={handleDeleteConfirm}
         onCancel={() => setShowDeleteDialog(false)}
+        showBackdrop={!isMobile}
       />
     </div>
   );

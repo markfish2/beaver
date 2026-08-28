@@ -6,6 +6,7 @@ interface DeleteConfirmDialogProps {
   message: string;
   onConfirm: () => void;
   onCancel: () => void;
+  showBackdrop?: boolean;
 }
 
 const DeleteConfirmDialog = ({ 
@@ -13,17 +14,19 @@ const DeleteConfirmDialog = ({
   title, 
   message, 
   onConfirm, 
-  onCancel 
+  onCancel,
+  showBackdrop = true,
 }: DeleteConfirmDialogProps) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
-      {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-black/50"
-        onClick={onCancel}
-      />
+    <div className="fixed inset-0 z-[10000] grid place-items-center p-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+      {showBackdrop && (
+        <div
+          className="absolute inset-0 bg-black/50"
+          onClick={onCancel}
+        />
+      )}
       
       {/* Dialog */}
       <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4">

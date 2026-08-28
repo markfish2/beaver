@@ -379,7 +379,7 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
         return (
           <div
             ref={contextMenuRef}
-            className="fixed z-[1000] w-40 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1"
+            className="fixed z-[10000] w-40 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1"
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onPointerDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
@@ -414,7 +414,7 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
       })()}
 
       {moveDialog && (
-        <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/40 p-4" onClick={() => { setMoveDialog(null); setMoveTargetFolder(null); }}>
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4" onClick={() => { setMoveDialog(null); setMoveTargetFolder(null); }}>
           <div className="w-full max-w-sm max-h-[75dvh] flex flex-col rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800" onClick={e => e.stopPropagation()}>
             <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
               <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">移动到文件夹</h3>
@@ -448,6 +448,7 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
         message={deleteTarget ? `确定要删除「${deleteTarget.title}」吗？` : ''}
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteTarget(null)}
+        showBackdrop={false}
       />
     </div>
   );

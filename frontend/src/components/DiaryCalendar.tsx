@@ -494,7 +494,7 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
                 {activeMenuId === task.id && (
                   <div
                     ref={menuRef}
-                    className="absolute right-0 top-full mt-1 z-50 w-36 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1"
+                    className="absolute right-0 top-full mt-1 z-[10000] w-36 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1"
                   >
                     <button
                       onClick={(e) => { e.stopPropagation(); handleStartEdit(task); }}
@@ -628,6 +628,7 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
         message={`确定要删除「${pendingDelete?.content || ''}」吗？此操作无法撤销。`}
         onConfirm={() => void handleDeleteTodo()}
         onCancel={() => setPendingDelete(null)}
+        showBackdrop={false}
       />
     </div>
   );

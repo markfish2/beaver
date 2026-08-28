@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronUp, ChevronDown, MoreHorizontal, CalendarDays, Trash2, Pencil } from 'lucide-react';
 import { getTodos, deleteTodo, createTodo, updateTodo, getMonthlyDiary, getOrCreateDayNode, createNode } from '../../api/data';
 import type { Todo } from '../../api/data';
@@ -16,6 +17,7 @@ export default function MobileTodos({ onTasksChanged }: MobileTodosProps) {
   const [loading, setLoading] = useState(true);
   const [newTodoText, setNewTodoText] = useState('');
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [pendingDelete, setPendingDelete] = useState<{ id: string; content: string } | null>(null);
@@ -241,16 +243,33 @@ export default function MobileTodos({ onTasksChanged }: MobileTodosProps) {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setActiveMenuId(activeMenuId === task.id ? null : task.id);
+                  if (activeMenuId === task.id) {
+                    setActiveMenuId(null);
+                    setMenuPosition(null);
+                    return;
+                  }
+                  const row = e.currentTarget.parentElement;
+                  const rect = row?.getBoundingClientRect();
+                  if (rect) {
+                    const menuWidth = 144;
+                    const menuHeight = 124;
+                    const top = rect.bottom + 4;
+                    setMenuPosition({
+                      top: top + menuHeight > window.innerHeight ? Math.max(8, rect.top - menuHeight - 4) : top,
+                      left: Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth)),
+                    });
+                  }
+                  setActiveMenuId(task.id);
                 }}
                 className="shrink-0 p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
               >
                 <MoreHorizontal className="w-3.5 h-3.5" />
               </button>
               {activeMenuId === task.id && (
-                <div
+                createPortal(<div
                   ref={menuRef}
-                  className="absolute right-0 top-full mt-1 z-50 w-36 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1"
+                  style={menuPosition ? { top: menuPosition.top, left: menuPosition.left } : undefined}
+                  className="fixed z-[100000] w-36 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1"
                 >
                   <button
                     onClick={(e) => { e.stopPropagation(); handleStartEdit(task); }}
@@ -273,7 +292,7 @@ export default function MobileTodos({ onTasksChanged }: MobileTodosProps) {
                     <Trash2 className="w-3.5 h-3.5" />
                     删除
                   </button>
-                </div>
+                </div>, document.body)
               )}
             </div>
             );
@@ -303,6 +322,7 @@ export default function MobileTodos({ onTasksChanged }: MobileTodosProps) {
         message={`确定要删除「${pendingDelete?.content || ''}」吗？此操作无法撤销。`}
         onConfirm={() => void handleDeleteTodo()}
         onCancel={() => setPendingDelete(null)}
+        showBackdrop={false}
       />
     </div>
   );

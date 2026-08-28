@@ -72,8 +72,7 @@ export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopu
 
   if (showInputDialog) {
     return (
-      <div className="fixed inset-0 z-50 flex items-end" onClick={() => { setShowInputDialog(false); setInputText(''); }}>
-        <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+      <div className="fixed inset-0 z-[10000] flex items-end" onClick={() => { setShowInputDialog(false); setInputText(''); }}>
         <div
           className="relative w-full bg-white dark:bg-gray-900 shadow-xl border-t border-gray-200 dark:border-gray-700 p-4 pb-8"
           onClick={(e) => e.stopPropagation()}
@@ -103,8 +102,7 @@ export default function NewMenuPopup({ onClose, onDocumentCreated }: NewMenuPopu
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center" onClick={onClose}>
       <div
         className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-64 py-2 mx-4"
         onClick={(e) => e.stopPropagation()}

@@ -92,6 +92,7 @@ interface MemoCardProps {
   documents?: Document[];
   readOnly?: boolean;
   compact?: boolean;
+  isMobile?: boolean;
   /** 宽屏右侧置顶栏默认完整展示，用户仍可手动收起。 */
   initiallyExpanded?: boolean;
 }
@@ -608,7 +609,7 @@ const markdownComponents = (
   };
 };
 
-const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, onToggleArchive, onTogglePublic, onToggleAI, onTagClick, isHighlighted, documents, readOnly, compact = false, initiallyExpanded = false }: MemoCardProps) {
+const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, onToggleArchive, onTogglePublic, onToggleAI, onTagClick, isHighlighted, documents, readOnly, compact = false, isMobile = false, initiallyExpanded = false }: MemoCardProps) {
   const isDark = useIsDark();
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
@@ -1363,7 +1364,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
 
       {/* 删除确认弹窗 - portal 到 body 避免被 contain:layout 裁剪 */}
       {showDeleteConfirm && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowDeleteConfirm(false)}>
+        <div className={`fixed inset-0 z-[10000] flex items-center justify-center ${isMobile ? '' : 'bg-black/40'}`} onClick={() => setShowDeleteConfirm(false)}>
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-xl max-w-xs w-full mx-4" onClick={(e) => e.stopPropagation()}>
             <p className="text-base text-gray-700 dark:text-gray-200 mb-4">确定要删除这条随想吗？此操作无法撤销。</p>
             <div className="flex justify-end gap-2">

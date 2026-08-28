@@ -364,9 +364,9 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
             {/* 历史对话侧边栏 */}
             {showAIHistory && (
               <>
-                <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowAIHistory(false)} />
+                <div className="fixed inset-0 z-[9999]" onClick={() => setShowAIHistory(false)} />
                 <div
-                  className="fixed left-3 z-50 flex w-[min(85vw,320px)] flex-col overflow-hidden rounded-[28px] border border-white/70 bg-[var(--app-sidebar)]/95 shadow-2xl backdrop-blur-2xl backdrop-saturate-150 dark:border-gray-700/70"
+                  className="fixed left-3 z-[10000] flex w-[min(85vw,320px)] flex-col overflow-hidden rounded-[28px] border border-white/70 bg-[var(--app-sidebar)]/95 shadow-2xl backdrop-blur-2xl backdrop-saturate-150 dark:border-gray-700/70"
                   style={{
                     top: 'calc(env(safe-area-inset-top, 0px) + 72px)',
                     bottom: 'calc(env(safe-area-inset-bottom, 0px) + 78px)',
