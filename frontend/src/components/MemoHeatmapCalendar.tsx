@@ -56,7 +56,7 @@ export default function MemoHeatmapCalendar({ embedded = false }: { embedded?: b
   while (cells.length % 7 !== 0) cells.push(null);
 
   return (
-    <div className={embedded ? 'px-1' : 'bg-white dark:bg-gray-800/50 rounded-2xl p-4 border border-[#e7e7e5] dark:border-gray-700/40'}>
+    <div className={embedded ? 'px-0' : 'bg-white dark:bg-gray-800/50 rounded-2xl p-4 border border-[#e7e7e5] dark:border-gray-700/40'}>
       <div className="flex items-center justify-between mb-3">
         <button onClick={prevMonth} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors">
           <ChevronLeft className="w-4 h-4 text-gray-500 dark:text-gray-400" />

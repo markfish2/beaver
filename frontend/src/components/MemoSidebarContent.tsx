@@ -64,7 +64,7 @@ export default function MemoSidebarContent() {
     }`;
 
   return (
-    <div className="px-3 py-3 space-y-4">
+    <div className="px-4 py-3 space-y-4">
       {/* 热力日历 */}
       <MemoHeatmapCalendar embedded />
 

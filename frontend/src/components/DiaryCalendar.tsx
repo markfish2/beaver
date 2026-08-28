@@ -345,9 +345,9 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
   while (cells.length % 7 !== 0) cells.push(null);
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto custom-scrollbar scrollbar-auto-hide">
+    <div className="flex min-h-full flex-col px-4">
       {/* Calendar */}
-      <div className="px-4 py-3">
+      <div className="px-0 py-3">
         {/* Month header */}
         <div className="flex items-center justify-between mb-3">
           <button onClick={prevMonth} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors">
@@ -426,7 +426,7 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
       </div>
 
       {/* Pending todos */}
-      <div className="px-2 py-2">
+      <div className="px-0 py-2">
         <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-400 dark:text-gray-500 mb-3 px-1 uppercase tracking-wider">
           <ListTodo className="w-4 h-4" />
           待办
@@ -567,10 +567,10 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
       </div>
 
       {/* Divider */}
-      <div className="border-t border-gray-200 dark:border-gray-700 mx-2" />
+      <div className="border-t border-gray-200 dark:border-gray-700" />
 
       {/* Year archive */}
-      <div className="px-2 py-2">
+      <div className="px-0 py-2">
         <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-400 dark:text-gray-500 mb-3 px-1 uppercase tracking-wider">
           <Archive className="w-4 h-4" />
           归档
@@ -609,7 +609,7 @@ export default function DiaryCalendar({ onNavigate, pendingTasks = [], onTaskTog
         )}
       </div>
 
-      <div className="mx-2 py-2 border-t border-gray-200 dark:border-gray-700">
+      <div className="py-2 border-t border-gray-200 dark:border-gray-700">
         <DiaryTagsPanel
           activeTag={activeTag}
           onTagClick={handleTagClick}

@@ -26,7 +26,7 @@ interface MemoHomeProps {
 
 type PendingTaskWithOrigin = (Node & { origin: 'diary'; diary_date?: string; parent_content?: string }) | (Todo & { origin: 'todo' });
 
-/** 首页待办按截止日期排序，避免被节点/待办的创建时间顺序干扰。 */
+/** 首页待办按日期从早到晚排序，避免被节点/待办的创建时间顺序干扰。 */
 function getPendingTaskDate(task: PendingTaskWithOrigin): number | null {
   if (task.origin === 'todo') {
     return parseTodoDueDate(task.content).dueDate?.getTime() ?? null;
@@ -216,11 +216,11 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
         pendingTasks.sort((a, b) => {
           const dateA = getPendingTaskDate(a);
           const dateB = getPendingTaskDate(b);
-          // 日期越近/越新越靠前；无法解析日期的项目放到末尾。
+          // 日期越早越靠前；无法解析日期的项目放到末尾。
           if (dateA === null && dateB === null) return 0;
           if (dateA === null) return 1;
           if (dateB === null) return -1;
-          return dateB - dateA;
+          return dateA - dateB;
         });
         setAllPendingTasks(pendingTasks);
       } catch (e) {
