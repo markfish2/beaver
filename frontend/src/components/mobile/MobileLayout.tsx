@@ -193,6 +193,8 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       navigate('/?view=starred', { replace: true });
     } else if (tab === 'files') {
       navigate('/', { replace: true });
+    } else if (tab === 'memos') {
+      navigate('/', { replace: true });
     } else if (isEditing && tab !== 'diary') {
       navigate('/', { replace: true });
     }
@@ -229,7 +231,8 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     if (target.tab) {
       setActiveTab(target.tab);
     }
-    navigate(target.to, {
+    const targetPath = target.tab === 'starred' ? '/?view=starred' : target.to;
+    navigate(targetPath, {
       replace: true,
       state: target.tab ? { mobileReturnTab: target.tab } : undefined,
     });

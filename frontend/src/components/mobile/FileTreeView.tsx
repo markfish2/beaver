@@ -146,7 +146,7 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
       handleToggleFolder(doc.id);
     } else {
       navigate(`/d/${doc.id}`, {
-        state: createMobileDocumentState('/', 'files'),
+        state: createMobileDocumentState('/', viewMode === 'starred' ? 'starred' : 'files'),
       });
     }
   };
