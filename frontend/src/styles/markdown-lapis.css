@@ -38,7 +38,6 @@
 
 :root[data-markdown-style="lapis"] .memo-content {
   color: var(--markdown-lapis-text) !important;
-  font-family: var(--markdown-lapis-font-body);
   font-size: var(--prose-font-size);
   line-height: 1.68;
   letter-spacing: 0;
@@ -62,7 +61,6 @@
 :root[data-markdown-style="lapis"] .memo-content h5,
 :root[data-markdown-style="lapis"] .memo-content h6 {
   color: var(--markdown-lapis-primary) !important;
-  font-family: var(--prose-font-family) !important;
   font-weight: 700;
   line-height: 1.35;
   padding: 0;
@@ -242,7 +240,6 @@
 :root[data-markdown-style="lapis"] .memo-content .markdown-code-block-root,
 :root[data-markdown-style="lapis"] .memo-content .markdown-code-body,
 :root[data-markdown-style="lapis"] .memo-content .markdown-code-language {
-  font-family: var(--markdown-lapis-font-mono) !important;
 }
 
 :root[data-markdown-style="lapis"] .memo-content code:not(pre code),
@@ -346,7 +343,6 @@
 :root[data-markdown-style="lapis"] .memo-content th {
   color: var(--markdown-lapis-primary) !important;
   background: transparent !important;
-  font-family: var(--markdown-lapis-font-serif);
   font-weight: 700;
   text-align: center;
   min-width: 0;
@@ -389,7 +385,6 @@
   color: var(--markdown-lapis-primary) !important;
   background: var(--markdown-lapis-block-bg) !important;
   border-color: color-mix(in srgb, var(--markdown-lapis-marker) 32%, transparent) !important;
-  font-family: var(--markdown-lapis-font-serif);
   font-weight: 700;
 }
 
@@ -408,7 +403,6 @@
   color: var(--markdown-lapis-text) !important;
   background: var(--markdown-lapis-bg) !important;
   border: 1px solid color-mix(in srgb, var(--markdown-lapis-block-border) 68%, transparent);
-  font-family: var(--markdown-lapis-font-body);
 }
 
 :root[data-markdown-style="lapis"] .memo-attachment-link svg {
@@ -438,6 +432,5 @@
   border-radius: var(--markdown-lapis-radius-sm);
   background: var(--markdown-lapis-block-bg);
   color: var(--markdown-lapis-primary);
-  font-family: var(--markdown-lapis-font-mono);
   font-size: 0.82em;
 }

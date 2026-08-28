@@ -38,7 +38,6 @@
 
 :root[data-markdown-style="pie"] .memo-content {
   color: var(--markdown-pie-text);
-  font-family: var(--markdown-pie-serif);
   font-size: calc(var(--prose-font-size) + 1px);
   line-height: 1.62;
   letter-spacing: 0.005em;
@@ -62,7 +61,6 @@
 :root[data-markdown-style="pie"] .memo-content h5,
 :root[data-markdown-style="pie"] .memo-content h6 {
   color: var(--markdown-pie-text) !important;
-  font-family: var(--prose-font-family) !important;
   line-height: 1.35;
   margin: 1.05em 0 0.65em;
   letter-spacing: 0;
@@ -184,7 +182,6 @@
 :root[data-markdown-style="pie"] .memo-content code,
 :root[data-markdown-style="pie"] .memo-content pre,
 :root[data-markdown-style="pie"] .memo-content .markdown-code-language {
-  font-family: var(--markdown-pie-mono) !important;
 }
 
 :root[data-markdown-style="pie"] .memo-content code:not(pre code) {

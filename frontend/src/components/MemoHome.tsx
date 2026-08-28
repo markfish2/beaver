@@ -24,6 +24,22 @@ interface MemoHomeProps {
   isMobile: boolean;
 }
 
+type PendingTaskWithOrigin = (Node & { origin: 'diary'; diary_date?: string; parent_content?: string }) | (Todo & { origin: 'todo' });
+
+/** 首页待办按截止日期排序，避免被节点/待办的创建时间顺序干扰。 */
+function getPendingTaskDate(task: PendingTaskWithOrigin): number | null {
+  if (task.origin === 'todo') {
+    return parseTodoDueDate(task.content).dueDate?.getTime() ?? null;
+  }
+  if (!task.diary_date || !task.parent_content) return null;
+  const dayMatch = task.parent_content.match(/(\d{1,2})[日号]/);
+  if (!dayMatch) return null;
+  const [year, month] = task.diary_date.split('-').map(Number);
+  const day = Number(dayMatch[1]);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day).getTime();
+}
+
 /** 首页待办与 Memo 正文保持一致：时间前缀使用胶囊，标签使用主题色标记。 */
 function renderMemoTaskContent(value: string) {
   const timePrefix = getDiaryTimePrefix(value);
@@ -124,7 +140,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
         columnPadTop: 'min-[1240px]:pt-6',
         panelVisible: 'min-[1240px]:block',
       };
-  type PendingTask = (Node & { origin: 'diary'; diary_date?: string }) | (Todo & { origin: 'todo' });
+  type PendingTask = PendingTaskWithOrigin;
   const [allPendingTasks, setAllPendingTasks] = useState<PendingTask[]>([]);
   const [completingTaskIds, setCompletingTaskIds] = useState<Set<string>>(new Set());
 
@@ -196,7 +212,17 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
             return dueDateStart < threeDaysLater; // 过期 + 3天内
           })
           .map(todo => ({ ...todo, origin: 'todo' }));
-        setAllPendingTasks([...diaryTasks, ...urgentTodos]);
+        const pendingTasks = [...diaryTasks, ...urgentTodos];
+        pendingTasks.sort((a, b) => {
+          const dateA = getPendingTaskDate(a);
+          const dateB = getPendingTaskDate(b);
+          // 日期越近/越新越靠前；无法解析日期的项目放到末尾。
+          if (dateA === null && dateB === null) return 0;
+          if (dateA === null) return 1;
+          if (dateB === null) return -1;
+          return dateB - dateA;
+        });
+        setAllPendingTasks(pendingTasks);
       } catch (e) {
         console.error('获取日记摘要失败', e);
       }

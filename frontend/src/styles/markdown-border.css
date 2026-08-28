@@ -54,7 +54,6 @@
 
 :root[data-markdown-style="border"] .memo-content {
   color: var(--markdown-border-text) !important;
-  font-family: var(--prose-font-family);
   font-size: var(--prose-font-size);
   line-height: 1.58;
   letter-spacing: 0;
@@ -78,7 +77,6 @@
 :root[data-markdown-style="border"] .memo-content h6 {
   position: relative;
   color: var(--markdown-border-text) !important;
-  font-family: var(--prose-font-family) !important;
   line-height: 1.24;
   padding: 0 0 0 13px;
   border: 0 !important;
@@ -321,7 +319,6 @@
 :root[data-markdown-style="border"] .memo-content .markdown-code-block-root,
 :root[data-markdown-style="border"] .memo-content .markdown-code-body,
 :root[data-markdown-style="border"] .memo-content .markdown-code-language {
-  font-family: var(--markdown-border-font-mono) !important;
 }
 
 :root[data-markdown-style="border"] .memo-content code:not(pre code),
@@ -487,7 +484,6 @@
   color: var(--markdown-border-muted) !important;
   background: var(--markdown-border-pattern) !important;
   border-color: var(--markdown-border-border) !important;
-  font-family: var(--prose-font-family);
   font-weight: 600;
 }
 
@@ -508,7 +504,6 @@
   border: 1px solid var(--markdown-border-border) !important;
   border-radius: var(--markdown-border-radius-sm) !important;
   box-shadow: none !important;
-  font-family: var(--prose-font-family);
 }
 
 :root[data-markdown-style="border"] .memo-attachment-link svg {
@@ -538,7 +533,6 @@
   border-radius: var(--markdown-border-radius-sm);
   background: var(--markdown-border-surface);
   color: var(--markdown-border-muted);
-  font-family: var(--markdown-border-font-mono);
   font-size: 0.88em;
   box-shadow: inset 0 -1px 0 var(--markdown-border-border-hover);
 }

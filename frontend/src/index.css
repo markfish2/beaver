@@ -26,7 +26,8 @@
   display: inline;
   padding: 0 0.25rem;
   border-radius: 0.25rem;
-  background-color: var(--app-tag-pale, var(--app-link-pale));
+  /* 首页未完成事项使用更轻的主题色底，避免抢过任务正文。 */
+  background-color: color-mix(in srgb, var(--app-link) 7%, var(--app-surface-raised, #ffffff));
   color: var(--app-link);
   font-size: inherit;
   line-height: inherit;
@@ -189,6 +190,9 @@
   --safe-area-inset-right: env(safe-area-inset-right, 0px);
   --safe-area-top-px: env(safe-area-inset-top, 0px);
   --safe-area-bottom-px: env(safe-area-inset-bottom, 0px);
+
+  /* 移动端顶部沉浸渐变从状态栏安全区下方开始，避免覆盖系统状态栏。 */
+  --mobile-top-gradient-height: 76px;
   
   /* 高亮颜色 - 亮色模式 */
   --highlight-red-bg: #FEEBE7;
@@ -206,6 +210,30 @@
   --highlight-mint-bg: #EEFAEB;
   --highlight-mint-border: #86EFAC;
   --highlight-mint-text: #166534;
+}
+
+@media (max-width: 767px) {
+  .mobile-top-gradient {
+    position: fixed;
+    z-index: 90;
+    top: var(--safe-area-inset-top);
+    left: 0;
+    right: 0;
+    height: var(--mobile-top-gradient-height);
+    pointer-events: none;
+    opacity: 0;
+    background: linear-gradient(
+      to bottom,
+      var(--app-canvas) 0%,
+      color-mix(in srgb, var(--app-canvas) 82%, transparent) 42%,
+      transparent 100%
+    );
+    transition: opacity 400ms linear;
+  }
+
+  .mobile-top-gradient.is-visible {
+    opacity: 1;
+  }
 }
 
 /*
@@ -818,7 +846,7 @@ body,
 .memo-content li + li { margin-top: 0.25em; }
 .memo-content li > ul, .memo-content li > ol { margin-bottom: 0; padding-left: 1.4em; }
 /* 行内代码 */
-.memo-content code:not(pre code) { background: #fff8c5; padding: 0.1em 0.3em; border-radius: 3px; font-size: 0.86em; font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace; }
+.memo-content code:not(pre code) { background: #fff8c5; padding: 0.1em 0.3em; border-radius: 3px; font-size: 0.86em; }
 .dark .memo-content code:not(pre code) { background: #4a3f1a; }
 /* 代码块 */
 .memo-content pre { border-radius: 0.5rem; overflow-x: auto; margin-bottom: 1em; max-width: 100%; }
@@ -826,7 +854,6 @@ body,
 .memo-content pre code span {
   font-size: inherit !important;
   line-height: 1.6 !important;
-  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
 }
 /* 高亮 */
 .memo-content mark { background: #fef08a; padding: 0.05em 0.15em; border-radius: 2px; }
@@ -888,12 +915,17 @@ body,
 :root[data-markdown-style] .memo-content pre.markdown-code-body {
   max-width: 100%;
   font-size: var(--markdown-block-code-font-size) !important;
-  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
   overflow-x: auto !important;
   overflow-y: hidden;
   white-space: pre !important;
   overflow-wrap: normal !important;
   word-break: normal !important;
+}
+
+/* Markdown 风格只负责颜色、间距和结构；字体统一继承外观设置。 */
+:root[data-markdown-style] .memo-content,
+:root[data-markdown-style] .memo-content * {
+  font-family: inherit !important;
 }
 
 .memo-content .markdown-code-body *,

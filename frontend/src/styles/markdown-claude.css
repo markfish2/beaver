@@ -55,7 +55,6 @@
 
 :root[data-markdown-style="claude"] .memo-content {
   color: var(--markdown-claude-text) !important;
-  font-family: var(--prose-font-family);
   font-size: var(--prose-font-size);
   line-height: 1.62;
   letter-spacing: 0;
@@ -80,7 +79,6 @@
 :root[data-markdown-style="claude"] .memo-content h6 {
   position: relative;
   color: var(--markdown-claude-heading) !important;
-  font-family: var(--prose-font-family) !important;
   font-weight: 600;
   line-height: 1.3;
   letter-spacing: 0;
@@ -256,7 +254,6 @@
 :root[data-markdown-style="claude"] .memo-content .markdown-code-block-root,
 :root[data-markdown-style="claude"] .memo-content .markdown-code-body,
 :root[data-markdown-style="claude"] .memo-content .markdown-code-language {
-  font-family: var(--markdown-claude-font-mono) !important;
 }
 
 :root[data-markdown-style="claude"] .memo-content code:not(pre code),
@@ -411,7 +408,6 @@
   color: var(--markdown-claude-muted) !important;
   background: var(--markdown-claude-surface-soft) !important;
   border-color: var(--markdown-claude-code-border) !important;
-  font-family: var(--prose-font-family);
   font-weight: 600;
 }
 
@@ -432,7 +428,6 @@
   border: 1px solid var(--markdown-claude-code-border) !important;
   border-radius: 8px !important;
   box-shadow: none !important;
-  font-family: var(--prose-font-family);
 }
 
 :root[data-markdown-style="claude"] .memo-attachment-link svg {
@@ -462,7 +457,6 @@
   border-radius: 6px;
   background: var(--markdown-claude-inline-code-bg);
   color: var(--markdown-claude-inline-code);
-  font-family: var(--markdown-claude-font-mono);
   font-size: 0.82em;
   box-shadow: inset 0 -1px 0 rgba(43, 38, 33, 0.08);
 }
