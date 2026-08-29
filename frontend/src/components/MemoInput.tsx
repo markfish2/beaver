@@ -15,6 +15,7 @@ import type { PopupItem } from './TagMentionPopup';
 import { tagMentionExtension } from '../extensions/tagMentionExtension';
 import type { TagMentionState } from '../extensions/tagMentionExtension';
 import { isMentionableDocument } from '../utils/documentMention';
+import { getEditorDraft, saveEditorDraft } from '../utils/editorDrafts';
 import type { Memo, Document } from '../api/data';
 
 const AIChatPanel = lazy(() => import('./AIChatPanel'));
@@ -25,7 +26,7 @@ interface MemoInputProps {
 }
 
 export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) {
-  const [content, setContent] = useState('');
+  const [content, setContent] = useState(() => getEditorDraft('memo-input', 'current') ?? '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showExpandEditor, setShowExpandEditor] = useState(false);
@@ -38,6 +39,10 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recorder = useAudioRecorder();
+
+  useEffect(() => {
+    saveEditorDraft('memo-input', 'current', content);
+  }, [content]);
 
   const [allTags, setAllTags] = useState<string[]>([]);
   const [tagState, setTagState] = useState<TagMentionState>({ type: null, query: '', coords: null, from: 0, to: 0 });

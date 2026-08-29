@@ -66,6 +66,7 @@ import MemoToDocDialog from './MemoToDocDialog';
 import AudioPlayer from './AudioPlayer';
 import { useIsDark } from '../hooks/useIsDark';
 import { getMemoPalette, getMemoPaletteStyle, MEMO_TAG_COLORS, type MemoCardPalette } from './memoCardTheme';
+import { clearEditorDraft, getEditorDraft, saveEditorDraft } from '../utils/editorDrafts';
 import { getPasteMarkdown } from '../utils/htmlToMarkdown';
 import { localizeMarkdownImages } from '../utils/markdownImageUpload';
 
@@ -613,7 +614,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const isDark = useIsDark();
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
-  const [editContent, setEditContent] = useState(memo.content);
+  const [editContent, setEditContent] = useState(() => getEditorDraft('memo', memo.id) ?? memo.content);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showExpandEditor, setShowExpandEditor] = useState(false);
   const [showAIPanel, setShowAIPanel] = useState(false);
@@ -633,6 +634,10 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const contentRef = useRef<HTMLDivElement>(null);
   const palette = getMemoPalette(isDark, memo.color);
   const bgColor = palette.background;
+
+  useEffect(() => {
+    if (isEditing) saveEditorDraft('memo', memo.id, editContent);
+  }, [editContent, isEditing, memo.id]);
 
   // Tag/mention state
   const [allTags, setAllTags] = useState<string[]>([]);
@@ -917,12 +922,14 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const handleSave = useCallback(async () => {
     const currentContent = editorRef.current?.getValue() || editContent;
     if (currentContent.trim() === memo.content) {
+      clearEditorDraft('memo', memo.id);
       setIsEditing(false);
       resetUserHeight();
       return;
     }
     try {
       await onEdit(memo.id, currentContent);
+      clearEditorDraft('memo', memo.id);
       setIsEditing(false);
       resetUserHeight();
     } catch (e) {
@@ -940,8 +947,8 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
 
   const handleContentDoubleClick = useCallback(() => {
     setIsEditing(true);
-    setEditContent(memo.content);
-  }, [memo.content]);
+    setEditContent(getEditorDraft('memo', memo.id) ?? memo.content);
+  }, [memo.content, memo.id]);
 
   const showTagPopup = tagState.type === 'tag' && filteredTags.length > 0 && tagState.coords;
   const showMentionPopup = mentionState.type === 'mention' && filteredDocs.length > 0 && mentionState.coords;
@@ -1105,7 +1112,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => { setIsEditing(false); setEditContent(memo.content); resetUserHeight(); }}
+              onClick={() => { clearEditorDraft('memo', memo.id); setIsEditing(false); setEditContent(memo.content); resetUserHeight(); }}
               className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
@@ -1413,7 +1420,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
           style={{ top: menuPos.top, right: menuPos.right }}
         >
           <button
-            onClick={() => { setShowMenu(false); setIsEditing(true); setEditContent(memo.content); }}
+            onClick={() => { setShowMenu(false); setIsEditing(true); setEditContent(getEditorDraft('memo', memo.id) ?? memo.content); }}
             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
           >
             <Pencil className="w-3.5 h-3.5" />

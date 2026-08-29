@@ -58,6 +58,7 @@ import MermaidBlock from './MermaidBlock';
 import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts, getMarkdownTaskOrdinalAtLine, toggleMarkdownTaskByOrdinal } from '../utils/markdownPreprocess';
 import { getPasteMarkdown } from '../utils/htmlToMarkdown';
 import { localizeMarkdownImages } from '../utils/markdownImageUpload';
+import { clearEditorDraft, getEditorDraft, saveEditorDraft } from '../utils/editorDrafts';
 import { useIsDark } from '../hooks/useIsDark';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import MarkdownEditor from './MarkdownEditor';
@@ -744,10 +745,17 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
         setTitle(docMeta?.title || '新笔记');
         if (nodes.length > 0) {
           const root = nodes.find(n => !n.parent_node_id) || nodes[0];
+          const serverContent = root.content || '';
+          const draft = isNew ? null : getEditorDraft('markdown-note', documentId);
           setNodeId(root.id);
-          setContent(root.content || '');
-          lastSavedRef.current = root.content || '';
-          onDirtyChange?.(false);
+          setContent(draft ?? serverContent);
+          lastSavedRef.current = serverContent;
+          if (draft !== null && draft !== serverContent) {
+            pendingSaveRef.current = draft;
+            onDirtyChange?.(true);
+          } else {
+            onDirtyChange?.(false);
+          }
         } else {
           const newNode = await createNode(documentId, '', null);
           if (cancelled) return;
@@ -763,6 +771,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   }, [documentId, initialNodes, initialDocuments, onDirtyChange]);
 
   const scheduleSave = useCallback((newContent: string) => {
+    saveEditorDraft('markdown-note', documentId, newContent);
     if (newContent === lastSavedRef.current) { pendingSaveRef.current = null; onDirtyChange?.(false); return; }
     onDirtyChange?.(true);
     pendingSaveRef.current = newContent;
@@ -770,7 +779,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
     saveTimerRef.current = setTimeout(async () => {
       if (!nodeId) return;
       setSaving(true);
-      try { await updateNode(nodeId, { content: newContent }); lastSavedRef.current = newContent; pendingSaveRef.current = null; onDirtyChange?.(false); }
+      try { await updateNode(nodeId, { content: newContent }); clearEditorDraft('markdown-note', documentId); lastSavedRef.current = newContent; pendingSaveRef.current = null; onDirtyChange?.(false); }
       catch (e) { console.error('Failed to save note', e); }
       finally { setSaving(false); }
     }, 500);
