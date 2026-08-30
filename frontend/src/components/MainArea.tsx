@@ -3576,6 +3576,26 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
               title="黄色高亮"
             />
             <button
+              onClick={() => applyBatchStyleToggle('highlight', 'red', null)}
+              className={`w-5 h-5 rounded bg-red-100 hover:ring-2 ring-red-300 ${selectionAllMatch('highlight', 'red') ? 'ring-2 ring-offset-2 ring-red-400' : ''}`}
+              title="红色高亮"
+            />
+            <button
+              onClick={() => applyBatchStyleToggle('highlight', 'green', null)}
+              className={`w-5 h-5 rounded bg-green-100 hover:ring-2 ring-green-300 ${selectionAllMatch('highlight', 'green') ? 'ring-2 ring-offset-2 ring-green-400' : ''}`}
+              title="绿色高亮"
+            />
+            <button
+              onClick={() => applyBatchStyleToggle('highlight', 'purple', null)}
+              className={`w-5 h-5 rounded bg-purple-100 hover:ring-2 ring-purple-300 ${selectionAllMatch('highlight', 'purple') ? 'ring-2 ring-offset-2 ring-purple-400' : ''}`}
+              title="紫色高亮"
+            />
+            <button
+              onClick={() => applyBatchStyleToggle('highlight', 'mint', null)}
+              className={`w-5 h-5 rounded bg-emerald-100 hover:ring-2 ring-emerald-300 ${selectionAllMatch('highlight', 'mint') ? 'ring-2 ring-offset-2 ring-emerald-400' : ''}`}
+              title="薄荷绿高亮"
+            />
+            <button
               onClick={() => {
                 selectedNodeIds.forEach(id => handleStyleChange(id, { highlight: null }));
                 setBatchEditPosition(null);
@@ -3613,6 +3633,13 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
               title="三级标题"
             >
               H3
+            </button>
+            <button
+              onClick={() => applyBatchStyleToggle('heading', 'h4', null)}
+              className={`p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm font-bold ${selectionAllMatch('heading', 'h4') ? 'bg-blue-500 text-white hover:bg-blue-600' : ''}`}
+              title="四级标题"
+            >
+              H4
             </button>
             <button
               onClick={() => {

@@ -1175,7 +1175,7 @@ const NodeItem = memo(({
       {showToolbar && (
         <div
           ref={toolbarRef}
-          className="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-2 flex flex-col gap-2 min-w-[200px]"
+          className="fixed z-[150] max-w-[min(92vw,720px)] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-2 flex flex-wrap items-center gap-1 min-w-[200px]"
           style={{ top: toolbarPos.top, left: toolbarPos.left }}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
@@ -1188,7 +1188,7 @@ const NodeItem = memo(({
           )}
 
           {/* Heading Buttons */}
-          <div className="flex items-center gap-1 border-b border-gray-200 dark:border-gray-700 pb-2">
+          <div className="order-5 flex items-center gap-1 border-r border-gray-200 dark:border-gray-700 pr-2">
             <span className="text-xs text-gray-500 mr-2">标题</span>
             <button
               onClick={() => handleStyleChange({ heading: node.heading === 'h1' ? null : 'h1' })}
@@ -1217,7 +1217,7 @@ const NodeItem = memo(({
           </div>
 
           {/* Text Style Buttons */}
-          <div className="flex items-center gap-1 border-b border-gray-200 dark:border-gray-700 pb-2">
+          <div className="order-1 flex items-center gap-1 border-r border-gray-200 dark:border-gray-700 pr-2">
             <button
               onClick={() => handleStyleChange({ is_bold: !node.is_bold })}
               className={`px-2 py-1 text-xs font-bold rounded ${node.is_bold ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
@@ -1230,16 +1230,10 @@ const NodeItem = memo(({
             >
               I
             </button>
-            <button
-              onClick={() => handleStyleChange({ is_todo: !node.is_todo })}
-              className={`px-2 py-1 text-xs rounded ${node.is_todo ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-            >
-              待办
-            </button>
           </div>
 
           {/* Color Buttons */}
-          <div className="flex items-center gap-1">
+          <div className="order-2 flex items-center gap-1 border-r border-gray-200 dark:border-gray-700 pr-2">
             <span className="text-xs text-gray-500 mr-2">颜色</span>
             <button
               onClick={() => handleColorChange({ color: node.color === 'red' ? null : 'red' })}
@@ -1264,7 +1258,7 @@ const NodeItem = memo(({
           </div>
 
           {/* Highlight Buttons */}
-          <div className="flex items-center gap-1">
+          <div className="order-3 flex items-center gap-1 border-r border-gray-200 dark:border-gray-700 pr-2">
             <span className="text-xs text-gray-500 mr-2">高亮</span>
             <button
               onClick={() => handleColorChange({ highlight: node.highlight === 'red' ? null : 'red' })}
@@ -1298,24 +1292,25 @@ const NodeItem = memo(({
             />
           </div>
 
-          {/* Convert to Memo */}
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-2">
+          {/* Todo */}
+          <div className="order-4 flex items-center gap-1 border-r border-gray-200 dark:border-gray-700 pr-2">
             <button
-              onClick={handleConvertToMemo}
-              disabled={converting}
-              className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors disabled:opacity-50"
+              onClick={() => handleStyleChange({ is_todo: !node.is_todo })}
+              className={`px-2 py-1 text-xs rounded ${node.is_todo ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
             >
-              <ArrowUpRight className="w-3.5 h-3.5" />
-              {converting ? '转换中...' : '转换为随想笔记'}
+              待办
             </button>
           </div>
 
           {/* Close Button */}
+          <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
           <button
             onClick={() => setShowToolbar(false)}
-            className="mt-1 w-full py-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 border-t border-gray-200 dark:border-gray-700"
+            className="order-6 px-2 py-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+            title="关闭"
+            aria-label="关闭编辑菜单"
           >
-            关闭
+            ✕
           </button>
         </div>
       )}
