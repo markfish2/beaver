@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ChevronRight, MoreHorizontal, Copy, Trash2, Pencil, Folder, Move } from 'lucide-react';
+import { ChevronRight, MoreHorizontal, Copy, Trash2, Pencil, Folder, Move, Star, ArrowUpRight, Sparkles, FileUp } from 'lucide-react';
 import { useDocuments } from '../../context/DocumentContext';
-import { deleteDocument, updateDocument, copyDocument, getRecentDocuments } from '../../api/data';
+import { createDocument, createMemo, createNodesBatch, deleteDocument, getNodes, getRecentDocuments, updateDocument, copyDocument } from '../../api/data';
 import DeleteConfirmDialog from '../DeleteConfirmDialog';
+import NewFolderDialog from '../NewFolderDialog';
 import type { Document } from '../../api/data';
+import { createExcalidrawDocument } from '../../api/excalidraw';
 import { createMobileDocumentState } from '../../utils/mobileNavigation';
+import { nodesToMemoMarkdown } from '../../utils/convertNode';
 import DocumentTypeIcon from '../DocumentTypeIcon';
 import NavigationIcon from '../NavigationIcon';
 
@@ -86,6 +89,10 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [moveDialog, setMoveDialog] = useState<{ id: string; title: string } | null>(null);
   const [moveTargetFolder, setMoveTargetFolder] = useState<string | null>(null);
+  const [newFolderParentId, setNewFolderParentId] = useState<string | null>(null);
+  const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
+  const [importParentId, setImportParentId] = useState<string | null>(null);
+  const markdownInputRef = useRef<HTMLInputElement>(null);
 
   const [recentDocs, setRecentDocs] = useState<Document[]>([]);
   useEffect(() => {
@@ -224,6 +231,45 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
     setMoveTargetFolder(null);
   };
 
+  const handleCreateChildDocument = async (parentId: string, type: 'document' | 'note' | 'excalidraw') => {
+    const title = type === 'document' ? '新文章' : type === 'note' ? '新笔记' : '无标题画布';
+    const doc = type === 'excalidraw'
+      ? await createExcalidrawDocument(title, parentId)
+      : await createDocument(title, type, parentId, Date.now());
+    await refreshDocuments();
+    setContextMenu(null);
+    navigate(`/d/${doc.id}`);
+  };
+
+  const handleCreateChildFolder = async (title: string) => {
+    if (newFolderParentId === null) return;
+    await createDocument(title, 'folder', newFolderParentId, Date.now());
+    await refreshDocuments();
+    setShowNewFolderDialog(false);
+    setNewFolderParentId(null);
+  };
+
+  const handleMarkdownImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []).filter(file => /\.(md|markdown)$/i.test(file.name));
+    event.target.value = '';
+    const parentId = importParentId;
+    setImportParentId(null);
+    setContextMenu(null);
+    for (const [index, file] of files.entries()) {
+      const content = await file.text();
+      const title = file.name.replace(/\.(md|markdown)$/i, '').trim() || '无标题笔记';
+      const doc = await createDocument(title, 'note', parentId, Date.now() + index);
+      await createNodesBatch([{ document_id: doc.id, content, parent_node_id: null, sort_order: Date.now() + index }]);
+    }
+    if (files.length > 0) await refreshDocuments();
+  };
+
+  const handleConvertToMemo = async (docId: string) => {
+    const nodes = await getNodes(docId);
+    await createMemo(nodesToMemoMarkdown(nodes));
+    setContextMenu(null);
+  };
+
   const foldersById = useMemo(() => new Map(documents.filter(doc => doc.type === 'folder').map(folder => [folder.id, folder])), [documents]);
   const folderTree = useMemo(() => {
     const folders = documents.filter(doc => doc.type === 'folder');
@@ -233,6 +279,22 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
       .flatMap(folder => [folder, ...build(folder.id)]);
     return build(null);
   }, [documents]);
+
+  const excludedMoveFolderIds = useMemo(() => {
+    if (!moveDialog) return new Set<string>();
+    const excluded = new Set<string>([moveDialog.id]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const folder of documents) {
+        if (folder.type === 'folder' && folder.parent_id && excluded.has(folder.parent_id) && !excluded.has(folder.id)) {
+          excluded.add(folder.id);
+          changed = true;
+        }
+      }
+    }
+    return excluded;
+  }, [documents, moveDialog]);
 
   // Close context menu on outside click
   useEffect(() => {
@@ -379,16 +441,28 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
         return (
           <div
             ref={contextMenuRef}
-            className="fixed z-[10000] w-40 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
+            className="fixed z-[10000] max-h-[calc(100dvh-16px)] w-52 overflow-y-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+            style={{ left: Math.max(8, Math.min(contextMenu.x, window.innerWidth - 216)), top: Math.max(8, Math.min(contextMenu.y, window.innerHeight - 420)) }}
             onPointerDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
           >
             {doc.type !== 'folder' && (
               <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); void handleStar(contextMenu.docId); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
-                <NavigationIcon type="starred" className={`w-4 h-4 ${doc.is_starred ? 'text-gray-700 dark:text-gray-200' : ''}`} />
+                <Star className={`w-4 h-4 ${doc.is_starred ? 'fill-current text-yellow-500' : 'text-gray-400'}`} />
                 {doc.is_starred ? '取消收藏' : '收藏'}
+              </button>
+            )}
+            {doc.type !== 'folder' && (
+              <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); void handleCopy(contextMenu.docId); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                <Copy className="w-4 h-4 text-gray-400" />
+                复制
+              </button>
+            )}
+            {doc.type !== 'folder' && (
+              <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); void handleConvertToMemo(contextMenu.docId); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                <ArrowUpRight className="w-4 h-4 text-gray-400" />
+                转换为随想笔记
               </button>
             )}
             <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); handleRename(contextMenu.docId); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
@@ -401,10 +475,40 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
                 移动到文件夹
               </button>
             )}
-            <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); void handleCopy(contextMenu.docId); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
-              <Copy className="w-4 h-4" />
-              复制
-            </button>
+            {doc.type !== 'folder' && (
+              <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); void updateDocument(contextMenu.docId, { ai_excluded: !doc.ai_excluded }).then(refreshDocuments); setContextMenu(null); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                <Sparkles className={`w-4 h-4 ${doc.ai_excluded ? 'text-gray-400' : 'text-blue-500'}`} />
+                {doc.ai_excluded ? '取消不参与 AI' : '不参与 AI'}
+              </button>
+            )}
+            {doc.type === 'folder' && (
+              <>
+                <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); void handleCreateChildDocument(doc.id, 'document'); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                  <DocumentTypeIcon type="document" className="w-4 h-4" />
+                  新建大纲笔记
+                </button>
+                <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); void handleCreateChildDocument(doc.id, 'note'); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                  <DocumentTypeIcon type="note" className="w-4 h-4" />
+                  新建普通笔记
+                </button>
+                <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); setImportParentId(doc.id); markdownInputRef.current?.click(); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                  <FileUp className="w-4 h-4 text-gray-400" />
+                  批量导入 md
+                </button>
+                <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); void handleCreateChildDocument(doc.id, 'excalidraw'); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                  <DocumentTypeIcon type="excalidraw" className="w-4 h-4" />
+                  新建画布
+                </button>
+                <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); setNewFolderParentId(doc.id); setShowNewFolderDialog(true); setContextMenu(null); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                  <DocumentTypeIcon type="folder" className="w-4 h-4" />
+                  新建子文件夹
+                </button>
+                <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); setMoveDialog({ id: doc.id, title: doc.title || '文件夹' }); setMoveTargetFolder(doc.parent_id); setContextMenu(null); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                  <Move className="w-4 h-4 text-gray-400" />
+                  移动到文件夹
+                </button>
+              </>
+            )}
             <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); handleDeleteClick(contextMenu.docId); }} className="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2">
               <Trash2 className="w-4 h-4" />
               删除
@@ -424,7 +528,7 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
               <button type="button" onClick={() => setMoveTargetFolder(null)} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm ${moveTargetFolder === null ? 'bg-[var(--app-link)]/10 text-[var(--app-link)]' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'}`}>
                 <Folder className="h-4 w-4 shrink-0" />根目录
               </button>
-              {folderTree.map(folder => {
+              {folderTree.filter(folder => !excludedMoveFolderIds.has(folder.id)).map(folder => {
                 const depth = (() => { let value = 0; let current = folder; while (current.parent_id) { value += 1; current = foldersById.get(current.parent_id) ?? current; if (current === folder) break; } return value; })();
                 return (
                   <button key={folder.id} type="button" onClick={() => setMoveTargetFolder(folder.id)} className={`flex w-full items-center gap-2 rounded-lg py-2 pr-3 text-left text-sm ${moveTargetFolder === folder.id ? 'bg-[var(--app-link)]/10 text-[var(--app-link)]' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'}`} style={{ paddingLeft: `${12 + depth * 16}px` }}>
@@ -449,6 +553,19 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteTarget(null)}
         showBackdrop={false}
+      />
+      <NewFolderDialog
+        isOpen={showNewFolderDialog}
+        onConfirm={(title) => { void handleCreateChildFolder(title); }}
+        onCancel={() => { setShowNewFolderDialog(false); setNewFolderParentId(null); }}
+      />
+      <input
+        ref={markdownInputRef}
+        type="file"
+        accept=".md,.markdown,text/markdown"
+        multiple
+        className="hidden"
+        onChange={(event) => { void handleMarkdownImport(event); }}
       />
     </div>
   );

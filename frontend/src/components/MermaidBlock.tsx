@@ -8,6 +8,79 @@ type ElkLayouts = typeof import('@mermaid-js/layout-elk').default;
 let beautifulMermaidPromise: Promise<typeof import('beautiful-mermaid')> | null = null;
 let mermaidRuntimePromise: Promise<{ mermaid: MermaidRuntime; elkLayouts: ElkLayouts }> | null = null;
 
+// 普通笔记阅读模式中的 Mermaid 可能很多。限制并发，避免打开长笔记时同时
+// 初始化多个解析器/布局器；缓存只保存成功的 SVG，切换 Tab 后可以直接复用。
+const MERMAID_RENDER_CONCURRENCY = 2;
+const MERMAID_CACHE_LIMIT = 80;
+const mermaidSvgCache = new Map<string, string>();
+let activeMermaidRenders = 0;
+const mermaidRenderQueue: Array<{
+  task: () => Promise<string>;
+  resolve: (value: string | null) => void;
+  cancelled: boolean;
+}> = [];
+
+function mermaidContentKey(code: string, dark?: boolean): string {
+  let hash = 2166136261;
+  for (let index = 0; index < code.length; index += 1) {
+    hash ^= code.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${dark ? 'dark' : 'light'}:${hash >>> 0}:${code.length}:${code}`;
+}
+
+function pumpMermaidRenderQueue() {
+  while (activeMermaidRenders < MERMAID_RENDER_CONCURRENCY && mermaidRenderQueue.length > 0) {
+    const job = mermaidRenderQueue.shift();
+    if (!job) return;
+    if (job.cancelled) continue;
+    activeMermaidRenders += 1;
+    void job.task()
+      .then((svg) => job.resolve(svg))
+      .catch(() => job.resolve(null))
+      .finally(() => {
+        activeMermaidRenders -= 1;
+        pumpMermaidRenderQueue();
+      });
+  }
+}
+
+function renderSvgWithPolicy(code: string, dark: boolean | undefined, cached: boolean): { promise: Promise<string | null>; cancel: () => void } {
+  if (!cached) {
+    let cancelled = false;
+    const promise = renderSvg(code, dark).then((svg) => (cancelled ? null : svg)).catch(() => null);
+    return { promise, cancel: () => { cancelled = true; } };
+  }
+
+  const key = mermaidContentKey(code, dark);
+  const cachedSvg = mermaidSvgCache.get(key);
+  if (cachedSvg) return { promise: Promise.resolve(cachedSvg), cancel: () => undefined };
+
+  let job: (typeof mermaidRenderQueue)[number] | undefined;
+  const promise = new Promise<string | null>((resolve) => {
+    job = { task: () => renderSvg(code, dark), resolve: (svg) => {
+      if (svg) {
+        mermaidSvgCache.delete(key);
+        mermaidSvgCache.set(key, svg);
+        while (mermaidSvgCache.size > MERMAID_CACHE_LIMIT) {
+          const oldest = mermaidSvgCache.keys().next().value;
+          if (oldest === undefined) break;
+          mermaidSvgCache.delete(oldest);
+        }
+      }
+      resolve(svg);
+    }, cancelled: false };
+    mermaidRenderQueue.push(job);
+    pumpMermaidRenderQueue();
+  });
+  return {
+    promise,
+    cancel: () => {
+      if (job) job.cancelled = true;
+    },
+  };
+}
+
 function loadBeautifulMermaid() {
   beautifulMermaidPromise ??= import('beautiful-mermaid');
   return beautifulMermaidPromise;
@@ -110,9 +183,11 @@ async function renderSvg(code: string, dark?: boolean): Promise<string> {
 interface MermaidBlockProps {
   code: string;
   dark?: boolean;
+  /** 仅普通笔记阅读模式启用缓存和并发队列，其他场景保持原有行为。 */
+  renderPolicy?: 'default' | 'normal-note';
 }
 
-export default function MermaidBlock({ code, dark }: MermaidBlockProps) {
+export default function MermaidBlock({ code, dark, renderPolicy = 'default' }: MermaidBlockProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
@@ -154,12 +229,14 @@ export default function MermaidBlock({ code, dark }: MermaidBlockProps) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setError(null);
 
+    const renderJob = renderSvgWithPolicy(code, dark, renderPolicy === 'normal-note');
     const render = async () => {
       try {
         if (!containerRef.current) return;
 
         // 优先 beautiful-mermaid 紧凑渲染，不支持的类型回退官方 mermaid
-        const svg = await renderSvg(code, dark);
+        const svg = await renderJob.promise;
+        if (!svg) return;
         if (!cancelled && containerRef.current) {
           containerRef.current.innerHTML = svg;
           setSvgMarkup(svg);
@@ -178,11 +255,12 @@ export default function MermaidBlock({ code, dark }: MermaidBlockProps) {
     void render();
     return () => {
       cancelled = true;
+      renderJob.cancel();
       // Mermaid 渲染是异步的。组件在切换笔记或关闭 Tab 时，主动清理旧 SVG，
       // 避免异步完成后的残留节点影响页面尺寸或出现在正文区域外。
       container?.replaceChildren();
     };
-  }, [code, dark, isNearViewport]);
+  }, [code, dark, isNearViewport, renderPolicy]);
 
   useEffect(() => {
     if (!isViewerOpen) return;

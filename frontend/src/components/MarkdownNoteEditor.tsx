@@ -935,7 +935,9 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
     },
     code: (props: MarkdownCodeProps) => {
       const match = /language-(\w+)/.exec(props.className || '');
-      if (match && match[1] === 'mermaid') return <MermaidBlock code={String(props.children).replace(/\n$/, '')} />;
+      if (match && match[1] === 'mermaid') {
+        return <MermaidBlock code={String(props.children).replace(/\n$/, '')} renderPolicy="normal-note" />;
+      }
       return <CodeBlock {...props} />;
     },
     h1: ({ node, children, ...props }) => {
