@@ -193,7 +193,8 @@
   --safe-area-bottom-px: env(safe-area-inset-bottom, 0px);
 
   /* 移动端顶部沉浸渐变从状态栏安全区下方开始，避免覆盖系统状态栏。 */
-  --mobile-top-gradient-height: 76px;
+  /* 顶部栏隐藏后的过渡区域：仅覆盖安全区下方的一小段内容。 */
+  --mobile-top-gradient-height: 38px;
   
   /* 高亮颜色 - 亮色模式 */
   --highlight-red-bg: #FEEBE7;
@@ -225,10 +226,14 @@
     opacity: 0;
     background: linear-gradient(
       to bottom,
-      var(--app-canvas) 0%,
-      color-mix(in srgb, var(--app-canvas) 82%, transparent) 42%,
+      color-mix(in srgb, var(--app-canvas) 64%, transparent) 0%,
+      color-mix(in srgb, var(--app-canvas) 32%, transparent) 52%,
       transparent 100%
     );
+    -webkit-backdrop-filter: blur(18px) saturate(175%);
+    backdrop-filter: blur(18px) saturate(175%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 36%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0%, #000 36%, transparent 100%);
     transition: opacity 400ms linear;
   }
 
