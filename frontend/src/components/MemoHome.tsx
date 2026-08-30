@@ -527,17 +527,17 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
                     const isCompleting = completingTaskIds.has(task.id);
                     const isTodo = task.origin === 'todo';
                     const inProgress = !isTodo && (task as Node & { origin: 'diary' }).is_in_progress && !isCompleting;
+                    const todoDueDate = isTodo ? parseTodoDueDate(task.content) : null;
                     // 截止日期：日记任务用日记日期，独立待办解析 !M.D
                     let dueLabel = '';
                     let urgency: 'today' | 'soon' | 'normal' | null = null;
                     let isOverdue = false;
                     if (isTodo) {
-                      const parsed = parseTodoDueDate(task.content);
-                      dueLabel = parsed.dueDateLabel;
-                      urgency = parsed.urgency;
+                      dueLabel = todoDueDate?.dueDateLabel ?? '';
+                      urgency = todoDueDate?.urgency ?? null;
                       // 过期 = 截止日期早于今天
-                      if (parsed.dueDate) {
-                        const dueDateStart = new Date(parsed.dueDate.getFullYear(), parsed.dueDate.getMonth(), parsed.dueDate.getDate());
+                      if (todoDueDate?.dueDate) {
+                        const dueDateStart = new Date(todoDueDate.dueDate.getFullYear(), todoDueDate.dueDate.getMonth(), todoDueDate.dueDate.getDate());
                         const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
                         isOverdue = dueDateStart < todayStart;
                       }
@@ -561,7 +561,9 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
                         }
                       }
                     }
-                    const displayText = task.content.replace(/\[[ xX-]\]/, '').trim();
+                    const displayText = (isTodo ? (todoDueDate?.displayContent ?? task.content) : task.content)
+                      .replace(/\[[ xX-]\]/, '')
+                      .trim();
                     return (
                       <div
                         key={task.id}
@@ -596,7 +598,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
                             <span className="w-2 h-0.5 bg-blue-400 rounded-full"></span>
                           ) : null}
                         </span>
-                        {/* 文字 + 日期右对齐 */}
+                        {/* 文字与日期右对齐 */}
                         <span
                           className={`ml-2 flex-1 min-w-0 flex items-center gap-1 cursor-pointer transition-all duration-300 text-base ${
                             isCompleting

@@ -57,17 +57,6 @@ export function parseTodoDueDate(content: string): ParsedTodo {
     dueDate = new Date(currentYear, month - 1, Math.min(day, lastDay));
   }
 
-  // 若日期已过（今天之前），推到明年
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (dueDate < todayStart) {
-    dueDate = new Date(currentYear + 1, month - 1, day);
-    // 同样检查明年的溢出
-    if (dueDate.getMonth() !== month - 1) {
-      const lastDay = new Date(currentYear + 1, month, 0).getDate();
-      dueDate = new Date(currentYear + 1, month - 1, Math.min(day, lastDay));
-    }
-  }
-
   // 从 content 中剥离日期标记，清理多余空格
   const displayContent = content
     .replace(DUE_DATE_REGEX, '')
@@ -75,6 +64,7 @@ export function parseTodoDueDate(content: string): ParsedTodo {
     .trim();
 
   // 紧急度判断
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const dueDateStart = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
   const diffDays = Math.ceil((dueDateStart.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
 
