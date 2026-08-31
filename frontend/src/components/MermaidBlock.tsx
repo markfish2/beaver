@@ -198,14 +198,27 @@ export default function MermaidBlock({ code, dark, renderPolicy = 'default' }: M
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [scale, setScale] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const viewportActivatedRef = useRef(false);
   const viewerContentRef = useRef<HTMLDivElement>(null);
   const svgNaturalSizeRef = useRef<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    viewportActivatedRef.current = false;
+
+    const activateIfVisible = () => {
+      if (viewportActivatedRef.current) return;
+      const rect = container.getBoundingClientRect();
+      const margin = 600;
+      if (rect.bottom < -margin || rect.top > window.innerHeight + margin) return;
+      viewportActivatedRef.current = true;
+      setIsNearViewport(true);
+    };
+
     if (!('IntersectionObserver' in window)) {
       // IntersectionObserver 不可用时需要立即回退到渲染状态。
+      viewportActivatedRef.current = true;
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsNearViewport(true);
       return;
@@ -213,11 +226,24 @@ export default function MermaidBlock({ code, dark, renderPolicy = 'default' }: M
 
     const observer = new IntersectionObserver((entries) => {
       if (!entries.some(entry => entry.isIntersecting)) return;
+      viewportActivatedRef.current = true;
       setIsNearViewport(true);
       observer.disconnect();
     }, { rootMargin: '600px 0px' });
     observer.observe(container);
-    return () => observer.disconnect();
+
+    // iPadOS Safari 在嵌套 overflow 容器首次布局、PWA 恢复或字体加载后，
+    // 可能延迟 IntersectionObserver 回调。主动检查首屏并提供一次兜底，
+    // 避免可见图表一直停留在空白占位状态。
+    const frame = window.requestAnimationFrame(activateIfVisible);
+    const fallback = window.setTimeout(activateIfVisible, 800);
+    window.addEventListener('scroll', activateIfVisible, { capture: true, passive: true });
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(fallback);
+      window.removeEventListener('scroll', activateIfVisible, true);
+    };
   }, []);
 
   useEffect(() => {
@@ -225,8 +251,8 @@ export default function MermaidBlock({ code, dark, renderPolicy = 'default' }: M
     let cancelled = false;
     const container = containerRef.current;
     // 进入视口或代码变化时清空旧 SVG，避免短暂显示过期图。
-    setSvgMarkup(null);
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSvgMarkup(null);
     setError(null);
 
     const renderJob = renderSvgWithPolicy(code, dark, renderPolicy === 'normal-note');

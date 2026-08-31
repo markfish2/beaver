@@ -59,6 +59,16 @@
 
   // ---- Save selected text as memo ----
   document.getElementById('beaver-memo');
+  function getSelectedMarkdown() {
+    var selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return '';
+    var wrapper = document.createElement('div');
+    for (var i = 0; i < selection.rangeCount; i++) {
+      wrapper.appendChild(selection.getRangeAt(i).cloneContents());
+    }
+    return (window.BeaverArticleMarkdown && window.BeaverArticleMarkdown.convert(wrapper.innerHTML, location.href)) || '';
+  }
+
   menu.addEventListener('click', function(e) {
     var target = e.target.closest('button');
     if (!target) return;
@@ -69,12 +79,13 @@
       menu.classList.remove('show');
       var sel = window.getSelection();
       var text = sel ? sel.toString().trim() : '';
+      var markdown = getSelectedMarkdown().trim() || text;
       if (!text) {
         showToast('请先选中要保存的文字', '#d97706');
         return;
       }
       showToast('正在保存到 Memo...', '#2563eb');
-      chrome.runtime.sendMessage({ type: 'saveMemo', content: text }, function(res) {
+      chrome.runtime.sendMessage({ type: 'saveMemo', content: markdown }, function(res) {
         if (res && res.ok) showToast('已保存到 Memo ✓', '#059669');
         else showToast('保存失败: ' + (res && res.error || ''), '#dc2626');
       });
@@ -138,27 +149,7 @@
 
       var markdown = '';
       try {
-        var td = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced', bulletListMarker: '-' });
-        td.addRule('linkedImages', {
-          filter: function(node) { return node.nodeName === 'A' && node.querySelector('img'); },
-          replacement: function(_, node) {
-            var img = node.querySelector('img');
-            var src = img.getAttribute('src') || img.getAttribute('data-src') || '';
-            var alt = img.getAttribute('alt') || '图片';
-            // 图片交互由 Beaver MemoCard 负责，不保留文章外层的跳转链接。
-            return src ? '![' + alt + '](' + src + ')' : '';
-          }
-        });
-        td.addRule('lazyImages', {
-          filter: 'img',
-          replacement: function(_, node) {
-            var src = node.getAttribute('src') || node.getAttribute('data-src') || node.getAttribute('data-original') || '';
-            var alt = node.getAttribute('alt') || '图片';
-            if (!src || src.indexOf('data:image') === 0) return '';
-            return '![' + alt + '](' + src + ')';
-          }
-        });
-        markdown = td.turndown(htmlContent).trim();
+        markdown = BeaverArticleMarkdown.convert(htmlContent, location.href);
 
         var endMarkers = ['你可能错过的好文章', '下载少数派', '推荐阅读', '相关推荐', '猜你喜欢', '相关文章', '阅读原文', 'Recommended for you', 'Related articles'];
         for (var m = 0; m < endMarkers.length; m++) {
@@ -177,7 +168,7 @@
 
       chrome.runtime.sendMessage({
         type: 'saveDocument',
-        title: title || document.title || '未命名笔记',
+        title: BeaverArticleMarkdown.cleanTitle(title, document.title),
         markdown: markdown,
         pageUrl: location.href,
       }, function(res) {

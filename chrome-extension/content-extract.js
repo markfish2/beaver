@@ -253,7 +253,10 @@ function cleanCellContent(html) {
       }
     });
 
-    var markdown = td.turndown(htmlContent).trim();
+    // Keep this injected path on the same converter as popup.js/content-fab.js.
+    // The legacy rules above remain harmless compatibility code for older pages,
+    // but the shared result is the one sent to the extension.
+    var markdown = BeaverArticleMarkdown.convert(htmlContent, location.href);
 
     // Trim content at known "end of article" markers
     var endMarkers = [
@@ -317,7 +320,7 @@ function cleanCellContent(html) {
 
     chrome.runtime.sendMessage({
       type: '_extractResult',
-      title: title || document.title || '未命名笔记',
+      title: BeaverArticleMarkdown.cleanTitle(title, document.title),
       markdown: markdown,
     });
 

@@ -229,7 +229,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     // Inject the three scripts
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      files: ['readability.js', 'turndown.js', 'content-fab.js']
+      files: ['readability.js', 'turndown.js', 'articleToMarkdown.js', 'content-fab.js']
     });
   } catch (err) {
     console.error('Failed to inject FAB:', err);
@@ -265,10 +265,37 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
   // ---- Save text ----
   if (info.menuItemId === 'beaver-save-text') {
-    const text = (info.selectionText || '').trim();
-    if (!text) return;
+    let content = (info.selectionText || '').trim();
+    if (tab?.id) {
+      try {
+        // contextMenus only exposes selectionText, so read the live selection
+        // from the page to preserve headings, paragraphs and emphasis.
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['turndown.js', 'articleToMarkdown.js']
+        });
+        const [{ result }] = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: () => {
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) return null;
+            const wrapper = document.createElement('div');
+            for (let i = 0; i < selection.rangeCount; i++) {
+              wrapper.appendChild(selection.getRangeAt(i).cloneContents());
+            }
+            const html = wrapper.innerHTML;
+            const markdown = window.BeaverArticleMarkdown?.convert(html, location.href) || '';
+            return { markdown, text: selection.toString().trim() };
+          }
+        });
+        content = result?.markdown?.trim() || result?.text?.trim() || content;
+      } catch {
+        // Fall back to the text supplied by Chrome for restricted pages.
+      }
+    }
+    if (!content) return;
     try {
-      await createMemo(text, base, apiToken);
+      await createMemo(content, base, apiToken);
       notify('Beaver', '文字已保存 ✓');
     } catch (err) {
       notify('Beaver', `保存失败: ${err.message}`);
@@ -316,7 +343,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       // Inject all three scripts (same content script world)
       await chrome.scripting.executeScript({
         target: { tabId },
-        files: ['readability.js', 'turndown.js', 'content-extract.js']
+        files: ['readability.js', 'turndown.js', 'articleToMarkdown.js', 'content-extract.js']
       });
 
       const extracted = await extractPromise;
@@ -397,7 +424,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         for (const imageUrl of (msg.images || [])) {
           try {
             const filePath = await uploadImageFromUrl(imageUrl, auth.base, auth.apiToken);
-            content += (content ? '\n\n' : '') + `![图片](${filePath})`;
+            // Rich selection content may already contain this image as Markdown.
+            // Replace its remote URL instead of appending a duplicate image.
+            if (content.includes(imageUrl)) {
+              content = content.split(imageUrl).join(filePath);
+            } else {
+              content += (content ? '\n\n' : '') + `![图片](${filePath})`;
+            }
             uploadedCount += 1;
           } catch {
             failedCount += 1;

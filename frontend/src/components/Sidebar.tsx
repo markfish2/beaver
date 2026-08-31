@@ -1,4 +1,4 @@
-import { Search, FileText, ChevronDown, Plus, Trash, Star, LogOut, ChevronLeft, ChevronRight, Folder, Edit2, CalendarDays, MoreHorizontal, Copy, ArrowUpRight, FileUp, Move, StickyNote, Key, Lock, Sparkles, User, Archive, Palette } from 'lucide-react';
+import { Search, FileText, ChevronDown, Plus, Trash, Star, Bookmark, LogOut, ChevronLeft, ChevronRight, Folder, Edit2, CalendarDays, MoreHorizontal, Copy, ArrowUpRight, FileUp, Move, StickyNote, Key, Lock, Sparkles, User, Archive, Palette } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createDocument, deleteDocument, updateDocument, copyDocument, getNodes, createNodesBatch, createMemo, uploadFile, search as apiSearch, getTodos, createTodo, updateTodo, getMonthlyDiary, getOrCreateDayNode } from '../api/data';
 import type { Document as DocType, SearchResultItem, Todo } from '../api/data';
@@ -1017,9 +1017,6 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                     isExpanded[doc.id] ? <ChevronDown className="w-3.5 h-3.5 mr-0.5 text-gray-400 dark:text-gray-500" /> : <ChevronRight className="w-3.5 h-3.5 mr-0.5 text-gray-400 dark:text-gray-500" />
                   )}
                   <DocumentTypeIcon type={folderIconType} className={`h-5 w-5 ${!isFolder ? 'ml-4' : ''}`} />
-                  {!isFolder && doc.is_starred && (
-                    <Star className="w-2 h-2 fill-current text-yellow-500 absolute -top-0.5 -right-0.5" />
-                  )}
                   {!isFolder && doc.ai_excluded && (
                     <svg className="w-3.5 h-3.5 absolute -bottom-1 -right-1" viewBox="0 0 24 24" fill="none">
                       <circle cx="12" cy="12" r="10" fill="#ef4444" stroke="white" strokeWidth="1.5"/>
@@ -1029,6 +1026,13 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                 </span>
 
                 <span className={`truncate flex-1 ${isFolder ? 'font-semibold' : ''}`}>{doc.title || '无标题'}</span>
+                {!isFolder && doc.is_starred && (
+                  <Bookmark
+                    aria-label="已收藏"
+                    className="h-3.5 w-3.5 shrink-0 text-[var(--app-link)]"
+                    fill="currentColor"
+                  />
+                )}
 
                 {/* 最近编辑视图：显示最后编辑时间 */}
                 {viewMode === 'recent' && doc.updated_at && (

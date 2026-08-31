@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ChevronRight, MoreHorizontal, Copy, Trash2, Pencil, Folder, Move, Star, ArrowUpRight, Sparkles, FileUp } from 'lucide-react';
+import { ChevronRight, MoreHorizontal, Copy, Trash2, Pencil, Folder, Move, Star, Bookmark, ArrowUpRight, Sparkles, FileUp } from 'lucide-react';
 import { useDocuments } from '../../context/DocumentContext';
 import { createDocument, createMemo, createNodesBatch, deleteDocument, getNodes, getRecentDocuments, updateDocument, copyDocument } from '../../api/data';
 import DeleteConfirmDialog from '../DeleteConfirmDialog';
@@ -367,6 +367,14 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
             <span className={`flex-1 text-base truncate ${selectedDocumentId === doc.id ? 'font-medium text-gray-900 dark:text-gray-100' : 'text-gray-700 dark:text-gray-300'} ${isFolder ? 'font-medium' : ''}`}>
               {doc.title || '无标题'}
             </span>
+          )}
+
+          {!isFolder && doc.is_starred && (
+            <Bookmark
+              aria-label="已收藏"
+              className="h-3.5 w-3.5 shrink-0 text-[var(--app-link)]"
+              fill="currentColor"
+            />
           )}
 
           {/* 3-dot menu - always visible on mobile */}

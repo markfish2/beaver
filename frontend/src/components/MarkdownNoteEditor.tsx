@@ -56,7 +56,7 @@ import { useDocuments } from '../context/DocumentContext';
 import type { Document, Node, RelatedNote } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts, getMarkdownTaskOrdinalAtLine, toggleMarkdownTaskByOrdinal } from '../utils/markdownPreprocess';
-import { getPasteMarkdown } from '../utils/htmlToMarkdown';
+import { getPasteMarkdown, htmlToMarkdown } from '../utils/htmlToMarkdown';
 import { localizeMarkdownImages } from '../utils/markdownImageUpload';
 import { clearEditorDraft, getEditorDraft, saveEditorDraft } from '../utils/editorDrafts';
 import { useIsDark } from '../hooks/useIsDark';
@@ -649,6 +649,23 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
     setTimeout(() => editorRef.current?.focus(), 0);
   }, []);
 
+  const handlePreviewCopy = useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+    const range = selection.getRangeAt(0);
+    if (!event.currentTarget.contains(range.commonAncestorContainer)) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.appendChild(range.cloneContents());
+    const markdown = htmlToMarkdown(wrapper.innerHTML);
+    if (!markdown) return;
+
+    // Browser copy may contain only rendered text on mobile. Store Markdown so
+    // Memo preserves headings, paragraphs, lists and emphasis.
+    event.preventDefault();
+    event.clipboardData.setData('text/plain', markdown);
+  }, []);
+
   const [tagState, setTagState] = useState<TagMentionState>({ type: null, query: '', coords: null, from: 0, to: 0 });
   const [mentionState, setMentionState] = useState<TagMentionState>({ type: null, query: '', coords: null, from: 0, to: 0 });
   const [tagDropdownIndex, setTagDropdownIndex] = useState(0);
@@ -1238,6 +1255,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
           >
             <div
               onDoubleClick={handlePreviewDoubleClick}
+              onCopyCapture={handlePreviewCopy}
               className="markdown-note-preview memo-content max-w-[768px] w-full cursor-text text-base text-gray-700 dark:text-gray-300 p-6"
               style={{ lineHeight: '1.75' }}
 

@@ -49,6 +49,30 @@
         }
       } catch(e) {}
     </script>
+    <!-- 开发环境入口前清理旧 PWA 控制，避免同源 8080 的生产 SW 返回旧模块。 -->
+    <script>
+      (function () {
+        var isViteDev = (location.hostname === '127.0.0.1' || location.hostname === 'localhost') && location.port === '8080';
+        if (!isViteDev || !('serviceWorker' in navigator)) return;
+        var resetKey = 'beaver-dev-sw-reset-v2';
+        var wasControlled = navigator.serviceWorker.controller !== null;
+        Promise.all([
+          navigator.serviceWorker.getRegistrations().then(function (registrations) {
+            return Promise.all(registrations.map(function (registration) { return registration.unregister(); }));
+          }),
+          'caches' in window ? caches.keys().then(function (names) {
+            return Promise.all(names.map(function (name) { return caches.delete(name); }));
+          }) : Promise.resolve()
+        ]).then(function () {
+          if (wasControlled && sessionStorage.getItem(resetKey) !== 'done') {
+            sessionStorage.setItem(resetKey, 'done');
+            location.reload();
+          } else {
+            sessionStorage.removeItem(resetKey);
+          }
+        }).catch(function () {});
+      }());
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -24,6 +24,7 @@ const Sidebar = lazy(() => import('./components/Sidebar'));
 const MainArea = lazy(() => import('./components/MainArea'));
 const MobileLayout = lazy(() => import('./components/mobile/MobileLayout'));
 const GlobalSearchPalette = lazy(() => import('./components/GlobalSearchPalette'));
+const shouldEnablePwaUpdates = !import.meta.env.DEV;
 
 const AppLayout = ({ children }: { children: ReactNode }) => {
   const isMobile = usePhoneLayout();
@@ -180,7 +181,7 @@ function App() {
                 <UserViewProvider>
                   <AppRoutes />
                   <Suspense fallback={null}>
-                    <ReloadPrompt />
+                    {shouldEnablePwaUpdates && <ReloadPrompt />}
                     <ConflictResolver />
                   </Suspense>
                 </UserViewProvider>

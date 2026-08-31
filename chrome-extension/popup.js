@@ -4,6 +4,7 @@ const $ = (sel) => document.querySelector(sel);
 
 // State: detected content from the page
 let detectedText = '';
+let detectedMarkdown = '';
 let detectedImages = []; // array of image URLs
 let detectedPageUrl = '';
 let currentMode = 'memo'; // 'memo' or 'doc'
@@ -124,12 +125,19 @@ async function loadSelection() {
           });
         }
 
-        return { text, images };
+        const wrapper = document.createElement('div');
+        for (let i = 0; i < sel.rangeCount; i++) {
+          wrapper.appendChild(sel.getRangeAt(i).cloneContents());
+        }
+        return { text, html: wrapper.innerHTML, images };
       }
     });
 
     const result = results?.[0]?.result || { text: '', images: [] };
     detectedText = result.text || '';
+    detectedMarkdown = result.html
+      ? (BeaverArticleMarkdown.convert(result.html, detectedPageUrl) || detectedText)
+      : detectedText;
     detectedImages = result.images || [];
 
     const preview = $('#selection-preview');
@@ -182,9 +190,9 @@ $('#btn-save').addEventListener('click', () => {
 
   let msg;
   if (detectedImages.length > 0) {
-    msg = { type: 'saveRichMemo', text: detectedText, images: detectedImages, pageUrl: detectedPageUrl };
+    msg = { type: 'saveRichMemo', text: detectedMarkdown || detectedText, images: detectedImages, pageUrl: detectedPageUrl };
   } else {
-    msg = { type: 'saveMemo', content: detectedText };
+    msg = { type: 'saveMemo', content: detectedMarkdown || detectedText };
   }
 
   chrome.runtime.sendMessage(msg, (res) => {
@@ -198,6 +206,7 @@ $('#btn-save').addEventListener('click', () => {
       showToast($('#save-toast'), label, 'success');
       setTimeout(() => {
         detectedText = '';
+        detectedMarkdown = '';
         detectedImages = [];
         $('#selection-preview').textContent = '未检测到选中内容';
         $('#selection-preview').classList.add('empty');
@@ -285,43 +294,8 @@ $('#btn-extract').addEventListener('click', async () => {
 
     if (!htmlContent) throw new Error('无法提取正文内容');
 
-    // Convert HTML to Markdown with Turndown
-    const turndownService = new TurndownService({
-      headingStyle: 'atx',
-      codeBlockStyle: 'fenced',
-      bulletListMarker: '-',
-    });
-
-    // Handle links wrapping images: output as [![alt](img)](link) on one line
-    turndownService.addRule('linkedImages', {
-      filter: (node) => node.nodeName === 'A' && node.querySelector('img'),
-      replacement: (content, node) => {
-        const href = node.getAttribute('href') || '';
-        const img = node.querySelector('img');
-        const src = img.getAttribute('src') || img.getAttribute('data-src') || img.getAttribute('data-original') || '';
-        const alt = img.getAttribute('alt') || '图片';
-        if (!src || src.startsWith('data:image/gif')) return '';
-        return `[![${alt}](${src})](${href})`;
-      }
-    });
-
-    // Handle standalone images
-    turndownService.addRule('lazyImages', {
-      filter: 'img',
-      replacement: (content, node) => {
-        const src = node.getAttribute('src')
-          || node.getAttribute('data-src')
-          || node.getAttribute('data-original')
-          || node.getAttribute('data-lazy-src')
-          || node.getAttribute('data-actualsrc')
-          || '';
-        const alt = node.getAttribute('alt') || '图片';
-        if (!src || src.startsWith('data:image/gif') || src.startsWith('data:image/svg')) return '';
-        return src ? `![${alt}](${src})` : '';
-      }
-    });
-
-    markdown = turndownService.turndown(htmlContent).trim();
+    // Use the same structured converter as the injected floating button.
+    markdown = BeaverArticleMarkdown.convert(htmlContent, pageData.url);
 
     // Trim content at known "end of article" markers
     const endMarkers = [
@@ -350,7 +324,7 @@ $('#btn-extract').addEventListener('click', async () => {
       markdown = meta.join('\n') + '\n\n' + markdown;
     }
 
-    title = title || '未命名笔记';
+    title = BeaverArticleMarkdown.cleanTitle(title, pageData.title);
 
     // Show preview
     const preview = $('#article-preview');
@@ -410,7 +384,7 @@ $('#btn-inject-fab').addEventListener('click', async () => {
     // Inject the FAB scripts
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      files: ['readability.js', 'turndown.js', 'content-fab.js'],
+      files: ['readability.js', 'turndown.js', 'articleToMarkdown.js', 'content-fab.js'],
     });
 
     showToast($('#save-toast'), '浮动按钮已注入 ✓', 'success');

@@ -20,6 +20,11 @@ export default function ReloadPrompt() {
   const updateSWRef = useRef<((reloadPage?: boolean) => Promise<void>) | null>(null);
 
   useEffect(() => {
+    // 开发服务器必须由 Vite HMR 接管。即便此前在同一 8080 域名安装过 PWA，
+    // 也不能在开发环境再次注册 Service Worker，否则会缓存 /src 模块并遮蔽热更新。
+    if (import.meta.env.DEV) return;
+
+    let updateInterval: ReturnType<typeof setInterval> | undefined;
     const update = registerSW({
       onNeedRefresh() {
         if (!isDismissed()) {
@@ -33,16 +38,16 @@ export default function ReloadPrompt() {
       onRegisteredSW(_swUrl, registration) {
         // 每小时检查一次更新
         if (registration) {
-          setInterval(() => {
+          updateInterval = setInterval(() => {
             registration.update();
           }, 60 * 60 * 1000);
         }
       },
-      onRegisterError(error) {
-        console.error('SW registration error', error);
-      },
     });
     updateSWRef.current = update;
+    return () => {
+      if (updateInterval) clearInterval(updateInterval);
+    };
   }, []);
 
   const close = () => {

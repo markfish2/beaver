@@ -297,7 +297,14 @@ export function htmlToMarkdown(html: string): string {
  */
 export function getPasteMarkdown(clipboardData: DataTransfer): string | null {
   const html = clipboardData.getData('text/html');
-  if (!html) return null;
-  const md = htmlToMarkdown(html);
-  return md || null;
+  if (html) {
+    const md = htmlToMarkdown(html);
+    if (md) return md;
+  }
+
+  // Some browsers/editors expose only text/plain when copying Markdown from
+  // CodeMirror or a PWA preview. Preserve its structure when pasted into Memo.
+  const text = clipboardData.getData('text/plain');
+  if (!text || !/(^#{1,6}\s|^\s*[-*+]\s|^\s*\d+\.\s|```|\*\*|!\[)/m.test(text)) return null;
+  return text.trim() || null;
 }
