@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, useMemo, memo, Children, isValidElement, lazy, Suspense, type TouchEvent as ReactTouchEvent } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo, memo, Children, isValidElement, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
@@ -53,6 +53,7 @@ import type { Memo, Document, LinkPreview } from '../api/data';
 import { uploadFile, getMemoTags, getThumbnailUrl, fetchLinkPreview, retryLinkPreview, downloadAttachment } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import LinkPreviewCard from './LinkPreviewCard';
+import ImageViewer from './ImageViewer';
 import MarkdownEditor from './MarkdownEditor';
 import type { MarkdownEditorHandle } from './MarkdownEditor';
 import EditorToolbar from './EditorToolbar';
@@ -226,195 +227,6 @@ const CodeBlock = memo(function CodeBlock({ className, children, palette, compac
     </code>
   );
 });
-
-function ImagePreview({ images, src: initialSrc, onClose }: { images: string[]; src: string; onClose: () => void }) {
-  const [currentSrc, setCurrentSrc] = useState(initialSrc);
-  const [scale, setScale] = useState(1);
-  const [translate, setTranslate] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const pinchStartRef = useRef<{ dist: number; scale: number } | null>(null);
-  const dragStartRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
-  const doubleTapRef = useRef<number>(0);
-
-  const currentIndex = images.indexOf(currentSrc);
-  const src = currentSrc;
-
-  const navigate = useCallback((newIndex: number) => {
-    if (newIndex >= 0 && newIndex < images.length) {
-      setCurrentSrc(images[newIndex]);
-      setScale(1);
-      setTranslate({ x: 0, y: 0 });
-    }
-  }, [images]);
-
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') navigate(currentIndex - 1);
-      else if (e.key === 'ArrowRight') navigate(currentIndex + 1);
-      else if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [currentIndex, navigate, onClose]);
-
-  const getTouchDist = (touches: TouchList) => {
-    if (touches.length < 2) return 0;
-    const dx = touches[0].clientX - touches[1].clientX;
-    const dy = touches[0].clientY - touches[1].clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  };
-
-  const handleTouchStart = useCallback((e: ReactTouchEvent) => {
-    e.stopPropagation();
-    const touches = e.touches;
-
-    if (touches.length === 2) {
-      // Pinch start
-      const dist = getTouchDist(touches);
-      pinchStartRef.current = { dist, scale };
-    } else if (touches.length === 1) {
-      // Double-tap detection
-      const now = Date.now();
-      if (now - doubleTapRef.current < 300) {
-        // Double tap: toggle zoom
-        if (scale > 1.5) {
-          setScale(1);
-          setTranslate({ x: 0, y: 0 });
-        } else {
-          setScale(2.5);
-        }
-        doubleTapRef.current = 0;
-        return;
-      }
-      doubleTapRef.current = now;
-
-      // Single finger drag start (only when zoomed)
-      if (scale > 1) {
-        setIsDragging(true);
-        dragStartRef.current = {
-          x: touches[0].clientX,
-          y: touches[0].clientY,
-          tx: translate.x,
-          ty: translate.y,
-        };
-      }
-    }
-  }, [scale, translate]);
-
-  const handleTouchMove = useCallback((e: ReactTouchEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const touches = e.touches;
-
-    if (touches.length === 2 && pinchStartRef.current) {
-      // Pinch zoom
-      const dist = getTouchDist(touches);
-      const newScale = Math.max(0.5, Math.min(5, pinchStartRef.current.scale * (dist / pinchStartRef.current.dist)));
-      setScale(newScale);
-    } else if (touches.length === 1 && isDragging && dragStartRef.current) {
-      // Pan when zoomed
-      const dx = touches[0].clientX - dragStartRef.current.x;
-      const dy = touches[0].clientY - dragStartRef.current.y;
-      setTranslate({
-        x: dragStartRef.current.tx + dx,
-        y: dragStartRef.current.ty + dy,
-      });
-    }
-  }, [isDragging]);
-
-  const handleTouchEnd = useCallback((e: ReactTouchEvent) => {
-    if (e.touches.length < 2) {
-      pinchStartRef.current = null;
-    }
-    if (e.touches.length === 0) {
-      setIsDragging(false);
-      dragStartRef.current = null;
-      // Snap back if scale < 1
-      if (scale < 1) {
-        setScale(1);
-        setTranslate({ x: 0, y: 0 });
-      }
-    }
-  }, [scale]);
-
-  const handleClose = useCallback(() => {
-    if (scale <= 1.05 && Math.abs(translate.x) < 10 && Math.abs(translate.y) < 10) {
-      onClose();
-    }
-  }, [scale, translate, onClose]);
-
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setScale(s => Math.max(0.5, Math.min(5, s * delta)));
-  }, []);
-
-  const imgStyle = useMemo(() => ({
-    transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})`,
-    cursor: (scale > 1 ? 'grab' : 'zoom-in') as string,
-  }), [translate.x, translate.y, scale]);
-
-  return (
-    <div
-      ref={containerRef}
-      className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center touch-none select-none"
-      onClick={handleClose}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onWheel={handleWheel}
-    >
-      {/* 左箭头 */}
-      {images.length > 1 && currentIndex > 0 && (
-        <button
-          className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
-          onClick={(e) => { e.stopPropagation(); navigate(currentIndex - 1); }}
-        >
-          ‹
-        </button>
-      )}
-
-      <img
-        src={src}
-        alt=""
-        draggable={false}
-        className="max-w-[95vw] max-h-[95vh] object-contain rounded-lg shadow-2xl transition-transform duration-100"
-        style={imgStyle}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (scale <= 1.05) {
-            const now = Date.now();
-            if (now - doubleTapRef.current < 300) {
-              setScale(2.5);
-              doubleTapRef.current = 0;
-            } else {
-              doubleTapRef.current = now;
-            }
-          }
-        }}
-      />
-
-      {/* 右箭头 */}
-      {images.length > 1 && currentIndex < images.length - 1 && (
-        <button
-          className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
-          onClick={(e) => { e.stopPropagation(); navigate(currentIndex + 1); }}
-        >
-          ›
-        </button>
-      )}
-
-      {/* 页码指示器 */}
-      {images.length > 1 && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-sm bg-black/40 px-3 py-1 rounded-full">
-          {currentIndex + 1} / {images.length}
-        </div>
-      )}
-    </div>
-  );
-}
 
 const MemoImage = memo(function MemoImage({ src, alt, onPreview }: { src?: string; alt?: string; onPreview: (url: string) => void }) {
   if (!src) return null;
@@ -632,6 +444,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const [expanded, setExpanded] = useState(initiallyExpanded);
   const [isLong, setIsLong] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  const images = useMemo(() => extractImages(memo.content), [memo.content]);
   const palette = getMemoPalette(isDark, memo.color);
   const bgColor = palette.background;
 
@@ -734,7 +547,6 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   }, [mentionState, showExpandEditor]);
 
   const tags = useMemo(() => extractTags(memo.content), [memo.content]);
-  const images = useMemo(() => extractImages(memo.content), [memo.content]);
   const fileLinks = useMemo(() => extractFileLinks(memo.content), [memo.content]);
   const strippedContent = useMemo(() => {
     let content = memo.content;
@@ -1407,10 +1219,12 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       )}
 
       {/* 图片放大预览 — Portal 到 body，绕开 contain:'layout' 的层叠上下文 */}
-      {previewImage && createPortal(
-        <ImagePreview images={images.map(i => i.url)} src={previewImage} onClose={() => setPreviewImage(null)} />,
-        document.body
-      )}
+      <ImageViewer
+        src={previewImage || ''}
+        alt="Memo 图片"
+        isOpen={previewImage !== null}
+        onClose={() => setPreviewImage(null)}
+      />
 
       {/* 菜单 Portal — 渲染在 body 上，绕开 contain: 'content' 的层叠上下文 */}
       {showMenu && menuPos && createPortal(

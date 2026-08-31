@@ -93,5 +93,51 @@
     return value || fallback || '未命名笔记';
   }
 
-  root.BeaverArticleMarkdown = { convert: convert, cleanTitle: cleanTitle };
+  function extractXTextLines(tweet) {
+    // X's regular posts are rendered as many inline spans. Turndown sees those
+    // spans as one continuous text node, while innerText still contains the
+    // visual paragraph breaks shown to the user.
+    var text = tweet.innerText || tweet.textContent || '';
+    return text
+      .replace(/\u00a0/g, ' ')
+      .split(/\r?\n+/)
+      .map(function (line) { return line.replace(/[ \t]+/g, ' ').trim(); })
+      .filter(Boolean);
+  }
+
+  function xPostTitle(lines) {
+    var first = lines[0] || 'X 帖子';
+    if (first.length <= 80) return first;
+    var sentence = first.match(/^(.{8,80}?[。！？!?])/);
+    if (sentence) return sentence[1];
+    return first.slice(0, 77).replace(/[，、；：,;: ]+$/, '') + '…';
+  }
+
+  // X is a timeline application rather than a conventional article. Readability
+  // often merges navigation, replies and the tweet into one giant "title".
+  // Extract the first visible tweet directly from its stable test-id instead.
+  function extractXArticle(html, pageUrl) {
+    if (!/https?:\/\/(?:www\.)?(?:x\.com|twitter\.com)(?:\/|$)/i.test(pageUrl || '')) return null;
+    var doc = new DOMParser().parseFromString(html || '', 'text/html');
+    var tweet = doc.querySelector('article[data-testid="tweet"] [data-testid="tweetText"]') ||
+      doc.querySelector('[data-testid="tweetText"]');
+    if (!tweet || !(tweet.textContent || '').trim()) return null;
+
+    var lines = extractXTextLines(tweet);
+    var title = xPostTitle(lines);
+    var markdown = lines.join('\n\n');
+    if (title && markdown.indexOf(title) === 0) {
+      markdown = markdown.slice(title.length).replace(/^\s*\n?/, '').trim();
+    }
+    // Keep the original HTML for callers that need media, but use the
+    // line-preserving markdown above for regular X posts. This avoids X's
+    // inline span structure collapsing all paragraphs into one line.
+    return { title: cleanTitle(title, 'X 帖子'), html: tweet.outerHTML, markdown: markdown };
+  }
+
+  root.BeaverArticleMarkdown = {
+    convert: convert,
+    cleanTitle: cleanTitle,
+    extractXArticle: extractXArticle
+  };
 }(typeof window !== 'undefined' ? window : self));

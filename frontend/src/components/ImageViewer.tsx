@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, type TouchEvent as ReactTouchEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 
 interface ImageViewerProps {
@@ -13,6 +14,9 @@ const ImageViewer = ({ src, alt = '图片', isOpen, onClose }: ImageViewerProps)
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const pinchStartRef = useRef<{ distance: number; scale: number } | null>(null);
+  const touchDragStartRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
+  const lastTapRef = useRef(0);
 
   const resetState = useCallback(() => {
     setScale(1);
@@ -74,6 +78,67 @@ const ImageViewer = ({ src, alt = '图片', isOpen, onClose }: ImageViewerProps)
     setIsDragging(false);
   };
 
+  const touchDistance = (touches: TouchList) => {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.hypot(dx, dy);
+  };
+
+  const handleTouchStart = (e: ReactTouchEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    const { touches } = e;
+    if (touches.length === 2) {
+      pinchStartRef.current = { distance: touchDistance(touches), scale };
+      touchDragStartRef.current = null;
+      return;
+    }
+    if (touches.length !== 1) return;
+
+    const now = Date.now();
+    if (now - lastTapRef.current < 300) {
+      setScale(previous => previous > 1.5 ? 1 : 2.5);
+      setPosition({ x: 0, y: 0 });
+      lastTapRef.current = 0;
+      return;
+    }
+    lastTapRef.current = now;
+    if (scale > 1) {
+      touchDragStartRef.current = {
+        x: touches[0].clientX,
+        y: touches[0].clientY,
+        px: position.x,
+        py: position.y,
+      };
+      setIsDragging(true);
+    }
+  };
+
+  const handleTouchMove = (e: ReactTouchEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const { touches } = e;
+    if (touches.length === 2 && pinchStartRef.current) {
+      const ratio = touchDistance(touches) / pinchStartRef.current.distance;
+      setScale(Math.max(0.25, Math.min(5, pinchStartRef.current.scale * ratio)));
+      return;
+    }
+    if (touches.length === 1 && touchDragStartRef.current) {
+      const start = touchDragStartRef.current;
+      setPosition({
+        x: start.px + touches[0].clientX - start.x,
+        y: start.py + touches[0].clientY - start.y,
+      });
+    }
+  };
+
+  const handleTouchEnd = (e: ReactTouchEvent<HTMLDivElement>) => {
+    if (e.touches.length < 2) pinchStartRef.current = null;
+    if (e.touches.length === 0) {
+      touchDragStartRef.current = null;
+      setIsDragging(false);
+    }
+  };
+
   const handleZoomIn = () => {
     setScale(prev => Math.min(prev + 0.25, 5));
   };
@@ -94,13 +159,17 @@ const ImageViewer = ({ src, alt = '图片', isOpen, onClose }: ImageViewerProps)
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center animate-in fade-in duration-200"
+      className="fixed inset-0 z-[9999] overflow-hidden bg-black/90 flex items-center justify-center animate-in fade-in duration-200"
+      style={{ left: 'var(--desktop-overlay-left, 0px)' }}
       onClick={handleBackdropClick}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       {/* Close Button */}
       <button
@@ -158,7 +227,8 @@ const ImageViewer = ({ src, alt = '图片', isOpen, onClose }: ImageViewerProps)
       <div className="absolute top-4 left-4 text-white/60 text-sm">
         滚轮缩放 · 拖拽移动 · ESC 关闭
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

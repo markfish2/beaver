@@ -98,6 +98,18 @@ function cleanCellContent(html) {
   try {
     // KEY FIX: Get full rendered HTML from LIVE DOM (not cloneNode which misses JS-rendered content)
     var rawHtml = document.documentElement.outerHTML;
+    var xArticle = BeaverArticleMarkdown.extractXArticle(rawHtml, location.href);
+    if (xArticle) {
+      var xMarkdown = xArticle.markdown;
+      var xMeta = ['> 原文: ' + location.href];
+      chrome.runtime.sendMessage({
+        type: '_extractResult',
+        title: xArticle.title,
+        markdown: xMeta.join('\n') + '\n\n' + xMarkdown,
+        pageUrl: location.href,
+      });
+      return;
+    }
     var liveDoc = new DOMParser().parseFromString(rawHtml, 'text/html');
 
     // Try Readability on the full parsed document

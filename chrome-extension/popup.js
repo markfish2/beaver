@@ -45,6 +45,17 @@ function showToast(el, message, type) {
   }
 }
 
+function extensionErrorMessage(error, fallback) {
+  const message = error instanceof Error ? error.message : String(error || '');
+  if (/extension context invalidated|context invalidated/i.test(message)) {
+    return '插件刚刚更新，请关闭此窗口后重新打开插件再试';
+  }
+  if (/cannot access|not allowed|permission/i.test(message)) {
+    return '当前页面禁止插件读取内容，请换到普通网页后重试';
+  }
+  return message || fallback;
+}
+
 // ---- Settings ----
 async function loadSettings() {
   const { apiUrl, apiToken } = await chrome.storage.local.get(['apiUrl', 'apiToken']);
@@ -171,9 +182,9 @@ async function loadSelection() {
     // Enable/disable save button
     $('#btn-save').disabled = !detectedText && detectedImages.length === 0;
 
-  } catch {
+  } catch (error) {
     // e.g. chrome:// pages where scripting is not allowed
-    $('#selection-preview').textContent = '无法获取选中内容';
+    $('#selection-preview').textContent = extensionErrorMessage(error, '无法获取选中内容');
     $('#selection-preview').classList.add('empty');
     detectedText = '';
     detectedImages = [];
@@ -251,6 +262,21 @@ $('#btn-extract').addEventListener('click', async () => {
     const pageData = results?.[0]?.result;
     if (!pageData?.html) {
       throw new Error('无法获取页面内容');
+    }
+
+    const xArticle = BeaverArticleMarkdown.extractXArticle(pageData.html, pageData.url);
+    if (xArticle) {
+      const xMarkdown = `> 原文: ${pageData.url}\n\n${xArticle.markdown}`;
+      const response = await chrome.runtime.sendMessage({
+        type: 'saveDocument',
+        title: xArticle.title,
+        markdown: xMarkdown,
+        pageUrl: pageData.url,
+      });
+      if (!response?.ok) throw new Error(response?.error || '保存失败');
+      toast.textContent = '已保存: ' + xArticle.title + ' ✓';
+      toast.className = 'toast success';
+      return;
     }
 
     // Parse with Readability (in popup context - no CORS issues)
@@ -359,7 +385,7 @@ $('#btn-extract').addEventListener('click', async () => {
   } catch (err) {
     btn.textContent = '提取正文并保存';
     btn.disabled = false;
-    showToast(toast, err.message || '提取失败', 'error');
+    showToast(toast, extensionErrorMessage(err, '提取失败'), 'error');
   }
 });
 
@@ -389,7 +415,7 @@ $('#btn-inject-fab').addEventListener('click', async () => {
 
     showToast($('#save-toast'), '浮动按钮已注入 ✓', 'success');
   } catch (err) {
-    showToast($('#save-toast'), err.message || '注入失败', 'error');
+    showToast($('#save-toast'), extensionErrorMessage(err, '注入失败'), 'error');
   }
 });
 

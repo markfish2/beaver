@@ -406,6 +406,13 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth));
   }, [sidebarWidth]);
 
+  // 全屏弹窗的遮罩只覆盖主内容区，侧边栏保持独立可见；宽度变化时同步更新。
+  useEffect(() => {
+    const overlayLeft = isMobile ? 0 : (contentExpanded ? ICON_RAIL_WIDTH + sidebarWidth : ICON_RAIL_WIDTH);
+    document.documentElement.style.setProperty('--desktop-overlay-left', `${overlayLeft}px`);
+    return () => document.documentElement.style.removeProperty('--desktop-overlay-left');
+  }, [contentExpanded, isMobile, sidebarWidth]);
+
   useEffect(() => {
     const handlePointerMove = (e: PointerEvent) => {
       if (!resizingRef.current) return;

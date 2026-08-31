@@ -418,6 +418,13 @@ body,
     overflow: hidden;
   }
 
+  /* 桌面端弹窗遮罩从侧边栏右侧开始，避免把导航栏一起压暗。 */
+  @media (min-width: 769px) {
+    .fixed.inset-0 {
+      left: var(--desktop-overlay-left, 0px) !important;
+    }
+  }
+
   #root {
     width: 100%;
     height: 100%;

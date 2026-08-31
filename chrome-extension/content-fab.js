@@ -104,6 +104,19 @@
 
     try {
       var rawHtml = document.documentElement.outerHTML;
+      var xArticle = BeaverArticleMarkdown.extractXArticle(rawHtml, location.href);
+      if (xArticle) {
+        chrome.runtime.sendMessage({
+          type: 'saveDocument',
+          title: xArticle.title,
+          markdown: '> 原文: ' + location.href + '\n\n' + xArticle.markdown,
+          pageUrl: location.href,
+        }, function(res) {
+          if (res && res.ok) showToast('已保存: ' + xArticle.title + ' ✓', '#059669');
+          else showToast('保存失败: ' + (res && res.error || ''), '#dc2626');
+        });
+        return;
+      }
       var liveDoc = new DOMParser().parseFromString(rawHtml, 'text/html');
       var article = null;
       try { article = new Readability(liveDoc).parse(); } catch(err) {}
