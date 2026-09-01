@@ -55,6 +55,12 @@ function ToolbarButton({ icon, label, onClick, danger }: {
 const isHarmonyBrowser = typeof navigator !== 'undefined'
   && /HarmonyOS|OpenHarmony|ArkWeb|HUAWEI/i.test(navigator.userAgent);
 
+// iOS Safari/Chrome 的键盘通常覆盖网页，不保证及时缩小 visualViewport。
+// iPad 的桌面 UA 也需要识别，否则大纲/日记节点在 iPadOS 上会走错误分支。
+const isIosBrowser = typeof navigator !== 'undefined'
+  && (/iPad|iPhone|iPod/i.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
 const MobileToolbar = memo(function MobileToolbar({
   isVisible,
   onIndent,
@@ -70,6 +76,8 @@ const MobileToolbar = memo(function MobileToolbar({
 }: MobileToolbarProps) {
   // 工具栏固定在浏览器为键盘让出的布局底部。
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [iosKeyboardInset, setIosKeyboardInset] = useState(0);
+  const [iosToolbarTop, setIosToolbarTop] = useState<number | null>(null);
   // 必须在组件首次挂载时记录基准。鸿蒙上键盘可能先收缩视口，
   // 然后才触发 focusedNode 状态更新；在 isVisible=true 时再记录会把键盘高度当成基准。
   const layoutHeightRef = useRef(
@@ -82,15 +90,43 @@ const MobileToolbar = memo(function MobileToolbar({
 
   const updatePosition = useCallback(() => {
     const viewport = window.visualViewport;
+    const active = document.activeElement;
+    const isEditable = active instanceof HTMLElement && (
+      active.isContentEditable
+      || active.tagName === 'INPUT'
+      || active.tagName === 'TEXTAREA'
+    );
+
+    // iOS 的系统键盘是覆盖式布局，键盘出现时 visualViewport.height 可能不变。
+    // 节点工具栏只在真实编辑节点获得焦点时出现，避免依赖不稳定的高度差。
+    // 该分支只针对 iOS，不改变鸿蒙和安卓已有的视口/UA 判断。
+    if (isIosBrowser) {
+      const isOpen = isVisible && isEditable;
+      // iOS 键盘通常覆盖 layout viewport，Flex 底部不会自动被推到键盘上方。
+      // visualViewport 与 layout viewport 的差值就是工具栏需要避开的高度。
+      const inset = viewport
+        ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+        : 0;
+      setIosKeyboardInset(isOpen ? inset : 0);
+      // iOS 的 fixed 元素可能仍以 layout viewport 为参照，使用 bottom
+      // 会把工具栏留在键盘后面。改用 visual viewport 的底边计算 top，
+      // 让工具栏直接落在当前可视区域底部（键盘上方）。
+      if (isOpen && viewport) {
+        setIosToolbarTop(Math.max(
+          viewport.offsetTop + viewport.height - 52,
+          viewport.offsetTop + 8,
+        ));
+      } else {
+        setIosToolbarTop(null);
+      }
+      setKeyboardOpen(isOpen);
+      window.dispatchEvent(new CustomEvent('keyboard-change', { detail: { open: isOpen } }));
+      return;
+    }
+
     if (!viewport) {
       // 部分移动端浏览器（尤其是隐私模式/内置浏览器）没有 visualViewport，
       // 但键盘弹出时仍会通过 window.resize 缩小布局视口。
-      const active = document.activeElement;
-      const isEditable = active instanceof HTMLElement && (
-        active.isContentEditable
-        || active.tagName === 'INPUT'
-        || active.tagName === 'TEXTAREA'
-      );
       // 没有 visualViewport 时只能以编辑框焦点作为键盘可见的兜底信号；
       // 键盘收起后编辑框通常会失焦，focusout 会再次刷新状态。
       const keyboardHeight = Math.max(0, layoutHeightRef.current - window.innerHeight);
@@ -163,7 +199,17 @@ const MobileToolbar = memo(function MobileToolbar({
       role="toolbar"
       aria-label="节点编辑工具栏"
       className="keyboard-toolbar flex-none mx-3 mb-2 overflow-hidden rounded-full border border-white/35 bg-white/30 shadow-[0_2px_16px_-6px_rgba(15,23,42,0.18)] backdrop-blur-2xl backdrop-saturate-200 dark:border-white/10 dark:bg-gray-800/35 dark:shadow-black/20 z-50"
-      style={{ flex: '0 0 44px' }}
+      style={isIosBrowser
+        ? {
+          position: 'fixed',
+          left: '0.75rem',
+          right: '0.75rem',
+          ...(iosToolbarTop !== null
+            ? { top: `${iosToolbarTop}px` }
+            : { bottom: `calc(${iosKeyboardInset}px + env(safe-area-inset-bottom, 0px) + 0.5rem)` }),
+          zIndex: 100,
+        }
+        : { flex: '0 0 44px' }}
       onMouseDown={(event) => event.preventDefault()}
     >
       <div className="flex h-full items-center justify-around">
