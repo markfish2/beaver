@@ -310,6 +310,20 @@ const AppearanceStateProvider = ({
 
   const [isOpen, setIsOpen] = useState(false);
 
+  // 账号设置同步回来时只更新设置值，不重挂载 Provider，避免面板被意外关闭。
+  useEffect(() => {
+    if (!accountSettings) return;
+    setSettings(prev => (
+      prev.fontSize === accountSettings.fontSize
+      && prev.fontFamily === accountSettings.fontFamily
+      && prev.theme === accountSettings.theme
+      && prev.themeColor === accountSettings.themeColor
+      && prev.markdownStyle === accountSettings.markdownStyle
+        ? prev
+        : accountSettings
+    ));
+  }, [accountSettings]);
+
   // 应用主题 CSS 变量和样式
   const applyTheme = useCallback((themeKey: Theme, themeColor: ThemeColor) => {
     const systemDark = themeKey === 'system'
@@ -514,12 +528,8 @@ export const AppearanceProvider = ({ children }: { children: ReactNode }) => {
     ...serverSettings,
     ...pendingToSettings(pendingSync),
   } : undefined;
-  const accountKey = user
-    ? `${user.id}:${user.theme}:${user.theme_color}:${user.font_family}:${user.font_size}:${user.markdown_style}:${JSON.stringify(pendingSync)}`
-    : 'local';
-
   return (
-    <AppearanceStateProvider key={accountKey} accountSettings={accountSettings} onSettingsPersisted={applyUser}>
+    <AppearanceStateProvider accountSettings={accountSettings} onSettingsPersisted={applyUser}>
       {children}
     </AppearanceStateProvider>
   );
