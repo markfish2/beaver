@@ -254,7 +254,7 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
     <div className={`flex-1 flex flex-col h-full bg-[var(--app-canvas)] ${isEmpty ? 'items-center justify-center' : ''}`}>
       {/* Messages */}
       <div className={`${isEmpty ? 'hidden' : 'flex-1 overflow-y-auto'}`}>
-        <div className="max-w-[700px] mx-auto px-4 pb-4 space-y-4" style={{ paddingTop: `max(calc(env(safe-area-inset-top, 0px) + 58px), 1rem)` }}>
+        <div className="max-w-[700px] mx-auto px-4 pb-[96px] space-y-4" style={{ paddingTop: `max(calc(env(safe-area-inset-top, 0px) + 58px), 1rem)` }}>
         {loadingConv ? (
           <div className="text-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-gray-400 mx-auto" />

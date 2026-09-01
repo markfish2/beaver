@@ -89,9 +89,9 @@ export const getRecentDocuments = async (limit: number = 20): Promise<Document[]
   return response.data;
 };
 
-export const getDocument = async (id: string): Promise<Document> => {
+export const getDocument = async (id: string, forceRefresh = false): Promise<Document> => {
   const cacheKey = `document:${id}`;
-  const cached = dataCache.get<Document>(cacheKey);
+  const cached = forceRefresh ? undefined : dataCache.get<Document>(cacheKey);
   if (cached) return cached;
 
   const response = await api.get<Document>(`/documents/${id}`);
@@ -144,9 +144,9 @@ export const deleteDocument = async (id: string, deleteChildren: boolean = false
 };
 
 // Nodes
-export const getNodes = async (documentId: string) => {
+export const getNodes = async (documentId: string, forceRefresh = false) => {
   const cacheKey = `nodes:${documentId}`;
-  const cached = dataCache.get<Node[]>(cacheKey);
+  const cached = forceRefresh ? undefined : dataCache.get<Node[]>(cacheKey);
   if (cached) return cached;
   
   const response = await api.get<Node[]>(`/documents/${documentId}/nodes`);
@@ -395,9 +395,9 @@ export const getDiaryDayDates = async (year: number, month: number): Promise<num
   return response.data.days;
 };
 
-export const getDiarySummary = async (): Promise<{ tasks: Node[]; tags: string[] }> => {
+export const getDiarySummary = async (forceRefresh = false): Promise<{ tasks: Node[]; tags: string[] }> => {
   const cacheKey = 'diary:summary:v2';
-  const cached = dataCache.get<{ tasks: Node[]; tags: string[] }>(cacheKey);
+  const cached = forceRefresh ? undefined : dataCache.get<{ tasks: Node[]; tags: string[] }>(cacheKey);
   if (cached) return cached;
 
   const response = await api.get<{ tasks: Node[]; tags: string[] }>('/diary/summary');
@@ -493,10 +493,10 @@ export const createMemo = async (content: string, aiExcluded: boolean = false): 
   return response.data;
 };
 
-export const getMemos = async (page: number = 1, pageSize: number = 20, archived: boolean = false, tag?: string, search?: string, publicOnly?: boolean): Promise<MemoListResponse> => {
+export const getMemos = async (page: number = 1, pageSize: number = 20, archived: boolean = false, tag?: string, search?: string, publicOnly?: boolean, forceRefresh = false): Promise<MemoListResponse> => {
   const viewKey = publicOnly ? 'public' : (archived ? 'archived' : 'active');
   const cacheKey = `memos:list:${viewKey}:${page}:${pageSize}${tag ? ':' + tag : ''}${search ? ':s=' + search : ''}`;
-  const cached = dataCache.get<MemoListResponse>(cacheKey);
+  const cached = forceRefresh ? undefined : dataCache.get<MemoListResponse>(cacheKey);
   if (cached) return cached;
 
   const params: Record<string, string | number | boolean> = { page, page_size: pageSize, archived };

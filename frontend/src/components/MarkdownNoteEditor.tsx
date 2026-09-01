@@ -51,7 +51,7 @@ SyntaxHighlighter.registerLanguage('go', go);
 SyntaxHighlighter.registerLanguage('rust', rust);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
 import { Pencil, Eye, Save, Columns2, Copy, CheckCheck, Download, Share2 } from 'lucide-react';
-import { getNodes, createNode, updateNode, uploadFile, getDocuments, updateDocument, downloadAttachment, getRelatedNotes } from '../api/data';
+import { getNodes, createNode, updateNode, uploadFile, getDocuments, getDocument, updateDocument, downloadAttachment, getRelatedNotes } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
 import type { Document, Node, RelatedNote } from '../api/data';
 import MermaidBlock from './MermaidBlock';
@@ -586,7 +586,12 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedRef = useRef('');
   const pendingSaveRef = useRef<string | null>(null);
+  const contentRef = useRef('');
   const previousDocumentIdRef = useRef(documentId);
+
+  useEffect(() => {
+    contentRef.current = content;
+  }, [content]);
 
   useEffect(() => {
     if (previousDocumentIdRef.current === documentId) return;
@@ -786,6 +791,34 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
     })();
     return () => { cancelled = true; };
   }, [documentId, initialNodes, initialDocuments, onDirtyChange]);
+
+  // 阅读页面保持打开时检查远端修改；编辑中、存在草稿或待保存内容时不覆盖本地输入。
+  useEffect(() => {
+    if (isNew || !nodeId) return;
+    const refresh = async () => {
+      if (viewMode !== 'preview' || document.visibilityState !== 'visible' || pendingSaveRef.current !== null) return;
+      try {
+        const [nodes, remoteDocument] = await Promise.all([
+          getNodes(documentId, true),
+          getDocument(documentId, true).catch(() => null),
+        ]);
+        const remoteNode = nodes.find(node => node.id === nodeId) || nodes.find(node => !node.parent_node_id);
+        if (remoteNode && remoteNode.content !== lastSavedRef.current && contentRef.current === lastSavedRef.current) {
+          lastSavedRef.current = remoteNode.content || '';
+          setContent(remoteNode.content || '');
+        }
+        if (remoteDocument && remoteDocument.title !== title) setTitle(remoteDocument.title);
+      } catch (error) {
+        console.error('Failed to refresh note', error);
+      }
+    };
+    const timer = window.setInterval(() => { void refresh(); }, 15000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [documentId, isNew, nodeId, title, viewMode]);
 
   const scheduleSave = useCallback((newContent: string) => {
     saveEditorDraft('markdown-note', documentId, newContent);

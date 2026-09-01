@@ -250,6 +250,47 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
     fetchMemos();
   }, [memoView, tagFilter, searchFilter]);
 
+  // Memo 首页保持打开时刷新列表和待办摘要。输入框或展开编辑器获得焦点时暂停，
+  // 避免远端列表更新打断本地正在输入的内容；失焦后下一轮自动补齐。
+  useEffect(() => {
+    const refresh = async () => {
+      if (document.visibilityState !== 'visible') return;
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && active.closest('.memo-input-shell, .memo-expanded-editor')) return;
+      try {
+        const isArchived = memoViewRef.current === 'archived';
+        const isPublic = memoViewRef.current === 'public';
+        if (memoPageRef.current === 1) {
+          const data = await getMemos(1, 20, isArchived, tagFilterRef.current || undefined, searchFilterRef.current || undefined, isPublic, true);
+          setMemos(data.memos);
+          setMemoTotal(data.total);
+        }
+        const [summary, todos] = await Promise.all([getDiarySummary(true), getTodos(false).catch(() => [])]);
+        const diaryTasks: PendingTask[] = summary.tasks.map(t => ({ ...t, origin: 'diary' }));
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const threeDaysLater = new Date(todayStart.getTime() + 4 * 24 * 60 * 60 * 1000);
+        const urgentTodos: PendingTask[] = todos.filter(todo => {
+          const parsed = parseTodoDueDate(todo.content);
+          if (!parsed.dueDate) return false;
+          const due = new Date(parsed.dueDate.getFullYear(), parsed.dueDate.getMonth(), parsed.dueDate.getDate());
+          return due < threeDaysLater;
+        }).map(todo => ({ ...todo, origin: 'todo' }));
+        const tasks = [...diaryTasks, ...urgentTodos];
+        tasks.sort((a, b) => (getPendingTaskDate(a) ?? Infinity) - (getPendingTaskDate(b) ?? Infinity));
+        setAllPendingTasks(tasks);
+      } catch (error) {
+        console.error('Failed to refresh memo home', error);
+      }
+    };
+    const timer = window.setInterval(() => { void refresh(); }, 15000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, []);
+
   // 从搜索结果页或知识图谱跳转过来时，同步 URL 参数到状态并清理
   useEffect(() => {
     if (searchFromUrl || highlightFromUrl || viewFromUrl || memoIdFromUrl) {
@@ -475,7 +516,10 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
     <div className={`overflow-y-auto bg-[var(--app-canvas)] custom-scrollbar scrollbar-auto-hide ${document.documentElement.dataset.mobileLayout ? 'flex-1' : 'flex-1 h-full'} ${
       showPinnedPanel ? pinnedPanelCls.pageScrollLock : ''
     }`}
-      style={document.documentElement.dataset.mobileLayout ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 44px)', paddingBottom: '62px' } : undefined}
+      style={document.documentElement.dataset.mobileLayout ? {
+        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 44px)',
+        paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)',
+      } : undefined}
     >
       {/* 移动端菜单按钮 (hidden when MobileLayout is active) */}
       {isMobile && !sidebarOpen && !showRightPanel && !document.documentElement.dataset.mobileLayout && (

@@ -1219,7 +1219,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   // 注意：不再在 sidebarClose 时重新 fetchData，
   // documentId 变化时 useEffect 已自动加载数据
 
-  const fetchData = useCallback(async (id: string, fetchId?: number) => {
+  const fetchData = useCallback(async (id: string, fetchId?: number, forceRefresh = false) => {
     const normalizedId = id.replace(/-/g, '');
     const contextDoc = documentsRef.current.find(d => d.id.replace(/-/g, '') === normalizedId);
     const isCanvasDocument = contextDoc?.type === 'excalidraw';
@@ -1230,11 +1230,11 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     }
     try {
       // 节点和文档元数据互不依赖，并行获取，避免文档不在 context 时多等待一轮 RTT。
-      const documentPromise = contextDoc
+      const documentPromise = contextDoc && !forceRefresh
         ? Promise.resolve(contextDoc)
-        : getDocument(id).catch(() => null);
+        : getDocument(id, forceRefresh).catch(() => null);
       const [nodesData, foundDoc] = await Promise.all([
-        isCanvasDocument || cachedNodes ? Promise.resolve(cachedNodes || [] as Node[]) : getNodes(id),
+        isCanvasDocument || (cachedNodes && !forceRefresh) ? Promise.resolve(cachedNodes || [] as Node[]) : getNodes(id, forceRefresh),
         documentPromise,
       ]);
 
@@ -1316,6 +1316,25 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       fetchIdRef.current++;
     }
   }, [documentId, fetchData]);
+
+  // 页面保持打开时定期读取远端版本。编辑节点或保存队列有内容时暂不合并，
+  // 防止另一端的修改覆盖本地尚未保存的输入；编辑结束后下一轮会自动同步。
+  useEffect(() => {
+    const activeMode = documentTabs.find(tab => tab.key === activeDocumentTabKey)?.mode;
+    // 普通笔记由 MarkdownNoteEditor 自己负责刷新；这里仅负责大纲/日记，
+    // 避免编辑普通笔记时父级刷新 initialNodes 造成编辑器重置。
+    if (!documentId || (activeDocumentTabKey && activeMode !== 'outline')) return;
+    const refresh = () => {
+      if (document.visibilityState !== 'visible' || editingNodesRef.current.size > 0 || pendingCount > 0 || saveStatus === 'saving') return;
+      void fetchData(documentId, ++fetchIdRef.current, true);
+    };
+    const timer = window.setInterval(refresh, 15000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [activeDocumentTabKey, documentId, documentTabs, fetchData, pendingCount, saveStatus]);
 
   useEffect(() => {
     logNavigation('main-area-document-state', {

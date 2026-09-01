@@ -258,10 +258,11 @@
   --color-gray-600: #4b5563;
   --color-gray-700: #374151;
   --color-gray-800: #1f2937;
-  --color-gray-900: #111827;
+  --color-gray-900: #273449;
   --color-gray-950: #030712;
   --app-canvas: #f7f6f2;
   --app-surface: #f7f6f2;
+  --app-text: #273449;
   --app-sidebar: #faf9f6;
   --app-surface-raised: #ffffff;
   --app-icon-rail: #f5f4ee;
@@ -287,6 +288,7 @@
   --color-gray-950: #030712;
   --app-canvas: #111827;
   --app-surface: #1f2937;
+  --app-text: #e5e7eb;
   --app-sidebar: #1f2937;
   --app-surface-raised: #374151;
   --app-icon-rail: #111827;
@@ -312,6 +314,7 @@
   --color-gray-950: #1c1c1a;
   --app-canvas: #262624;
   --app-surface: #2d2d2a;
+  --app-text: #e7e4dd;
   --app-sidebar: #2d2d2a;
   --app-surface-raised: #353532;
   --app-icon-rail: #262624;
@@ -410,7 +413,8 @@ body,
   }
 
   body {
-    @apply antialiased text-gray-900 bg-white dark:bg-gray-900 dark:text-gray-100;
+    @apply antialiased bg-white dark:bg-gray-900 dark:text-gray-100;
+    color: var(--app-text);
     font-family: var(--outline-font-family);
     font-size: 1rem;
     width: 100%;
