@@ -820,6 +820,24 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
     };
   }, [documentId, isNew, nodeId, title, viewMode]);
 
+  const persistContent = useCallback(async (newContent: string): Promise<boolean> => {
+    if (!nodeId) return false;
+    setSaving(true);
+    try {
+      await updateNode(nodeId, { content: newContent });
+      clearEditorDraft('markdown-note', documentId);
+      lastSavedRef.current = newContent;
+      pendingSaveRef.current = null;
+      onDirtyChange?.(false);
+      return true;
+    } catch (e) {
+      console.error('Failed to save note', e);
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [documentId, nodeId, onDirtyChange]);
+
   const scheduleSave = useCallback((newContent: string) => {
     saveEditorDraft('markdown-note', documentId, newContent);
     if (newContent === lastSavedRef.current) { pendingSaveRef.current = null; onDirtyChange?.(false); return; }
@@ -827,13 +845,27 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
     pendingSaveRef.current = newContent;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
-      if (!nodeId) return;
-      setSaving(true);
-      try { await updateNode(nodeId, { content: newContent }); clearEditorDraft('markdown-note', documentId); lastSavedRef.current = newContent; pendingSaveRef.current = null; onDirtyChange?.(false); }
-      catch (e) { console.error('Failed to save note', e); }
-      finally { setSaving(false); }
+      await persistContent(newContent);
     }, 500);
-  }, [nodeId, onDirtyChange]);
+  }, [documentId, onDirtyChange, persistContent]);
+
+  const handleViewModeToggle = useCallback(async () => {
+    if (viewMode === 'edit' || viewMode === 'split') {
+      const latestContent = editorRef.current?.getValue() ?? contentRef.current;
+      if (latestContent !== lastSavedRef.current) {
+        if (saveTimerRef.current) {
+          clearTimeout(saveTimerRef.current);
+          saveTimerRef.current = null;
+        }
+        saveEditorDraft('markdown-note', documentId, latestContent);
+        pendingSaveRef.current = latestContent;
+        await persistContent(latestContent);
+      }
+      setViewMode('preview');
+      return;
+    }
+    setViewMode('edit');
+  }, [documentId, persistContent, viewMode]);
 
   const saveTitle = useCallback(async (newTitle: string) => {
       try { await updateDocumentTitle(documentId, newTitle); await updateDocument(documentId, { title: newTitle }); onDirtyChange?.(false); }
@@ -1219,7 +1251,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
             <Share2 className="h-[14px] w-[14px]" />
             <span className="hidden lg:inline">分享</span>
           </button>
-          <button onClick={() => setViewMode(viewMode === 'preview' ? 'edit' : 'preview')}
+          <button onClick={() => { void handleViewModeToggle(); }}
             className={`editor-topbar-button ${viewMode !== 'preview' ? 'is-active' : ''}`}>
             {viewMode === 'preview' ? <Pencil className="h-[14px] w-[14px]" /> : <Eye className="h-[14px] w-[14px]" />}
           </button>

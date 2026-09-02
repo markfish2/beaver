@@ -2,7 +2,7 @@ import React, { useRef, useState, useCallback, useEffect, useMemo, Component, Su
 import type { ReactNode, ErrorInfo } from 'react';
 import { Excalidraw, MainMenu, exportToBlob, exportToSvg, FONT_FAMILY } from "@excalidraw/excalidraw";
 import type { AppState, BinaryFiles, ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from "@excalidraw/excalidraw/types";
-import { ChevronLeft, ChevronRight, Download, FileJson, FileText, GripVertical, Image, Loader2, Play, Presentation, StickyNote, Wand2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Eye, EyeOff, FileJson, FileText, GripVertical, Image, Loader2, Play, Presentation, StickyNote, Wand2, X } from 'lucide-react';
 import { getExcalidrawData, getExcalidrawDataFresh, updateExcalidrawData, loadExcalidrawFiles, VersionConflictError } from '../api/excalidraw';
 import NoteEmbedContent from './NoteEmbedContent';
 import NotePickerDialog from './NotePickerDialog';
@@ -1035,6 +1035,14 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
     saveDataRef.current?.(elements, appState);
   }, [readOnly]);
 
+  const toggleSlideVisibility = useCallback((frameId: string) => {
+    if (readOnly) return;
+    const slides = presentationRef.current.slides.map(slide =>
+      slide.frameId === frameId ? { ...slide, visible: !slide.visible } : slide,
+    );
+    queuePresentationSave({ slides });
+  }, [queuePresentationSave, readOnly]);
+
   const reorderSlides = useCallback((fromFrameId: string, toFrameId: string) => {
     if (readOnly || fromFrameId === toFrameId) return;
     const slides = [...presentationRef.current.slides];
@@ -1348,12 +1356,25 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
                   >
                     <GripVertical className="h-4 w-4" />
                   </button>
-                  <button onClick={() => { focusFrame(slide.frameId); setShowPresentationPanel(false); }} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                  <button onClick={() => { focusFrame(slide.frameId); setShowPresentationPanel(false); }} className={`flex min-w-0 flex-1 items-center gap-2 text-left ${slide.visible ? '' : 'opacity-45'}`}>
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-100 text-xs font-semibold tabular-nums text-gray-500 dark:bg-gray-800 dark:text-gray-400">{String(index + 1).padStart(2, '0')}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm text-gray-700 dark:text-gray-200">{getFrameTitle(frame, index)}</span>
                       <span className="block truncate text-[11px] text-gray-400">{Math.round(frame.width)} × {Math.round(frame.height)}</span>
                     </span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={readOnly}
+                    onClick={event => {
+                      event.stopPropagation();
+                      toggleSlideVisibility(slide.frameId);
+                    }}
+                    className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 disabled:cursor-default disabled:opacity-50 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                    title={slide.visible ? '播放时显示此页' : '播放时隐藏此页'}
+                    aria-label={slide.visible ? '播放时显示此页' : '播放时隐藏此页'}
+                  >
+                    {slide.visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                   </button>
                 </div>
               );

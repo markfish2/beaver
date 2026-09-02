@@ -888,11 +888,13 @@ body,
 .memo-content p:last-child { margin-bottom: 0; }
 
 /* 列表 - 覆盖 Tailwind preflight 的 list-style: none */
-.memo-content ul { list-style: disc inside !important; padding-left: 1.4em; margin-bottom: 1em; }
-.memo-content ol { list-style: decimal inside !important; padding-left: 1.4em; margin-bottom: 1em; }
+.memo-content ul { list-style: disc outside !important; padding-left: 1.4em; margin-bottom: 1em; }
+.memo-content ol { list-style: decimal outside !important; padding-left: 1.4em; margin-bottom: 1em; }
 .memo-content li { line-height: var(--prose-line-height); }
 .memo-content li + li { margin-top: 0.25em; }
 .memo-content li > ul, .memo-content li > ol { margin-bottom: 0; padding-left: 1.4em; }
+/* 列表项里的段落应与标记处于同一行，避免 Chromium 将编号单独排成一行。 */
+.memo-content li > p { margin-top: 0; margin-bottom: 0; }
 /* 行内代码 */
 .memo-content code:not(pre code) { background: #fff8c5; padding: 0.1em 0.3em; border-radius: 3px; font-size: 0.86em; }
 .dark .memo-content code:not(pre code) { background: #4a3f1a; }
