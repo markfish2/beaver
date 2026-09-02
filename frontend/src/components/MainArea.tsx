@@ -60,6 +60,17 @@ const MemoHome = lazy(() => import('./MemoHome'));
 
 type EmptyWorkspaceView = 'files' | 'recent' | 'starred' | 'projects';
 
+// 轮询只负责检测远端变化。比较完整记录后复用旧引用，避免相同响应触发整棵节点树重渲染。
+function sameRecordList<T>(left: T[], right: T[]): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  return left.every((record, index) => JSON.stringify(record) === JSON.stringify(right[index]));
+}
+
+function sameRecord<T>(left: T | null, right: T | null): boolean {
+  return left === right || JSON.stringify(left) === JSON.stringify(right);
+}
+
 const EmptyDocumentWorkspace = ({ view }: { view: EmptyWorkspaceView }) => {
   const content = {
     files: { icon: FolderOpen, title: '请选择一篇笔记', description: '请在左侧文件列表中选择笔记查看或编辑' },
@@ -1226,7 +1237,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     const cachedNodes = isCanvasDocument ? [] : dataCache.get<Node[]>(`nodes:${id}`);
     setIsLoading(!isCanvasDocument && !cachedNodes);
     if (cachedNodes) {
-      setNodes(cachedNodes);
+      setNodes(previous => sameRecordList(previous, cachedNodes) ? previous : cachedNodes);
     }
     try {
       // 节点和文档元数据互不依赖，并行获取，避免文档不在 context 时多等待一轮 RTT。
@@ -1258,9 +1269,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         }
       }
 
-      setNodes(processedNodes);
+      setNodes(previous => sameRecordList(previous, processedNodes) ? previous : processedNodes);
       if (foundDoc) {
-        setCurrentDoc(foundDoc);
+        setCurrentDoc(previous => sameRecord(previous, foundDoc) ? previous : foundDoc);
       }
 
       if (ancestorsToExpand.length > 0) {
@@ -1323,7 +1334,13 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     const activeMode = documentTabs.find(tab => tab.key === activeDocumentTabKey)?.mode;
     // 普通笔记由 MarkdownNoteEditor 自己负责刷新；这里仅负责大纲/日记，
     // 避免编辑普通笔记时父级刷新 initialNodes 造成编辑器重置。
-    if (!documentId || (activeDocumentTabKey && activeMode !== 'outline')) return;
+    // 不能只用 Tab 的 mode 判断：普通笔记也使用 outline mode，但不属于
+    // 大纲树，必须按真实文档类型阻止这条父级轮询链路。
+    if (
+      !documentId
+      || !currentDoc
+      || (!isDiaryDoc && (currentDoc.type !== 'document' || activeMode !== 'outline'))
+    ) return;
     const refresh = () => {
       if (document.visibilityState !== 'visible' || editingNodesRef.current.size > 0 || pendingCount > 0 || saveStatus === 'saving') return;
       void fetchData(documentId, ++fetchIdRef.current, true);
@@ -1334,7 +1351,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', refresh);
     };
-  }, [activeDocumentTabKey, documentId, documentTabs, fetchData, pendingCount, saveStatus]);
+  }, [activeDocumentTabKey, currentDoc, documentId, documentTabs, fetchData, isDiaryDoc, pendingCount, saveStatus]);
 
   useEffect(() => {
     logNavigation('main-area-document-state', {

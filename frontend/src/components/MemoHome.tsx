@@ -26,6 +26,13 @@ interface MemoHomeProps {
 
 type PendingTaskWithOrigin = (Node & { origin: 'diary'; diary_date?: string; parent_content?: string }) | (Todo & { origin: 'todo' });
 
+// 远端轮询只在数据真的变化时替换状态，避免每 15 秒用新数组触发 Memo 首页重绘。
+function sameRecordList<T>(left: T[], right: T[]): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  return left.every((record, index) => JSON.stringify(record) === JSON.stringify(right[index]));
+}
+
 /** 首页待办按日期从早到晚排序，避免被节点/待办的创建时间顺序干扰。 */
 function getPendingTaskDate(task: PendingTaskWithOrigin): number | null {
   if (task.origin === 'todo') {
@@ -262,8 +269,8 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
         const isPublic = memoViewRef.current === 'public';
         if (memoPageRef.current === 1) {
           const data = await getMemos(1, 20, isArchived, tagFilterRef.current || undefined, searchFilterRef.current || undefined, isPublic, true);
-          setMemos(data.memos);
-          setMemoTotal(data.total);
+          setMemos(previous => sameRecordList(previous, data.memos) ? previous : data.memos);
+          setMemoTotal(previous => previous === data.total ? previous : data.total);
         }
         const [summary, todos] = await Promise.all([getDiarySummary(true), getTodos(false).catch(() => [])]);
         const diaryTasks: PendingTask[] = summary.tasks.map(t => ({ ...t, origin: 'diary' }));
@@ -278,7 +285,7 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
         }).map(todo => ({ ...todo, origin: 'todo' }));
         const tasks = [...diaryTasks, ...urgentTodos];
         tasks.sort((a, b) => (getPendingTaskDate(a) ?? Infinity) - (getPendingTaskDate(b) ?? Infinity));
-        setAllPendingTasks(tasks);
+        setAllPendingTasks(previous => sameRecordList(previous, tasks) ? previous : tasks);
       } catch (error) {
         console.error('Failed to refresh memo home', error);
       }
