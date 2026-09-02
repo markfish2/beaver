@@ -1299,14 +1299,14 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           {contentExpanded && (
             <div
               className="fixed inset-0 bg-black/40"
-              style={{ zIndex: 55 }}
+              style={{ zIndex: 'calc(var(--layer-sidebar) - 10)' }}
               onClick={() => setContentExpanded(false)}
             />
           )}
           {contentExpanded && (
             <div
               className="fixed inset-y-0 left-0 flex shadow-xl bg-[var(--app-sidebar)]"
-              style={{ zIndex: 9990, width: `calc(80vw)` }}
+              style={{ zIndex: 'var(--layer-sidebar)', width: `calc(80vw)` }}
             >
               {/* 图标栏 */}
               <div className="h-full bg-[var(--app-icon-rail)] flex flex-col items-center gap-[5px] py-3 select-none shrink-0 border-r border-gray-200 dark:border-gray-700"
@@ -1549,7 +1549,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
           {/* 内容面板 - 可折叠 */}
           <div
             ref={sidebarRef}
-            className={`h-full bg-[var(--app-sidebar)] flex flex-col select-none text-sm relative z-[9990] border-r border-gray-200 dark:border-gray-700 ${
+            className={`h-full bg-[var(--app-sidebar)] flex flex-col select-none text-sm relative z-[var(--layer-sidebar)] border-r border-gray-200 dark:border-gray-700 ${
               isResizing ? '' : 'transition-all duration-300 ease-in-out'
             } ${!contentExpanded ? 'overflow-hidden' : ''}`}
             style={{
@@ -1837,7 +1837,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
 
       {/* 文件夹删除弹窗（带两个选项） */}
       {deleteDialog.show && deleteDialog.type === 'folder' && (
-        <div className="fixed inset-0 z-50 grid place-items-center p-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+        <div className="fixed inset-0 z-[var(--layer-overlay)] grid place-items-center p-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
           <div className="absolute inset-0 bg-black/50" onClick={() => setDeleteDialog({ ...deleteDialog, show: false })} />
           <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">删除文件夹</h3>
@@ -1951,7 +1951,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
 
       {/* 新建待办弹窗 */}
       {showTodoDialog && (
-        <div className="fixed inset-0 z-50 grid place-items-center p-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }} onClick={() => { setShowTodoDialog(false); setTodoText(''); }}>
+        <div className="fixed inset-0 z-[var(--layer-overlay)] grid place-items-center p-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }} onClick={() => { setShowTodoDialog(false); setTodoText(''); }}>
           <div
             className="bg-white dark:bg-gray-800 shadow-xl border border-gray-200 dark:border-gray-700 p-3 flex items-center gap-2"
             onClick={e => e.stopPropagation()}

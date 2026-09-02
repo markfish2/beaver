@@ -90,7 +90,7 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
     <>
       {/* 悬浮胶囊顶栏 */}
       <div
-        className="pointer-events-none fixed left-3 right-3 z-[100] flex items-center justify-between"
+        className="pointer-events-none fixed left-3 right-3 z-[var(--layer-chrome)] flex items-center justify-between"
         style={{
           top: `calc(8px + env(safe-area-inset-top, 0px))`,
           height: '44px',
@@ -146,7 +146,7 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
 
               {showUserMenu && (
                 <div className="absolute left-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-2xl
-                                shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-[10000]
+                                shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-[var(--layer-overlay)]
                                 backdrop-blur-2xl bg-white/95 dark:bg-gray-800/95">
                   <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700">
                     <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">

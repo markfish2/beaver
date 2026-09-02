@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Image, Paperclip, Link, Download, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getMemos, getThumbnailUrl, getFileUrl, fetchLinkPreview, retryLinkPreview, downloadAttachment, type Memo, type LinkPreview } from '../api/data';
 import LinkPreviewCard from './LinkPreviewCard';
@@ -244,7 +245,7 @@ export default function MemoMediaGallery() {
 
       {/* Lightbox */}
       {lightboxIndex !== null && images.length > 0 && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80" onClick={closeLightbox}>
+        createPortal(<div className="beaver-fullscreen-layer fixed inset-0 flex items-center justify-center bg-black/80" style={{ left: 0, right: 0, zIndex: 'var(--layer-fullscreen)' }} onClick={closeLightbox}>
           <button
             onClick={(e) => { e.stopPropagation(); closeLightbox(); }}
             className="absolute top-4 right-4 p-2 text-white/70 hover:text-white transition-colors"
@@ -277,7 +278,7 @@ export default function MemoMediaGallery() {
             {lightboxIndex + 1} / {images.length}
             <span className="ml-3 text-white/40">{images[lightboxIndex].name}</span>
           </div>
-        </div>
+        </div>, document.body)
       )}
     </div>
   );

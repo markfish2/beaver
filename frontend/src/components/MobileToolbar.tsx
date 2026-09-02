@@ -198,7 +198,7 @@ const MobileToolbar = memo(function MobileToolbar({
     <div
       role="toolbar"
       aria-label="节点编辑工具栏"
-      className="keyboard-toolbar flex-none mx-3 mb-2 overflow-hidden rounded-full border border-white/35 bg-white/30 shadow-[0_2px_16px_-6px_rgba(15,23,42,0.18)] backdrop-blur-2xl backdrop-saturate-200 dark:border-white/10 dark:bg-gray-800/35 dark:shadow-black/20 z-50"
+      className="keyboard-toolbar flex-none mx-3 mb-2 overflow-hidden rounded-full border border-white/35 bg-white/30 shadow-[0_2px_16px_-6px_rgba(15,23,42,0.18)] backdrop-blur-2xl backdrop-saturate-200 dark:border-white/10 dark:bg-gray-800/35 dark:shadow-black/20 z-[var(--layer-chrome)]"
       style={isIosBrowser
         ? {
           position: 'fixed',

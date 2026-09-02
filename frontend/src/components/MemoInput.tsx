@@ -316,7 +316,7 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
 
       {/* 展开编辑器弹窗 */}
       {showExpandEditor && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => {
+      <div className="fixed inset-0 z-[var(--layer-overlay)] flex items-center justify-center bg-black/40" onClick={() => {
           const newContent = expandEditorRef.current?.getValue() ?? content;
           setContent(newContent);
           setShowExpandEditor(false);

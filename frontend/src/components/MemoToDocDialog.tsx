@@ -103,7 +103,7 @@ export default function MemoToDocDialog({ content, onClose, onConverted }: MemoT
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-[var(--layer-overlay)] flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
         className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-[420px] max-h-[80vh] flex flex-col"
         onClick={e => e.stopPropagation()}

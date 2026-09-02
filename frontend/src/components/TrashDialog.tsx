@@ -99,7 +99,7 @@ export default function TrashDialog({ onClose, onRestore }: TrashDialogProps) {
   const isEmpty = allItems.length === 0;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+    <div className="fixed inset-0 z-[var(--layer-overlay)] grid place-items-center p-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[80dvh] flex flex-col">
         {/* Header */}

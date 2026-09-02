@@ -31,7 +31,7 @@ export default function MobileBottomTabBar({ activeTab, onTabChange, chromeHidde
   return (
     <>
       <div
-        className="fixed left-0 right-0 z-30 flex items-center justify-center"
+        className="fixed left-0 right-0 z-[var(--layer-chrome)] flex items-center justify-center"
         style={{
           bottom: `calc(16px + env(safe-area-inset-bottom, 0px))`,
           transform: chromeHidden ? 'translateY(150%)' : 'translateY(0)',
@@ -123,7 +123,7 @@ export default function MobileBottomTabBar({ activeTab, onTabChange, chromeHidde
       </div>
 
       <div
-        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 z-20 pointer-events-none"
+        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 z-[var(--layer-content)] pointer-events-none"
         style={{
           height: 'env(safe-area-inset-bottom, 0px)',
         }}

@@ -1175,7 +1175,7 @@ const NodeItem = memo(({
       {showToolbar && (
         <div
           ref={toolbarRef}
-          className="fixed z-[150] max-w-[min(92vw,720px)] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-2 flex flex-wrap items-center gap-1 min-w-[200px]"
+          className="fixed z-[var(--layer-local-menu)] max-w-[min(92vw,720px)] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-2 flex flex-wrap items-center gap-1 min-w-[200px]"
           style={{ top: toolbarPos.top, left: toolbarPos.left }}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}

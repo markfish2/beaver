@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Maximize2, Minus, Plus, RotateCcw, X } from 'lucide-react';
 
 let initializedTheme: 'dark' | 'default' | null = null;
@@ -364,8 +365,9 @@ export default function MermaidBlock({ code, dark, renderPolicy = 'default' }: M
       </div>
 
       {isViewerOpen && svgMarkup && (
-        <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-0 backdrop-blur-[2px]"
+        createPortal(<div
+          className="beaver-fullscreen-layer fixed inset-0 flex items-center justify-center bg-black/45 p-0 backdrop-blur-[2px]"
+          style={{ left: 0, right: 0, zIndex: 'var(--layer-fullscreen)' }}
           role="dialog"
           aria-modal="true"
           aria-label="Mermaid 图查看器"
@@ -456,7 +458,7 @@ export default function MermaidBlock({ code, dark, renderPolicy = 'default' }: M
               />
             </div>
           </div>
-        </div>
+        </div>, document.body)
       )}
     </>
   );

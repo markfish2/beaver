@@ -66,7 +66,7 @@ const ShareDialog = ({ isOpen, documentId, onCancel }: ShareDialogProps) => {
   const shareUrl = shareToken ? `${window.location.origin}/s/${shareToken}` : '';
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+    <div className="fixed inset-0 z-[var(--layer-overlay)] grid place-items-center p-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
       <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
 
       <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-96 max-w-[90vw]">

@@ -269,7 +269,7 @@ export default function MobileTodos({ onTasksChanged }: MobileTodosProps) {
                 createPortal(<div
                   ref={menuRef}
                   style={menuPosition ? { top: menuPosition.top, left: menuPosition.left } : undefined}
-                  className="fixed z-[100000] w-36 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1"
+                  className="fixed z-[var(--layer-overlay)] w-36 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1"
                 >
                   <button
                     onClick={(e) => { e.stopPropagation(); handleStartEdit(task); }}

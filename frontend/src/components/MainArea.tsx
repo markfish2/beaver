@@ -3687,7 +3687,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
 
       {/* Confirm Delete Dialog */}
       {confirmDialog?.show && (
-        <div className="fixed inset-0 bg-black/50 grid place-items-center p-4 z-[200]" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+        <div className="fixed inset-0 bg-black/50 grid place-items-center p-4 z-[var(--layer-overlay)]" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm shadow-xl">
             <p className="text-gray-800 dark:text-gray-200 mb-4">{confirmDialog.message}</p>
             <div className="flex justify-end gap-3">
@@ -3710,7 +3710,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
 
       {/* Markdown Preview Modal */}
       {markdownPreview !== null && (
-        <div className="fixed inset-0 bg-black/50 grid place-items-center p-4 z-[200]" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+        <div className="fixed inset-0 bg-black/50 grid place-items-center p-4 z-[var(--layer-overlay)]" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full shadow-xl max-h-[80dvh] flex flex-col">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Markdown 预览</h3>

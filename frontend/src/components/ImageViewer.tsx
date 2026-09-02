@@ -161,8 +161,8 @@ const ImageViewer = ({ src, alt = '图片', isOpen, onClose }: ImageViewerProps)
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] overflow-hidden bg-black/90 flex items-center justify-center animate-in fade-in duration-200"
-      style={{ left: 'var(--desktop-overlay-left, 0px)' }}
+      className="beaver-fullscreen-layer fixed inset-0 overflow-hidden bg-black/90 flex items-center justify-center animate-in fade-in duration-200"
+      style={{ left: 0, right: 0, zIndex: 'var(--layer-fullscreen)' }}
       onClick={handleBackdropClick}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}

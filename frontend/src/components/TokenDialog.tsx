@@ -73,7 +73,7 @@ export default function TokenDialog({ onClose }: TokenDialogProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }} onClick={onClose}>
+    <div className="fixed inset-0 z-[var(--layer-overlay)] grid place-items-center p-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }} onClick={onClose}>
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
       <div
         className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md max-h-[80dvh] flex flex-col"
