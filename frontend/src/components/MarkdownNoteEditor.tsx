@@ -53,6 +53,7 @@ SyntaxHighlighter.registerLanguage('yaml', yaml);
 import { Pencil, Eye, Save, Columns2, Copy, CheckCheck, Download, Share2 } from 'lucide-react';
 import { getNodes, createNode, updateNode, uploadFile, getDocuments, getDocument, updateDocument, downloadAttachment, getRelatedNotes } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
+import { onDataRefresh } from '../utils/conflictResolver';
 import type { Document, Node, RelatedNote } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts, getMarkdownTaskOrdinalAtLine, toggleMarkdownTaskByOrdinal } from '../utils/markdownPreprocess';
@@ -795,8 +796,8 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   // 阅读页面保持打开时检查远端修改；编辑中、存在草稿或待保存内容时不覆盖本地输入。
   useEffect(() => {
     if (isNew || !nodeId) return;
-    const refresh = async () => {
-      if (viewMode !== 'preview' || document.visibilityState !== 'visible' || pendingSaveRef.current !== null) return;
+    const refresh = async (force = false) => {
+      if (!force && (viewMode !== 'preview' || document.visibilityState !== 'visible' || pendingSaveRef.current !== null)) return;
       try {
         const [nodes, remoteDocument] = await Promise.all([
           getNodes(documentId, true),
@@ -814,9 +815,13 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
     };
     const timer = window.setInterval(() => { void refresh(); }, 15000);
     document.addEventListener('visibilitychange', refresh);
+    const removeDataRefreshListener = onDataRefresh((request) => {
+      if (request.entityId === documentId) void refresh(true);
+    });
     return () => {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', refresh);
+      removeDataRefreshListener();
     };
   }, [documentId, isNew, nodeId, title, viewMode]);
 

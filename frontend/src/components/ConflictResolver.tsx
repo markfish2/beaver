@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle, Cloud, Laptop } from 'lucide-react';
-import { onConflict, type ConflictInfo } from '../utils/conflictResolver';
+import { onConflict, requestDataRefresh, type ConflictInfo } from '../utils/conflictResolver';
 import { updateDocument, updateNode } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
 
@@ -17,9 +17,10 @@ export default function ConflictResolver() {
   if (!conflict) return null;
 
   const handleUseServer = () => {
-    // Discard local changes, refresh will pick up server version
+    // Discard local changes and let the active views pull the server version.
+    // A full page reload loses editor state and is unnecessary here.
+    requestDataRefresh({ entityType: conflict.entityType, entityId: conflict.entityId });
     setConflict(null);
-    window.location.reload();
   };
 
   const handleUseLocal = async () => {

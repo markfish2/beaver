@@ -3,6 +3,7 @@ import { getDocuments } from '../api/data';
 import { dataCache } from '../api/cache';
 import type { Document } from '../api/data';
 import { useAuth } from './AuthContext';
+import { onDataRefresh } from '../utils/conflictResolver';
 
 interface DocumentContextType {
   documents: Document[];
@@ -76,6 +77,11 @@ export const DocumentProvider = ({ children }: { children: ReactNode }) => {
       window.removeEventListener('focus', syncDocuments);
       document.removeEventListener('visibilitychange', syncDocuments);
     };
+  }, [fetchDocuments, isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    return onDataRefresh(() => { void fetchDocuments(undefined, true); });
   }, [fetchDocuments, isAuthenticated]);
 
   const updateDocumentTitle = useCallback((id: string, newTitle: string) => {
