@@ -1224,10 +1224,12 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
               <span className="hidden lg:inline">导出</span>
             </button>
             {showExportMenu && (
-              <div className="absolute right-0 top-full z-50 mt-1 min-w-[150px] overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+              <div
+                className={`absolute left-0 top-full z-[var(--layer-overlay)] mt-1 min-w-[180px] max-w-[calc(100vw-24px)] overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800 md:left-auto md:right-0`}
+              >
                 <button
                   onClick={() => { setShowExportMenu(false); handleDownload(); }}
-                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                  className="flex w-full items-center gap-2 whitespace-nowrap px-4 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                 >
                   <Download className="h-4 w-4" />
                   导出 Markdown
@@ -1235,7 +1237,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
                 <button
                   onClick={() => { setShowExportMenu(false); void handleExportPdf(); }}
                   disabled={exportingPdf}
-                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-700"
+                  className="flex w-full items-center gap-2 whitespace-nowrap px-4 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-700"
                 >
                   <Download className="h-4 w-4" />
                   {exportingPdf ? '导出中...' : '导出 PDF'}
@@ -1375,6 +1377,17 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
         key={`${documentId}-${showShareDialog}`}
         isOpen={showShareDialog}
         documentId={documentId}
+        onBeforeCreateShare={async () => {
+          const latestContent = editorRef.current?.getValue() ?? contentRef.current;
+          if (latestContent === lastSavedRef.current) return;
+          if (saveTimerRef.current) {
+            clearTimeout(saveTimerRef.current);
+            saveTimerRef.current = null;
+          }
+          saveEditorDraft('markdown-note', documentId, latestContent);
+          const saved = await persistContent(latestContent);
+          if (!saved) throw new Error('笔记保存失败');
+        }}
         onCancel={() => setShowShareDialog(false)}
       />
 

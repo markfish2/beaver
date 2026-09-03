@@ -6,9 +6,10 @@ interface ShareDialogProps {
   isOpen: boolean;
   documentId: string;
   onCancel: () => void;
+  onBeforeCreateShare?: () => Promise<void>;
 }
 
-const ShareDialog = ({ isOpen, documentId, onCancel }: ShareDialogProps) => {
+const ShareDialog = ({ isOpen, documentId, onCancel, onBeforeCreateShare }: ShareDialogProps) => {
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(isOpen);
   const [copied, setCopied] = useState(false);
@@ -28,6 +29,7 @@ const ShareDialog = ({ isOpen, documentId, onCancel }: ShareDialogProps) => {
   const handleCreate = async () => {
     setIsLoading(true);
     try {
+      await onBeforeCreateShare?.();
       const share = await createShare(documentId);
       setShareToken(share.token);
     } catch (e) {

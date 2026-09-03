@@ -35,4 +35,4 @@ def get_shared_document(token: str, db: Session = Depends(get_db)):
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     nodes = crud.get_nodes(db, share.document_id)
-    return schemas.SharedDocumentResponse(title=doc.title, nodes=nodes)
+    return schemas.SharedDocumentResponse(title=doc.title, document_type=doc.type, nodes=nodes)

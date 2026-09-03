@@ -3,6 +3,22 @@ import { useParams } from 'react-router-dom';
 import { getSharedDocument } from '../api/data';
 import type { Node } from '../api/data';
 import { ChevronRight, ChevronDown } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import type { Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
+import remarkMath from 'remark-math';
+import rehypeRaw from 'rehype-raw';
+import rehypeKatex from 'rehype-katex';
+import { preserveCodeBlocks } from '../utils/preserveCodeBlocks';
+import {
+  normalizeCallouts,
+  normalizeCodeBlocks,
+  normalizeHighlight,
+  normalizeListSeparators,
+  normalizeTaskLists,
+} from '../utils/markdownPreprocess';
+import MermaidBlock from '../components/MermaidBlock';
 
 const buildTree = (nodes: Node[]): (Node & { children: Node[] })[] => {
   const nodeMap = new Map<string, Node & { children: Node[] }>();
@@ -26,6 +42,49 @@ const BULLET_MARGIN: Record<string, string> = {
   h2: 'mt-[8px]',
   h3: 'mt-[6px]',
   h4: 'mt-[5px]',
+};
+
+const preprocessMarkdown = (content: string): string => normalizeCodeBlocks(
+  normalizeListSeparators(
+    normalizeHighlight(
+      normalizeTaskLists(normalizeCallouts(content)),
+    ),
+  ),
+);
+
+const isMarkdownDocumentFallback = (nodes: (Node & { children: Node[] })[]): boolean => {
+  // 普通笔记历史上可能因为保存/迁移留下重复的根节点。判断分享类型时
+  // 按正文去重，不能把同一份 Markdown 误判成大纲节点树。
+  const contentNodes = nodes.filter(node => node.content.trim() !== '');
+  const uniqueContent = new Set(contentNodes.map(node => node.content.trim()));
+  if (uniqueContent.size !== 1 || contentNodes.some(node => node.children.length > 0)) return false;
+  const content = contentNodes[0]?.content || '';
+  return content.includes('\n') || /(^|\n)\s*(```|#{1,6}\s|[-*+]\s|\d+\.\s)/.test(content);
+};
+
+const markdownComponents: Components = {
+  code: ({ className, children, ...props }) => {
+    const match = /language-(\w+)/.exec(className || '');
+    if (match?.[1].toLowerCase() === 'mermaid') {
+      return <MermaidBlock code={String(children).replace(/\n$/, '')} renderPolicy="normal-note" />;
+    }
+    const rawCode = String(children);
+    const code = rawCode.replace(/\n+$/, '');
+    const isBlock = rawCode.endsWith('\n') || code.includes('\n') || Boolean(className);
+    if (isBlock) {
+      return (
+        <div className="markdown-code-block markdown-code-block-root relative rounded-lg overflow-hidden border border-[#dad9d4]">
+          <div className="markdown-code-header flex items-center px-3 py-1.5 border-b border-[#dad9d4] bg-[#f6f5f0]">
+            <span className="markdown-code-language text-[11px] font-mono text-gray-500">{match?.[1] || 'text'}</span>
+          </div>
+          <pre className="markdown-code-body p-4 overflow-x-auto font-mono" style={{ margin: 0, background: '#fbfbf8' }}>
+            <code className={className} {...props}>{code}</code>
+          </pre>
+        </div>
+      );
+    }
+    return <code className={className} {...props}>{children}</code>;
+  },
 };
 
 const SharedNode = ({ node }: { node: Node & { children: Node[] } }) => {
@@ -101,6 +160,8 @@ const SharedNode = ({ node }: { node: Node & { children: Node[] } }) => {
 export default function SharePage() {
   const { shareToken } = useParams<{ shareToken: string }>();
   const [title, setTitle] = useState('');
+  const [documentType, setDocumentType] = useState<string | undefined>();
+  const [markdownContent, setMarkdownContent] = useState('');
   const [tree, setTree] = useState<(Node & { children: Node[] })[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -110,14 +171,22 @@ export default function SharePage() {
     getSharedDocument(shareToken)
       .then(data => {
         setTitle(data.title);
-        setTree(buildTree(data.nodes));
+        const nextTree = buildTree(data.nodes);
+        setDocumentType(data.document_type);
+        const uniqueMarkdown = Array.from(new Set(
+          data.nodes
+            .filter(node => !node.parent_node_id && node.content.trim() !== '')
+            .map(node => node.content.trim()),
+        ));
+        setMarkdownContent(uniqueMarkdown.join('\n\n'));
+        setTree(nextTree);
       })
       .catch(() => setError('分享链接无效或已失效'))
       .finally(() => setLoading(false));
   }, [shareToken]);
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="h-screen overflow-y-auto bg-white">
       <div className="max-w-3xl mx-auto px-6 py-12">
         {loading ? (
           <div className="flex items-center justify-center py-20">
@@ -137,11 +206,28 @@ export default function SharePage() {
             <h1 className="text-2xl font-bold text-gray-900 mb-8 pb-4 border-b border-gray-100">
               {title}
             </h1>
-            <div className="space-y-0.5">
-              {tree.map(node => (
-                <SharedNode key={node.id} node={node} />
-              ))}
-            </div>
+            {(
+              documentType === 'note'
+              // 兼容后端尚未重启/旧分享接口：普通笔记只有一个根节点，且正文是多行 Markdown。
+              // 旧后端没有 document_type，或历史数据类型不规范时，按节点形态兜底。
+              || isMarkdownDocumentFallback(tree)
+            ) ? (
+              <div className="share-markdown markdown-note-preview memo-content text-base leading-relaxed text-gray-800">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
+                  rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]}
+                  components={markdownComponents}
+                >
+                  {preprocessMarkdown(markdownContent)}
+                </ReactMarkdown>
+              </div>
+            ) : (
+              <div className="space-y-0.5">
+                {tree.map(node => (
+                  <SharedNode key={node.id} node={node} />
+                ))}
+              </div>
+            )}
             <div className="mt-16 pt-6 border-t border-gray-100 text-center">
               <p className="text-xs text-gray-300">由 Beaver 分享</p>
             </div>

@@ -347,7 +347,7 @@ export const deleteShare = async (token: string): Promise<void> => {
   await api.delete(`/shares/${token}`);
 };
 
-export const getSharedDocument = async (token: string): Promise<{ title: string; nodes: Node[] }> => {
+export const getSharedDocument = async (token: string): Promise<{ title: string; document_type?: Document['type']; nodes: Node[] }> => {
   const response = await api.get(`/public/share/${token}`);
   return response.data;
 };

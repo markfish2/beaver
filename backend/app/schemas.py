@@ -219,6 +219,7 @@ class ShareResponse(BaseModel):
 
 class SharedDocumentResponse(BaseModel):
     title: str
+    document_type: str
     nodes: List[Node]
 
 # Diary schemas
