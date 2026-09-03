@@ -252,7 +252,19 @@ $('#btn-extract').addEventListener('click', async () => {
       target: { tabId: tab.id },
       func: () => {
         return {
-          html: document.documentElement.outerHTML,
+          html: (() => {
+            const snapshot = document.documentElement.cloneNode(true);
+            const sourceElements = document.querySelectorAll('div, p, span, section, header');
+            const snapshotElements = snapshot.querySelectorAll('div, p, span, section, header');
+            sourceElements.forEach((element, index) => {
+              const clone = snapshotElements[index];
+              if (!clone) return;
+              const computed = getComputedStyle(element);
+              if (computed.fontSize) clone.setAttribute('data-beaver-font-size', computed.fontSize.replace('px', ''));
+              if (computed.fontWeight) clone.setAttribute('data-beaver-font-weight', computed.fontWeight);
+            });
+            return snapshot.outerHTML;
+          })(),
           title: document.title || '',
           url: location.href,
         };
@@ -264,93 +276,12 @@ $('#btn-extract').addEventListener('click', async () => {
       throw new Error('无法获取页面内容');
     }
 
-    const xArticle = BeaverArticleMarkdown.extractXArticle(pageData.html, pageData.url);
-    if (xArticle) {
-      const xMarkdown = `> 原文: ${pageData.url}\n\n${xArticle.markdown}`;
-      const response = await chrome.runtime.sendMessage({
-        type: 'saveDocument',
-        title: xArticle.title,
-        markdown: xMarkdown,
-        pageUrl: pageData.url,
-      });
-      if (!response?.ok) throw new Error(response?.error || '保存失败');
-      toast.textContent = '已保存: ' + xArticle.title + ' ✓';
-      toast.className = 'toast success';
-      return;
-    }
-
-    // Parse with Readability (in popup context - no CORS issues)
-    const doc = new DOMParser().parseFromString(pageData.html, 'text/html');
-    const article = new Readability(doc).parse();
-
-    let htmlContent = '';
-
-    if (article?.content && article.content.length > 200) {
-      htmlContent = article.content;
-      title = article.title || pageData.title || '';
-    } else {
-      // Fallback: extract from page DOM directly
-      const selectors = [
-        '.post__body__extend__item__content',
-        '.article-body .post__body__extend__item__content',
-        '.article-body', '.article-content',
-        '[itemprop="articleBody"]',
-        '.article', 'article',
-        '.post-content', '.post-body', '.entry-content',
-        '.content-body', '.story-body', '.rich-text',
-        'main .content', '.article__main__content',
-      ];
-      for (const sel of selectors) {
-        const all = doc.querySelectorAll(sel);
-        if (all.length > 1) {
-          const parts = [];
-          all.forEach(el => { if (el.textContent.trim().length > 20) parts.push(el.innerHTML); });
-          if (parts.length > 0) { htmlContent = parts.join('\n\n'); break; }
-        } else if (all.length === 1) {
-          const c = all[0];
-          if (c && c.textContent.trim().length > 100) { htmlContent = c.innerHTML; break; }
-        }
-      }
-      if (!htmlContent) {
-        const c = doc.querySelector('main') || doc.body;
-        htmlContent = c?.innerHTML || '';
-      }
-      title = article?.title || pageData.title || '';
-    }
-
-    if (!htmlContent) throw new Error('无法提取正文内容');
-
-    // Use the same structured converter as the injected floating button.
-    markdown = BeaverArticleMarkdown.convert(htmlContent, pageData.url);
-
-    // Trim content at known "end of article" markers
-    const endMarkers = [
-      '你可能错过的好文章', '下载少数派', '关注少数派公众号',
-      '推荐阅读', '相关推荐', '猜你喜欢', '你可能感兴趣',
-      '相关文章', '延伸阅读', '相关阅读', '热门推荐',
-      '阅读原文', '分享文章', '喜欢这篇文章',
-      '条评论', '登录后你可以', '展开阅读全文',
-      'Recommended for you', 'You might also like',
-      'Related articles', 'Read more', 'More from',
-    ];
-    for (const marker of endMarkers) {
-      const idx = markdown.indexOf(marker);
-      if (idx > 200) {
-        markdown = markdown.substring(0, idx).trim();
-        break;
-      }
-    }
-
-    // Add metadata header
-    const meta = [];
-    if (article?.siteName) meta.push(`> 来源: ${article.siteName}`);
-    if (article?.byline) meta.push(`> 作者: ${article.byline}`);
-    if (pageData.url) meta.push(`> 原文: ${pageData.url}`);
-    if (meta.length > 0) {
-      markdown = meta.join('\n') + '\n\n' + markdown;
-    }
-
-    title = BeaverArticleMarkdown.cleanTitle(title, pageData.title);
+    // All popup saves use the same extractor as the page button and content
+    // script. This prevents title/strong/paragraph handling from diverging.
+    const extracted = BeaverArticleMarkdown.extractArticle(pageData.html, pageData.url, pageData.title);
+    if (!extracted) throw new Error('无法提取正文内容');
+    title = extracted.title;
+    markdown = extracted.markdown;
 
     // Show preview
     const preview = $('#article-preview');
@@ -396,16 +327,17 @@ $('#btn-inject-fab').addEventListener('click', async () => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) throw new Error('无法获取当前标签页');
 
-    // Check if FAB already exists
-    const check = await chrome.scripting.executeScript({
+    // Replace a possibly stale FAB from a previous extension version. Content
+    // scripts remain in the page until navigation, so merely detecting the old
+    // element would keep the old Markdown converter alive.
+    await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: () => !!document.getElementById('beaver-fab'),
+      func: () => {
+        ['beaver-fab', 'beaver-menu', 'beaver-toast'].forEach((id) => {
+          document.getElementById(id)?.remove();
+        });
+      },
     });
-
-    if (check?.[0]?.result) {
-      showToast($('#save-toast'), '浮动按钮已存在', 'success');
-      return;
-    }
 
     // Inject the FAB scripts
     await chrome.scripting.executeScript({

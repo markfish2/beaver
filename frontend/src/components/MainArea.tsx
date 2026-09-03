@@ -386,6 +386,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     nodeKeyDownRef.current(...args);
   }, []);
   const [loadedDoc, setCurrentDoc] = useState<Document | null>(null);
+  const currentDocRef = useRef(loadedDoc);
+  useEffect(() => { currentDocRef.current = loadedDoc; }, [loadedDoc]);
   const documentsRef = useRef(documents);
   useEffect(() => { documentsRef.current = documents; }, [documents]);
 
@@ -1341,15 +1343,21 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       || !currentDoc
       || (!isDiaryDoc && (currentDoc.type !== 'document' || activeMode !== 'outline'))
     ) return;
-    const refresh = () => {
+    const refresh = async () => {
       if (document.visibilityState !== 'visible' || editingNodesRef.current.size > 0 || pendingCount > 0 || saveStatus === 'saving') return;
+      // 文档更新时间由节点写入同步维护。先只检查文档元数据，未变化时不再
+      // 读取整棵节点树，避免每轮轮询都调度 tab 和内容页。
+      const remoteDocument = await getDocument(documentId, true).catch(() => null);
+      if (!remoteDocument || sameRecord(currentDocRef.current, remoteDocument)) return;
+      dataCache.invalidate(`nodes:${documentId}`);
       void fetchData(documentId, ++fetchIdRef.current, true);
     };
-    const timer = window.setInterval(refresh, 15000);
-    document.addEventListener('visibilitychange', refresh);
+    const handleVisibilityChange = () => { void refresh(); };
+    const timer = window.setInterval(() => { void refresh(); }, 15000);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
       window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', refresh);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [activeDocumentTabKey, currentDoc, documentId, documentTabs, fetchData, isDiaryDoc, pendingCount, saveStatus]);
 

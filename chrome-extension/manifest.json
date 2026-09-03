@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Beaver",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "Save to Beaver: memo notes or full article extraction",
   "permissions": [
     "storage",

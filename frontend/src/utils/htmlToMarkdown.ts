@@ -11,6 +11,71 @@ const turndown = new TurndownService({
 });
 const headingLevels = new WeakMap<Node, number>();
 
+function parseCssPixels(value: string | null): number | null {
+  if (!value) return null;
+  const match = value.match(/(-?\d+(?:\.\d+)?)\s*(px|pt|em|rem)/i);
+  if (!match) return null;
+  const number = Number(match[1]);
+  switch (match[2].toLowerCase()) {
+    case 'pt': return number * 1.333;
+    case 'em':
+    case 'rem': return number * 16;
+    default: return number;
+  }
+}
+
+function getHeadingLevelFromVisualStyle(node: Node): number | null {
+  const el = node as unknown as HTMLElement;
+  if (!el.getAttribute || /^H[1-6]$/.test(node.nodeName)) return null;
+
+  const role = (el.getAttribute('role') || '').toLowerCase();
+  const ariaLevel = Number(el.getAttribute('aria-level'));
+  if (role === 'heading' && ariaLevel >= 1 && ariaLevel <= 6) return ariaLevel;
+
+  const cls = (el.getAttribute('class') || '').toLowerCase();
+  const classLevel = cls.match(/(?:^|\\s)(?:h|heading-?)([1-6])(?:$|\\s)/);
+  if (classLevel) return Number(classLevel[1]);
+  if (/\\b(article-title|post-title|headline|heading|title)\\b/.test(cls)) return 2;
+
+  const utilitySize = cls.match(/(?:^|\\s)text-(4xl|3xl|2xl|xl)(?:$|\\s)/);
+  if (utilitySize) {
+    return ({ '4xl': 1, '3xl': 1, '2xl': 2, xl: 3 } as Record<string, number>)[utilitySize[1]];
+  }
+
+  // Clipboard HTML from X and some rich editors often flattens headings into
+  // div/span elements. Only promote clearly larger, short blocks so ordinary
+  // paragraphs that happen to be bold remain paragraphs.
+  const style = (el.getAttribute('style') || '').toLowerCase();
+  const fontSize = parseCssPixels(style.match(/font-size\\s*:\\s*([^;]+)/)?.[1] ?? null);
+  const fontWeight = style.match(/font-weight\\s*:\\s*([^;]+)/)?.[1]?.trim() || '';
+  const weight = fontWeight === 'bold' ? 700 : Number(fontWeight);
+  const text = (el.textContent || '').replace(/\\s+/g, ' ').trim();
+  const isBlock = /^(DIV|P|SECTION|ARTICLE|HEADER|LI|H[1-6])$/.test(node.nodeName);
+  if (!isBlock || !fontSize || !text || text.length > 180) return null;
+
+  // Use absolute sizes when available; relative units are intentionally only
+  // accepted when the element is also visibly bold.
+  if (fontSize >= 28) return 1;
+  if (fontSize >= 22) return 2;
+  if (fontSize >= 19 && weight >= 600) return 3;
+  return null;
+}
+
+// Recover headings that were copied as styled blocks rather than <h1>-<h6>.
+// This rule must run before boldStyle, otherwise a heading's bold font would
+// be emitted as ordinary **bold text**.
+turndown.addRule('headingVisualStyle', {
+  filter(node: Node) {
+    const level = getHeadingLevelFromVisualStyle(node);
+    if (level) headingLevels.set(node, level);
+    return level !== null;
+  },
+  replacement(content, node) {
+    const level = headingLevels.get(node) ?? 2;
+    return `\\n\\n${'#'.repeat(level)} ${content.trim()}\\n\\n`;
+  },
+});
+
 // 启用 GFM 插件（表格、删除线、任务列表）
 turndown.use(gfm);
 
@@ -19,6 +84,7 @@ turndown.use(gfm);
 turndown.addRule('boldStyle', {
   filter(node: Node) {
     if (/^H[1-6]$/.test(node.nodeName)) return false;
+    if (getHeadingLevelFromVisualStyle(node) !== null) return false;
     const el = node as unknown as HTMLElement;
     if (!el.getAttribute) return false;
     const style = (el.getAttribute('style') || '').toLowerCase();
@@ -142,6 +208,10 @@ turndown.addRule('fencedCodeBlock', {
 // 清理多余空行
 function cleanMarkdown(md: string): string {
   let result = md.replace(/\n{3,}/g, '\n\n');
+  // Some rich-text clipboards split a generated heading into a marker line
+  // and its text line. Rejoin only a marker followed by the next non-empty
+  // line, so the pasted title remains a valid Markdown heading.
+  result = result.replace(/(^|\n)(#{1,6})\s*\n+(?=\S)/g, '$1$2 ');
   // 链接文字与地址完全相同时，简化为纯 URL（remark-gfm 自动识别为链接）
   result = result.replace(/\[(https?:\/\/[^\s)\]]+)\]\(\1\)/g, '$1');
   return result.trim();

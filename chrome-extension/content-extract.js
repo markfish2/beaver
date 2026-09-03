@@ -1,6 +1,19 @@
 // Content extraction script
 // Injected with readability.js + turndown.js in the same content script world
 
+function sendExtensionMessage(message, callback) {
+  try {
+    if (!globalThis.chrome || !chrome.runtime || !chrome.runtime.sendMessage) {
+      throw new Error('插件上下文已失效，请刷新当前网页后重试');
+    }
+    chrome.runtime.sendMessage(message, callback);
+  } catch (error) {
+    // The background listener will report the actual extraction error when
+    // available; this guard prevents a stale injected script from throwing a
+    // misleading `sendMessage` TypeError.
+  }
+}
+
 /**
  * Preprocess HTML before turndown conversion
  * - Clean table cells (strip div/p/section/span wrappers)
@@ -97,15 +110,37 @@ function cleanCellContent(html) {
 (async function() {
   try {
     // KEY FIX: Get full rendered HTML from LIVE DOM (not cloneNode which misses JS-rendered content)
-    var rawHtml = document.documentElement.outerHTML;
+    // Preserve the visual weight/size used by sites that render headings with
+    // CSS rather than semantic h1-h6 tags. Only copy small, stable attributes
+    // into the snapshot; never mutate the live page.
+    var snapshot = document.documentElement.cloneNode(true);
+    var sourceElements = document.querySelectorAll('div, p, span, section, header');
+    var snapshotElements = snapshot.querySelectorAll('div, p, span, section, header');
+    sourceElements.forEach(function (element, index) {
+      var clone = snapshotElements[index];
+      if (!clone) return;
+      var computed = getComputedStyle(element);
+      if (computed.fontSize) clone.setAttribute('data-beaver-font-size', computed.fontSize.replace('px', ''));
+      if (computed.fontWeight) clone.setAttribute('data-beaver-font-weight', computed.fontWeight);
+    });
+    var rawHtml = snapshot.outerHTML;
+    var sharedArticle = BeaverArticleMarkdown.extractArticle(rawHtml, location.href, document.title);
+    if (sharedArticle) {
+      sendExtensionMessage({
+        type: '_extractResult',
+        title: sharedArticle.title,
+        markdown: sharedArticle.markdown,
+        pageUrl: location.href,
+      });
+      return;
+    }
     var xArticle = BeaverArticleMarkdown.extractXArticle(rawHtml, location.href);
     if (xArticle) {
       var xMarkdown = xArticle.markdown;
-      var xMeta = ['> 原文: ' + location.href];
-      chrome.runtime.sendMessage({
+      sendExtensionMessage({
         type: '_extractResult',
         title: xArticle.title,
-        markdown: xMeta.join('\n') + '\n\n' + xMarkdown,
+        markdown: xMarkdown,
         pageUrl: location.href,
       });
       return;
@@ -165,7 +200,7 @@ function cleanCellContent(html) {
     }
 
     if (!htmlContent) {
-      chrome.runtime.sendMessage({ type: '_extractResult', error: '无法提取正文' });
+      sendExtensionMessage({ type: '_extractResult', error: '无法提取正文' });
       return;
     }
 
@@ -327,16 +362,16 @@ function cleanCellContent(html) {
     var meta = [];
     if (article && article.siteName) meta.push('> 来源: ' + article.siteName);
     if (article && article.byline) meta.push('> 作者: ' + article.byline);
-    meta.push('> 原文: ' + location.href);
+    meta.push('> 原文: [打开原文](' + location.href + ')');
     markdown = meta.join('\n') + '\n\n' + markdown;
 
-    chrome.runtime.sendMessage({
+    sendExtensionMessage({
       type: '_extractResult',
       title: BeaverArticleMarkdown.cleanTitle(title, document.title),
       markdown: markdown,
     });
 
   } catch(e) {
-    chrome.runtime.sendMessage({ type: '_extractResult', error: e.message });
+    sendExtensionMessage({ type: '_extractResult', error: e.message });
   }
 })();

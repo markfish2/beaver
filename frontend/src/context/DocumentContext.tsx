@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
 import { getDocuments } from '../api/data';
+import { dataCache } from '../api/cache';
 import type { Document } from '../api/data';
 import { useAuth } from './AuthContext';
 
@@ -16,22 +17,36 @@ interface DocumentContextType {
 
 const DocumentContext = createContext<DocumentContextType | undefined>(undefined);
 
+// 后台同步拿到的新数组不能直接写入状态。插件或其他设备没有新增/修改文档时，
+// 复用原数组引用，避免文件树、tab 和当前内容页被无意义地重新渲染。
+const sameDocuments = (left: Document[], right: Document[]): boolean => {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  return left.every((document, index) => JSON.stringify(document) === JSON.stringify(right[index]));
+};
+
 export const DocumentProvider = ({ children }: { children: ReactNode }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { isAuthenticated } = useAuth();
 
-  const refreshDocuments = useCallback(async (search?: string) => {
-    setIsLoading(true);
+  const fetchDocuments = useCallback(async (search: string | undefined, silent: boolean) => {
+    if (!silent) setIsLoading(true);
     try {
+      // 文档也可能由浏览器插件或其他设备直接写入 API，刷新前必须跳过本地列表缓存。
+      dataCache.invalidate(`documents:${search || 'all'}`);
       const data = await getDocuments(search);
-      setDocuments(data);
+      setDocuments(previous => sameDocuments(previous, data) ? previous : data);
     } catch (error) {
       console.error('Failed to fetch documents', error);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, []);
+
+  const refreshDocuments = useCallback(async (search?: string) => {
+    await fetchDocuments(search, false);
+  }, [fetchDocuments]);
 
   // Re-fetch documents when authenticated
   useEffect(() => {
@@ -41,6 +56,27 @@ export const DocumentProvider = ({ children }: { children: ReactNode }) => {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [isAuthenticated, refreshDocuments]);
+
+  // 插件保存文章时不会经过当前页面的 React 状态树。定期同步文档元数据，
+  // 并在用户回到页面时立即同步，使文件列表自然热更新而无需刷新整页。
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const syncDocuments = () => {
+      if (document.visibilityState === 'hidden') return;
+      // 轮询只检查远端快照；没有变化时不触发加载态，也不替换列表引用。
+      void fetchDocuments(undefined, true);
+    };
+    const timer = window.setInterval(syncDocuments, 15000);
+    window.addEventListener('focus', syncDocuments);
+    document.addEventListener('visibilitychange', syncDocuments);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', syncDocuments);
+      document.removeEventListener('visibilitychange', syncDocuments);
+    };
+  }, [fetchDocuments, isAuthenticated]);
 
   const updateDocumentTitle = useCallback((id: string, newTitle: string) => {
     setDocuments(prev => prev.map(d => d.id === id ? { ...d, title: newTitle } : d));

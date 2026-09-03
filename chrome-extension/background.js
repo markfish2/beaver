@@ -350,6 +350,10 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
       const title = extracted.title || '未命名笔记';
       let markdown = extracted.markdown || '';
+      markdown = markdown.trim();
+      if (!markdown || /<(?:!doctype|html|body|head)\b/i.test(markdown)) {
+        throw new Error('提取结果不是有效的 Markdown');
+      }
 
       const imageResult = await localizeMarkdownImages(
         markdown,
@@ -456,6 +460,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         let markdown = msg.markdown || '';
         const title = msg.title || '未命名笔记';
         const pageUrl = msg.pageUrl || '';
+        markdown = markdown.trim();
+        if (!markdown) throw new Error('提取结果为空');
+        // A conversion failure must never persist the source HTML as note
+        // content. It makes the ordinary-note renderer display raw markup.
+        if (/<(?:!doctype|html|body|head)\b/i.test(markdown)) {
+          throw new Error('提取结果不是有效的 Markdown');
+        }
 
         const imageResult = await localizeMarkdownImages(markdown, pageUrl, base, apiToken);
         markdown = imageResult.markdown;

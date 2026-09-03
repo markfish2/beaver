@@ -19,6 +19,17 @@
     setTimeout(function() { toast.style.transform = 'translateY(-100%)'; }, 2500);
   }
 
+  function sendExtensionMessage(message, callback) {
+    try {
+      if (!globalThis.chrome || !chrome.runtime || !chrome.runtime.sendMessage) {
+        throw new Error('插件上下文已失效，请刷新当前网页后重试');
+      }
+      chrome.runtime.sendMessage(message, callback);
+    } catch (error) {
+      showToast(error.message || '插件连接已失效，请刷新当前网页后重试', '#dc2626');
+    }
+  }
+
   // Menu
   var menu = document.createElement('div');
   menu.id = 'beaver-menu';
@@ -85,7 +96,7 @@
         return;
       }
       showToast('正在保存到 Memo...', '#2563eb');
-      chrome.runtime.sendMessage({ type: 'saveMemo', content: markdown }, function(res) {
+      sendExtensionMessage({ type: 'saveMemo', content: markdown }, function(res) {
         if (res && res.ok) showToast('已保存到 Memo ✓', '#059669');
         else showToast('保存失败: ' + (res && res.error || ''), '#dc2626');
       });
@@ -103,96 +114,38 @@
     showToast('正在提取正文...', '#2563eb');
 
     try {
-      var rawHtml = document.documentElement.outerHTML;
-      var xArticle = BeaverArticleMarkdown.extractXArticle(rawHtml, location.href);
-      if (xArticle) {
-        chrome.runtime.sendMessage({
-          type: 'saveDocument',
-          title: xArticle.title,
-          markdown: '> 原文: ' + location.href + '\n\n' + xArticle.markdown,
-          pageUrl: location.href,
-        }, function(res) {
-          if (res && res.ok) showToast('已保存: ' + xArticle.title + ' ✓', '#059669');
-          else showToast('保存失败: ' + (res && res.error || ''), '#dc2626');
-        });
-        return;
-      }
-      var liveDoc = new DOMParser().parseFromString(rawHtml, 'text/html');
-      var article = null;
-      try { article = new Readability(liveDoc).parse(); } catch(err) {}
-
-      var htmlContent = '';
-      var title = '';
-      var selectors = [
-        '.post__body__extend__item__content',
-        '.article-body', '.article-content',
-        '[itemprop="articleBody"]', '.article', 'article',
-        '.post-content', '.post-body', '.entry-content',
-        '.content-body', '.story-body', '.rich-text',
-        'main .content', '#article-content', '#post-content',
-        '.article__main__content',
-      ];
-
-      if (article && article.content && article.content.length > 200) {
-        htmlContent = article.content;
-        title = article.title || document.title || '';
-      } else {
-        for (var i = 0; i < selectors.length; i++) {
-          var all = document.querySelectorAll(selectors[i]);
-          if (all.length > 1) {
-            var parts = [];
-            all.forEach(function(el) { if (el.textContent.trim().length > 20) parts.push(el.innerHTML); });
-            if (parts.length > 0) { htmlContent = parts.join('\n\n'); break; }
-          } else if (all.length === 1) {
-            var c = all[0];
-            if (c && c.textContent.trim().length > 100) { htmlContent = c.innerHTML; break; }
-          }
-        }
-        if (!htmlContent) {
-          var mc = document.querySelector('main') || document.body;
-          htmlContent = mc ? mc.innerHTML : '';
-        }
-        title = article ? article.title : (document.title || '');
-      }
-
-      if (!htmlContent) {
+      var snapshot = document.documentElement.cloneNode(true);
+      var sourceElements = document.querySelectorAll('div, p, span, section, header');
+      var snapshotElements = snapshot.querySelectorAll('div, p, span, section, header');
+      sourceElements.forEach(function (element, index) {
+        var clone = snapshotElements[index];
+        if (!clone) return;
+        var computed = getComputedStyle(element);
+        if (computed.fontSize) clone.setAttribute('data-beaver-font-size', computed.fontSize.replace('px', ''));
+        if (computed.fontWeight) clone.setAttribute('data-beaver-font-weight', computed.fontWeight);
+      });
+      var rawHtml = snapshot.outerHTML;
+      var extracted = BeaverArticleMarkdown.extractArticle(rawHtml, location.href, document.title);
+      if (!extracted) {
         showToast('无法提取正文', '#dc2626');
         return;
       }
-
-      var markdown = '';
-      try {
-        markdown = BeaverArticleMarkdown.convert(htmlContent, location.href);
-
-        var endMarkers = ['你可能错过的好文章', '下载少数派', '推荐阅读', '相关推荐', '猜你喜欢', '相关文章', '阅读原文', 'Recommended for you', 'Related articles'];
-        for (var m = 0; m < endMarkers.length; m++) {
-          var idx = markdown.indexOf(endMarkers[m]);
-          if (idx > 200) { markdown = markdown.substring(0, idx).trim(); break; }
-        }
-      } catch(err) {
-        markdown = htmlContent;
-      }
-
-      var meta = [];
-      if (article && article.siteName) meta.push('> 来源: ' + article.siteName);
-      if (article && article.byline) meta.push('> 作者: ' + article.byline);
-      meta.push('> 原文: ' + location.href);
-      markdown = meta.join('\n') + '\n\n' + markdown;
-
-      chrome.runtime.sendMessage({
+      sendExtensionMessage({
         type: 'saveDocument',
-        title: BeaverArticleMarkdown.cleanTitle(title, document.title),
-        markdown: markdown,
+        title: extracted.title,
+        markdown: extracted.markdown,
         pageUrl: location.href,
       }, function(res) {
         if (res && res.ok) {
           var imageStatus = res.failedCount > 0
             ? '，' + (res.uploadedCount || 0) + ' 张图片成功，' + res.failedCount + ' 张失败'
             : res.uploadedCount > 0 ? '，' + res.uploadedCount + ' 张图片已本地化' : '';
-          showToast('已保存: ' + (title || '笔记') + imageStatus + ' ✓', res.failedCount > 0 ? '#dc2626' : '#059669');
+          showToast('已保存: ' + extracted.title + imageStatus + ' ✓', res.failedCount > 0 ? '#dc2626' : '#059669');
+        } else {
+          showToast('保存失败: ' + (res && res.error || '未知错误'), '#dc2626');
         }
-        else showToast('保存失败: ' + (res && res.error || '未知错误'), '#dc2626');
       });
+      return;
     } catch(err) {
       showToast('提取失败: ' + err.message, '#dc2626');
     }
