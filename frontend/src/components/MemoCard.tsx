@@ -1210,7 +1210,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
         document.body
       )}
 
-      {/* 转换为大纲笔记对话框 */}
+      {/* 转换为普通笔记对话框 */}
       {showConvertDialog && createPortal(
         <MemoToDocDialog
           content={memo.content}
@@ -1279,7 +1279,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
           >
             <ArrowUpRight className="w-3.5 h-3.5" />
-            转换为大纲笔记
+            转换为普通笔记
           </button>
           <button
             onClick={() => { setShowMenu(false); setShowDeleteConfirm(true); }}

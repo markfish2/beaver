@@ -1,10 +1,9 @@
 import { Search, FileText, ChevronDown, Plus, Trash, Star, Bookmark, LogOut, ChevronLeft, ChevronRight, Folder, Edit2, CalendarDays, MoreHorizontal, Copy, ArrowUpRight, FileUp, Move, StickyNote, Key, Lock, Sparkles, User, Archive, Palette } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { createDocument, deleteDocument, updateDocument, copyDocument, getNodes, createNodesBatch, createMemo, uploadFile, search as apiSearch, getTodos, createTodo, updateTodo, getMonthlyDiary, getOrCreateDayNode } from '../api/data';
+import { createDocument, deleteDocument, updateDocument, copyDocument, createNodesBatch, createMemo, uploadFile, search as apiSearch, getTodos, createTodo, updateTodo, getMonthlyDiary, getOrCreateDayNode } from '../api/data';
 import type { Document as DocType, SearchResultItem, Todo } from '../api/data';
 import { createExcalidrawDocument, getExcalidrawDataFresh } from '../api/excalidraw';
 import { saveStateManager } from '../utils/saveStateManager';
-import { nodesToMemoMarkdown } from '../utils/convertNode';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useDocuments } from '../context/DocumentContext';
@@ -966,7 +965,8 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
         {children.map((doc) => {
           const isFolder = doc.type === 'folder';
           const isUnfiledNote = viewMode === 'all' && level === 0 && !isFolder && doc.parent_id === null;
-          const folderIconType = isFolder && isExpanded[doc.id] ? 'folder-open' : doc.type;
+          const isExpandedFolder = isFolder && isExpanded[doc.id];
+          const folderIconType = isExpandedFolder ? 'folder-open' : doc.type;
           return (
             <div key={doc.id}>
               <div
@@ -980,6 +980,8 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                 className={`relative flex items-center px-2 py-1.5 rounded-full cursor-pointer group transition-all ${
                   documentId === doc.id
                     ? 'bg-[#f1f1f1] text-gray-900 dark:bg-gray-700 dark:text-gray-100 font-medium'
+                    : isExpandedFolder
+                      ? 'bg-gray-200/50 text-gray-900 dark:bg-gray-800/50 dark:text-gray-200'
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200/50 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-gray-200'
                 } ${dragOverItem === doc.id && isFolder ? 'bg-gray-500 ring-2 ring-gray-400' : ''} ${
                   draggedItem?.id === doc.id ? 'opacity-50' : ''
@@ -1068,9 +1070,9 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                 </button>
               </div>
               
-              {!sidebarSearchQuery.trim() && viewMode !== 'starred' && isFolder && isExpanded[doc.id] && (
+              {!sidebarSearchQuery.trim() && viewMode !== 'starred' && isExpandedFolder && (
                 <div
-                  className="relative"
+                  className="relative pt-0.5"
                 >
                   <div
                     className="absolute top-0 bottom-0 border-l border-gray-200 dark:border-gray-600"
@@ -2232,18 +2234,18 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                 <Copy className="w-4 h-4 text-gray-400" />
                 <span>复制</span>
               </button>
-              <button
-                onClick={async () => {
-                  setContextMenu(null);
-                  try {
-                    if (contextMenu.docType === 'excalidraw') {
+              {contextMenu.docType === 'excalidraw' && (
+                <button
+                  onClick={async () => {
+                    setContextMenu(null);
+                    try {
                       // 画布转随想笔记：导出图片
                       // 先等待可能正在进行的防抖保存（2s），再读取最新数据
                       await new Promise(resolve => setTimeout(resolve, 2500));
                       const excalidrawData = await getExcalidrawDataFresh(contextMenu.docId);
                       if (excalidrawData.scene_data) {
                         const sceneData = JSON.parse(excalidrawData.scene_data);
-                        // 2. 过滤掉已删除元素（与 Excalidraw getSceneElements 一致）
+                        // 过滤掉已删除元素（与 Excalidraw getSceneElements 一致）
                         const visibleElements = (sceneData.elements || []).filter(
                           (el: { isDeleted?: boolean }) => !el.isDeleted
                         );
@@ -2265,23 +2267,17 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                           alert('画布为空，无法导出');
                         }
                       }
-                    } else {
-                      // 大纲笔记和普通笔记：转换为 markdown
-                      const nodes = await getNodes(contextMenu.docId);
-                      const markdown = nodesToMemoMarkdown(nodes);
-                      await createMemo(markdown);
-                      navigate('/');
+                    } catch (error) {
+                      console.error('转换失败', error);
+                      alert('转换失败：' + (error instanceof Error ? error.message : '未知错误'));
                     }
-                  } catch (error) {
-                    console.error('转换失败', error);
-                    alert('转换失败：' + (error instanceof Error ? error.message : '未知错误'));
-                  }
-                }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              >
-                <ArrowUpRight className="w-4 h-4 text-gray-400" />
-                <span>转换为随想笔记</span>
-              </button>
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <ArrowUpRight className="w-4 h-4 text-gray-400" />
+                  <span>转换为随想笔记</span>
+                </button>
+              )}
               <button
                 onClick={() => {
                   setMoveTargetFolder(null);

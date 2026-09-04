@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { X, ChevronRight, ChevronDown, Folder, FileText } from 'lucide-react';
 import { useDocuments } from '../context/DocumentContext';
 import { createDocument, createNodesBatch } from '../api/data';
-import { parseMemoToNodes } from '../utils/convertMemo';
+import { extractTitle } from '../utils/convertMemo';
 
 interface MemoToDocDialogProps {
   content: string;
@@ -16,7 +16,15 @@ export default function MemoToDocDialog({ content, onClose, onConverted }: MemoT
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
 
-  const { title, nodes } = useMemo(() => parseMemoToNodes(content), [content]);
+  const { title, noteContent } = useMemo(() => {
+    const lines = content.split('\n');
+    let bodyStart = 1;
+    while (bodyStart < lines.length && lines[bodyStart].trim() === '') bodyStart++;
+    return {
+      title: extractTitle(content),
+      noteContent: lines.slice(bodyStart).join('\n').trim(),
+    };
+  }, [content]);
   const [editedTitle, setEditedTitle] = useState(title);
 
   const folders = useMemo(() => documents.filter(d => d.type === 'folder'), [documents]);
@@ -69,30 +77,13 @@ export default function MemoToDocDialog({ content, onClose, onConverted }: MemoT
     if (loading) return;
     setLoading(true);
     try {
-      const doc = await createDocument(editedTitle || title, 'document', selectedFolderId);
-      if (nodes.length > 0) {
-        // Build tempId → index mapping for parent resolution
-        const tempIdToIndex = new Map<string, number>();
-        nodes.forEach((n, i) => tempIdToIndex.set(n.tempId, i));
-        // We need to use createNodesBatch which handles temp_id mapping
-        // But the batch API expects string IDs. Let's use single creation with temp IDs
-        // Actually, let's just create nodes sequentially for simplicity with parent mapping
-        await createNodesBatch(
-          nodes.map((n) => ({
-            id: n.tempId,
-            document_id: doc.id,
-            content: n.content,
-            parent_node_id: n.parentTempId,
-            sort_order: n.sort_order,
-            is_todo: n.is_todo,
-            is_completed: n.is_completed,
-            note: n.note,
-            content_type: n.content_type,
-            file_path: n.file_path,
-            file_name: n.file_name,
-          }))
-        );
-      }
+      const doc = await createDocument(editedTitle || title, 'note', selectedFolderId);
+      await createNodesBatch([{
+        document_id: doc.id,
+        content: noteContent,
+        parent_node_id: null,
+        sort_order: Date.now(),
+      }]);
       await refreshDocuments();
       onConverted(doc.id);
     } catch (e) {
@@ -110,7 +101,7 @@ export default function MemoToDocDialog({ content, onClose, onConverted }: MemoT
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">转换为大纲笔记</h3>
+          <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">转换为普通笔记</h3>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
             <X className="w-5 h-5" />
           </button>
@@ -152,18 +143,9 @@ export default function MemoToDocDialog({ content, onClose, onConverted }: MemoT
 
           {/* Preview */}
           <div>
-            <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1.5">
-              预览（{nodes.length} 个节点）
-            </label>
+            <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1.5">正文预览</label>
             <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 max-h-32 overflow-y-auto text-xs text-gray-600 dark:text-gray-400 font-mono whitespace-pre-wrap">
-              {nodes.length === 0
-                ? '（空笔记）'
-                : nodes.slice(0, 10).map(n => {
-                    const indent = '  '.repeat(n.parentTempId ? 1 : 0);
-                    const prefix = n.is_todo ? (n.is_completed ? '- [x] ' : '- [ ] ') : '- ';
-                    return `${indent}${prefix}${n.content}`;
-                  }).join('\n') + (nodes.length > 10 ? '\n...' : '')
-              }
+              {noteContent || '（空笔记）'}
             </div>
           </div>
         </div>

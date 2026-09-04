@@ -1,16 +1,14 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ChevronRight, MoreHorizontal, Copy, Trash2, Pencil, Folder, Move, Star, Bookmark, ArrowUpRight, Sparkles, FileUp } from 'lucide-react';
+import { ChevronRight, MoreHorizontal, Copy, Trash2, Pencil, Folder, Move, Star, Bookmark, Sparkles, FileUp } from 'lucide-react';
 import { useDocuments } from '../../context/DocumentContext';
-import { createDocument, createMemo, createNodesBatch, deleteDocument, getNodes, getRecentDocuments, updateDocument, copyDocument } from '../../api/data';
+import { createDocument, createNodesBatch, deleteDocument, getRecentDocuments, updateDocument, copyDocument } from '../../api/data';
 import DeleteConfirmDialog from '../DeleteConfirmDialog';
 import NewFolderDialog from '../NewFolderDialog';
 import type { Document } from '../../api/data';
 import { createExcalidrawDocument } from '../../api/excalidraw';
 import { createMobileDocumentState } from '../../utils/mobileNavigation';
-import { nodesToMemoMarkdown } from '../../utils/convertNode';
 import DocumentTypeIcon from '../DocumentTypeIcon';
-import NavigationIcon from '../NavigationIcon';
 
 interface FileTreeViewProps {
   starredOnly?: boolean;
@@ -264,12 +262,6 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
     if (files.length > 0) await refreshDocuments();
   };
 
-  const handleConvertToMemo = async (docId: string) => {
-    const nodes = await getNodes(docId);
-    await createMemo(nodesToMemoMarkdown(nodes));
-    setContextMenu(null);
-  };
-
   const foldersById = useMemo(() => new Map(documents.filter(doc => doc.type === 'folder').map(folder => [folder.id, folder])), [documents]);
   const folderTree = useMemo(() => {
     const folders = documents.filter(doc => doc.type === 'folder');
@@ -465,12 +457,6 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
               <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); void handleCopy(contextMenu.docId); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
                 <Copy className="w-4 h-4 text-gray-400" />
                 复制
-              </button>
-            )}
-            {doc.type !== 'folder' && (
-              <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); void handleConvertToMemo(contextMenu.docId); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
-                <ArrowUpRight className="w-4 h-4 text-gray-400" />
-                转换为随想笔记
               </button>
             )}
             <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); handleRename(contextMenu.docId); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">

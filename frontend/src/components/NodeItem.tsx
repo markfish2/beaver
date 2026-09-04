@@ -1,10 +1,7 @@
 import React, { useRef, useEffect, useLayoutEffect, useState, useCallback, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
 import type { Node, Document } from '../api/data';
-import { getFileUrl, getThumbnailUrl, getNodes, createMemo } from '../api/data';
-import { ArrowUpRight } from 'lucide-react';
-import { nodesToMemoMarkdown } from '../utils/convertNode';
+import { getFileUrl, getThumbnailUrl } from '../api/data';
 import TagMentionPopup from './TagMentionPopup';
 import type { PopupItem } from './TagMentionPopup';
 import ImageViewer from './ImageViewer';
@@ -148,8 +145,6 @@ const NodeItem = memo(({
   onEndEditing,
   onBlurToolbar,
 }: NodeItemProps) => {
-  const navigate = useNavigate();
-  const [converting, setConverting] = useState(false);
   const shouldFocus = focusedNodeId?.id === node.id ? focusedNodeId.field : null;
   const noteEditorRequestId = noteEditorRequest?.id === node.id ? noteEditorRequest.requestId : null;
   const isSelected = selectedNodeIds.includes(node.id);
@@ -719,27 +714,6 @@ const NodeItem = memo(({
     if (contentRef.current) {
       contentRef.current.blur();
       contentRef.current.focus();
-    }
-  };
-
-  const handleConvertToMemo = async () => {
-    if (converting) return;
-    setConverting(true);
-    try {
-      const allNodes = await getNodes(node.document_id);
-      // Current node content as first line, children as list
-      let content = node.content;
-      const childMarkdown = nodesToMemoMarkdown(allNodes, node.id);
-      if (childMarkdown.trim()) {
-        content += '\n\n' + childMarkdown;
-      }
-      await createMemo(content);
-      setShowToolbar(false);
-      navigate('/');
-    } catch (e) {
-      console.error('转换失败', e);
-    } finally {
-      setConverting(false);
     }
   };
 
