@@ -48,7 +48,6 @@ import { saveStateManager, sendBatchSaveRequest, PendingOperation } from '../uti
 import { saveViewState, saveScrollPosition, loadScrollPosition } from '../utils/pwaState';
 import { getErrorMessage } from '../utils/errors';
 import { logNavigation } from '../utils/navigationDebug';
-import { onDataRefresh } from '../utils/conflictResolver';
 import { flattenParsedNodes, parseMarkdown } from './mainAreaClipboard';
 import type { ParsedNode } from './mainAreaClipboard';
 
@@ -1330,57 +1329,6 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       fetchIdRef.current++;
     }
   }, [documentId, fetchData]);
-
-  // 页面保持打开时定期读取远端版本。编辑节点或保存队列有内容时暂不合并，
-  // 防止另一端的修改覆盖本地尚未保存的输入；编辑结束后下一轮会自动同步。
-  useEffect(() => {
-    const activeMode = documentTabs.find(tab => tab.key === activeDocumentTabKey)?.mode;
-    // 普通笔记由 MarkdownNoteEditor 自己负责刷新；这里仅负责大纲/日记，
-    // 避免编辑普通笔记时父级刷新 initialNodes 造成编辑器重置。
-    // 不能只用 Tab 的 mode 判断：普通笔记也使用 outline mode，但不属于
-    // 大纲树，必须按真实文档类型阻止这条父级轮询链路。
-    if (
-      !documentId
-      || !currentDoc
-      || (!isDiaryDoc && (currentDoc.type !== 'document' || activeMode !== 'outline'))
-    ) return;
-    const refresh = async (force = false) => {
-      if (!force && (document.visibilityState !== 'visible' || editingNodesRef.current.size > 0 || pendingCount > 0 || saveStatus === 'saving')) return;
-      // 文档更新时间由节点写入同步维护。先只检查文档元数据，未变化时不再
-      // 读取整棵节点树，避免每轮轮询都调度 tab 和内容页。
-      const remoteDocument = await getDocument(documentId, true).catch(() => null);
-      if (!remoteDocument || sameRecord(currentDocRef.current, remoteDocument)) return;
-      // 本端保存节点后，服务端会更新文档 updated_at，但本地节点已经是同一份
-      // 内容。先做一次内容比对，过滤掉这个“自己的保存回声”，不要重新设置
-      // 节点树或触发编辑器/Tab 的刷新。只有节点确实不同才合并远端版本。
-      const remoteNodes = await getNodes(documentId, true).catch(() => null);
-      if (remoteNodes && sameRecordList(nodesRef.current, remoteNodes)) {
-        const localDocument = currentDocRef.current;
-        const sameExceptUpdatedAt = localDocument && Object.keys(remoteDocument).every((key) => (
-          key === 'updated_at' || JSON.stringify(localDocument[key as keyof Document]) === JSON.stringify(remoteDocument[key as keyof Document])
-        )) && Object.keys(localDocument).every((key) => (
-          key === 'updated_at' || JSON.stringify(localDocument[key as keyof Document]) === JSON.stringify(remoteDocument[key as keyof Document])
-        ));
-        if (sameExceptUpdatedAt) {
-          currentDocRef.current = remoteDocument;
-          return;
-        }
-      }
-      dataCache.invalidate(`nodes:${documentId}`);
-      void fetchData(documentId, ++fetchIdRef.current, true);
-    };
-    const handleVisibilityChange = () => { void refresh(); };
-    const timer = window.setInterval(() => { void refresh(); }, 15000);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    const removeDataRefreshListener = onDataRefresh((request) => {
-      if (request.entityId === documentId) void refresh(true);
-    });
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      removeDataRefreshListener();
-    };
-  }, [activeDocumentTabKey, currentDoc, documentId, documentTabs, fetchData, isDiaryDoc, pendingCount, saveStatus]);
 
   useEffect(() => {
     logNavigation('main-area-document-state', {

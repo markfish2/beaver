@@ -3,7 +3,6 @@ import { getDocuments } from '../api/data';
 import { dataCache } from '../api/cache';
 import type { Document } from '../api/data';
 import { useAuth } from './AuthContext';
-import { onDataRefresh } from '../utils/conflictResolver';
 
 interface DocumentContextType {
   documents: Document[];
@@ -57,32 +56,6 @@ export const DocumentProvider = ({ children }: { children: ReactNode }) => {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [isAuthenticated, refreshDocuments]);
-
-  // 插件保存文章时不会经过当前页面的 React 状态树。定期同步文档元数据，
-  // 并在用户回到页面时立即同步，使文件列表自然热更新而无需刷新整页。
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const syncDocuments = () => {
-      if (document.visibilityState === 'hidden') return;
-      // 轮询只检查远端快照；没有变化时不触发加载态，也不替换列表引用。
-      void fetchDocuments(undefined, true);
-    };
-    const timer = window.setInterval(syncDocuments, 15000);
-    window.addEventListener('focus', syncDocuments);
-    document.addEventListener('visibilitychange', syncDocuments);
-
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener('focus', syncDocuments);
-      document.removeEventListener('visibilitychange', syncDocuments);
-    };
-  }, [fetchDocuments, isAuthenticated]);
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    return onDataRefresh(() => { void fetchDocuments(undefined, true); });
-  }, [fetchDocuments, isAuthenticated]);
 
   const updateDocumentTitle = useCallback((id: string, newTitle: string) => {
     setDocuments(prev => prev.map(d => d.id === id ? { ...d, title: newTitle } : d));

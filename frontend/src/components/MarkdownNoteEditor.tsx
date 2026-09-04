@@ -53,7 +53,6 @@ SyntaxHighlighter.registerLanguage('yaml', yaml);
 import { Pencil, Eye, Save, Columns2, Copy, CheckCheck, Download, Share2 } from 'lucide-react';
 import { getNodes, createNode, updateNode, uploadFile, getDocuments, getDocument, updateDocument, downloadAttachment, getRelatedNotes } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
-import { onDataRefresh } from '../utils/conflictResolver';
 import type { Document, Node, RelatedNote } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts, getMarkdownTaskOrdinalAtLine, toggleMarkdownTaskByOrdinal } from '../utils/markdownPreprocess';
@@ -580,6 +579,10 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const editorScrollRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+  // MainArea 会因文档元数据热同步而重新传入 initialNodes/initialDocuments。
+  // 这些 props 只用于首次进入文档，不能让普通笔记编辑器重复初始化，
+  // 否则本端保存更新 updated_at 后，下一轮同步会重置正在编辑的内容。
+  const initializedDocumentRef = useRef<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
@@ -589,7 +592,6 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   const pendingSaveRef = useRef<string | null>(null);
   const contentRef = useRef('');
   const previousDocumentIdRef = useRef(documentId);
-
   useEffect(() => {
     contentRef.current = content;
   }, [content]);
@@ -753,6 +755,8 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   }, [nodeId]);
 
   useEffect(() => {
+    if (initializedDocumentRef.current === documentId) return;
+    initializedDocumentRef.current = documentId;
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -787,43 +791,16 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
           lastSavedRef.current = '';
           onDirtyChange?.(false);
         }
-      } catch (e) { console.error('Failed to load note', e); }
+      } catch (e) {
+        if (!cancelled && initializedDocumentRef.current === documentId) {
+          initializedDocumentRef.current = null;
+        }
+        console.error('Failed to load note', e);
+      }
       finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
   }, [documentId, initialNodes, initialDocuments, onDirtyChange]);
-
-  // 阅读页面保持打开时检查远端修改；编辑中、存在草稿或待保存内容时不覆盖本地输入。
-  useEffect(() => {
-    if (isNew || !nodeId) return;
-    const refresh = async (force = false) => {
-      if (!force && (viewMode !== 'preview' || document.visibilityState !== 'visible' || pendingSaveRef.current !== null)) return;
-      try {
-        const [nodes, remoteDocument] = await Promise.all([
-          getNodes(documentId, true),
-          getDocument(documentId, true).catch(() => null),
-        ]);
-        const remoteNode = nodes.find(node => node.id === nodeId) || nodes.find(node => !node.parent_node_id);
-        if (remoteNode && remoteNode.content !== lastSavedRef.current && contentRef.current === lastSavedRef.current) {
-          lastSavedRef.current = remoteNode.content || '';
-          setContent(remoteNode.content || '');
-        }
-        if (remoteDocument && remoteDocument.title !== title) setTitle(remoteDocument.title);
-      } catch (error) {
-        console.error('Failed to refresh note', error);
-      }
-    };
-    const timer = window.setInterval(() => { void refresh(); }, 15000);
-    document.addEventListener('visibilitychange', refresh);
-    const removeDataRefreshListener = onDataRefresh((request) => {
-      if (request.entityId === documentId) void refresh(true);
-    });
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', refresh);
-      removeDataRefreshListener();
-    };
-  }, [documentId, isNew, nodeId, title, viewMode]);
 
   const persistContent = useCallback(async (newContent: string): Promise<boolean> => {
     if (!nodeId) return false;
@@ -1203,7 +1180,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   const showMentionPopup = mentionState.type === 'mention' && filteredDocs.length > 0 && mentionState.coords;
 
   return (
-    <div className="flex flex-col h-full bg-[var(--app-canvas)]">
+    <div className={`markdown-note-editor flex flex-col h-full bg-[var(--app-canvas)] ${viewMode !== 'preview' ? 'is-editing' : ''}`}>
       <div className="hidden">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {showDocumentTabs && onDocumentTabSelect && onDocumentTabClose && (

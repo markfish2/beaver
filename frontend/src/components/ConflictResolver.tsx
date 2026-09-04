@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle, Cloud, Laptop } from 'lucide-react';
-import { onConflict, requestDataRefresh, type ConflictInfo } from '../utils/conflictResolver';
+import { onConflict, type ConflictInfo } from '../utils/conflictResolver';
 import { updateDocument, updateNode } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
 
@@ -17,9 +17,8 @@ export default function ConflictResolver() {
   if (!conflict) return null;
 
   const handleUseServer = () => {
-    // Discard local changes and let the active views pull the server version.
-    // A full page reload loses editor state and is unnecessary here.
-    requestDataRefresh({ entityType: conflict.entityType, entityId: conflict.entityId });
+    // 不再通过全局热更新事件拉取云端版本，避免重置当前编辑器。
+    // 用户关闭冲突提示后可手动重新打开文档查看云端版本。
     setConflict(null);
   };
 
