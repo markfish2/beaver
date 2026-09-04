@@ -343,6 +343,8 @@ interface MainAreaProps {
 }
 
 const createSortOrder = () => Date.now();
+const normalizeDocumentId = (id: string): string => id.replace(/-/g, '').toLowerCase();
+
 function loadDocumentTabs(): DocumentTab[] {
   try {
     const parsed = JSON.parse(sessionStorage.getItem(DOCUMENT_TABS_STORAGE_KEY) || '[]') as DocumentTab[];
@@ -377,7 +379,14 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const [showOutlineFilter, setShowOutlineFilter] = useState(false);
   const diaryCtx = useDiary();
   const fetchIdRef = useRef(0);
-  const [nodes, setNodes] = useState<Node[]>([]);
+  const [nodeState, setNodes] = useState<Node[]>([]);
+  const [nodesDocumentId, setNodesDocumentId] = useState<string | null>(null);
+  // 路由切换是同步渲染的，但数据请求在 effect 中完成。只暴露属于当前
+  // documentId 的节点，避免新页面首帧拿到上一篇笔记的内容。
+  const nodes = useMemo(() => {
+    const currentDocumentId = documentId ? normalizeDocumentId(documentId) : null;
+    return currentDocumentId && nodesDocumentId === currentDocumentId ? nodeState : [];
+  }, [documentId, nodeState, nodesDocumentId]);
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   // NodeItem 使用 memo 避免大纲树整体重渲染，因此不能直接把每次渲染新建的
@@ -1234,12 +1243,13 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   // documentId 变化时 useEffect 已自动加载数据
 
   const fetchData = useCallback(async (id: string, fetchId?: number, forceRefresh = false) => {
-    const normalizedId = id.replace(/-/g, '');
-    const contextDoc = documentsRef.current.find(d => d.id.replace(/-/g, '') === normalizedId);
+    const normalizedId = normalizeDocumentId(id);
+    const contextDoc = documentsRef.current.find(d => normalizeDocumentId(d.id) === normalizedId);
     const isCanvasDocument = contextDoc?.type === 'excalidraw';
     const cachedNodes = isCanvasDocument ? [] : dataCache.get<Node[]>(`nodes:${id}`);
     setIsLoading(!isCanvasDocument && !cachedNodes);
     if (cachedNodes) {
+      setNodesDocumentId(normalizedId);
       setNodes(previous => sameRecordList(previous, cachedNodes) ? previous : cachedNodes);
     }
     try {
@@ -1272,6 +1282,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         }
       }
 
+      setNodesDocumentId(normalizedId);
       setNodes(previous => sameRecordList(previous, processedNodes) ? previous : processedNodes);
       if (foundDoc) {
         setCurrentDoc(previous => sameRecord(previous, foundDoc) ? previous : foundDoc);

@@ -97,6 +97,7 @@ interface Props {
 const BLOCK_CODE_FONT_SIZE = 'var(--markdown-block-code-font-size)';
 const MARKDOWN_REMARK_PLUGINS = [remarkGfm, remarkBreaks, remarkMath];
 const MARKDOWN_REHYPE_PLUGINS = [rehypeRaw, preserveCodeBlocks, rehypeKatex];
+const normalizeDocumentId = (id: string): string => id.replace(/-/g, '').toLowerCase();
 
 const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => {
   // 非默认主题的暗色模式不设置内联背景，让 CSS 主题变量控制
@@ -660,6 +661,13 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   // 这些 props 只用于首次进入文档，不能让普通笔记编辑器重复初始化，
   // 否则本端保存更新 updated_at 后，下一轮同步会重置正在编辑的内容。
   const initializedDocumentRef = useRef<string | null>(null);
+  const documentScopedInitialNodes = useMemo(() => {
+    if (!initialNodes || initialNodes.length === 0) return initialNodes;
+    const normalizedDocumentId = normalizeDocumentId(documentId);
+    return initialNodes.every(node => normalizeDocumentId(node.document_id) === normalizedDocumentId)
+      ? initialNodes
+      : [];
+  }, [documentId, initialNodes]);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
@@ -870,7 +878,9 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
         // MainArea 已经加载过当前文档时直接复用，避免普通笔记再次请求同一批数据。
         // 空数组可能只是 MainArea 的首帧占位，不能立即当成“没有节点”并创建新节点。
         const [nodes, docs] = await Promise.all([
-          initialNodes && initialNodes.length > 0 ? Promise.resolve(initialNodes) : getNodes(documentId),
+          documentScopedInitialNodes && documentScopedInitialNodes.length > 0
+            ? Promise.resolve(documentScopedInitialNodes)
+            : getNodes(documentId),
           initialDocuments && initialDocuments.length > 0 ? Promise.resolve(initialDocuments) : getDocuments(),
         ]);
         if (cancelled) return;
@@ -917,7 +927,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
         initializedDocumentRef.current = null;
       }
     };
-  }, [documentId, initialNodes, initialDocuments, isNew, notifyDirty]);
+  }, [documentId, documentScopedInitialNodes, initialDocuments, isNew, notifyDirty]);
 
   const persistContent = useCallback(async (newContent: string): Promise<boolean> => {
     if (!nodeId) return false;
