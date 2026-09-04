@@ -1,10 +1,9 @@
-import { useState, useRef, useCallback, useEffect, useMemo, memo, lazy, Suspense, Children, isValidElement } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo, useDeferredValue, startTransition, memo, lazy, Suspense, Children, isValidElement } from 'react';
 import type { RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
-import type { Root } from 'hast';
 import { EditorView } from '@codemirror/view';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -51,11 +50,11 @@ SyntaxHighlighter.registerLanguage('go', go);
 SyntaxHighlighter.registerLanguage('rust', rust);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
 import { Pencil, Eye, Save, Columns2, Copy, CheckCheck, Download, Share2 } from 'lucide-react';
-import { getNodes, createNode, updateNode, uploadFile, getDocuments, getDocument, updateDocument, downloadAttachment, getRelatedNotes } from '../api/data';
+import { getNodes, createNode, updateNode, uploadFile, getDocuments, updateDocument, downloadAttachment, getRelatedNotes } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
 import type { Document, Node, RelatedNote } from '../api/data';
 import MermaidBlock from './MermaidBlock';
-import { normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts, getMarkdownTaskOrdinalAtLine, toggleMarkdownTaskByOrdinal } from '../utils/markdownPreprocess';
+import { getMarkdownTaskOrdinalAtLine, toggleMarkdownTaskByOrdinal } from '../utils/markdownPreprocess';
 import { getPasteMarkdown, htmlToMarkdown } from '../utils/htmlToMarkdown';
 import { localizeMarkdownImages } from '../utils/markdownImageUpload';
 import { clearEditorDraft, getEditorDraft, saveEditorDraft } from '../utils/editorDrafts';
@@ -68,8 +67,9 @@ import TagMentionPopup from './TagMentionPopup';
 import type { PopupItem } from './TagMentionPopup';
 import { tagMentionExtension } from '../extensions/tagMentionExtension';
 import type { TagMentionState } from '../extensions/tagMentionExtension';
-import { extractTagCandidates } from '../utils/tagCandidates';
 import { isMentionableDocument } from '../utils/documentMention';
+import { useMarkdownAnalysis } from '../hooks/useMarkdownAnalysis';
+import type { MarkdownNoteBlock, NoteTocItem } from '../utils/markdownNoteAnalysis';
 import ShareDialog from './ShareDialog';
 import { exportNotePdf } from '../utils/notePdf';
 import { showToast } from '../utils/toast';
@@ -94,27 +94,9 @@ interface Props {
   onDirtyChange?: (dirty: boolean) => void;
 }
 
-function preprocess(content: string): string {
-  return normalizeCodeBlocks(normalizeListSeparators(normalizeHighlight(normalizeTaskLists(normalizeCallouts(content)))));
-}
-
 const BLOCK_CODE_FONT_SIZE = 'var(--markdown-block-code-font-size)';
 const MARKDOWN_REMARK_PLUGINS = [remarkGfm, remarkBreaks, remarkMath];
 const MARKDOWN_REHYPE_PLUGINS = [rehypeRaw, preserveCodeBlocks, rehypeKatex];
-
-// 预览模式按顶层 Markdown 块延迟挂载，避免长笔记首次打开时一次性执行全部重渲染。
-function wrapMarkdownBlocks() {
-  return (tree: Root) => {
-    tree.children = tree.children.map((child) => ({
-      type: 'element' as const,
-      tagName: 'div',
-      properties: { 'data-markdown-block': 'true' },
-      children: [child],
-    }));
-  };
-}
-
-const LAZY_MARKDOWN_REHYPE_PLUGINS = [...MARKDOWN_REHYPE_PLUGINS, wrapMarkdownBlocks];
 
 const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => {
   // 非默认主题的暗色模式不设置内联背景，让 CSS 主题变量控制
@@ -152,6 +134,29 @@ function getNodeStartLine(node: unknown): number | null {
   return typeof line === 'number' && Number.isFinite(line) ? line : null;
 }
 
+interface MarkdownPositionNode {
+  position?: {
+    start?: { line?: number };
+    end?: { line?: number };
+  };
+  children?: MarkdownPositionNode[];
+}
+
+// ReactMarkdown parses each visible block independently. Restore document-level
+// line numbers so heading anchors and task-list interactions keep working.
+function offsetMarkdownPositions(lineOffset: number) {
+  return function offsetMarkdownPlugin() {
+    return function offsetMarkdownTree(tree: MarkdownPositionNode) {
+      const visit = (node: MarkdownPositionNode) => {
+        if (node.position?.start?.line != null) node.position.start.line += lineOffset;
+        if (node.position?.end?.line != null) node.position.end.line += lineOffset;
+        node.children?.forEach(visit);
+      };
+      visit(tree);
+    };
+  };
+}
+
 function PlainCodeWithLineNumbers({ code, isDark }: { code: string; isDark: boolean }) {
   const lineNumberStyle = codeLineNumberStyle(isDark);
   const mdStyle = typeof document !== 'undefined' ? document.documentElement.dataset.markdownStyle : '';
@@ -170,21 +175,31 @@ function PlainCodeWithLineNumbers({ code, isDark }: { code: string; isDark: bool
   );
 }
 
-type MarkdownDivProps = Parameters<NonNullable<Components['div']>>[0];
-
 function DeferredMarkdownBlock({
   children,
   minHeight,
   rootRef,
+  startLine,
+  endLine,
+  headingId,
+  virtualize = true,
+  initiallyActive = false,
 }: {
   children: React.ReactNode;
   minHeight: number;
   rootRef: RefObject<HTMLElement | null>;
+  startLine: number | null;
+  endLine: number | null;
+  headingId?: string;
+  virtualize?: boolean;
+  initiallyActive?: boolean;
 }) {
   const blockRef = useRef<HTMLDivElement>(null);
-  const [isNearViewport, setIsNearViewport] = useState(false);
+  const [isNearViewport, setIsNearViewport] = useState(!virtualize || initiallyActive);
+  const [reservedHeight, setReservedHeight] = useState(Math.max(44, minHeight));
 
   useEffect(() => {
+    if (!virtualize) return;
     const element = blockRef.current;
     if (!element || typeof IntersectionObserver === 'undefined') {
       setIsNearViewport(true);
@@ -193,29 +208,68 @@ function DeferredMarkdownBlock({
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (!entry?.isIntersecting) return;
-        setIsNearViewport(true);
-        observer.disconnect();
+        setIsNearViewport(Boolean(entry?.isIntersecting));
       },
-      { root: rootRef.current, rootMargin: '600px 0px' },
+      { root: rootRef.current, rootMargin: '800px 0px' },
     );
-    observer.observe(element);
+      observer.observe(element);
     return () => observer.disconnect();
-  }, [rootRef]);
+  }, [rootRef, virtualize]);
+
+  useEffect(() => {
+    if (!isNearViewport) return;
+    const element = blockRef.current;
+    if (!element) return;
+
+    const updateHeight = () => {
+      const nextHeight = element.getBoundingClientRect().height;
+      if (nextHeight > 0) {
+        setReservedHeight(previous => Math.abs(previous - nextHeight) > 1 ? nextHeight : previous);
+      }
+    };
+
+    updateHeight();
+    if (typeof ResizeObserver === 'undefined') {
+      const frame = requestAnimationFrame(updateHeight);
+      return () => cancelAnimationFrame(frame);
+    }
+
+    const resizeObserver = new ResizeObserver(updateHeight);
+    resizeObserver.observe(element);
+    return () => resizeObserver.disconnect();
+  }, [isNearViewport]);
 
   return (
-    <div ref={blockRef} style={{ minHeight: isNearViewport ? undefined : minHeight }}>
-      {isNearViewport ? children : null}
+    <div
+      ref={blockRef}
+      data-note-block-start-line={startLine ?? undefined}
+      data-note-block-end-line={endLine ?? undefined}
+      data-note-block-heading-id={headingId}
+      style={{ minHeight: virtualize && !isNearViewport ? reservedHeight : undefined }}
+    >
+      {!virtualize || isNearViewport ? children : null}
     </div>
   );
 }
 
-interface NoteTocItem {
-  id: string;
-  text: string;
-  level: 1 | 2 | 3 | 4 | 5 | 6;
-  sourceLine: number;
+interface MarkdownPreviewBlockProps {
+  source: string;
+  block: MarkdownNoteBlock;
+  components: Components;
 }
+
+const MarkdownPreviewBlock = memo(function MarkdownPreviewBlock({ source, block, components }: MarkdownPreviewBlockProps) {
+  const remarkPlugins = useMemo(
+    () => [...MARKDOWN_REMARK_PLUGINS, offsetMarkdownPositions(Math.max(0, block.startLine - 1))],
+    [block.startLine],
+  );
+
+  return (
+    <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={MARKDOWN_REHYPE_PLUGINS} components={components}>
+      {source.slice(block.startOffset, block.endOffset)}
+    </ReactMarkdown>
+  );
+});
 
 const TOC_LEVEL_INDENT: Record<NoteTocItem['level'], number> = {
   1: 0,
@@ -226,57 +280,7 @@ const TOC_LEVEL_INDENT: Record<NoteTocItem['level'], number> = {
   6: 60,
 };
 
-function stripInlineMarkdown(text: string): string {
-  return text
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/[`*_~]/g, '')
-    .replace(/<[^>]+>/g, '')
-    .trim();
-}
-
-function extractMarkdownHeadings(markdown: string): NoteTocItem[] {
-  const lines = markdown.split(/\r?\n/);
-  const items: NoteTocItem[] = [];
-  let inFence = false;
-  let fenceMarker: '```' | '~~~' | null = null;
-
-  for (let index = 0; index < lines.length; index++) {
-    const line = lines[index];
-    const trimmedStart = line.trimStart();
-    const fence = trimmedStart.match(/^(```|~~~)/);
-    if (fence) {
-      const marker = fence[1] as '```' | '~~~';
-      if (!inFence) {
-        inFence = true;
-        fenceMarker = marker;
-      } else if (fenceMarker === marker) {
-        inFence = false;
-        fenceMarker = null;
-      }
-      continue;
-    }
-    if (inFence) continue;
-
-    const match = line.match(/^ {0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);
-    if (!match) continue;
-
-    const text = stripInlineMarkdown(match[2]);
-    if (!text) continue;
-
-    const sourceLine = index + 1;
-    items.push({
-      id: `note-heading-${sourceLine}-${items.length}`,
-      text,
-      level: match[1].length as NoteTocItem['level'],
-      sourceLine,
-    });
-  }
-
-  return items;
-}
-
-function NoteTableOfContents({
+const NoteTableOfContents = memo(function NoteTableOfContents({
   items,
   scrollRootRef,
   onJump,
@@ -432,7 +436,7 @@ function NoteTableOfContents({
       </div>
     </aside>
   );
-}
+});
 
 const CodeBlock = memo(function CodeBlock({ className, children, ...props }: MarkdownCodeProps) {
   const [copied, setCopied] = useState(false);
@@ -558,9 +562,79 @@ function RelatedNotes({ notes, onOpen }: { notes: RelatedNote[]; onOpen: (note: 
   );
 }
 
+interface MarkdownNotePreviewProps {
+  previewRef: RefObject<HTMLDivElement | null>;
+  content: string;
+  processedContent: string;
+  blocks: MarkdownNoteBlock[];
+  title: string;
+  viewMode: 'preview' | 'split';
+  isMobile: boolean;
+  components: Components;
+  onDoubleClick: (event: React.MouseEvent<HTMLDivElement>) => void;
+  onCopy: (event: React.ClipboardEvent<HTMLDivElement>) => void;
+  showRelatedNotes: boolean;
+  relatedNotes: RelatedNote[];
+  onRelatedNoteOpen: (note: RelatedNote) => void;
+}
+
+const MarkdownNotePreview = memo(function MarkdownNotePreview({
+  previewRef,
+  content,
+  processedContent,
+  blocks,
+  title,
+  viewMode,
+  isMobile,
+  components,
+  onDoubleClick,
+  onCopy,
+  showRelatedNotes,
+  relatedNotes,
+  onRelatedNoteOpen,
+}: MarkdownNotePreviewProps) {
+  return (
+    <div
+      ref={previewRef}
+      className={`${viewMode === 'split' ? 'w-1/2' : 'flex-1 min-w-0 h-full'} overflow-x-hidden overflow-y-auto custom-scrollbar scrollbar-auto-hide flex flex-col items-center`}
+      style={isMobile ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 58px)' } : undefined}
+    >
+      <div
+        onDoubleClick={onDoubleClick}
+        onCopyCapture={onCopy}
+        className="markdown-note-preview memo-content max-w-[768px] w-full cursor-text text-base text-gray-700 dark:text-gray-300 p-6"
+        style={{ lineHeight: '1.75' }}
+      >
+        <h1 className="markdown-note-title mb-6 text-3xl font-semibold leading-tight text-gray-900 dark:text-gray-100">{title || '无标题'}</h1>
+        {content.trim() ? (
+          blocks.length > 0 ? blocks.map((block, index) => (
+            <DeferredMarkdownBlock
+              key={block.id}
+              minHeight={Math.max(44, Math.min(420, (block.endLine - block.startLine + 1) * 28))}
+              rootRef={previewRef}
+              startLine={block.startLine}
+              endLine={block.endLine}
+              headingId={block.headingId}
+              initiallyActive={index < 4}
+            >
+              <MarkdownPreviewBlock source={processedContent} block={block} components={components} />
+            </DeferredMarkdownBlock>
+          )) : (
+            <ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} rehypePlugins={MARKDOWN_REHYPE_PLUGINS} components={components}>
+              {processedContent}
+            </ReactMarkdown>
+          )
+        ) : <p className="text-gray-400 dark:text-gray-500 italic">空笔记</p>}
+        {showRelatedNotes && <RelatedNotes notes={relatedNotes} onOpen={onRelatedNoteOpen} />}
+      </div>
+    </div>
+  );
+});
+
 export default function MarkdownNoteEditor({ documentId, isNew = false, initialNodes, initialDocuments, documentTabs = [], activeDocumentTabKey = null, showDocumentTabs = true, onDocumentTabSelect, onDocumentTabClose, onRelatedNoteOpen, onDirtyChange }: Props) {
   const { updateDocumentTitle } = useDocuments();
   const isMobile = usePhoneLayout();
+  const navigate_fn = useNavigate();
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>(isNew ? 'edit' : 'preview');
   const [content, setContent] = useState('');
   const [showAIPanel, setShowAIPanel] = useState(false);
@@ -573,7 +647,10 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
-  const allTags = useMemo(() => extractTagCandidates([content]), [content]);
+  const deferredContent = useDeferredValue(content);
+  const markdownAnalysis = useMarkdownAnalysis(deferredContent);
+  const allTags = markdownAnalysis.allTags;
+  const previewContent = markdownAnalysis.sourceContent;
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [relatedNotesState, setRelatedNotesState] = useState<{ key: string; notes: RelatedNote[] }>({ key: '', notes: [] });
   const editorRef = useRef<MarkdownEditorHandle>(null);
@@ -588,13 +665,22 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const exportSurfaceRef = useRef<HTMLDivElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const contentPublishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedRef = useRef('');
   const pendingSaveRef = useRef<string | null>(null);
   const contentRef = useRef('');
+  const dirtyRef = useRef(false);
   const previousDocumentIdRef = useRef(documentId);
   useEffect(() => {
     contentRef.current = content;
   }, [content]);
+
+  const notifyDirty = useCallback((dirty: boolean) => {
+    if (dirtyRef.current === dirty) return;
+    dirtyRef.current = dirty;
+    onDirtyChange?.(dirty);
+  }, [onDirtyChange]);
 
   useEffect(() => {
     if (previousDocumentIdRef.current === documentId) return;
@@ -603,8 +689,8 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   }, [documentId, isNew]);
 
   useEffect(() => {
-    const relatedQueryKey = `${documentId}:${viewMode}:${content}`;
-    if (viewMode !== 'preview' || isNew || content.trim().length < 30) {
+    const relatedQueryKey = `${documentId}:${viewMode}:${previewContent}`;
+    if (viewMode !== 'preview' || isNew || previewContent.trim().length < 30) {
       return;
     }
     let cancelled = false;
@@ -612,7 +698,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
       .then((notes) => { if (!cancelled) setRelatedNotesState({ key: relatedQueryKey, notes }); })
       .catch(() => { if (!cancelled) setRelatedNotesState({ key: relatedQueryKey, notes: [] }); });
     return () => { cancelled = true; };
-  }, [content, documentId, isNew, viewMode]);
+  }, [documentId, isNew, previewContent, viewMode]);
 
   const handleDownload = useCallback(() => {
     const currentContent = editorRef.current?.getValue() ?? content;
@@ -637,9 +723,14 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   }, [showExportMenu]);
 
   const handleExportPdf = useCallback(async () => {
-    if (exportingPdf || !exportSurfaceRef.current) return;
+    if (exportingPdf) return;
     setExportingPdf(true);
     try {
+      // 渲染面按需挂载，等待 React 提交和浏览器布局完成后再导出。
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+      });
+      if (!exportSurfaceRef.current) throw new Error('PDF 渲染面尚未准备好');
       await exportNotePdf({ surface: exportSurfaceRef.current, title: title || 'note' });
     } catch (e) {
       console.error('导出 PDF 失败', e);
@@ -673,6 +764,14 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
     event.preventDefault();
     event.clipboardData.setData('text/plain', markdown);
   }, []);
+
+  const handleRelatedNoteOpen = useCallback((note: RelatedNote) => {
+    if (onRelatedNoteOpen) {
+      onRelatedNoteOpen(note);
+      return;
+    }
+    navigate_fn(note.type === 'memo' ? `/?view=wanderer&memoId=${note.id}` : `/d/${note.id}`);
+  }, [navigate_fn, onRelatedNoteOpen]);
 
   const [tagState, setTagState] = useState<TagMentionState>({ type: null, query: '', coords: null, from: 0, to: 0 });
   const [mentionState, setMentionState] = useState<TagMentionState>({ type: null, query: '', coords: null, from: 0, to: 0 });
@@ -738,33 +837,41 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
     },
     isPopupActive: () => isTagPopupActive() || isMentionPopupActive(),
   }), [allTags.length, documents.length, filteredTags, filteredDocs, tagDropdownIndex, mentionDropdownIndex, isTagPopupActive, isMentionPopupActive]); // eslint-disable-line react-hooks/exhaustive-deps
+  const editorExtensions = useMemo(() => [tmExtension], [tmExtension]);
 
   useEffect(() => {
+    const editorAtCleanup = editorRef.current;
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+      if (contentPublishTimerRef.current) clearTimeout(contentPublishTimerRef.current);
       if (pendingSaveRef.current !== null && nodeId) {
+        const latestContent = editorAtCleanup?.getValue() ?? contentRef.current;
+        saveEditorDraft('markdown-note', documentId, latestContent);
         const token = localStorage.getItem('token');
         fetch(`/api/nodes/${nodeId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
-          body: JSON.stringify({ content: pendingSaveRef.current }),
+          body: JSON.stringify({ content: latestContent }),
           keepalive: true,
         }).catch(() => {});
       }
     };
-  }, [nodeId]);
+  }, [documentId, nodeId]);
 
   useEffect(() => {
     if (initializedDocumentRef.current === documentId) return;
     initializedDocumentRef.current = documentId;
     let cancelled = false;
+    let initializationCompleted = false;
     (async () => {
       setLoading(true);
       try {
         // MainArea 已经加载过当前文档时直接复用，避免普通笔记再次请求同一批数据。
+        // 空数组可能只是 MainArea 的首帧占位，不能立即当成“没有节点”并创建新节点。
         const [nodes, docs] = await Promise.all([
-          initialNodes ? Promise.resolve(initialNodes) : getNodes(documentId),
-          initialDocuments ? Promise.resolve(initialDocuments) : getDocuments(),
+          initialNodes && initialNodes.length > 0 ? Promise.resolve(initialNodes) : getNodes(documentId),
+          initialDocuments && initialDocuments.length > 0 ? Promise.resolve(initialDocuments) : getDocuments(),
         ]);
         if (cancelled) return;
         setDocuments(docs);
@@ -774,23 +881,27 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
           const root = nodes.find(n => !n.parent_node_id) || nodes[0];
           const serverContent = root.content || '';
           const draft = isNew ? null : getEditorDraft('markdown-note', documentId);
+          const initialContent = draft ?? serverContent;
           setNodeId(root.id);
-          setContent(draft ?? serverContent);
+          contentRef.current = initialContent;
+          setContent(initialContent);
           lastSavedRef.current = serverContent;
           if (draft !== null && draft !== serverContent) {
             pendingSaveRef.current = draft;
-            onDirtyChange?.(true);
+            notifyDirty(true);
           } else {
-            onDirtyChange?.(false);
+            notifyDirty(false);
           }
         } else {
           const newNode = await createNode(documentId, '', null);
           if (cancelled) return;
           setNodeId(newNode.id);
+          contentRef.current = '';
           setContent('');
           lastSavedRef.current = '';
-          onDirtyChange?.(false);
+          notifyDirty(false);
         }
+        initializationCompleted = true;
       } catch (e) {
         if (!cancelled && initializedDocumentRef.current === documentId) {
           initializedDocumentRef.current = null;
@@ -799,18 +910,26 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
       }
       finally { if (!cancelled) setLoading(false); }
     })();
-    return () => { cancelled = true; };
-  }, [documentId, initialNodes, initialDocuments, onDirtyChange]);
+    return () => {
+      cancelled = true;
+      // props 在初始化期间更新时，允许下一轮 effect 使用最新数据重试。
+      if (!initializationCompleted && initializedDocumentRef.current === documentId) {
+        initializedDocumentRef.current = null;
+      }
+    };
+  }, [documentId, initialNodes, initialDocuments, isNew, notifyDirty]);
 
   const persistContent = useCallback(async (newContent: string): Promise<boolean> => {
     if (!nodeId) return false;
     setSaving(true);
     try {
       await updateNode(nodeId, { content: newContent });
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+      draftTimerRef.current = null;
       clearEditorDraft('markdown-note', documentId);
       lastSavedRef.current = newContent;
       pendingSaveRef.current = null;
-      onDirtyChange?.(false);
+      notifyDirty(false);
       return true;
     } catch (e) {
       console.error('Failed to save note', e);
@@ -818,22 +937,62 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
     } finally {
       setSaving(false);
     }
-  }, [documentId, nodeId, onDirtyChange]);
+  }, [documentId, nodeId, notifyDirty]);
 
-  const scheduleSave = useCallback((newContent: string) => {
-    saveEditorDraft('markdown-note', documentId, newContent);
-    if (newContent === lastSavedRef.current) { pendingSaveRef.current = null; onDirtyChange?.(false); return; }
-    onDirtyChange?.(true);
-    pendingSaveRef.current = newContent;
+  const scheduleSave = useCallback((newContent?: string) => {
+    if (newContent !== undefined) contentRef.current = newContent;
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      const latestContent = editorRef.current?.getValue() ?? newContent ?? contentRef.current;
+      saveEditorDraft('markdown-note', documentId, latestContent);
+      draftTimerRef.current = null;
+    }, 500);
+    if (newContent !== undefined && newContent === lastSavedRef.current) {
+      pendingSaveRef.current = null;
+      notifyDirty(false);
+      return;
+    }
+    notifyDirty(true);
+    // 只记录存在待保存变更，真正内容在定时器中从 CodeMirror 读取。
+    pendingSaveRef.current = newContent ?? contentRef.current;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
-      await persistContent(newContent);
+      const latestContent = editorRef.current?.getValue() ?? newContent ?? contentRef.current;
+      if (latestContent === lastSavedRef.current) {
+        pendingSaveRef.current = null;
+        notifyDirty(false);
+        return;
+      }
+      await persistContent(latestContent);
     }, 500);
-  }, [documentId, onDirtyChange, persistContent]);
+  }, [documentId, notifyDirty, persistContent]);
+
+  // CodeMirror 自己负责输入和光标，React 只按节流后的内容刷新目录、标签和预览。
+  const publishLatestContent = useCallback((value?: string, urgent = false): string => {
+    const latest = value ?? editorRef.current?.getValue() ?? contentRef.current;
+    contentRef.current = latest;
+    if (contentPublishTimerRef.current) {
+      clearTimeout(contentPublishTimerRef.current);
+      contentPublishTimerRef.current = null;
+    }
+    const publish = () => setContent(previous => previous === latest ? previous : latest);
+    if (urgent) publish();
+    else startTransition(publish);
+    return latest;
+  }, []);
+
+  const handleEditorDocChange = useCallback(() => {
+    scheduleSave();
+    if (contentPublishTimerRef.current) clearTimeout(contentPublishTimerRef.current);
+    contentPublishTimerRef.current = setTimeout(() => {
+      const latest = editorRef.current?.getValue() ?? contentRef.current;
+      publishLatestContent(latest);
+    }, 300);
+  }, [publishLatestContent, scheduleSave]);
 
   const handleViewModeToggle = useCallback(async () => {
     if (viewMode === 'edit' || viewMode === 'split') {
-      const latestContent = editorRef.current?.getValue() ?? contentRef.current;
+      const latestContent = publishLatestContent(undefined, true);
       if (latestContent !== lastSavedRef.current) {
         if (saveTimerRef.current) {
           clearTimeout(saveTimerRef.current);
@@ -847,7 +1006,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
       return;
     }
     setViewMode('edit');
-  }, [documentId, persistContent, viewMode]);
+  }, [documentId, persistContent, publishLatestContent, viewMode]);
 
   const saveTitle = useCallback(async (newTitle: string) => {
       try { await updateDocumentTitle(documentId, newTitle); await updateDocument(documentId, { title: newTitle }); onDirtyChange?.(false); }
@@ -863,11 +1022,11 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
       const text = isImage ? `![${res.file_name}](${url})` : `[${res.file_name}](${url})`;
       editorRef.current?.insertText(text);
       const newContent = editorRef.current?.getValue() ?? content;
-      setContent(newContent);
+      publishLatestContent(newContent, true);
       scheduleSave(newContent);
     } catch (e) { console.error('Upload failed', e); alert('上传失败'); }
     finally { setUploading(false); }
-  }, [scheduleSave, content]);
+  }, [content, publishLatestContent, scheduleSave]);
 
   const handleTagSelect = useCallback((tag: string) => {
     const view = editorRef.current?.view;
@@ -903,7 +1062,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
       const newContent = editorRef.current?.getValue() ?? content;
       // CodeMirror 的 updateListener 与 React 状态更新可能不在同一批次，
       // 显式同步，确保粘贴后立即切换预览时使用最新内容。
-      setContent(newContent);
+      publishLatestContent(newContent, true);
       scheduleSave(newContent);
       if (md.includes('![')) {
         setUploading(true);
@@ -914,7 +1073,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
           let updated = view.state.doc.toString();
           if (result.markdown !== md) updated = updated.replace(md, result.markdown);
           if (updated !== view.state.doc.toString()) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: updated } });
-          setContent(updated);
+          publishLatestContent(updated, true);
           scheduleSave(updated);
           if (result.failedUrls.length > 0) alert(`${result.failedUrls.length} 张图片未能自动上传，已保留原地址`);
         } finally {
@@ -922,36 +1081,45 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
         }
       }
     }
-  }, [handleFileUpload, scheduleSave, content]);
+  }, [content, handleFileUpload, publishLatestContent, scheduleSave]);
 
-  const navigate_fn = useNavigate();
   const handleImagePreview = useCallback((src: string) => setPreviewImage(src), []);
-  const processedContent = useMemo(() => preprocess(content), [content]);
-  const renderedHeadings = useMemo(() => extractMarkdownHeadings(processedContent), [processedContent]);
+  const processedContent = markdownAnalysis.processedContent;
+  const renderedHeadings = markdownAnalysis.renderedHeadings;
   const headingIdByLine = useMemo(() => {
     const map = new Map<number, string>();
     for (const item of renderedHeadings) map.set(item.sourceLine, item.id);
     return map;
   }, [renderedHeadings]);
-  const tocItems = useMemo(() => {
-    const rawHeadings = extractMarkdownHeadings(content);
-    return rawHeadings.map((item, index) => ({
-      ...item,
-      id: renderedHeadings[index]?.id ?? item.id,
-    }));
-  }, [content, renderedHeadings]);
+  const tocItems = markdownAnalysis.tocItems;
   const showNoteToc = !isMobile && viewMode !== 'split' && tocItems.length > 0;
 
   const handleTocJump = useCallback((item: NoteTocItem) => {
     if (viewMode === 'preview') {
       const scrollRoot = previewRef.current;
-      const target = scrollRoot?.querySelector<HTMLElement>(`[data-note-heading-id="${item.id}"]`);
+      const target = scrollRoot?.querySelector<HTMLElement>(`[data-note-heading-id="${item.id}"]`)
+        ?? scrollRoot?.querySelector<HTMLElement>(`[data-note-block-heading-id="${item.id}"]`);
       if (!scrollRoot || !target) return;
 
       const rootRect = scrollRoot.getBoundingClientRect();
       const targetRect = target.getBoundingClientRect();
       const targetTop = scrollRoot.scrollTop + targetRect.top - rootRect.top - 32;
       scrollRoot.scrollTo({ top: targetTop, behavior: 'smooth' });
+
+      // 目录跳转可能先命中尚未挂载内容的占位块。滚动后块进入预加载范围，
+      // 再把真实标题对齐到顶部，避免虚拟化后目录跳转失效。
+      if (!target.matches(`[data-note-heading-id="${item.id}"]`)) {
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          const heading = scrollRoot.querySelector<HTMLElement>(`[data-note-heading-id="${item.id}"]`);
+          if (!heading) return;
+          const nextRootRect = scrollRoot.getBoundingClientRect();
+          const nextHeadingRect = heading.getBoundingClientRect();
+          scrollRoot.scrollTo({
+            top: scrollRoot.scrollTop + nextHeadingRect.top - nextRootRect.top - 32,
+            behavior: 'auto',
+          });
+        }));
+      }
       return;
     }
 
@@ -971,32 +1139,15 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
     if (taskIndex == null) return;
     const nextContent = toggleMarkdownTaskByOrdinal(content, taskIndex);
     if (nextContent === content) return;
-    setContent(nextContent);
+    publishLatestContent(nextContent, true);
     const view = editorRef.current?.view;
     if (view) {
       view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: nextContent } });
     }
     scheduleSave(nextContent);
-  }, [content, processedContent, scheduleSave]);
+  }, [content, processedContent, publishLatestContent, scheduleSave]);
 
   const mdComponents = useMemo((): Components => ({
-    div: ({ node, children, ...props }: MarkdownDivProps) => {
-      const properties = (node as { properties?: Record<string, unknown> } | undefined)?.properties;
-      if (properties?.['data-markdown-block'] === 'true') {
-        const startLine = getNodeStartLine((node as { children?: unknown[] }).children?.[0]);
-        const endLine = (node as { children?: Array<{ position?: { end?: { line?: number } } }> }).children?.[0]?.position?.end?.line;
-        const estimatedLines = startLine && endLine && endLine >= startLine ? endLine - startLine + 1 : 2;
-        return (
-          <DeferredMarkdownBlock
-            minHeight={Math.max(44, Math.min(420, estimatedLines * 28))}
-            rootRef={previewRef}
-          >
-            {children}
-          </DeferredMarkdownBlock>
-        );
-      }
-      return <div {...props}>{children}</div>;
-    },
     code: (props: MarkdownCodeProps) => {
       const match = /language-(\w+)/.exec(props.className || '');
       if (match && match[1] === 'mermaid') {
@@ -1278,9 +1429,9 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
             </div>
             <div ref={editorScrollRef} className={`flex-1 min-h-0 overflow-y-auto custom-scrollbar scrollbar-auto-hide ${viewMode === 'split' ? '' : 'flex justify-center'}`}>
               <div className={`flex flex-col ${viewMode === 'split' ? 'w-full' : 'w-full max-w-[768px]'}`} onPasteCapture={handlePaste}>
-                <MarkdownEditor ref={editorRef} value={content} onChange={(val) => { setContent(val); scheduleSave(val); }}
+                <MarkdownEditor ref={editorRef} value={content} onDocChange={handleEditorDocChange}
                   compact={false} placeholder="开始书写... (支持 Markdown，输入 # 添加标签，@ 链接笔记)" className="min-h-0 px-6 pt-5"
-                  extensions={[tmExtension]}
+                  extensions={editorExtensions}
                 />
               </div>
             </div>
@@ -1297,36 +1448,21 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
           </div>
         )}
         {(viewMode === 'preview' || viewMode === 'split') && (
-          <div
-            ref={previewRef}
-            className={`${viewMode === 'split' ? 'w-1/2' : 'flex-1 min-w-0 h-full'} overflow-x-hidden overflow-y-auto custom-scrollbar scrollbar-auto-hide flex flex-col items-center`}
-            style={isMobile ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 58px)' } : undefined}
-          >
-            <div
-              onDoubleClick={handlePreviewDoubleClick}
-              onCopyCapture={handlePreviewCopy}
-              className="markdown-note-preview memo-content max-w-[768px] w-full cursor-text text-base text-gray-700 dark:text-gray-300 p-6"
-              style={{ lineHeight: '1.75' }}
-
-            >
-              <h1 className="markdown-note-title mb-6 text-3xl font-semibold leading-tight text-gray-900 dark:text-gray-100">{title || '无标题'}</h1>
-              {content.trim() ? (
-                <ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} rehypePlugins={LAZY_MARKDOWN_REHYPE_PLUGINS} components={mdComponents}>{processedContent}</ReactMarkdown>
-              ) : <p className="text-gray-400 dark:text-gray-500 italic">空笔记</p>}
-              {viewMode === 'preview' && relatedNotesState.key === `${documentId}:${viewMode}:${content}` && (
-                <RelatedNotes
-                  notes={relatedNotesState.notes}
-                  onOpen={(note) => {
-                    if (onRelatedNoteOpen) {
-                      onRelatedNoteOpen(note);
-                      return;
-                    }
-                    navigate(note.type === 'memo' ? `/?view=wanderer&memoId=${note.id}` : `/d/${note.id}`);
-                  }}
-                />
-              )}
-            </div>
-          </div>
+          <MarkdownNotePreview
+            previewRef={previewRef}
+            content={previewContent}
+            processedContent={processedContent}
+            blocks={markdownAnalysis.blocks}
+            title={title}
+            viewMode={viewMode}
+            isMobile={isMobile}
+            components={mdComponents}
+            onDoubleClick={handlePreviewDoubleClick}
+            onCopy={handlePreviewCopy}
+            showRelatedNotes={viewMode === 'preview' && relatedNotesState.key === `${documentId}:${viewMode}:${previewContent}`}
+            relatedNotes={relatedNotesState.notes}
+            onRelatedNoteOpen={handleRelatedNoteOpen}
+          />
         )}
         {showNoteToc && (
           <NoteTableOfContents
@@ -1352,7 +1488,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
 
       {showAIPanel && (
         <Suspense fallback={null}><AIChatPanel context={content}
-          onWriteBack={(newContent) => { setContent(newContent); editorRef.current?.view?.dispatch({ changes: { from: 0, to: editorRef.current.view.state.doc.length, insert: newContent } }); scheduleSave(newContent); }}
+          onWriteBack={(newContent) => { publishLatestContent(newContent, true); editorRef.current?.view?.dispatch({ changes: { from: 0, to: editorRef.current.view.state.doc.length, insert: newContent } }); scheduleSave(newContent); }}
           onClose={() => setShowAIPanel(false)} /></Suspense>
       )}
       <ShareDialog
@@ -1373,23 +1509,25 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
         onCancel={() => setShowShareDialog(false)}
       />
 
-      {/* 导出 PDF 用的隐藏渲染面：与预览同一套渲染管线，任意视图下都可导出 */}
-      <div
-        ref={exportSurfaceRef}
-        className="markdown-note-preview memo-content"
-        style={{ position: 'fixed', left: -99999, top: 0, width: 768, background: '#ffffff', color: '#1f2937', lineHeight: 1.75, zIndex: -1, pointerEvents: 'none', visibility: 'hidden', overflow: 'hidden', contain: 'layout paint style' }}
-        aria-hidden="true"
-      >
-        {content.trim() ? (
-          <ReactMarkdown
-            remarkPlugins={MARKDOWN_REMARK_PLUGINS}
-            rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
-            components={mdComponents}
-          >
-            {processedContent}
-          </ReactMarkdown>
-        ) : null}
-      </div>
+      {/* 仅导出 PDF 时挂载渲染面，避免编辑长文时重复解析整篇 Markdown。 */}
+      {exportingPdf && (
+        <div
+          ref={exportSurfaceRef}
+          className="markdown-note-preview memo-content"
+          style={{ position: 'fixed', left: -99999, top: 0, width: 768, background: '#ffffff', color: '#1f2937', lineHeight: 1.75, zIndex: -1, pointerEvents: 'none', visibility: 'hidden', overflow: 'hidden', contain: 'layout paint style' }}
+          aria-hidden="true"
+        >
+          {previewContent.trim() ? (
+            <ReactMarkdown
+              remarkPlugins={MARKDOWN_REMARK_PLUGINS}
+              rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
+              components={mdComponents}
+            >
+              {processedContent}
+            </ReactMarkdown>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

@@ -3116,6 +3116,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       {currentDoc?.type === 'note' && (
         <div className="main-content-area flex-1 overflow-hidden custom-scrollbar scrollbar-auto-hide">
           <MarkdownNoteEditor
+            key={documentId}
             documentId={documentId!}
             isNew={currentDoc.title === '新笔记'}
             initialNodes={nodes}

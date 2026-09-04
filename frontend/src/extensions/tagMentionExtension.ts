@@ -155,8 +155,31 @@ export function tagMentionExtension(config: TagMentionConfig) {
 
   // Trigger detection plugin
   const plugin = ViewPlugin.define(
-    () => ({
-      update(update: ViewUpdate) {
+    () => {
+      // 普通文字输入时触发检测也会经过这里。不要每次都向 React 发送内容相同
+      // 的新对象，否则长文编辑会被迫整棵组件树重渲染。
+      const emptySignature = 'null|||0|0|';
+      let lastTagSignature = emptySignature;
+      let lastMentionSignature = emptySignature;
+
+      const emitTagSearch = (state: TagMentionState) => {
+        const coords = state.coords ? `${state.coords.top}:${state.coords.left}` : '';
+        const signature = `${state.type}|${state.query}|${state.from}|${state.to}|${coords}`;
+        if (signature === lastTagSignature) return;
+        lastTagSignature = signature;
+        config.onTagSearch?.(state);
+      };
+
+      const emitMentionSearch = (state: TagMentionState) => {
+        const coords = state.coords ? `${state.coords.top}:${state.coords.left}` : '';
+        const signature = `${state.type}|${state.query}|${state.from}|${state.to}|${coords}`;
+        if (signature === lastMentionSignature) return;
+        lastMentionSignature = signature;
+        config.onMentionSearch?.(state);
+      };
+
+      return {
+        update(update: ViewUpdate) {
         if (!update.docChanged && !update.selectionSet) return;
 
         // 仅处理获得焦点的编辑器。MemoInput / MemoCard 同时挂载了紧凑编辑器与
@@ -169,8 +192,8 @@ export function tagMentionExtension(config: TagMentionConfig) {
 
         const trigger = getTriggerState(view);
         if (!trigger) {
-          config.onTagSearch?.({ type: null, query: '', coords: null, from: 0, to: 0 });
-          config.onMentionSearch?.({ type: null, query: '', coords: null, from: 0, to: 0 });
+          emitTagSearch({ type: null, query: '', coords: null, from: 0, to: 0 });
+          emitMentionSearch({ type: null, query: '', coords: null, from: 0, to: 0 });
           return;
         }
 
@@ -184,14 +207,15 @@ export function tagMentionExtension(config: TagMentionConfig) {
         };
 
         if (trigger.type === 'tag') {
-          config.onTagSearch?.(pos);
-          config.onMentionSearch?.({ type: null, query: '', coords: null, from: 0, to: 0 });
+          emitTagSearch(pos);
+          emitMentionSearch({ type: null, query: '', coords: null, from: 0, to: 0 });
         } else {
-          config.onMentionSearch?.(pos);
-          config.onTagSearch?.({ type: null, query: '', coords: null, from: 0, to: 0 });
+          emitMentionSearch(pos);
+          emitTagSearch({ type: null, query: '', coords: null, from: 0, to: 0 });
         }
       },
-    }),
+      };
+    },
   );
 
   // navKeymap first for higher priority

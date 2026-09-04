@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle, memo } from 'react';
 import { EditorState, type Extension } from '@codemirror/state';
 import {
   EditorView,
@@ -89,7 +89,9 @@ function buildTheme(isDark: boolean, scrollable: boolean, compact: boolean) {
 // ── Props ──
 export interface MarkdownEditorProps {
   value: string;
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
+  /** 仅通知文档发生变化，不在每次输入时复制完整文档。 */
+  onDocChange?: () => void;
   placeholder?: string;
   minHeight?: number | string;
   maxHeight?: number | string;
@@ -123,10 +125,11 @@ export interface MarkdownEditorHandle {
   focus: () => void;
 }
 
-const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(function MarkdownEditor(
+const MarkdownEditor = memo(forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(function MarkdownEditor(
   {
     value,
     onChange,
+    onDocChange,
     placeholder,
     minHeight,
     maxHeight,
@@ -145,12 +148,15 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
+  const onDocChangeRef = useRef(onDocChange);
   const onEnterRef = useRef(onEnter);
   const valueRef = useRef(value);
+  const syncingValueRef = useRef(false);
   const isDarkRef = useRef(false);
 
   // Keep refs up to date
   onChangeRef.current = onChange;
+  onDocChangeRef.current = onDocChange;
   onEnterRef.current = onEnter;
   valueRef.current = value;
 
@@ -245,7 +251,13 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       enterKeymap,
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
-          onChangeRef.current(update.state.doc.toString());
+          // 外部 value 同步只是切换/恢复文档，不应被当作用户输入再次触发保存。
+          if (syncingValueRef.current) return;
+          if (onDocChangeRef.current) {
+            onDocChangeRef.current();
+          } else {
+            onChangeRef.current?.(update.state.doc.toString());
+          }
         }
       }),
     ];
@@ -294,9 +306,14 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
     if (!view) return;
     const current = view.state.doc.toString();
     if (current !== value) {
-      view.dispatch({
-        changes: { from: 0, to: current.length, insert: value },
-      });
+      syncingValueRef.current = true;
+      try {
+        view.dispatch({
+          changes: { from: 0, to: current.length, insert: value },
+        });
+      } finally {
+        syncingValueRef.current = false;
+      }
     }
   }, [value]);
 
@@ -370,6 +387,6 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       />
     </div>
   );
-});
+}));
 
 export default MarkdownEditor;

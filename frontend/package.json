@@ -45,10 +45,12 @@
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
     "simple-mind-map": "^0.14.0-fix.1",
     "tailwind-merge": "^3.5.0",
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
+    "unified": "^11.0.0",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
