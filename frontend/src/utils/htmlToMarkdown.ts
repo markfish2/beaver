@@ -33,11 +33,11 @@ function getHeadingLevelFromVisualStyle(node: Node): number | null {
   if (role === 'heading' && ariaLevel >= 1 && ariaLevel <= 6) return ariaLevel;
 
   const cls = (el.getAttribute('class') || '').toLowerCase();
-  const classLevel = cls.match(/(?:^|\\s)(?:h|heading-?)([1-6])(?:$|\\s)/);
+  const classLevel = cls.match(/(?:^|\s)(?:h|heading-?)([1-6])(?:$|\s)/);
   if (classLevel) return Number(classLevel[1]);
-  if (/\\b(article-title|post-title|headline|heading|title)\\b/.test(cls)) return 2;
+  if (/\b(article-title|post-title|headline|heading|title)\b/.test(cls)) return 2;
 
-  const utilitySize = cls.match(/(?:^|\\s)text-(4xl|3xl|2xl|xl)(?:$|\\s)/);
+  const utilitySize = cls.match(/(?:^|\s)text-(4xl|3xl|2xl|xl)(?:$|\s)/);
   if (utilitySize) {
     return ({ '4xl': 1, '3xl': 1, '2xl': 2, xl: 3 } as Record<string, number>)[utilitySize[1]];
   }
@@ -46,10 +46,10 @@ function getHeadingLevelFromVisualStyle(node: Node): number | null {
   // div/span elements. Only promote clearly larger, short blocks so ordinary
   // paragraphs that happen to be bold remain paragraphs.
   const style = (el.getAttribute('style') || '').toLowerCase();
-  const fontSize = parseCssPixels(style.match(/font-size\\s*:\\s*([^;]+)/)?.[1] ?? null);
-  const fontWeight = style.match(/font-weight\\s*:\\s*([^;]+)/)?.[1]?.trim() || '';
+  const fontSize = parseCssPixels(style.match(/font-size\s*:\s*([^;]+)/)?.[1] ?? null);
+  const fontWeight = style.match(/font-weight\s*:\s*([^;]+)/)?.[1]?.trim() || '';
   const weight = fontWeight === 'bold' ? 700 : Number(fontWeight);
-  const text = (el.textContent || '').replace(/\\s+/g, ' ').trim();
+  const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
   const isBlock = /^(DIV|P|SECTION|ARTICLE|HEADER|LI|H[1-6])$/.test(node.nodeName);
   if (!isBlock || !fontSize || !text || text.length > 180) return null;
 
@@ -72,12 +72,31 @@ turndown.addRule('headingVisualStyle', {
   },
   replacement(content, node) {
     const level = headingLevels.get(node) ?? 2;
-    return `\\n\\n${'#'.repeat(level)} ${content.trim()}\\n\\n`;
+    return `\n\n${'#'.repeat(level)} ${content.trim()}\n\n`;
   },
 });
 
 // 启用 GFM 插件（表格、删除线、任务列表）
 turndown.use(gfm);
+
+function getVisibleUrl(node: Node): string | null {
+  if (node.nodeName !== 'A') return null;
+  const text = (node.textContent || '').replace(/\s+/g, ' ').trim();
+  if (/^(?:https?|ftp):\/\/[^\s<>]+$/i.test(text)) return text;
+  return null;
+}
+
+// 网页（尤其是 X）经常把真实 URL 作为链接文字，但 href 指向 t.co 等
+// 追踪短链。笔记中保留可读的真实地址，避免生成
+// [https://example.com](https://t.co/...) 这种内容。
+turndown.addRule('visibleUrlLink', {
+  filter(node: Node) {
+    return getVisibleUrl(node) !== null;
+  },
+  replacement(_content, node) {
+    return getVisibleUrl(node) || _content;
+  },
+});
 
 // 加粗：识别 style="font-weight:bold/700" 和 class="bold/font-bold/fw-bold"
 // 跳过 h1-h6 标签（标题标签的 font-weight:bold 不应转为加粗）
@@ -251,6 +270,8 @@ function preprocessHtml(html: string): string {
       li.innerHTML = cleaned;
     });
 
+    preserveRichTextLineBreaks(doc.body);
+
     return doc.body.innerHTML;
   } catch {
     return preprocessHtmlFallback(html);
@@ -314,6 +335,76 @@ function cleanListItemContent(html: string): string {
   return result;
 }
 
+function preservesTextLineBreaks(element: Element): boolean {
+  let current: Element | null = element;
+  while (current) {
+    // Code blocks have their own Turndown handling and must not be rewritten.
+    if (current.tagName === 'PRE' || current.tagName === 'CODE') return false;
+
+    const style = current.getAttribute('style') || '';
+    if (/white-space\s*:\s*(?:pre|pre-wrap|pre-line|break-spaces)\b/i.test(style)) {
+      return true;
+    }
+
+    // X uses React Native Web's r-bcqeeo class for white-space: pre-wrap.
+    // Keep the marker narrow so ordinary HTML indentation is not converted.
+    const className = current.getAttribute('class') || '';
+    if (/(?:^|\s)(?:r-bcqeeo|whitespace-pre(?:-wrap|-line)?|white-space-pre(?:-wrap|-line)?)(?:$|\s)/i.test(className)) {
+      return true;
+    }
+
+    if (current.getAttribute('data-testid') === 'tweetText') return true;
+    current = current.parentElement;
+  }
+  return false;
+}
+
+/**
+ * Turndown 会把普通文本节点中的换行压成空格。网页复制（尤其是 X）常把
+ * 段落保存为 pre-wrap 文本节点而不是多个 p/br，因此先显式转成 br。
+ */
+function preserveRichTextLineBreaks(root: HTMLElement): void {
+  const walker = root.ownerDocument.createTreeWalker(root, 4 /* NodeFilter.SHOW_TEXT */);
+  const textNodes: Text[] = [];
+  let current = walker.nextNode();
+  while (current) {
+    if (current.nodeType === 3) textNodes.push(current as Text);
+    current = walker.nextNode();
+  }
+
+  for (const textNode of textNodes) {
+    const data = textNode.data.replace(/\r\n?/g, '\n');
+    if (!data.includes('\n') || !textNode.parentElement) continue;
+
+    const hasExplicitParagraphBreak = /\n[ \t]*\n/.test(data);
+    if (!preservesTextLineBreaks(textNode.parentElement) && !hasExplicitParagraphBreak) continue;
+
+    const fragment = textNode.ownerDocument.createDocumentFragment();
+    const lines = data.split('\n');
+    lines.forEach((line, index) => {
+      if (line) fragment.appendChild(textNode.ownerDocument.createTextNode(line));
+      if (index < lines.length - 1) fragment.appendChild(textNode.ownerDocument.createElement('br'));
+    });
+    textNode.replaceWith(fragment);
+  }
+}
+
+function preserveRichTextLineBreaksFallback(html: string): string {
+  const wrapperPattern = /(<(div|span|p)\b[^>]*>)([\s\S]*?)(<\/\2>)/gi;
+  return html.replace(wrapperPattern, (match, opening: string, _tag: string, content: string, closing: string) => {
+    const hasPreWrapStyle = /white-space\s*:\s*(?:pre|pre-wrap|pre-line|break-spaces)\b/i.test(opening);
+    const hasPreWrapClass = /\b(?:r-bcqeeo|whitespace-pre(?:-wrap|-line)?|white-space-pre(?:-wrap|-line)?)\b/i.test(opening);
+    const isTweetText = /data-testid\s*=\s*(['"])tweetText\1/i.test(opening);
+    if ((!hasPreWrapStyle && !hasPreWrapClass && !isTweetText) || !/\r?\n/.test(content)) return match;
+
+    const contentWithBreaks = content
+      .split(/(<[^>]*>)/g)
+      .map(part => part.startsWith('<') ? part : part.replace(/\r\n?/g, '\n').replace(/\n/g, '<br>'))
+      .join('');
+    return `${opening}${contentWithBreaks}${closing}`;
+  });
+}
+
 /**
  * 回退方案：使用正则表达式清理表格
  */
@@ -346,7 +437,7 @@ function preprocessHtmlFallback(html: string): string {
     return cleaned;
   });
 
-  return html;
+  return preserveRichTextLineBreaksFallback(html);
 }
 
 /**
@@ -361,12 +452,31 @@ export function htmlToMarkdown(html: string): string {
   }
 }
 
+function readClipboardData(clipboardData: DataTransfer, type: string): string {
+  try {
+    return clipboardData.getData(type);
+  } catch {
+    return '';
+  }
+}
+
+function getHtmlClipboardItem(clipboardData: DataTransfer): DataTransferItem | null {
+  return Array.from(clipboardData.items || []).find(
+    item => item.kind === 'string' && item.type.toLowerCase() === 'text/html',
+  ) ?? null;
+}
+
+/** 判断剪贴板是否声明了 HTML，供粘贴事件在异步读取前同步阻止浏览器默认粘贴。 */
+export function hasHtmlClipboardData(clipboardData: DataTransfer): boolean {
+  return Boolean(readClipboardData(clipboardData, 'text/html') || getHtmlClipboardItem(clipboardData));
+}
+
 /**
  * 从粘贴事件中提取 HTML 并转为 Markdown。
- * 没有 HTML 内容时返回 null。
+ * 没有富文本或明显 Markdown 结构时返回 null，让浏览器保留原生纯文本粘贴行为。
  */
 export function getPasteMarkdown(clipboardData: DataTransfer): string | null {
-  const html = clipboardData.getData('text/html');
+  const html = readClipboardData(clipboardData, 'text/html');
   if (html) {
     const md = htmlToMarkdown(html);
     if (md) return md;
@@ -374,7 +484,35 @@ export function getPasteMarkdown(clipboardData: DataTransfer): string | null {
 
   // Some browsers/editors expose only text/plain when copying Markdown from
   // CodeMirror or a PWA preview. Preserve its structure when pasted into Memo.
-  const text = clipboardData.getData('text/plain');
-  if (!text || !/(^#{1,6}\s|^\s*[-*+]\s|^\s*\d+\.\s|```|\*\*|!\[)/m.test(text)) return null;
+  const text = readClipboardData(clipboardData, 'text/plain');
+  if (!text) return null;
+  // HTML 存在但 Turndown 无法产出内容时，至少保留网页的纯文本，避免粘贴结果丢失。
+  if (html) return text.trim() || null;
+  if (!/(^#{1,6}\s|^\s*[-*+]\s|^\s*\d+\.\s|```|\*\*|!\[)/m.test(text)) return null;
+  return text.trim() || null;
+}
+
+/**
+ * 兼容少数浏览器 getData('text/html') 为空、但 DataTransferItem 仍提供 HTML 的情况。
+ * 事件处理器必须先同步 preventDefault，再调用此异步回退。
+ */
+export async function getPasteMarkdownAsync(clipboardData: DataTransfer): Promise<string | null> {
+  const direct = getPasteMarkdown(clipboardData);
+  if (direct) return direct;
+
+  const htmlItem = getHtmlClipboardItem(clipboardData);
+  if (!htmlItem) return null;
+
+  const html = await new Promise<string>(resolve => {
+    try {
+      htmlItem.getAsString(resolve);
+    } catch {
+      resolve('');
+    }
+  });
+  const markdown = html ? htmlToMarkdown(html) : '';
+  if (markdown) return markdown;
+
+  const text = readClipboardData(clipboardData, 'text/plain');
   return text.trim() || null;
 }

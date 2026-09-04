@@ -55,7 +55,7 @@ import { useDocuments } from '../context/DocumentContext';
 import type { Document, Node, RelatedNote } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import { getMarkdownTaskOrdinalAtLine, toggleMarkdownTaskByOrdinal } from '../utils/markdownPreprocess';
-import { getPasteMarkdown, htmlToMarkdown } from '../utils/htmlToMarkdown';
+import { getPasteMarkdown, getPasteMarkdownAsync, hasHtmlClipboardData, htmlToMarkdown } from '../utils/htmlToMarkdown';
 import { localizeMarkdownImages } from '../utils/markdownImageUpload';
 import { clearEditorDraft, getEditorDraft, saveEditorDraft } from '../utils/editorDrafts';
 import { useIsDark } from '../hooks/useIsDark';
@@ -1055,7 +1055,13 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
       const item = items[i];
       if (item.kind === 'file') { e.preventDefault(); const file = item.getAsFile(); if (file) handleFileUpload(file, item.type.startsWith('image/')); return; }
     }
-    const md = getPasteMarkdown(e.clipboardData);
+    const hasHtml = hasHtmlClipboardData(e.clipboardData);
+    let md = getPasteMarkdown(e.clipboardData);
+    if (!md && hasHtml) {
+      // 某些浏览器的 getData('text/html') 为空，但 DataTransferItem 仍能异步提供 HTML。
+      e.preventDefault();
+      md = await getPasteMarkdownAsync(e.clipboardData);
+    }
     if (md) {
       e.preventDefault();
       editorRef.current?.insertText(md);

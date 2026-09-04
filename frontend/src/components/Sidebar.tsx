@@ -831,10 +831,6 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     if (!dragged || dragged.id === targetDoc.id) return;
 
     const newParentId = targetDoc.type === 'folder' ? targetDoc.id : targetDoc.parent_id;
-    // Auto-expand target folder so the moved item is visible
-    if (targetDoc.type === 'folder' && !isExpanded[targetDoc.id]) {
-      setIsExpanded(prev => ({ ...prev, [targetDoc.id]: true }));
-    }
     // Optimistic update: immediately update local state
     moveDocument(dragged.id, newParentId ?? null);
     draggedItemRef.current = null;
@@ -846,8 +842,10 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
       } else {
         await updateDocument(dragged.id, { parent_id: newParentId });
       }
+      showToast(`已移动到“${targetDoc.title || '文件夹'}”`);
     } catch (error) {
       console.error('Failed to move document', error);
+      showToast('移动失败，请重试', 'error');
     }
   };
 

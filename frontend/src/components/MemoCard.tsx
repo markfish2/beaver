@@ -68,7 +68,7 @@ import AudioPlayer from './AudioPlayer';
 import { useIsDark } from '../hooks/useIsDark';
 import { getMemoPalette, getMemoPaletteStyle, MEMO_TAG_COLORS, type MemoCardPalette } from './memoCardTheme';
 import { clearEditorDraft, getEditorDraft, saveEditorDraft } from '../utils/editorDrafts';
-import { getPasteMarkdown } from '../utils/htmlToMarkdown';
+import { getPasteMarkdown, getPasteMarkdownAsync, hasHtmlClipboardData } from '../utils/htmlToMarkdown';
 import { localizeMarkdownImages } from '../utils/markdownImageUpload';
 
 const AIChatPanel = lazy(() => import('./AIChatPanel'));
@@ -703,7 +703,12 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       return;
     }
 
-    const markdown = getPasteMarkdown(e.clipboardData);
+    const hasHtml = hasHtmlClipboardData(e.clipboardData);
+    let markdown = getPasteMarkdown(e.clipboardData);
+    if (!markdown && hasHtml) {
+      e.preventDefault();
+      markdown = await getPasteMarkdownAsync(e.clipboardData);
+    }
     if (!markdown) return;
 
     e.preventDefault();

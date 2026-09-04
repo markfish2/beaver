@@ -4,7 +4,7 @@ import { Send, Image, Paperclip, ChevronDown, Mic, Maximize2, X, Sparkles } from
 import { createMemo, uploadFile, uploadAudio, getMemoTags, createTodo, getAIConfigs } from '../api/data';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import VoiceRecordCard from './VoiceRecordCard';
-import { getPasteMarkdown } from '../utils/htmlToMarkdown';
+import { getPasteMarkdown, getPasteMarkdownAsync, hasHtmlClipboardData } from '../utils/htmlToMarkdown';
 import { localizeMarkdownImages } from '../utils/markdownImageUpload';
 import { showToast } from '../utils/toast';
 import MarkdownEditor from './MarkdownEditor';
@@ -204,7 +204,12 @@ export default function MemoInput({ onMemoCreated, documents }: MemoInputProps) 
       const item = items[i];
       if (item.kind === 'file') { e.preventDefault(); const file = item.getAsFile(); if (file) handleFileUpload(file, item.type.startsWith('image/')); return; }
     }
-    const md = getPasteMarkdown(e.clipboardData);
+    const hasHtml = hasHtmlClipboardData(e.clipboardData);
+    let md = getPasteMarkdown(e.clipboardData);
+    if (!md && hasHtml) {
+      e.preventDefault();
+      md = await getPasteMarkdownAsync(e.clipboardData);
+    }
     if (md) {
       e.preventDefault();
       const active = showExpandEditor ? expandEditorRef.current : editorRef.current;

@@ -50,6 +50,7 @@ import { getErrorMessage } from '../utils/errors';
 import { logNavigation } from '../utils/navigationDebug';
 import { flattenParsedNodes, parseMarkdown } from './mainAreaClipboard';
 import type { ParsedNode } from './mainAreaClipboard';
+import { getPasteMarkdown, getPasteMarkdownAsync, hasHtmlClipboardData } from '../utils/htmlToMarkdown';
 
 const MindMapView = lazy(() => import('./MindMapView'));
 const MarkdownNoteEditor = lazy(() => import('./MarkdownNoteEditor'));
@@ -1691,17 +1692,31 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       }
     }
 
-    // 3. 回退到纯文本 Markdown 解析（跨文件/跨标签页粘贴）
+    // 3. 优先把网页富文本转换为 Markdown，再解析成大纲节点。
+    //    这样从浏览器复制的标题、段落、列表和链接不会退化成一整段纯文本。
     if (!parsedTree) {
-      const text = e.clipboardData.getData('text/plain');
-      if (!text) return;
-
-      // 只有当粘贴的内容包含换行符，或者明显是列表语法时，才进行拦截解析
-      if (!text.includes('\n') && !text.match(/^[-*#]\s/)) {
-        return;
+      const hasHtml = hasHtmlClipboardData(e.clipboardData);
+      let markdown = getPasteMarkdown(e.clipboardData);
+      if (!markdown && hasHtml) {
+        // 异步读取前先阻止 CodeMirror/contentEditable 的原生 HTML 粘贴。
+        e.preventDefault();
+        e.stopPropagation();
+        markdown = await getPasteMarkdownAsync(e.clipboardData);
       }
+      if (markdown) {
+        parsedTree = parseMarkdown(markdown);
+      } else {
+        // 4. 回退到纯文本 Markdown 解析（跨文件/跨标签页粘贴）
+        const text = e.clipboardData.getData('text/plain');
+        if (!text) return;
 
-      parsedTree = parseMarkdown(text);
+        // 只有当粘贴的内容包含换行符，或者明显是列表语法时，才进行拦截解析
+        if (!text.includes('\n') && !text.match(/^[-*#]\s/)) {
+          return;
+        }
+
+        parsedTree = parseMarkdown(text);
+      }
     }
 
     if (!parsedTree || parsedTree.length === 0) return;
