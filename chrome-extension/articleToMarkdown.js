@@ -91,6 +91,47 @@
     if (!root.TurndownService) throw new Error('Markdown 转换器未加载');
     var service = new root.TurndownService({ headingStyle: 'atx', bulletListMarker: '-', codeBlockStyle: 'fenced', emDelimiter: '*' });
     service.addRule('preserveBreaks', { filter: ['br'], replacement: function () { return '\n'; } });
+    service.addRule('tableToGfm', {
+      filter: 'table',
+      replacement: function (_, node) {
+        var matrix = [];
+        var occupied = {};
+        var maxColumns = 0;
+        var rows = Array.prototype.slice.call(node.rows || node.querySelectorAll('tr')).filter(function (row) {
+          return row.cells && row.cells.length > 0 && String(row.textContent || '').trim();
+        });
+        rows.forEach(function (row, rowIndex) {
+          var values = matrix[rowIndex] || (matrix[rowIndex] = []);
+          var column = 0;
+          Array.prototype.slice.call(row.cells).forEach(function (cell) {
+            while (occupied[rowIndex + ':' + column]) column += 1;
+            var value = service.turndown(cell.innerHTML || '').replace(/\s+/g, ' ').trim().replace(/\|/g, '\\|') || ' ';
+            var colspan = Math.max(1, cell.colSpan || Number(cell.getAttribute('colspan')) || 1);
+            var rowspan = Math.max(1, cell.rowSpan || Number(cell.getAttribute('rowspan')) || 1);
+            for (var y = 0; y < rowspan; y++) {
+              var target = matrix[rowIndex + y] || (matrix[rowIndex + y] = []);
+              for (var x = 0; x < colspan; x++) {
+                var targetColumn = column + x;
+                target[targetColumn] = value;
+                if (y > 0) occupied[(rowIndex + y) + ':' + targetColumn] = value;
+              }
+            }
+            column += colspan;
+          });
+          matrix.slice(rowIndex).forEach(function (current) { maxColumns = Math.max(maxColumns, current.length); });
+          maxColumns = Math.max(maxColumns, values.length);
+        });
+        if (!maxColumns || !matrix.length) return '';
+        var normalized = matrix.map(function (row) {
+          return Array.apply(null, Array(maxColumns)).map(function (_, index) { return row[index] || ' '; });
+        });
+        var header = normalized[0];
+        var separator = header.map(function () { return '---'; });
+        var body = normalized.slice(1);
+        return '\n\n| ' + header.join(' | ') + ' |\n| ' + separator.join(' | ') + ' |' +
+          (body.length ? '\n' + body.map(function (row) { return '| ' + row.join(' | ') + ' |'; }).join('\n') : '') + '\n\n';
+      }
+    });
     return service;
   }
 

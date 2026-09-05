@@ -76,8 +76,55 @@ turndown.addRule('headingVisualStyle', {
   },
 });
 
-// 启用 GFM 插件（表格、删除线、任务列表）
+// 启用 GFM 插件（表格、删除线、任务列表）。自定义表格规则紧随其后，覆盖默认表格实现。
 turndown.use(gfm);
+
+/**
+ * GFM 表格要求每一行列数一致。浏览器剪贴板经常带有 colspan/rowspan，
+ * 交给默认规则会把单元格内容错位，因此先展开成规则矩阵再输出。
+ */
+turndown.addRule('tableToGfm', {
+  filter: 'table',
+  replacement(_content, node) {
+    const table = node as unknown as HTMLTableElement;
+    const matrix: string[][] = [];
+    const occupied = new Map<string, string>();
+    let maxColumns = 0;
+    const rows = Array.from(table.rows).filter(row => row.cells.length > 0 && row.textContent?.trim());
+
+    rows.forEach((row, rowIndex) => {
+      const values = matrix[rowIndex] ?? (matrix[rowIndex] = []);
+      let column = 0;
+      Array.from(row.cells).forEach(cell => {
+        while (occupied.has(`${rowIndex}:${column}`)) column += 1;
+        const html = (cell as HTMLElement).innerHTML || '';
+        const value = turndown.turndown(html).replace(/\s+/g, ' ').trim().replace(/\|/g, '\\|') || ' ';
+        const tableCell = cell as HTMLTableCellElement;
+        const colspan = Math.max(1, tableCell.colSpan || Number(cell.getAttribute('colspan')) || 1);
+        const rowspan = Math.max(1, tableCell.rowSpan || Number(cell.getAttribute('rowspan')) || 1);
+        for (let y = 0; y < rowspan; y += 1) {
+          const target = matrix[rowIndex + y] ?? (matrix[rowIndex + y] = []);
+          for (let x = 0; x < colspan; x += 1) {
+            const targetColumn = column + x;
+            target[targetColumn] = value;
+            if (y > 0) occupied.set(`${rowIndex + y}:${targetColumn}`, value);
+          }
+        }
+        column += colspan;
+      });
+      maxColumns = Math.max(maxColumns, ...matrix.slice(rowIndex).map(current => current.length), values.length);
+    });
+
+    if (!maxColumns || !matrix.length) return '';
+    const normalized = matrix.map(row => Array.from({ length: maxColumns }, (_, index) => row[index] || ' '));
+    const header = normalized[0];
+    const separator = header.map(() => '---');
+    const body = normalized.slice(1);
+    // Markdown 表格必须有表头；无 th 的 HTML 表格按第一行作为表头。
+    return `\n\n| ${header.join(' | ')} |\n| ${separator.join(' | ')} |${body.length ? `\n${body.map(row => `| ${row.join(' | ')} |`).join('\n')}` : ''}\n\n`;
+  },
+});
+
 
 function getVisibleUrl(node: Node): string | null {
   if (node.nodeName !== 'A') return null;

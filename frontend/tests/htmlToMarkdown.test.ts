@@ -42,6 +42,14 @@ test('网页结构转换为 Markdown 段落、标题和列表', () => {
   assert.match(md, /-\s+条目二/);
 });
 
+test('表格粘贴转换为列数一致的 GFM 表格并转义竖线', () => {
+  const md = htmlToMarkdown([
+    '<table><thead><tr><th>名称</th><th>说明</th></tr></thead>',
+    '<tbody><tr><td>A</td><td>第一 | 项</td></tr><tr><td colspan="2">合并行</td></tr></tbody></table>',
+  ].join(''));
+  assert.equal(md, '| 名称 | 说明 |\n| --- | --- |\n| A | 第一 \\| 项 |\n| 合并行 |   |');
+});
+
 test('网页复制的样式标题不会输出字面量换行符', () => {
   const md = htmlToMarkdown('<div class="post-title" style="font-size: 24px; font-weight: 700">视觉标题</div>');
   assert.equal(md, '## 视觉标题');
