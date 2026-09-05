@@ -202,10 +202,14 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
 
   // 获取最近编辑的文档
   useEffect(() => {
+    let cancelled = false;
     if (viewMode === 'recent') {
-      import('../api/data').then(mod => mod.getRecentDocuments(20)).then(setRecentDocuments).catch(() => {});
+      import('../api/data').then(mod => mod.getRecentDocuments(20)).then(items => {
+        if (!cancelled) setRecentDocuments(items);
+      }).catch(() => {});
     }
-  }, [viewMode]);
+    return () => { cancelled = true; };
+  }, [viewMode, documents]);
   const [newMenuTarget] = useState<string | null>(null);
   const markdownInputRef = useRef<HTMLInputElement>(null);
   const markdownImportParentRef = useRef<string | null>(null);

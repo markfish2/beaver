@@ -1,4 +1,5 @@
 import type { Node } from '../api/data';
+import { clientId, startLocalWrite, finishLocalWrite } from './liveUpdates';
 
 type OperationStatus = 'pending' | 'saving' | 'saved' | 'error';
 
@@ -79,8 +80,10 @@ export function sendBatchSaveRequest(operations: BatchSaveOperation[]): void {
   if (operations.length === 0) return;
   const token = localStorage.getItem('token');
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  headers['X-Client-ID'] = clientId;
   if (token) headers.Authorization = `Bearer ${token}`;
 
+  startLocalWrite();
   void fetch('/api/nodes/batch/save', {
     method: 'POST',
     headers,
@@ -88,7 +91,7 @@ export function sendBatchSaveRequest(operations: BatchSaveOperation[]): void {
     keepalive: true,
   }).catch((error) => {
     console.error('Failed to send final batch save:', error);
-  });
+  }).finally(finishLocalWrite);
 }
 
 class SaveStateManager {

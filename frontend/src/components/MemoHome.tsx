@@ -11,6 +11,7 @@ import MemoWanderer from './MemoWanderer';
 import MemoMediaGallery from './MemoMediaGallery';
 import MemoCard from './MemoCard';
 import { getMemos, getDiarySummary, updateMemo, deleteMemo, toggleMemoPinned, toggleMemoArchived, toggleMemoPublic, toggleMemoAI, updateNode, getTodos, updateTodo } from '../api/data';
+import { useRemoteRefresh } from '../hooks/useRemoteRefresh';
 import type { Memo, Node, Todo } from '../api/data';
 import { parseTodoDueDate } from '../utils/todoDueDate';
 import { getDiaryTimePrefix } from '../utils/diaryTime';
@@ -26,7 +27,7 @@ interface MemoHomeProps {
 
 type PendingTaskWithOrigin = (Node & { origin: 'diary'; diary_date?: string; parent_content?: string }) | (Todo & { origin: 'todo' });
 
-// 远端轮询只在数据真的变化时替换状态，避免每 15 秒用新数组触发 Memo 首页重绘。
+// 仅在推送带来的数据确实变化时替换列表。
 function sameRecordList<T>(left: T[], right: T[]): boolean {
   if (left === right) return true;
   if (left.length !== right.length) return false;
@@ -236,6 +237,22 @@ export default function MemoHome({ sidebarOpen, isMobile }: MemoHomeProps) {
     };
     fetchTasks();
   }, []);
+
+  useRemoteRefresh('memos,trash', async canApply => {
+    const seq = ++fetchMemosSeqRef.current;
+    const pages = await Promise.all(Array.from({ length: memoPage }, (_, index) =>
+      getMemos(index + 1, 20, memoView === 'archived', tagFilter || undefined, searchFilter || undefined, memoView === 'public', true)));
+    if (!canApply() || seq !== fetchMemosSeqRef.current) return;
+    setMemos(previous => {
+      const existing = new Map(previous.map(memo => [memo.id, memo]));
+      const next = pages.flatMap(page => page.memos).map(memo => {
+        const old = existing.get(memo.id);
+        return old && JSON.stringify(old) === JSON.stringify(memo) ? old : memo;
+      });
+      return sameRecordList(previous, next) ? previous : next;
+    });
+    setMemoTotal(pages[0]?.total ?? 0);
+  }, false, `${memoView}:${tagFilter}:${searchFilter}:${memoPage}`);
 
   // 首页随想数据（根据 memoView 切换活跃/归档，支持标签/搜索筛选）
   useEffect(() => {

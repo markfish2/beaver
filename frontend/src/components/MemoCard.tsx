@@ -64,6 +64,7 @@ import type { TagMentionState } from '../extensions/tagMentionExtension';
 import { isMentionableDocument } from '../utils/documentMention';
 import { stripTags, stripAttachments, normalizeTaskLists, normalizeHighlight, normalizeListSeparators, normalizeCodeBlocks, normalizeCallouts, escapeCodeBlockHtml, getMarkdownTaskOrdinalAtLine, toggleMarkdownTaskByOrdinal } from '../utils/markdownPreprocess';
 import MemoToDocDialog from './MemoToDocDialog';
+import { activeMemoEditors, liveWakeEvent } from '../utils/liveUpdates';
 import AudioPlayer from './AudioPlayer';
 import { useIsDark } from '../hooks/useIsDark';
 import { getMemoPalette, getMemoPaletteStyle, MEMO_TAG_COLORS, type MemoCardPalette } from './memoCardTheme';
@@ -426,6 +427,15 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const isDark = useIsDark();
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
+  useEffect(() => {
+    if (!isEditing) return;
+    const editor = Symbol(memo.id);
+    activeMemoEditors.add(editor);
+    return () => {
+      activeMemoEditors.delete(editor);
+      window.dispatchEvent(new Event(liveWakeEvent));
+    };
+  }, [isEditing, memo.id]);
   const [editContent, setEditContent] = useState(() => getEditorDraft('memo', memo.id) ?? memo.content);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showExpandEditor, setShowExpandEditor] = useState(false);

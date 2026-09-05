@@ -51,6 +51,7 @@ import { logNavigation } from '../utils/navigationDebug';
 import { flattenParsedNodes, parseMarkdown } from './mainAreaClipboard';
 import type { ParsedNode } from './mainAreaClipboard';
 import { getPasteMarkdown, getPasteMarkdownAsync, hasHtmlClipboardData } from '../utils/htmlToMarkdown';
+import { useRemoteRefresh } from '../hooks/useRemoteRefresh';
 
 const MindMapView = lazy(() => import('./MindMapView'));
 const MarkdownNoteEditor = lazy(() => import('./MarkdownNoteEditor'));
@@ -555,6 +556,14 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   const [isRecovering, setIsRecovering] = useState(false);
   const [editingNodes, setEditingNodes] = useState<Set<string>>(new Set());
   const editingNodesRef = useRef(editingNodes);
+  useRemoteRefresh('nodes,documents,diary,trash', async canApply => {
+    if (!documentId || currentDoc?.type === 'note' || currentDoc?.type === 'excalidraw') return;
+    const [remoteNodes, remoteDoc] = await Promise.all([getNodes(documentId, true), getDocument(documentId, true)]);
+    if (!canApply()) return;
+    setNodesDocumentId(normalizeDocumentId(documentId));
+    setNodes(previous => sameRecordList(previous, remoteNodes) ? previous : remoteNodes);
+    setCurrentDoc(previous => sameRecord(previous, remoteDoc) ? previous : remoteDoc);
+  }, editingNodes.size > 0 || pendingCount > 0 || saveStatus === 'saving', documentId || '');
   useEffect(() => { editingNodesRef.current = editingNodes; }, [editingNodes]);
   const [focusedNodeIdForToolbar, setFocusedNodeIdForToolbar] = useState<string | null>(null);
   const focusedNodeIdForToolbarRef = useRef(focusedNodeIdForToolbar);

@@ -3,6 +3,8 @@ import { getDocuments } from '../api/data';
 import { dataCache } from '../api/cache';
 import type { Document } from '../api/data';
 import { useAuth } from './AuthContext';
+import { connectLiveUpdates } from '../utils/liveUpdates';
+import { useRemoteRefresh } from '../hooks/useRemoteRefresh';
 
 interface DocumentContextType {
   documents: Document[];
@@ -29,6 +31,16 @@ export const DocumentProvider = ({ children }: { children: ReactNode }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { isAuthenticated } = useAuth();
+  useRemoteRefresh('documents,nodes,diary,trash', async canApply => {
+    dataCache.invalidate('documents:');
+    dataCache.invalidate('nodes:');
+    dataCache.invalidate('document:');
+    const data = await getDocuments();
+    if (canApply()) setDocuments(previous => sameDocuments(previous, data) ? previous : data);
+  }, !isAuthenticated);
+  useEffect(() => {
+    if (isAuthenticated) return connectLiveUpdates();
+  }, [isAuthenticated]);
 
   const fetchDocuments = useCallback(async (search: string | undefined, silent: boolean) => {
     if (!silent) setIsLoading(true);

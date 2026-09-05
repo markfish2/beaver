@@ -13,6 +13,8 @@ import logging
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Dynalist Clone API")
+from .live_updates import install_live_updates
+install_live_updates(app)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

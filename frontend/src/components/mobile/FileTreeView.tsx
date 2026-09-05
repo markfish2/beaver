@@ -102,7 +102,7 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
       if (!cancelled) setRecentDocs([]);
     });
     return () => { cancelled = true; };
-  }, [viewMode]);
+  }, [viewMode, documents]);
 
   const filteredDocs = viewMode === 'recent'
     ? recentDocs

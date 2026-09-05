@@ -1,4 +1,5 @@
 import axios, { AxiosError } from 'axios';
+import { clientId, startLocalWrite, finishLocalWrite } from '../utils/liveUpdates';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
@@ -15,6 +16,8 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 api.interceptors.request.use(
   (config) => {
+    config.headers['X-Client-ID'] = clientId;
+    if (['post', 'put', 'patch', 'delete'].includes(config.method || '')) startLocalWrite();
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -28,12 +31,14 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => {
+    if (['post', 'put', 'patch', 'delete'].includes(response.config.method || '')) finishLocalWrite();
     const requestKey = `${response.config.method}-${response.config.url}`;
     retryQueue.delete(requestKey);
     return response;
   },
   async (error: AxiosError) => {
     const config = error.config;
+    if (['post', 'put', 'patch', 'delete'].includes(config?.method || '')) finishLocalWrite();
 
     if (!config) {
       return Promise.reject(error);

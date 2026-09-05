@@ -50,7 +50,7 @@ SyntaxHighlighter.registerLanguage('go', go);
 SyntaxHighlighter.registerLanguage('rust', rust);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
 import { Pencil, Eye, Save, Columns2, Copy, CheckCheck, Download, Share2 } from 'lucide-react';
-import { getNodes, createNode, updateNode, uploadFile, getDocuments, updateDocument, downloadAttachment, getRelatedNotes } from '../api/data';
+import { getNodes, getDocument, createNode, updateNode, uploadFile, getDocuments, updateDocument, downloadAttachment, getRelatedNotes } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
 import type { Document, Node, RelatedNote } from '../api/data';
 import MermaidBlock from './MermaidBlock';
@@ -77,6 +77,7 @@ import DocumentTabs from './DocumentTabs';
 import EditorActionPortal from './EditorActionPortal';
 import type { DocumentTab } from './documentTabTypes';
 import ImageViewer from './ImageViewer';
+import { useRemoteRefresh } from '../hooks/useRemoteRefresh';
 
 const AIChatPanel = lazy(() => import('./AIChatPanel'));
 
@@ -680,6 +681,18 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   const contentRef = useRef('');
   const dirtyRef = useRef(false);
   const previousDocumentIdRef = useRef(documentId);
+  useRemoteRefresh('nodes,documents,trash', async canApply => {
+    const [remoteNodes, remoteDoc] = await Promise.all([getNodes(documentId, true), getDocument(documentId, true)]);
+    if (!canApply() || dirtyRef.current || pendingSaveRef.current !== null || initializedDocumentRef.current !== documentId) return;
+    const root = remoteNodes.find(node => !node.parent_node_id);
+    if (!root) return;
+    const remoteTitle = remoteDoc.title;
+    if (remoteTitle !== undefined) setTitle(remoteTitle);
+    setNodeId(root.id);
+    contentRef.current = root.content;
+    lastSavedRef.current = root.content;
+    setContent(root.content);
+  }, viewMode !== 'preview' || saving || loading, documentId);
   useEffect(() => {
     contentRef.current = content;
   }, [content]);
