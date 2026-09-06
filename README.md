@@ -10,6 +10,14 @@ Beaver 是一个自托管的个人知识库，适合整理长期积累的资料�
 - 思维导图、Excalidraw 画布、深色模式和离线缓存
 - Chrome 浏览器插件：保存网页、选中文字和图片
 
+<img width="1370" height="1095" alt="image" src="https://github.com/user-attachments/assets/8b0e8adc-cb1e-426f-b73d-c604f6c58e74" />
+<img width="1366" height="1093" alt="image" src="https://github.com/user-attachments/assets/63abb70c-eab9-4d16-8bb6-ae4a372c5056" />
+<img width="1362" height="1086" alt="image" src="https://github.com/user-attachments/assets/90a321e0-55d3-4a1f-98d4-4213acf71758" />
+<img width="1369" height="1092" alt="image" src="https://github.com/user-attachments/assets/f2ae1755-bf2e-4c9c-af27-55e64e6bcf21" />
+<img width="1367" height="1089" alt="image" src="https://github.com/user-attachments/assets/3f9368d6-b522-4ab4-971e-c368ed7e05ce" />
+
+
+
 ## 部署
 
 ### 方式一：使用 GHCR 预构建镜像（推荐）
