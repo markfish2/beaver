@@ -21,7 +21,7 @@ services:
       - ./backend/data:/app/data
     environment:
       - DATABASE_URL=sqlite:///app/data/app.db
-      - SECRET_KEY=REDACTED_SECRET_REMOVED
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set in .env}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s

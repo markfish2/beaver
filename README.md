@@ -23,6 +23,17 @@ deploy/           预打包部署文件
 
 ## 快速开始
 
+### 环境变量
+
+首次启动前，在项目根目录创建本地密钥文件：
+
+```bash
+cp .env.example .env
+openssl rand -hex 32
+```
+
+将命令输出的随机字符串填入 `.env` 的 `SECRET_KEY`。`.env` 只保存在本机或服务器上，不要提交到 Git。更换密钥后，已有登录会话会失效，需要重新登录。
+
 ### Docker 部署
 
 需要安装 Docker 和 Docker Compose：
@@ -31,7 +42,71 @@ deploy/           预打包部署文件
 docker compose up -d --build
 ```
 
-启动后访问 <http://127.0.0.1:8080>。
+这会构建后端、前端并启动 Nginx。启动后访问 <http://127.0.0.1:8080>；服务器部署时，将 `127.0.0.1` 换成服务器地址。
+
+## 部署与升级
+
+### 首次部署（服务器构建）
+
+将项目上传或克隆到服务器，例如 `/opt/beaver`，然后执行：
+
+```bash
+cd /opt/beaver
+mkdir -p backend/data
+# 首次部署时创建 .env，并填入随机 SECRET_KEY
+docker compose up -d --build
+docker compose ps
+```
+
+应用数据保存在 `backend/data/`，后端 API 默认仅供容器内部使用，外部入口是 Nginx 的 `8080` 端口。
+
+### 日常升级（源码部署）
+
+升级前先备份数据库和附件，再更新代码并重新构建：
+
+```bash
+cd /opt/beaver
+cp backend/data/app.db backend/data/app.db.bak-$(date +%Y%m%d%H%M%S)
+tar -czf /tmp/beaver-data-$(date +%Y%m%d%H%M%S).tar.gz backend/data
+git pull --ff-only
+docker compose up -d --build
+docker compose ps
+docker compose logs --tail=100 backend
+```
+
+后端启动时会自动执行数据库迁移。不要用仓库中的旧数据库覆盖 `backend/data/app.db`，也不要执行 `docker compose down -v`。
+
+### 推荐升级（预构建镜像）
+
+服务器构建较慢时，在本地仓库根目录生成部署包和完整镜像包：
+
+```bash
+# 已有基础部署包时，更新 deploy-package-new.tar.gz
+scripts/package-deploy.sh --verify fast
+
+# 必须同时构建后端和前端镜像
+docker compose build backend frontend
+docker save -o docker-images.tar beaver-backend:latest beaver-frontend:latest
+gzip -f docker-images.tar
+```
+
+将 `deploy-package-new.tar.gz` 和 `docker-images.tar.gz` 上传到服务器。部署目录以 `/opt/beaver` 为例：
+
+```bash
+mkdir -p /opt/beaver/data
+tar -xzf /tmp/deploy-package-new.tar.gz --strip-components=1 -C /opt/beaver
+# 首次部署时在 /opt/beaver/.env 中配置 SECRET_KEY
+gzip -dc /tmp/docker-images.tar.gz | docker load
+cd /opt/beaver
+docker compose up -d
+docker compose ps
+```
+
+预构建镜像已经加载后不要加 `--build`。部署包不会包含服务器数据，升级时必须保留 `data/app.db`、`data/uploads/`、`data/excalidraw/` 和 `data/skill/`。
+
+### 回滚
+
+代码回滚到旧版本后重新构建即可；如果使用预构建镜像，加载上一份 `docker-images.tar.gz` 后执行 `docker compose up -d`。数据库需要从对应的备份文件恢复，再启动服务。
 
 ### 本地开发
 

@@ -22,6 +22,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Local secrets
+.env
+
 # Deploy packages
 deploy-package.tar.gz
 *.tar.gz
