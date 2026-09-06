@@ -104,6 +104,35 @@ docker compose ps
 
 预构建镜像已经加载后不要加 `--build`。部署包不会包含服务器数据，升级时必须保留 `data/app.db`、`data/uploads/`、`data/excalidraw/` 和 `data/skill/`。
 
+### GHCR 镜像部署（推荐）
+
+GitHub Actions 会在 `main` 更新或推送 `v*` 标签时，自动将后端和前端镜像发布到 GitHub Container Registry（GHCR）。首次发布后，需要在 GitHub 的 Packages 页面将两个镜像设置为 `Public`。
+
+新服务器不需要克隆完整源码，只需下载镜像版 Compose 和网关配置：
+
+```bash
+export BEAVER_REF=main
+mkdir -p /opt/beaver/data
+cd /opt/beaver
+curl -fsSLo docker-compose.yml "https://raw.githubusercontent.com/markfish2/beaver/${BEAVER_REF}/docker-compose.images.yml"
+curl -fsSLo nginx.conf "https://raw.githubusercontent.com/markfish2/beaver/${BEAVER_REF}/nginx/nginx.conf"
+curl -fsSLo .env.example "https://raw.githubusercontent.com/markfish2/beaver/${BEAVER_REF}/.env.example"
+cp .env.example .env
+openssl rand -hex 32
+# 将随机字符串填入 .env 的 SECRET_KEY
+docker compose pull
+docker compose up -d
+```
+
+安装目录中的 `data/` 保存数据库、上传文件和画布数据，升级时不要删除。升级镜像时执行：
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+生产环境可以将 `BEAVER_REF` 改为具体版本标签，例如 `v1.0.0`，并在 `.env` 中设置 `BEAVER_VERSION=v1.0.0`，避免使用会变化的 `latest` 标签。
+
 ### 回滚
 
 代码回滚到旧版本后重新构建即可；如果使用预构建镜像，加载上一份 `docker-images.tar.gz` 后执行 `docker compose up -d`。数据库需要从对应的备份文件恢复，再启动服务。
