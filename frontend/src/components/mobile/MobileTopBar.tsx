@@ -180,7 +180,7 @@ export default function MobileTopBar({ title, showBack, isDocumentPage = false, 
             </>
           )}
 
-          {isDocumentPage && <MobileEditorActionsSlot className="relative flex min-w-0 items-center gap-0.5 pr-1" />}
+          {isDocumentPage && <MobileEditorActionsSlot className="mobile-editor-action-slot relative flex min-w-0 items-center gap-0.5 pr-1" />}
         </div>
 
         {/* 中间：标题（胶囊长条形，缩小一半，居中） */}

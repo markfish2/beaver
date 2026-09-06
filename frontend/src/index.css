@@ -518,11 +518,11 @@ body,
   }
 
   /* 移动端文档页的操作按钮进入左上角胶囊，只保留图标。 */
-  #mobile-editor-action-slot .editor-topbar-button > span {
+  .mobile-editor-action-slot .editor-topbar-button > span {
     display: none !important;
   }
 
-  #mobile-editor-action-slot .editor-topbar-button {
+  .mobile-editor-action-slot .editor-topbar-button {
     min-width: 32px;
     padding-left: 7px;
     padding-right: 7px;

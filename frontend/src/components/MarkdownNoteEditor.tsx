@@ -80,6 +80,7 @@ import ImageViewer from './ImageViewer';
 import { useRemoteRefresh } from '../hooks/useRemoteRefresh';
 import { applyNoteHighlights, captureNoteHighlightSelection, clearNoteHighlights, formatNoteHighlightsAsMemo, normalizeHighlightSource, normalizeHighlightText, scrollToNoteHighlight, sortNoteHighlightsByDocumentOrder, sourceMayContainNoteHighlight, type NoteHighlightMatch, type NoteHighlightSelection } from '../utils/noteHighlights';
 import { NoteHighlightPanel, NoteHighlightSelectionMenu } from './NoteHighlightMenus';
+import { loadNoteScrollPosition, saveNoteScrollPosition } from '../utils/pwaState';
 
 const AIChatPanel = lazy(() => import('./AIChatPanel'));
 
@@ -600,6 +601,7 @@ interface MarkdownNotePreviewProps {
   onCopy: (event: React.ClipboardEvent<HTMLDivElement>) => void;
   onSelectionEnd: () => void;
   onScroll: () => void;
+  onScrollIntent: () => void;
   showRelatedNotes: boolean;
   relatedNotes: RelatedNote[];
   onRelatedNoteOpen: (note: RelatedNote) => void;
@@ -620,6 +622,7 @@ const MarkdownNotePreview = memo(function MarkdownNotePreview({
   onCopy,
   onSelectionEnd,
   onScroll,
+  onScrollIntent,
   showRelatedNotes,
   relatedNotes,
   onRelatedNoteOpen,
@@ -628,6 +631,9 @@ const MarkdownNotePreview = memo(function MarkdownNotePreview({
     <div
       ref={previewRef}
       onScroll={onScroll}
+      onPointerDown={onScrollIntent}
+      onWheel={onScrollIntent}
+      onTouchStart={onScrollIntent}
       className={`${viewMode === 'split' ? 'w-1/2' : 'flex-1 min-w-0 h-full'} overflow-x-hidden overflow-y-auto custom-scrollbar scrollbar-auto-hide flex flex-col items-center`}
       style={isMobile ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 58px)' } : undefined}
     >
@@ -716,6 +722,15 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   const pendingHighlightJumpRef = useRef<string | null>(null);
   const highlightFrameRef = useRef<number | null>(null);
   const selectionCaptureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noteScrollSaveFrameRef = useRef<number | null>(null);
+  const noteScrollTopRef = useRef(0);
+  const noteScrollRestoreFrameRef = useRef<number | null>(null);
+  const noteScrollRestoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noteScrollRestoreStartedDocumentRef = useRef<string | null>(null);
+  const noteScrollRestoredDocumentRef = useRef<string | null>(null);
+  const noteScrollRestoreActiveRef = useRef(false);
+  const noteScrollUserInteractedRef = useRef(false);
+  const noteScrollIgnoreUntilRef = useRef(0);
   // MainArea 会因文档元数据热同步而重新传入 initialNodes/initialDocuments。
   // 这些 props 只用于首次进入文档，不能让普通笔记编辑器重复初始化，
   // 否则本端保存更新 updated_at 后，下一轮同步会重置正在编辑的内容。
@@ -747,12 +762,74 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
     [highlightLoadDocumentId, normalizedActiveDocumentId, noteHighlights],
   );
 
+  const flushNoteScrollPosition = useCallback(() => {
+    // 首次恢复尚未完成时，预览区的 0 可能只是尚未挂载完的空壳，
+    // 不能让卸载清理把已有的阅读位置覆盖掉。
+    if (!isMobile || (noteScrollRestoreActiveRef.current && !noteScrollUserInteractedRef.current)) return;
+    const scrollRoot = previewRef.current;
+    if (!scrollRoot) return;
+    if (noteScrollSaveFrameRef.current !== null) {
+      cancelAnimationFrame(noteScrollSaveFrameRef.current);
+      noteScrollSaveFrameRef.current = null;
+    }
+    noteScrollTopRef.current = scrollRoot.scrollTop;
+    saveNoteScrollPosition(documentId, noteScrollTopRef.current);
+  }, [documentId, isMobile]);
+
+  const queueNoteScrollSave = useCallback(() => {
+    if (!isMobile || noteScrollRestoreActiveRef.current) return;
+    const scrollRoot = previewRef.current;
+    if (!scrollRoot) return;
+    noteScrollTopRef.current = scrollRoot.scrollTop;
+    if (noteScrollSaveFrameRef.current !== null) return;
+    noteScrollSaveFrameRef.current = requestAnimationFrame(() => {
+      noteScrollSaveFrameRef.current = null;
+      if (!noteScrollRestoreActiveRef.current) {
+        saveNoteScrollPosition(documentId, noteScrollTopRef.current);
+      }
+    });
+  }, [documentId, isMobile]);
+
+  const handleNoteScrollIntent = useCallback(() => {
+    if (!isMobile || noteScrollRestoredDocumentRef.current === documentId) return;
+    noteScrollUserInteractedRef.current = true;
+    noteScrollRestoreActiveRef.current = false;
+    if (noteScrollRestoreFrameRef.current !== null) {
+      cancelAnimationFrame(noteScrollRestoreFrameRef.current);
+      noteScrollRestoreFrameRef.current = null;
+    }
+    if (noteScrollRestoreTimerRef.current !== null) {
+      clearTimeout(noteScrollRestoreTimerRef.current);
+      noteScrollRestoreTimerRef.current = null;
+    }
+  }, [documentId, isMobile]);
+
   useEffect(() => () => {
     if (highlightFrameRef.current !== null) cancelAnimationFrame(highlightFrameRef.current);
     if (selectionCaptureTimerRef.current !== null) clearTimeout(selectionCaptureTimerRef.current);
     clearNoteHighlights(previewBodyRef.current);
     highlightMatchesRef.current.clear();
   }, []);
+
+  useEffect(() => {
+    noteScrollRestoreStartedDocumentRef.current = documentId;
+    noteScrollRestoredDocumentRef.current = null;
+    noteScrollRestoreActiveRef.current = false;
+    noteScrollUserInteractedRef.current = false;
+    noteScrollIgnoreUntilRef.current = 0;
+  }, [documentId]);
+
+  useEffect(() => () => {
+    flushNoteScrollPosition();
+    if (noteScrollRestoreFrameRef.current !== null) {
+      cancelAnimationFrame(noteScrollRestoreFrameRef.current);
+      noteScrollRestoreFrameRef.current = null;
+    }
+    if (noteScrollRestoreTimerRef.current !== null) {
+      clearTimeout(noteScrollRestoreTimerRef.current);
+      noteScrollRestoreTimerRef.current = null;
+    }
+  }, [flushNoteScrollPosition]);
 
   useEffect(() => {
     if (selectionCaptureTimerRef.current !== null) clearTimeout(selectionCaptureTimerRef.current);
@@ -1252,6 +1329,161 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
     })[0] ?? null;
   }, [markdownAnalysis.blocks, processedContent]);
 
+  useEffect(() => {
+    if (!isMobile || isNew || loading || viewMode !== 'preview') return;
+    // useMarkdownAnalysis 会先返回空分析，再在 Worker 完成后提交结果。
+    // 只有源内容和分析结果都稳定后才恢复，避免把位置写回到空预览上。
+    if (markdownAnalysis.isPending || previewContent !== deferredContent) return;
+    if (deferredContent.trim() && markdownAnalysis.blocks.length === 0) return;
+    if (noteScrollRestoreStartedDocumentRef.current !== documentId) {
+      noteScrollRestoreStartedDocumentRef.current = documentId;
+      noteScrollRestoredDocumentRef.current = null;
+      noteScrollUserInteractedRef.current = false;
+    }
+    if (
+      noteScrollRestoredDocumentRef.current === documentId
+      || noteScrollUserInteractedRef.current
+    ) return;
+
+    const savedTop = loadNoteScrollPosition(documentId);
+    if (savedTop === null || savedTop <= 0) {
+      noteScrollRestoredDocumentRef.current = documentId;
+      noteScrollRestoreActiveRef.current = false;
+      return;
+    }
+
+    let cancelled = false;
+    let attempts = 0;
+    let lastScrollHeight = -1;
+    let stableFrames = 0;
+    let resizeObserver: ResizeObserver | null = null;
+    let deadlineTimer: ReturnType<typeof setTimeout> | null = null;
+    const observedImages = new Set<HTMLImageElement>();
+
+    const cleanupObservers = () => {
+      resizeObserver?.disconnect();
+      resizeObserver = null;
+      for (const image of observedImages) {
+        image.removeEventListener('load', scheduleRestore);
+        image.removeEventListener('error', scheduleRestore);
+      }
+      observedImages.clear();
+    };
+
+    const finishRestore = () => {
+      if (cancelled) return;
+      if (noteScrollRestoreFrameRef.current !== null) {
+        cancelAnimationFrame(noteScrollRestoreFrameRef.current);
+        noteScrollRestoreFrameRef.current = null;
+      }
+      if (deadlineTimer !== null) {
+        clearTimeout(deadlineTimer);
+        deadlineTimer = null;
+      }
+      if (noteScrollRestoreTimerRef.current !== null) {
+        clearTimeout(noteScrollRestoreTimerRef.current);
+        noteScrollRestoreTimerRef.current = null;
+      }
+      cleanupObservers();
+      noteScrollRestoreActiveRef.current = false;
+      if (!noteScrollUserInteractedRef.current) {
+        noteScrollRestoredDocumentRef.current = documentId;
+      }
+    };
+
+    const observeImages = (root: HTMLDivElement) => {
+      for (const image of root.querySelectorAll('img')) {
+        if (image.complete || observedImages.has(image)) continue;
+        image.addEventListener('load', scheduleRestore);
+        image.addEventListener('error', scheduleRestore);
+        observedImages.add(image);
+      }
+    };
+
+    const setupObservers = (root: HTMLDivElement) => {
+      if (typeof ResizeObserver !== 'undefined' && !resizeObserver) {
+        resizeObserver = new ResizeObserver(() => scheduleRestore());
+        resizeObserver.observe(root);
+        if (previewBodyRef.current) resizeObserver.observe(previewBodyRef.current);
+      }
+      observeImages(root);
+    };
+
+    const restorePosition = () => {
+      noteScrollRestoreFrameRef.current = null;
+      if (
+        cancelled
+        || noteScrollUserInteractedRef.current
+        || noteScrollRestoredDocumentRef.current === documentId
+      ) return;
+
+      const scrollRoot = previewRef.current;
+      if (!scrollRoot) {
+        attempts += 1;
+        if (attempts >= 30) finishRestore();
+        else scheduleRestore();
+        return;
+      }
+
+      setupObservers(scrollRoot);
+      const maxScrollTop = Math.max(0, scrollRoot.scrollHeight - scrollRoot.clientHeight);
+      // 虚拟化块尚未完成首轮挂载时，继续等待，不要把目标位置截断为 0。
+      if (maxScrollTop <= 0 && attempts < 30) {
+        attempts += 1;
+        scheduleRestore();
+        return;
+      }
+
+      noteScrollRestoreActiveRef.current = true;
+      noteScrollIgnoreUntilRef.current = performance.now() + 180;
+      const targetTop = Math.min(savedTop, maxScrollTop);
+      noteScrollTopRef.current = targetTop;
+      if (Math.abs(scrollRoot.scrollTop - targetTop) > 1) scrollRoot.scrollTop = targetTop;
+
+      const currentScrollHeight = scrollRoot.scrollHeight;
+      stableFrames = currentScrollHeight === lastScrollHeight ? stableFrames + 1 : 0;
+      lastScrollHeight = currentScrollHeight;
+      attempts += 1;
+      const pendingImages = Array.from(scrollRoot.querySelectorAll('img')).some(image => !image.complete);
+      if ((stableFrames >= 3 && attempts >= 8 && !pendingImages) || attempts >= 30) {
+        finishRestore();
+        return;
+      }
+      scheduleRestore();
+    };
+
+    function scheduleRestore() {
+      if (
+        cancelled
+        || noteScrollUserInteractedRef.current
+        || noteScrollRestoredDocumentRef.current === documentId
+        || noteScrollRestoreFrameRef.current !== null
+      ) return;
+      noteScrollRestoreFrameRef.current = requestAnimationFrame(restorePosition);
+    }
+
+    noteScrollRestoreActiveRef.current = true;
+    scheduleRestore();
+    deadlineTimer = setTimeout(finishRestore, 1800);
+    noteScrollRestoreTimerRef.current = deadlineTimer;
+
+    return () => {
+      cancelled = true;
+      if (noteScrollRestoreFrameRef.current !== null) {
+        cancelAnimationFrame(noteScrollRestoreFrameRef.current);
+        noteScrollRestoreFrameRef.current = null;
+      }
+      if (deadlineTimer !== null) clearTimeout(deadlineTimer);
+      if (noteScrollRestoreTimerRef.current !== null) {
+        clearTimeout(noteScrollRestoreTimerRef.current);
+        noteScrollRestoreTimerRef.current = null;
+      }
+      cleanupObservers();
+      // 保持 active 标记，避免组件在恢复尚未完成时卸载，把空壳位置 0
+      // 写回并覆盖 sessionStorage 中原本有效的阅读位置。
+    };
+  }, [deferredContent, documentId, isMobile, isNew, loading, markdownAnalysis.blocks.length, markdownAnalysis.isPending, previewContent, viewMode]);
+
   const applyPreviewHighlights = useCallback(() => {
     const body = previewBodyRef.current;
     if (!body || viewMode === 'edit' || loading) {
@@ -1352,6 +1584,11 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   }, [applyPreviewHighlights, loading, processedContent, viewMode]);
 
   const handlePreviewScroll = useCallback(() => {
+    const isRestoreScroll = noteScrollRestoreActiveRef.current || performance.now() < noteScrollIgnoreUntilRef.current;
+    if (isMobile && !isRestoreScroll) {
+      if (noteScrollRestoredDocumentRef.current !== documentId) noteScrollUserInteractedRef.current = true;
+      queueNoteScrollSave();
+    }
     setSelectionMenu(null);
     if (activeNoteHighlights.length === 0) return;
     if (highlightFrameRef.current !== null) return;
@@ -1369,7 +1606,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
         }
       });
     });
-  }, [activeNoteHighlights.length, applyPreviewHighlights]);
+  }, [activeNoteHighlights.length, applyPreviewHighlights, documentId, isMobile, queueNoteScrollSave]);
 
   const handlePreviewSelectionEnd = useCallback(() => {
     const canCapture = viewMode !== 'edit' && !isNew;
@@ -1749,7 +1986,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
             aria-label="查看划线"
             aria-expanded={showHighlightPanel && highlightPanelDocumentId === documentId}
           >
-            <Highlighter className="h-[14px] w-[14px] text-red-500" />
+            <Highlighter className="h-[14px] w-[14px]" />
             <span>划线{activeNoteHighlights.length > 0 ? ` (${activeNoteHighlights.length})` : ''}</span>
           </button>
           <div className="relative" ref={exportMenuRef}>
@@ -1868,6 +2105,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
             onCopy={handlePreviewCopy}
             onSelectionEnd={handlePreviewSelectionEnd}
             onScroll={handlePreviewScroll}
+            onScrollIntent={handleNoteScrollIntent}
             showRelatedNotes={viewMode === 'preview' && relatedNotesState.key === `${documentId}:${viewMode}:${previewContent}`}
             relatedNotes={relatedNotesState.notes}
             onRelatedNoteOpen={handleRelatedNoteOpen}

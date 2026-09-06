@@ -111,6 +111,36 @@ export function loadScrollPosition(): number | null {
   } catch { return null; }
 }
 
+// ========== 普通笔记阅读位置（按文档隔离，当前会话内保留） ==========
+
+const NOTE_SCROLL_KEY_PREFIX = 'mf-note-scroll-y:';
+
+function getNoteScrollKey(documentId: string): string {
+  return `${NOTE_SCROLL_KEY_PREFIX}${encodeURIComponent(documentId)}`;
+}
+
+export function saveNoteScrollPosition(documentId: string, scrollTop: number) {
+  if (!documentId || !Number.isFinite(scrollTop)) return;
+  try {
+    sessionStorage.setItem(getNoteScrollKey(documentId), JSON.stringify({
+      top: Math.max(0, Math.round(scrollTop)),
+      savedAt: Date.now(),
+    }));
+  } catch {}
+}
+
+export function loadNoteScrollPosition(documentId: string): number | null {
+  if (!documentId) return null;
+  try {
+    const raw = sessionStorage.getItem(getNoteScrollKey(documentId));
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || !('top' in parsed)) return null;
+    const top = (parsed as { top?: unknown }).top;
+    return typeof top === 'number' && Number.isFinite(top) && top >= 0 ? top : null;
+  } catch { return null; }
+}
+
 // ========== 笔记缓存（IndexedDB） ==========
 
 interface MemosCacheEntry {
