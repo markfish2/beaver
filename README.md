@@ -1,114 +1,29 @@
-# Beaver（MiniFlowy）🦫
+# Beaver（MiniFlowy）
 
-Beaver 是一个自托管的个人知识库，支持大纲笔记、Markdown 普通笔记、随想、日记、待办、思维导图和画布，并提供桌面端、移动端和 PWA 使用体验。
+Beaver 是一个自托管的个人知识库，适合整理长期积累的资料、文章和想法。项目支持大纲笔记、Markdown 普通笔记、Memo、日记、待办、全文搜索、思维导图、Excalidraw 画布和 PWA 多端访问。
 
-## 功能特性
+## 功能
 
 - 大纲笔记：层级组织、折叠、拖拽和节点编辑
-- 普通笔记：Markdown、代码块、表格、图片、链接和划线
-- 随想、日记、待办、全文搜索与公开分享
-- Excalidraw 画布和思维导图
-- 深色模式、离线缓存及多端适配
-- Chrome 浏览器插件，快速保存网页内容
+- 普通笔记：Markdown、表格、代码块、图片、链接和划线
+- Memo、日记、待办、回收站、全文搜索和公开分享
+- 思维导图、Excalidraw 画布、深色模式和离线缓存
+- Chrome 浏览器插件：保存网页、选中文字和图片
 
-## 项目结构
+## 部署
+
+### 方式一：使用 GHCR 预构建镜像（推荐）
+
+GitHub Actions 会在 `main` 分支更新或推送 `v*` 标签时，自动发布：
 
 ```text
-backend/          FastAPI 后端、SQLite 数据库和附件存储
-frontend/         React + TypeScript + Vite 前端
-excalidraw/       嵌入式画布编辑器
-chrome-extension/ 浏览器插件
-deploy/           预打包部署文件
+ghcr.io/markfish2/beaver-backend
+ghcr.io/markfish2/beaver-frontend
 ```
 
-## 快速开始
+首次发布后，请在 GitHub 仓库的 **Packages** 页面将两个镜像设为 `Public`。如果镜像保持私有，服务器需要先使用具有 `read:packages` 权限的 Token 登录 GHCR。
 
-### 环境变量
-
-首次启动前，在项目根目录创建本地密钥文件：
-
-```bash
-cp .env.example .env
-openssl rand -hex 32
-```
-
-将命令输出的随机字符串填入 `.env` 的 `SECRET_KEY`。`.env` 只保存在本机或服务器上，不要提交到 Git。更换密钥后，已有登录会话会失效，需要重新登录。
-
-### Docker 部署
-
-需要安装 Docker 和 Docker Compose：
-
-```bash
-docker compose up -d --build
-```
-
-这会构建后端、前端并启动 Nginx。启动后访问 <http://127.0.0.1:8080>；服务器部署时，将 `127.0.0.1` 换成服务器地址。
-
-## 部署与升级
-
-### 首次部署（服务器构建）
-
-将项目上传或克隆到服务器，例如 `/opt/beaver`，然后执行：
-
-```bash
-cd /opt/beaver
-mkdir -p backend/data
-# 首次部署时创建 .env，并填入随机 SECRET_KEY
-docker compose up -d --build
-docker compose ps
-```
-
-应用数据保存在 `backend/data/`，后端 API 默认仅供容器内部使用，外部入口是 Nginx 的 `8080` 端口。
-
-### 日常升级（源码部署）
-
-升级前先备份数据库和附件，再更新代码并重新构建：
-
-```bash
-cd /opt/beaver
-cp backend/data/app.db backend/data/app.db.bak-$(date +%Y%m%d%H%M%S)
-tar -czf /tmp/beaver-data-$(date +%Y%m%d%H%M%S).tar.gz backend/data
-git pull --ff-only
-docker compose up -d --build
-docker compose ps
-docker compose logs --tail=100 backend
-```
-
-后端启动时会自动执行数据库迁移。不要用仓库中的旧数据库覆盖 `backend/data/app.db`，也不要执行 `docker compose down -v`。
-
-### 推荐升级（预构建镜像）
-
-服务器构建较慢时，在本地仓库根目录生成部署包和完整镜像包：
-
-```bash
-# 已有基础部署包时，更新 deploy-package-new.tar.gz
-scripts/package-deploy.sh --verify fast
-
-# 必须同时构建后端和前端镜像
-docker compose build backend frontend
-docker save -o docker-images.tar beaver-backend:latest beaver-frontend:latest
-gzip -f docker-images.tar
-```
-
-将 `deploy-package-new.tar.gz` 和 `docker-images.tar.gz` 上传到服务器。部署目录以 `/opt/beaver` 为例：
-
-```bash
-mkdir -p /opt/beaver/data
-tar -xzf /tmp/deploy-package-new.tar.gz --strip-components=1 -C /opt/beaver
-# 首次部署时在 /opt/beaver/.env 中配置 SECRET_KEY
-gzip -dc /tmp/docker-images.tar.gz | docker load
-cd /opt/beaver
-docker compose up -d
-docker compose ps
-```
-
-预构建镜像已经加载后不要加 `--build`。部署包不会包含服务器数据，升级时必须保留 `data/app.db`、`data/uploads/`、`data/excalidraw/` 和 `data/skill/`。
-
-### GHCR 镜像部署（推荐）
-
-GitHub Actions 会在 `main` 更新或推送 `v*` 标签时，自动将后端和前端镜像发布到 GitHub Container Registry（GHCR）。首次发布后，需要在 GitHub 的 Packages 页面将两个镜像设置为 `Public`。
-
-新服务器不需要克隆完整源码，只需下载镜像版 Compose 和网关配置：
+在新服务器上执行：
 
 ```bash
 export BEAVER_REF=main
@@ -119,46 +34,71 @@ curl -fsSLo nginx.conf "https://raw.githubusercontent.com/markfish2/beaver/${BEA
 curl -fsSLo .env.example "https://raw.githubusercontent.com/markfish2/beaver/${BEAVER_REF}/.env.example"
 cp .env.example .env
 openssl rand -hex 32
+# 将上面生成的随机字符串填入 .env 的 SECRET_KEY
+docker compose pull
+docker compose up -d
+```
+
+服务通过 `8080` 端口访问。升级时保留 `/opt/beaver/data`，执行：
+
+```bash
+cd /opt/beaver
+docker compose pull
+docker compose up -d
+```
+
+需要固定版本时，在 `.env` 中设置 `BEAVER_VERSION=v1.0.0`，并使用对应版本的 `BEAVER_REF` 下载配置文件。当前 GHCR 工作流发布目标为 `linux/amd64`。
+
+### 方式二：服务器本地构建镜像
+
+适合需要从源码构建或无法访问 GHCR 的环境：
+
+```bash
+git clone https://github.com/markfish2/beaver.git /opt/beaver
+cd /opt/beaver
+cp .env.example .env
+openssl rand -hex 32
 # 将随机字符串填入 .env 的 SECRET_KEY
-docker compose pull
-docker compose up -d
+docker compose up -d --build
 ```
 
-安装目录中的 `data/` 保存数据库、上传文件和画布数据，升级时不要删除。升级镜像时执行：
+源码部署的数据位于 `backend/data/`；GHCR 部署的数据位于部署目录的 `data/`。两种方式升级前都应备份 `app.db`、上传文件和画布数据，禁止用仓库中的旧数据库覆盖现有数据。
+
+## 本地开发
+
+开发时 Docker 只运行后端，前端使用 Vite 热更新：
 
 ```bash
-docker compose pull
-docker compose up -d
-```
-
-生产环境可以将 `BEAVER_REF` 改为具体版本标签，例如 `v1.0.0`，并在 `.env` 中设置 `BEAVER_VERSION=v1.0.0`，避免使用会变化的 `latest` 标签。
-
-### 回滚
-
-代码回滚到旧版本后重新构建即可；如果使用预构建镜像，加载上一份 `docker-images.tar.gz` 后执行 `docker compose up -d`。数据库需要从对应的备份文件恢复，再启动服务。
-
-### 本地开发
-
-开发环境使用 Docker 启动后端，前端使用 Vite 热更新：
-
-```bash
+cp .env.example .env
 docker compose -f docker-compose.dev.yml up -d
 cd frontend
 npm install
 npm run dev
 ```
 
-前端访问地址仍为 <http://127.0.0.1:8080>。常用检查命令：
+浏览器访问 <http://127.0.0.1:8080>。常用检查命令：
 
 ```bash
 npm run lint
-npx tsc --noEmit
+npx tsc --noEmit -p tsconfig.app.json
 npm test
+npm run build
 ```
 
-## 数据与贡献
+## 项目结构
 
-用户数据保存在 `backend/data/`，升级或迁移前请先备份数据库。功能开发主要修改 `backend/` 或 `frontend/`，不要直接修改 `deploy/` 中的预打包文件。
+```text
+backend/           FastAPI 后端、SQLite 数据库和附件存储
+frontend/          React + TypeScript + Vite 前端
+excalidraw/        嵌入式画布编辑器
+chrome-extension/  Chrome 浏览器插件
+nginx/             反向代理配置
+deploy/            预打包部署文件（不要直接修改）
+```
+
+## 数据与安全
+
+`.env` 和 `backend/data/` 仅用于本地或服务器运行，不要提交到 Git。请为每个部署环境生成独立的 `SECRET_KEY`，并定期备份数据目录。
 
 ## License
 
