@@ -22,12 +22,38 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Local agent context and temporary reports
+/MEMORY.md
+/CLAUDE.md
+/excalidraw/CLAUDE.md
+/docs/HANDOVER.md
+/docs/CODE_AUDIT_*.md
+/audit_report.md
+/checklist.md
+/spec.md
+/tasks.md
+/cloud-graph-diagnose.py
+/generate_icons.py
+/generate_ios_icons.py
+/compress_icon.py
+
 # Local secrets
 .env
 
 # Deploy packages
 deploy-package.tar.gz
 *.tar.gz
+
+# Local build and release artifacts
+*.apk
+/backend/*.db
+/frontend/dev-dist/
+/BEAVERLOGO.png
+/beaver.png
+/beaver_cropped.png
+/logo.png
+/logo[0-9].png
+/beaver-extension.zip
 
 # Temp
 *.tmp
