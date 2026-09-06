@@ -14,10 +14,13 @@ def install_live_updates(app):
     @app.middleware("http")
     async def announce_write(request: Request, call_next):
         response = await call_next(request)
-        resource = request.url.path.split("/")[2:3]
+        path_parts = request.url.path.strip("/").split("/")
+        resource = path_parts[1:2]
+        if resource == ["documents"] and "highlights" in path_parts:
+            resource = ["highlights"]
         if (request.method in {"POST", "PUT", "PATCH", "DELETE"}
                 and 200 <= response.status_code < 300
-                and resource and resource[0] in {"documents", "nodes", "memos", "diary", "trash"}):
+                and resource and resource[0] in {"documents", "nodes", "memos", "diary", "trash", "highlights"}):
             message = {"resource": resource[0], "source": request.headers.get("X-Client-ID", "")}
             for queue in tuple(subscribers):
                 if queue.full():

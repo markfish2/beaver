@@ -299,15 +299,6 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     <MobileToolbarProvider>
     <MobileEditorActionsProvider>
     <div className="app-container flex flex-col bg-[var(--app-canvas)] dark:bg-gray-900" style={{ height: '100dvh', width: '100vw', overflow: 'hidden' }}>
-      {/*
-       * 顶部操作栏隐藏时的沉浸渐变。
-       * 渐变从安全区下方开始，不能覆盖系统状态栏，避免 Chrome PWA
-       * 将状态栏与网页内容之间再次绘制出接缝线。
-       */}
-      <div
-        aria-hidden="true"
-        className={`mobile-top-gradient ${topChromeHidden ? 'is-visible' : ''}`}
-      />
       <MobileTopBar
         title={getTopBarTitle()}
         showBack={isEditing || !!userSubView}

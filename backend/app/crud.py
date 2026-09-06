@@ -92,6 +92,59 @@ def get_recent_documents(db: Session, limit: int = 20):
 def get_document(db: Session, document_id: uuid.UUID):
     return db.query(models.Document).filter(models.Document.id == document_id).first()
 
+def get_note_highlights(db: Session, document_id: uuid.UUID, user_id: uuid.UUID):
+    return db.query(models.NoteHighlight).filter(
+        models.NoteHighlight.document_id == document_id,
+        models.NoteHighlight.user_id == user_id,
+    ).order_by(models.NoteHighlight.created_at.asc()).all()
+
+def create_note_highlight(db: Session, document_id: uuid.UUID, user_id: uuid.UUID, highlight: schemas.NoteHighlightCreate):
+    existing = db.query(models.NoteHighlight).filter(
+        models.NoteHighlight.document_id == document_id,
+        models.NoteHighlight.user_id == user_id,
+        models.NoteHighlight.quote == highlight.quote,
+        models.NoteHighlight.prefix == highlight.prefix,
+        models.NoteHighlight.suffix == highlight.suffix,
+        models.NoteHighlight.block_line == highlight.block_line,
+    ).first()
+    if existing:
+        return existing
+    db_highlight = models.NoteHighlight(
+        document_id=document_id,
+        user_id=user_id,
+        **highlight.model_dump(),
+    )
+    db.add(db_highlight)
+    db.commit()
+    db.refresh(db_highlight)
+    return db_highlight
+
+def update_note_highlight(db: Session, highlight_id: uuid.UUID, document_id: uuid.UUID, user_id: uuid.UUID, highlight: schemas.NoteHighlightUpdate):
+    db_highlight = db.query(models.NoteHighlight).filter(
+        models.NoteHighlight.id == highlight_id,
+        models.NoteHighlight.document_id == document_id,
+        models.NoteHighlight.user_id == user_id,
+    ).first()
+    if not db_highlight:
+        return None
+    for key, value in highlight.model_dump().items():
+        setattr(db_highlight, key, value)
+    db.commit()
+    db.refresh(db_highlight)
+    return db_highlight
+
+def delete_note_highlight(db: Session, highlight_id: uuid.UUID, document_id: uuid.UUID, user_id: uuid.UUID):
+    db_highlight = db.query(models.NoteHighlight).filter(
+        models.NoteHighlight.id == highlight_id,
+        models.NoteHighlight.document_id == document_id,
+        models.NoteHighlight.user_id == user_id,
+    ).first()
+    if not db_highlight:
+        return False
+    db.delete(db_highlight)
+    db.commit()
+    return True
+
 def create_document(db: Session, document: schemas.DocumentCreate):
     db_document = models.Document(**document.model_dump())
     db.add(db_document)

@@ -49,10 +49,10 @@ SyntaxHighlighter.registerLanguage('cpp', cpp);
 SyntaxHighlighter.registerLanguage('go', go);
 SyntaxHighlighter.registerLanguage('rust', rust);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
-import { Pencil, Eye, Save, Columns2, Copy, CheckCheck, Download, Share2 } from 'lucide-react';
-import { getNodes, getDocument, createNode, updateNode, uploadFile, getDocuments, updateDocument, downloadAttachment, getRelatedNotes } from '../api/data';
+import { Pencil, Eye, Save, Columns2, Copy, CheckCheck, Download, Share2, Highlighter } from 'lucide-react';
+import { getNodes, getDocument, createNode, updateNode, uploadFile, getDocuments, updateDocument, downloadAttachment, getRelatedNotes, getNoteHighlights, createNoteHighlight, updateNoteHighlight, deleteNoteHighlight, createMemo } from '../api/data';
 import { useDocuments } from '../context/DocumentContext';
-import type { Document, Node, RelatedNote } from '../api/data';
+import type { Document, Node, RelatedNote, NoteHighlight } from '../api/data';
 import MermaidBlock from './MermaidBlock';
 import { getMarkdownTaskOrdinalAtLine, toggleMarkdownTaskByOrdinal } from '../utils/markdownPreprocess';
 import { getPasteMarkdown, getPasteMarkdownAsync, hasHtmlClipboardData, htmlToMarkdown } from '../utils/htmlToMarkdown';
@@ -78,6 +78,8 @@ import EditorActionPortal from './EditorActionPortal';
 import type { DocumentTab } from './documentTabTypes';
 import ImageViewer from './ImageViewer';
 import { useRemoteRefresh } from '../hooks/useRemoteRefresh';
+import { applyNoteHighlights, captureNoteHighlightSelection, clearNoteHighlights, formatNoteHighlightsAsMemo, normalizeHighlightSource, normalizeHighlightText, scrollToNoteHighlight, sortNoteHighlightsByDocumentOrder, sourceMayContainNoteHighlight, type NoteHighlightMatch, type NoteHighlightSelection } from '../utils/noteHighlights';
+import { NoteHighlightPanel, NoteHighlightSelectionMenu } from './NoteHighlightMenus';
 
 const AIChatPanel = lazy(() => import('./AIChatPanel'));
 
@@ -95,9 +97,25 @@ interface Props {
   onDirtyChange?: (dirty: boolean) => void;
 }
 
+interface NoteSelectionMenuState {
+  documentId: string;
+  selection: NoteHighlightSelection;
+}
+
 const BLOCK_CODE_FONT_SIZE = 'var(--markdown-block-code-font-size)';
 const MARKDOWN_REMARK_PLUGINS = [remarkGfm, remarkBreaks, remarkMath];
 const MARKDOWN_REHYPE_PLUGINS = [rehypeRaw, preserveCodeBlocks, rehypeKatex];
+const MARKDOWN_IMAGE_PATTERN = /!\[[^\]]*\]\([\s\S]*?\)|<img\b/i;
+
+function containsMarkdownImage(source: string): boolean {
+  return MARKDOWN_IMAGE_PATTERN.test(source);
+}
+
+function isAppleWebKitBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const userAgent = navigator.userAgent;
+  return /AppleWebKit/i.test(userAgent) && !/Android|Chrome|Chromium|Edg/i.test(userAgent);
+}
 const normalizeDocumentId = (id: string): string => id.replace(/-/g, '').toLowerCase();
 
 const codeBlockCustomStyle = (isDark: boolean): React.CSSProperties => {
@@ -508,7 +526,10 @@ function NoteImage({ src, alt, onPreview }: { src?: string; alt?: string; onPrev
       src={src}
       alt={alt || ''}
       className="max-w-full rounded-lg my-2 cursor-pointer hover:opacity-80 transition-opacity"
-      loading="lazy"
+      // Safari can recalculate the scroll position when a lazy image at the
+      // viewport edge obtains its intrinsic height during a touch scroll.
+      loading={isAppleWebKitBrowser() ? 'eager' : 'lazy'}
+      decoding="async"
       onClick={(event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -566,6 +587,8 @@ function RelatedNotes({ notes, onOpen }: { notes: RelatedNote[]; onOpen: (note: 
 
 interface MarkdownNotePreviewProps {
   previewRef: RefObject<HTMLDivElement | null>;
+  bodyRef: RefObject<HTMLDivElement | null>;
+  documentId: string;
   content: string;
   processedContent: string;
   blocks: MarkdownNoteBlock[];
@@ -575,6 +598,8 @@ interface MarkdownNotePreviewProps {
   components: Components;
   onDoubleClick: (event: React.MouseEvent<HTMLDivElement>) => void;
   onCopy: (event: React.ClipboardEvent<HTMLDivElement>) => void;
+  onSelectionEnd: () => void;
+  onScroll: () => void;
   showRelatedNotes: boolean;
   relatedNotes: RelatedNote[];
   onRelatedNoteOpen: (note: RelatedNote) => void;
@@ -582,6 +607,8 @@ interface MarkdownNotePreviewProps {
 
 const MarkdownNotePreview = memo(function MarkdownNotePreview({
   previewRef,
+  bodyRef,
+  documentId,
   content,
   processedContent,
   blocks,
@@ -591,6 +618,8 @@ const MarkdownNotePreview = memo(function MarkdownNotePreview({
   components,
   onDoubleClick,
   onCopy,
+  onSelectionEnd,
+  onScroll,
   showRelatedNotes,
   relatedNotes,
   onRelatedNoteOpen,
@@ -598,30 +627,44 @@ const MarkdownNotePreview = memo(function MarkdownNotePreview({
   return (
     <div
       ref={previewRef}
+      onScroll={onScroll}
       className={`${viewMode === 'split' ? 'w-1/2' : 'flex-1 min-w-0 h-full'} overflow-x-hidden overflow-y-auto custom-scrollbar scrollbar-auto-hide flex flex-col items-center`}
       style={isMobile ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 58px)' } : undefined}
     >
       <div
+        ref={bodyRef}
+        data-note-body="true"
+        data-note-document-id={normalizeDocumentId(documentId)}
         onDoubleClick={onDoubleClick}
         onCopyCapture={onCopy}
+        onPointerUp={onSelectionEnd}
+        onMouseUp={onSelectionEnd}
+        onTouchEnd={onSelectionEnd}
         className="markdown-note-preview memo-content max-w-[768px] w-full cursor-text text-base text-gray-700 dark:text-gray-300 p-6"
         style={{ lineHeight: '1.75' }}
       >
         <h1 className="markdown-note-title mb-6 text-3xl font-semibold leading-tight text-gray-900 dark:text-gray-100">{title || '无标题'}</h1>
         {content.trim() ? (
-          blocks.length > 0 ? blocks.map((block, index) => (
-            <DeferredMarkdownBlock
-              key={block.id}
-              minHeight={Math.max(44, Math.min(420, (block.endLine - block.startLine + 1) * 28))}
-              rootRef={previewRef}
-              startLine={block.startLine}
-              endLine={block.endLine}
-              headingId={block.headingId}
-              initiallyActive={index < 4}
-            >
-              <MarkdownPreviewBlock source={processedContent} block={block} components={components} />
-            </DeferredMarkdownBlock>
-          )) : (
+          blocks.length > 0 ? blocks.map((block, index) => {
+            const blockSource = processedContent.slice(block.startOffset, block.endOffset);
+            const containsImage = containsMarkdownImage(blockSource);
+            return (
+              <DeferredMarkdownBlock
+                key={block.id}
+                minHeight={Math.max(44, Math.min(420, (block.endLine - block.startLine + 1) * 28))}
+                rootRef={previewRef}
+                startLine={block.startLine}
+                endLine={block.endLine}
+                headingId={block.headingId}
+                initiallyActive={index < 4}
+                // Keep image blocks mounted so Safari never alternates
+                // between an intrinsic image height and a text estimate.
+                virtualize={!containsImage}
+              >
+                <MarkdownPreviewBlock source={processedContent} block={block} components={components} />
+              </DeferredMarkdownBlock>
+            );
+          }) : (
             <ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} rehypePlugins={MARKDOWN_REHYPE_PLUGINS} components={components}>
               {processedContent}
             </ReactMarkdown>
@@ -655,9 +698,24 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   const previewContent = markdownAnalysis.sourceContent;
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [relatedNotesState, setRelatedNotesState] = useState<{ key: string; notes: RelatedNote[] }>({ key: '', notes: [] });
+  const [noteHighlights, setNoteHighlights] = useState<NoteHighlight[]>([]);
+  const [highlightLoadDocumentId, setHighlightLoadDocumentId] = useState<string | null>(null);
+  const [selectionMenu, setSelectionMenu] = useState<NoteSelectionMenuState | null>(null);
+  const [showHighlightPanel, setShowHighlightPanel] = useState(false);
+  const [highlightPanelDocumentId, setHighlightPanelDocumentId] = useState<string | null>(null);
+  const [isAddingHighlightsToMemo, setIsAddingHighlightsToMemo] = useState(false);
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const editorScrollRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+  const previewBodyRef = useRef<HTMLDivElement>(null);
+  const highlightButtonRef = useRef<HTMLButtonElement>(null);
+  const highlightPanelRef = useRef<HTMLDivElement>(null);
+  const highlightMatchesRef = useRef<Map<string, NoteHighlightMatch>>(new Map());
+  const pendingHighlightMutationsRef = useRef(new Set<string>());
+  const highlightMutationRevisionRef = useRef(0);
+  const pendingHighlightJumpRef = useRef<string | null>(null);
+  const highlightFrameRef = useRef<number | null>(null);
+  const selectionCaptureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // MainArea 会因文档元数据热同步而重新传入 initialNodes/initialDocuments。
   // 这些 props 只用于首次进入文档，不能让普通笔记编辑器重复初始化，
   // 否则本端保存更新 updated_at 后，下一轮同步会重置正在编辑的内容。
@@ -681,6 +739,57 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   const contentRef = useRef('');
   const dirtyRef = useRef(false);
   const previousDocumentIdRef = useRef(documentId);
+  const normalizedActiveDocumentId = normalizeDocumentId(documentId);
+  const activeNoteHighlights = useMemo(
+    () => highlightLoadDocumentId === normalizedActiveDocumentId
+      ? noteHighlights.filter(highlight => normalizeDocumentId(highlight.document_id) === normalizedActiveDocumentId)
+      : [],
+    [highlightLoadDocumentId, normalizedActiveDocumentId, noteHighlights],
+  );
+
+  useEffect(() => () => {
+    if (highlightFrameRef.current !== null) cancelAnimationFrame(highlightFrameRef.current);
+    if (selectionCaptureTimerRef.current !== null) clearTimeout(selectionCaptureTimerRef.current);
+    clearNoteHighlights(previewBodyRef.current);
+    highlightMatchesRef.current.clear();
+  }, []);
+
+  useEffect(() => {
+    if (selectionCaptureTimerRef.current !== null) clearTimeout(selectionCaptureTimerRef.current);
+    pendingHighlightJumpRef.current = null;
+    clearNoteHighlights(previewBodyRef.current);
+    highlightMatchesRef.current.clear();
+    if (isNew) return;
+    let cancelled = false;
+    const requestRevision = highlightMutationRevisionRef.current;
+    (async () => {
+      try {
+        // A document can be opened in another tab and the IndexedDB cache is
+        // not shared transactionally between tabs. The document entry point
+        // must always reconcile against the server's current annotations.
+        const highlights = await getNoteHighlights(documentId, true);
+        if (!cancelled && requestRevision === highlightMutationRevisionRef.current) {
+          setNoteHighlights(highlights);
+          setHighlightLoadDocumentId(normalizeDocumentId(documentId));
+        }
+      } catch {
+        if (!cancelled && requestRevision === highlightMutationRevisionRef.current) {
+          setNoteHighlights([]);
+          setHighlightLoadDocumentId(normalizeDocumentId(documentId));
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [documentId, isNew]);
+
+  useRemoteRefresh('highlights', async canApply => {
+    const highlights = await getNoteHighlights(documentId, true);
+    if (canApply()) {
+      setNoteHighlights(highlights);
+      setHighlightLoadDocumentId(normalizeDocumentId(documentId));
+    }
+  }, viewMode !== 'preview' || saving || loading, documentId);
+
   useRemoteRefresh('nodes,documents,trash', async canApply => {
     const [remoteNodes, remoteDoc] = await Promise.all([getNodes(documentId, true), getDocument(documentId, true)]);
     if (!canApply() || dirtyRef.current || pendingSaveRef.current !== null || initializedDocumentRef.current !== documentId) return;
@@ -1122,6 +1231,254 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   }, [renderedHeadings]);
   const tocItems = markdownAnalysis.tocItems;
   const showNoteToc = !isMobile && viewMode !== 'split' && tocItems.length > 0;
+  const normalizedHighlightSource = useMemo(
+    () => viewMode === 'edit' || activeNoteHighlights.length === 0 ? '' : normalizeHighlightSource(processedContent),
+    [activeNoteHighlights.length, processedContent, viewMode],
+  );
+  const orderedNoteHighlights = useMemo(
+    () => sortNoteHighlightsByDocumentOrder(activeNoteHighlights, normalizedHighlightSource),
+    [activeNoteHighlights, normalizedHighlightSource],
+  );
+  const findHighlightBlock = useCallback((highlight: NoteHighlight): MarkdownNoteBlock | null => {
+    const quote = normalizeHighlightText(highlight.quote);
+    if (!quote) return null;
+    const candidates = markdownAnalysis.blocks.filter(block => {
+      const blockSource = normalizeHighlightSource(processedContent.slice(block.startOffset, block.endOffset));
+      return blockSource.includes(quote) || sourceMayContainNoteHighlight(blockSource, highlight);
+    });
+    return candidates.sort((left, right) => {
+      const targetLine = highlight.block_line ?? left.startLine;
+      return Math.abs(left.startLine - targetLine) - Math.abs(right.startLine - targetLine);
+    })[0] ?? null;
+  }, [markdownAnalysis.blocks, processedContent]);
+
+  const applyPreviewHighlights = useCallback(() => {
+    const body = previewBodyRef.current;
+    if (!body || viewMode === 'edit' || loading) {
+      clearNoteHighlights(body);
+      highlightMatchesRef.current.clear();
+      return;
+    }
+    // React can keep the preview node for one render while a document tab is
+    // changing. Never reconcile the new document's annotations against the
+    // previous document's DOM.
+    if (body.dataset.noteDocumentId !== normalizedActiveDocumentId) {
+      clearNoteHighlights(body);
+      highlightMatchesRef.current.clear();
+      return;
+    }
+    if (activeNoteHighlights.length === 0) {
+      clearNoteHighlights(body);
+      highlightMatchesRef.current.clear();
+      pendingHighlightJumpRef.current = null;
+      return;
+    }
+
+    const matches = applyNoteHighlights(body, activeNoteHighlights);
+    highlightMatchesRef.current = matches;
+    if (pendingHighlightJumpRef.current && !activeNoteHighlights.some(highlight => highlight.id === pendingHighlightJumpRef.current)) {
+      pendingHighlightJumpRef.current = null;
+    }
+
+    // The rendered DOM is virtualized. Only reconcile annotations whose block
+    // is mounted; unloaded blocks are checked when the user scrolls to them.
+    const reconcile = async () => {
+      for (const highlight of activeNoteHighlights) {
+        // A split view may contain unsaved editor text. It is safe to render
+        // against that text, but never persist or delete an anchor until the
+        // document has been saved.
+        if (dirtyRef.current || pendingSaveRef.current !== null) return;
+        const match = matches.get(highlight.id);
+        if (match) {
+          const nextData = {
+            quote: match.text,
+            prefix: match.prefix,
+            suffix: match.suffix,
+            block_line: match.block_line ?? highlight.block_line,
+          };
+          if (
+            normalizeHighlightText(highlight.quote) !== match.text
+            || highlight.prefix !== match.prefix
+            || highlight.suffix !== match.suffix
+            || (match.block_line !== null && highlight.block_line !== match.block_line)
+          ) {
+            if (pendingHighlightMutationsRef.current.has(highlight.id)) continue;
+            pendingHighlightMutationsRef.current.add(highlight.id);
+            try {
+              const updated = await updateNoteHighlight(documentId, highlight.id, nextData);
+              setNoteHighlights(current => current.map(item => item.id === updated.id ? updated : item));
+            } catch {
+              // A failed re-anchor is retried on the next render or live update.
+            } finally {
+              pendingHighlightMutationsRef.current.delete(highlight.id);
+            }
+          }
+          continue;
+        }
+
+        // A missing DOM match is not proof that the annotation was deleted:
+        // the block may be virtualized or still rendering. Only remove it
+        // when the fully loaded source and its context prove the old span is
+        // gone. This prevents tab switches and transient React renders from
+        // deleting a persisted highlight.
+        if (pendingHighlightMutationsRef.current.has(highlight.id)) continue;
+        if (normalizedHighlightSource && !sourceMayContainNoteHighlight(normalizedHighlightSource, highlight)) {
+          pendingHighlightMutationsRef.current.add(highlight.id);
+          try {
+            await deleteNoteHighlight(documentId, highlight.id);
+            setNoteHighlights(current => current.filter(item => item.id !== highlight.id));
+          } catch {
+            // Keep the annotation if the cleanup request failed.
+          } finally {
+            pendingHighlightMutationsRef.current.delete(highlight.id);
+          }
+          continue;
+        }
+      }
+    };
+    void reconcile();
+  }, [activeNoteHighlights, documentId, loading, normalizedHighlightSource, normalizedActiveDocumentId, viewMode]);
+
+  useEffect(() => {
+    if (viewMode === 'edit') {
+      clearNoteHighlights(previewBodyRef.current);
+      highlightMatchesRef.current.clear();
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      requestAnimationFrame(applyPreviewHighlights);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [applyPreviewHighlights, loading, processedContent, viewMode]);
+
+  const handlePreviewScroll = useCallback(() => {
+    setSelectionMenu(null);
+    if (activeNoteHighlights.length === 0) return;
+    if (highlightFrameRef.current !== null) return;
+    highlightFrameRef.current = requestAnimationFrame(() => {
+      highlightFrameRef.current = null;
+      requestAnimationFrame(() => {
+        applyPreviewHighlights();
+        const pendingId = pendingHighlightJumpRef.current;
+        const body = previewBodyRef.current;
+        const scrollRoot = previewRef.current;
+        const match = pendingId ? highlightMatchesRef.current.get(pendingId) : undefined;
+        if (body && scrollRoot && match) {
+          pendingHighlightJumpRef.current = null;
+          scrollToNoteHighlight(scrollRoot, match);
+        }
+      });
+    });
+  }, [activeNoteHighlights.length, applyPreviewHighlights]);
+
+  const handlePreviewSelectionEnd = useCallback(() => {
+    const canCapture = viewMode !== 'edit' && !isNew;
+    if (!canCapture) return;
+    if (selectionCaptureTimerRef.current !== null) clearTimeout(selectionCaptureTimerRef.current);
+
+    // Selection finalization is asynchronous in several mobile WebViews and
+    // can also lag one frame when the range crosses paragraph nodes. Retry a
+    // few frames instead of treating the first empty range as no selection.
+    const capture = (attempt: number) => {
+      if (!canCapture) return;
+      const body = previewBodyRef.current;
+      const selection = body ? captureNoteHighlightSelection(body) : null;
+      if (selection) {
+        setSelectionMenu({ documentId, selection });
+        return;
+      }
+      if (attempt < 3) {
+        selectionCaptureTimerRef.current = window.setTimeout(() => {
+          requestAnimationFrame(() => capture(attempt + 1));
+        }, 40);
+      } else {
+        setSelectionMenu(null);
+      }
+    };
+    selectionCaptureTimerRef.current = window.setTimeout(() => {
+      requestAnimationFrame(() => capture(0));
+    }, 0);
+  }, [documentId, isNew, viewMode]);
+
+  const handleCreateHighlight = useCallback(async () => {
+    const selection = selectionMenu?.documentId === documentId ? selectionMenu.selection : null;
+    if (!selection || isNew) return;
+    setSelectionMenu(null);
+    const mutationRevision = ++highlightMutationRevisionRef.current;
+    try {
+      const created = await createNoteHighlight(documentId, selection.anchor);
+      if (mutationRevision === highlightMutationRevisionRef.current) {
+        setHighlightLoadDocumentId(normalizeDocumentId(documentId));
+        setNoteHighlights(current => current.some(item => item.id === created.id) ? current : [...current, created]);
+      }
+      window.getSelection()?.removeAllRanges();
+    } catch {
+      showToast('划线保存失败，请稍后重试', 'error');
+    }
+  }, [documentId, isNew, selectionMenu]);
+
+  const handleAddHighlightsToMemo = useCallback(async () => {
+    if (isAddingHighlightsToMemo || orderedNoteHighlights.length === 0) return;
+    setIsAddingHighlightsToMemo(true);
+    try {
+      await createMemo(formatNoteHighlightsAsMemo(title, documentId, orderedNoteHighlights));
+      showToast('已添加到 Memo');
+    } catch {
+      showToast('添加到 Memo 失败，请稍后重试', 'error');
+    } finally {
+      setIsAddingHighlightsToMemo(false);
+    }
+  }, [documentId, isAddingHighlightsToMemo, orderedNoteHighlights, title]);
+
+  const handleDeleteHighlight = useCallback(async (highlight: NoteHighlight) => {
+    const mutationRevision = ++highlightMutationRevisionRef.current;
+    setNoteHighlights(current => current.filter(item => item.id !== highlight.id));
+    try {
+      await deleteNoteHighlight(documentId, highlight.id);
+    } catch {
+      if (mutationRevision === highlightMutationRevisionRef.current) {
+        setNoteHighlights(current => [...current, highlight].sort((left, right) => left.created_at.localeCompare(right.created_at)));
+      }
+      showToast('删除划线失败，请稍后重试', 'error');
+    }
+  }, [documentId]);
+
+  const handleHighlightJump = useCallback((highlight: NoteHighlight) => {
+    setShowHighlightPanel(false);
+    pendingHighlightJumpRef.current = highlight.id;
+    const scrollRoot = previewRef.current;
+    if (!scrollRoot) return;
+    const sourceBlock = findHighlightBlock(highlight);
+    const blockLine = sourceBlock?.startLine ?? highlight.block_line;
+    const block = blockLine
+      ? scrollRoot.querySelector<HTMLElement>(`[data-note-block-start-line="${blockLine}"]`)
+      : null;
+    if (block) {
+      const rootRect = scrollRoot.getBoundingClientRect();
+      const blockRect = block.getBoundingClientRect();
+      scrollRoot.scrollTo({ top: scrollRoot.scrollTop + blockRect.top - rootRect.top - 80, behavior: 'smooth' });
+    }
+    const focusMatch = () => {
+      applyPreviewHighlights();
+      const match = highlightMatchesRef.current.get(highlight.id);
+      if (match) {
+        pendingHighlightJumpRef.current = null;
+        scrollToNoteHighlight(scrollRoot, match);
+      }
+    };
+    requestAnimationFrame(() => requestAnimationFrame(focusMatch));
+  }, [applyPreviewHighlights, findHighlightBlock]);
+
+  useEffect(() => {
+    if (!showHighlightPanel) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (highlightPanelRef.current?.contains(target) || highlightButtonRef.current?.contains(target)) return;
+      setShowHighlightPanel(false);
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [showHighlightPanel]);
 
   const handleTocJump = useCallback((item: NoteTocItem) => {
     if (viewMode === 'preview') {
@@ -1376,6 +1733,25 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
         </div>
         <EditorActionPortal>
         <div className="flex items-center gap-1 shrink-0 ml-4">
+          <button
+            ref={highlightButtonRef}
+            type="button"
+            onClick={() => {
+              if (showHighlightPanel && highlightPanelDocumentId === documentId) {
+                setShowHighlightPanel(false);
+              } else {
+                setHighlightPanelDocumentId(documentId);
+                setShowHighlightPanel(true);
+              }
+            }}
+            className={`editor-topbar-button ${showHighlightPanel && highlightPanelDocumentId === documentId ? 'is-active' : ''}`}
+            title="查看划线"
+            aria-label="查看划线"
+            aria-expanded={showHighlightPanel && highlightPanelDocumentId === documentId}
+          >
+            <Highlighter className="h-[14px] w-[14px] text-red-500" />
+            <span>划线{activeNoteHighlights.length > 0 ? ` (${activeNoteHighlights.length})` : ''}</span>
+          </button>
           <div className="relative" ref={exportMenuRef}>
             <button
               onClick={() => setShowExportMenu(v => !v)}
@@ -1479,6 +1855,8 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
         {(viewMode === 'preview' || viewMode === 'split') && (
           <MarkdownNotePreview
             previewRef={previewRef}
+            bodyRef={previewBodyRef}
+            documentId={documentId}
             content={previewContent}
             processedContent={processedContent}
             blocks={markdownAnalysis.blocks}
@@ -1488,6 +1866,8 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
             components={mdComponents}
             onDoubleClick={handlePreviewDoubleClick}
             onCopy={handlePreviewCopy}
+            onSelectionEnd={handlePreviewSelectionEnd}
+            onScroll={handlePreviewScroll}
             showRelatedNotes={viewMode === 'preview' && relatedNotesState.key === `${documentId}:${viewMode}:${previewContent}`}
             relatedNotes={relatedNotesState.notes}
             onRelatedNoteOpen={handleRelatedNoteOpen}
@@ -1509,6 +1889,20 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
         isOpen={previewImage !== null}
         onClose={() => setPreviewImage(null)}
       />
+
+      <NoteHighlightPanel
+        highlights={orderedNoteHighlights}
+        isOpen={showHighlightPanel && highlightPanelDocumentId === documentId}
+        anchorRef={highlightButtonRef}
+        panelRef={highlightPanelRef}
+        onJump={handleHighlightJump}
+        onDelete={handleDeleteHighlight}
+        onAddToMemo={() => { void handleAddHighlightsToMemo(); }}
+        isAddingToMemo={isAddingHighlightsToMemo}
+      />
+      {selectionMenu?.documentId === documentId && !isNew && viewMode !== 'edit' && (
+        <NoteHighlightSelectionMenu selection={selectionMenu.selection} onHighlight={() => { void handleCreateHighlight(); }} />
+      )}
 
       <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden"
         onChange={(e) => { const files = e.target.files; if (files) { for (let i = 0; i < files.length; i++) { handleFileUpload(files[i], true); } } e.target.value = ''; }} />

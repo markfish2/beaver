@@ -200,10 +200,6 @@
   --safe-area-top-px: env(safe-area-inset-top, 0px);
   --safe-area-bottom-px: env(safe-area-inset-bottom, 0px);
 
-  /* 移动端顶部沉浸渐变从状态栏安全区下方开始，避免覆盖系统状态栏。 */
-  /* 顶部栏隐藏后的过渡区域：仅覆盖安全区下方的一小段内容。 */
-  --mobile-top-gradient-height: 38px;
-  
   /* 高亮颜色 - 亮色模式 */
   --highlight-red-bg: #FEEBE7;
   --highlight-red-border: #FCA5A1;
@@ -220,34 +216,6 @@
   --highlight-mint-bg: #EEFAEB;
   --highlight-mint-border: #86EFAC;
   --highlight-mint-text: #166534;
-}
-
-@media (max-width: 767px) {
-  .mobile-top-gradient {
-    position: fixed;
-    z-index: 90;
-    top: var(--safe-area-inset-top);
-    left: 0;
-    right: 0;
-    height: var(--mobile-top-gradient-height);
-    pointer-events: none;
-    opacity: 0;
-    background: linear-gradient(
-      to bottom,
-      color-mix(in srgb, var(--app-canvas) 64%, transparent) 0%,
-      color-mix(in srgb, var(--app-canvas) 32%, transparent) 52%,
-      transparent 100%
-    );
-    -webkit-backdrop-filter: blur(18px) saturate(175%);
-    backdrop-filter: blur(18px) saturate(175%);
-    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 36%, transparent 100%);
-    mask-image: linear-gradient(to bottom, #000 0%, #000 36%, transparent 100%);
-    transition: opacity 400ms linear;
-  }
-
-  .mobile-top-gradient.is-visible {
-    opacity: 1;
-  }
 }
 
 /*
@@ -916,6 +884,26 @@ body,
 .dark .memo-content a { color: #60a5fa; }
 .memo-content a:hover { color: #1d4ed8; }
 .dark .memo-content a:hover { color: #93bbfd; }
+
+/* 阅读模式划线使用 CSS Custom Highlight，不改写 ReactMarkdown 生成的 DOM。 */
+::highlight(note-reading-highlight) {
+  text-decoration-line: underline;
+  text-decoration-color: #dc2626;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
+}
+
+.note-reading-highlight {
+  text-decoration-line: underline;
+  text-decoration-color: #dc2626;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
+}
+
+.dark ::highlight(note-reading-highlight) { text-decoration-color: #f87171; }
+.dark .note-reading-highlight { text-decoration-color: #f87171; }
 /* 图片 */
 .memo-content img { max-width: 100%; border-radius: 0.5rem; margin: 0.5em 0; }
 /* 表格 */

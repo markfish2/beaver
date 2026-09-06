@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app import crud, schemas
+from app import crud, models, schemas
 from app.database import Base
 from app.routers.tasks import _add_to_diary, _remove_from_diary
 from datetime import date
@@ -54,6 +54,41 @@ class CrudIntegrationTest(unittest.TestCase):
         )
         self.assertEqual(status, "conflict")
         self.assertEqual(current.title, "新标题")
+
+    def test_note_highlight_round_trip_is_user_scoped(self):
+        user = models.User(username="highlight-user", password_hash="hash")
+        other_user = models.User(username="other-highlight-user", password_hash="hash")
+        self.db.add_all([user, other_user])
+        self.db.commit()
+
+        document = crud.create_document(self.db, schemas.DocumentCreate(title="普通笔记", type="note"))
+        highlight = crud.create_note_highlight(self.db, document.id, user.id, schemas.NoteHighlightCreate(
+            quote="需要保留的句子",
+            prefix="前文 ",
+            suffix=" 后文",
+            block_line=3,
+        ))
+        duplicate = crud.create_note_highlight(self.db, document.id, user.id, schemas.NoteHighlightCreate(
+            quote="需要保留的句子",
+            prefix="前文 ",
+            suffix=" 后文",
+            block_line=3,
+        ))
+
+        self.assertEqual(highlight.id, duplicate.id)
+        self.assertEqual(len(crud.get_note_highlights(self.db, document.id, user.id)), 1)
+        self.assertEqual(crud.get_note_highlights(self.db, document.id, other_user.id), [])
+
+        updated = crud.update_note_highlight(
+            self.db,
+            highlight.id,
+            document.id,
+            user.id,
+            schemas.NoteHighlightUpdate(quote="改过的句子", prefix="前文 ", suffix=" 后文", block_line=3),
+        )
+        self.assertEqual(updated.quote, "改过的句子")
+        self.assertTrue(crud.delete_note_highlight(self.db, highlight.id, document.id, user.id))
+        self.assertEqual(crud.get_note_highlights(self.db, document.id, user.id), [])
 
     def _create_project_and_children(self):
         project = crud.create_project(self.db, "甘特图测试项目")

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from uuid import UUID
 from typing import Optional, List
 from datetime import datetime
@@ -80,6 +80,23 @@ class Document(DocumentBase):
     id: UUID
     version: int = 1
     updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class NoteHighlightCreate(BaseModel):
+    quote: str = Field(min_length=1, max_length=20000)
+    prefix: str = Field(default="", max_length=500)
+    suffix: str = Field(default="", max_length=500)
+    block_line: Optional[int] = Field(default=None, ge=1)
+
+class NoteHighlightUpdate(NoteHighlightCreate):
+    pass
+
+class NoteHighlight(NoteHighlightCreate):
+    id: UUID
+    document_id: UUID
+    created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -31,6 +31,17 @@ export interface RelatedNote {
   distance?: number | null;
 }
 
+export interface NoteHighlight {
+  id: string;
+  document_id: string;
+  quote: string;
+  prefix: string;
+  suffix: string;
+  block_line: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Node {
   id: string;
   document_id: string;
@@ -102,6 +113,39 @@ export const getDocument = async (id: string, forceRefresh = false): Promise<Doc
 export const getRelatedNotes = async (documentId: string, limit: number = 3): Promise<RelatedNote[]> => {
   const response = await api.get<RelatedNote[]>(`/documents/${documentId}/related`, { params: { limit } });
   return response.data;
+};
+
+export const getNoteHighlights = async (documentId: string, forceRefresh = false): Promise<NoteHighlight[]> => {
+  const cacheKey = `note-highlights:${documentId}`;
+  const cached = forceRefresh ? undefined : dataCache.get<NoteHighlight[]>(cacheKey);
+  if (cached) return cached;
+  const response = await api.get<NoteHighlight[]>(`/documents/${documentId}/highlights`);
+  dataCache.set(cacheKey, response.data, 2 * 60 * 1000);
+  return response.data;
+};
+
+export const createNoteHighlight = async (
+  documentId: string,
+  data: Pick<NoteHighlight, 'quote' | 'prefix' | 'suffix' | 'block_line'>,
+): Promise<NoteHighlight> => {
+  const response = await api.post<NoteHighlight>(`/documents/${documentId}/highlights`, data);
+  dataCache.invalidate(`note-highlights:${documentId}`);
+  return response.data;
+};
+
+export const updateNoteHighlight = async (
+  documentId: string,
+  highlightId: string,
+  data: Pick<NoteHighlight, 'quote' | 'prefix' | 'suffix' | 'block_line'>,
+): Promise<NoteHighlight> => {
+  const response = await api.put<NoteHighlight>(`/documents/${documentId}/highlights/${highlightId}`, data);
+  dataCache.invalidate(`note-highlights:${documentId}`);
+  return response.data;
+};
+
+export const deleteNoteHighlight = async (documentId: string, highlightId: string): Promise<void> => {
+  await api.delete(`/documents/${documentId}/highlights/${highlightId}`);
+  dataCache.invalidate(`note-highlights:${documentId}`);
 };
 
 export const createDocument = async (title: string, type: string = 'document', parent_id: string | null = null, sort_order: number = Date.now(), aiExcluded: boolean = false) => {

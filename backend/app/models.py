@@ -46,6 +46,19 @@ class Document(Base):
     parent: Mapped[Optional["Document"]] = relationship("Document", remote_side=[id], back_populates="children")
     nodes: Mapped[List["Node"]] = relationship("Node", back_populates="document", cascade="all, delete-orphan")
 
+class NoteHighlight(Base):
+    """A reading-mode annotation anchored to text in an ordinary note."""
+    __tablename__ = "note_highlights"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    quote: Mapped[str] = mapped_column(Text)
+    prefix: Mapped[str] = mapped_column(Text, default="")
+    suffix: Mapped[str] = mapped_column(Text, default="")
+    block_line: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class Node(Base):
     __tablename__ = "nodes"
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

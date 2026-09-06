@@ -35,6 +35,22 @@ COLUMNS: dict[str, dict[str, str]] = {
     "ai_configs": {"purpose": "VARCHAR(20) NOT NULL DEFAULT 'chat'"},
 }
 
+TABLES = (
+    """
+    CREATE TABLE IF NOT EXISTS note_highlights (
+        id CHAR(32) PRIMARY KEY,
+        document_id CHAR(32) NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        user_id CHAR(32) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        quote TEXT NOT NULL,
+        prefix TEXT NOT NULL DEFAULT '',
+        suffix TEXT NOT NULL DEFAULT '',
+        block_line INTEGER,
+        created_at TIMESTAMP NOT NULL,
+        updated_at TIMESTAMP NOT NULL
+    )
+    """,
+)
+
 INDEXES = (
     "CREATE INDEX IF NOT EXISTS ix_documents_diary_date ON documents(diary_date)",
     "CREATE INDEX IF NOT EXISTS ix_documents_deleted_at ON documents(deleted_at)",
@@ -49,6 +65,7 @@ INDEXES = (
     "CREATE INDEX IF NOT EXISTS ix_projects_archived ON projects(is_archived)",
     "CREATE INDEX IF NOT EXISTS ix_projects_deleted ON projects(is_deleted)",
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_habit_records_unique ON habit_records(habit_id, record_date)",
+    "CREATE INDEX IF NOT EXISTS ix_note_highlights_document_user ON note_highlights(document_id, user_id)",
 )
 
 
@@ -62,6 +79,8 @@ def migrate_database(db_path: str) -> list[str]:
     applied: list[str] = []
     with sqlite3.connect(db_path) as connection:
         connection.execute("PRAGMA foreign_keys=ON")
+        for statement in TABLES:
+            connection.execute(statement)
         for table, definitions in COLUMNS.items():
             if not _table_exists(connection, table):
                 continue

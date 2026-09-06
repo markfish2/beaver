@@ -107,6 +107,37 @@ def read_document_nodes(document_id: UUID, db: Session = Depends(get_db), curren
         raise HTTPException(status_code=404, detail="Document not found")
     return crud.get_nodes(db, document_id)
 
+def _require_note_document(db: Session, document_id: UUID):
+    document = crud.get_document(db, document_id)
+    if not document or document.deleted_at is not None or document.type != "note":
+        raise HTTPException(status_code=404, detail="Ordinary note not found")
+    return document
+
+@router.get("/{document_id}/highlights", response_model=List[schemas.NoteHighlight])
+def read_note_highlights(document_id: UUID, db: Session = Depends(get_db), current_user: schemas.User = Depends(get_current_user)):
+    _require_note_document(db, document_id)
+    return crud.get_note_highlights(db, document_id, current_user.id)
+
+@router.post("/{document_id}/highlights", response_model=schemas.NoteHighlight)
+def create_note_highlight(document_id: UUID, highlight: schemas.NoteHighlightCreate, db: Session = Depends(get_db), current_user: schemas.User = Depends(get_current_user)):
+    _require_note_document(db, document_id)
+    return crud.create_note_highlight(db, document_id, current_user.id, highlight)
+
+@router.put("/{document_id}/highlights/{highlight_id}", response_model=schemas.NoteHighlight)
+def update_note_highlight(document_id: UUID, highlight_id: UUID, highlight: schemas.NoteHighlightUpdate, db: Session = Depends(get_db), current_user: schemas.User = Depends(get_current_user)):
+    _require_note_document(db, document_id)
+    updated = crud.update_note_highlight(db, highlight_id, document_id, current_user.id, highlight)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Highlight not found")
+    return updated
+
+@router.delete("/{document_id}/highlights/{highlight_id}")
+def delete_note_highlight(document_id: UUID, highlight_id: UUID, db: Session = Depends(get_db), current_user: schemas.User = Depends(get_current_user)):
+    _require_note_document(db, document_id)
+    if not crud.delete_note_highlight(db, highlight_id, document_id, current_user.id):
+        raise HTTPException(status_code=404, detail="Highlight not found")
+    return {"ok": True}
+
 @router.get("/{document_id}/related", response_model=List[schemas.RelatedNote])
 async def read_related_documents(
     document_id: UUID,

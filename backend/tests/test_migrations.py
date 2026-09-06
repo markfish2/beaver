@@ -33,13 +33,17 @@ class MigrationTest(unittest.TestCase):
         with sqlite3.connect(self.db_path) as connection:
             node_columns = {row[1] for row in connection.execute("PRAGMA table_info(nodes)")}
             user_columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
+            highlight_columns = {row[1] for row in connection.execute("PRAGMA table_info(note_highlights)")}
             document = connection.execute("SELECT version, updated_at FROM documents WHERE id='doc-1'").fetchone()
             indexes = {row[1] for row in connection.execute("PRAGMA index_list(documents)")}
+            highlight_indexes = {row[1] for row in connection.execute("PRAGMA index_list(note_highlights)")}
         self.assertTrue({"note", "is_todo", "is_in_progress", "version"}.issubset(node_columns))
         self.assertIn("markdown_style", user_columns)
         self.assertEqual(document[0], 1)
         self.assertIsNotNone(document[1])
         self.assertIn("ix_documents_sort_order", indexes)
+        self.assertTrue({"document_id", "user_id", "quote", "prefix", "suffix", "block_line"}.issubset(highlight_columns))
+        self.assertIn("ix_note_highlights_document_user", highlight_indexes)
 
 
 if __name__ == "__main__":
