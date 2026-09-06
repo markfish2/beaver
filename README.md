@@ -1,4 +1,4 @@
-# Beaver（MiniFlowy）
+# Beaver
 
 Beaver 是一个自托管的个人知识库，适合整理长期积累的资料、文章和想法。项目支持大纲笔记、Markdown 普通笔记、Memo、日记、待办、全文搜索、思维导图、Excalidraw 画布和 PWA 多端访问。
 
