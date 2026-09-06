@@ -9,6 +9,10 @@ interface SelectionMenuProps {
   onHighlight: () => void;
 }
 
+export function shouldPlaceTabletHighlightActionAtBottom(selection: NoteHighlightSelection): boolean {
+  return selection.rect.top < Math.max(128, window.innerHeight * 0.28);
+}
+
 export function NoteHighlightSelectionMenu({ selection, onHighlight }: SelectionMenuProps) {
   const width = 104;
   const left = Math.max(8, Math.min(window.innerWidth - width - 8, selection.rect.left + selection.rect.width / 2 - width / 2));
@@ -29,6 +33,30 @@ export function NoteHighlightSelectionMenu({ selection, onHighlight }: Selection
       >
         <Highlighter className="h-4 w-4" />
         划线
+      </button>
+    </div>,
+    document.body,
+  );
+}
+
+export function NoteHighlightTabletAction({ onHighlight }: { onHighlight: () => void }) {
+  return createPortal(
+    <div
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-[var(--layer-overlay)] flex justify-center px-4"
+      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
+      role="toolbar"
+      aria-label="划线操作"
+    >
+      <button
+        type="button"
+        onPointerDown={event => event.preventDefault()}
+        onMouseDown={event => event.preventDefault()}
+        onClick={onHighlight}
+        className="pointer-events-auto flex h-10 items-center gap-2 rounded-full border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 shadow-xl transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+        aria-label="为选中内容划线"
+      >
+        <Highlighter className="h-4 w-4" />
+        划线选中内容
       </button>
     </div>,
     document.body,

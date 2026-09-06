@@ -79,8 +79,9 @@ import type { DocumentTab } from './documentTabTypes';
 import ImageViewer from './ImageViewer';
 import { useRemoteRefresh } from '../hooks/useRemoteRefresh';
 import { applyNoteHighlights, captureNoteHighlightSelection, clearNoteHighlights, formatNoteHighlightsAsMemo, normalizeHighlightSource, normalizeHighlightText, scrollToNoteHighlight, sortNoteHighlightsByDocumentOrder, sourceMayContainNoteHighlight, type NoteHighlightMatch, type NoteHighlightSelection } from '../utils/noteHighlights';
-import { NoteHighlightPanel, NoteHighlightSelectionMenu } from './NoteHighlightMenus';
+import { NoteHighlightPanel, NoteHighlightSelectionMenu, NoteHighlightTabletAction, shouldPlaceTabletHighlightActionAtBottom } from './NoteHighlightMenus';
 import { loadNoteScrollPosition, saveNoteScrollPosition } from '../utils/pwaState';
+import { getDeviceLayoutSnapshot, isTabletDevice } from '../utils/deviceLayout';
 
 const AIChatPanel = lazy(() => import('./AIChatPanel'));
 
@@ -685,6 +686,7 @@ const MarkdownNotePreview = memo(function MarkdownNotePreview({
 export default function MarkdownNoteEditor({ documentId, isNew = false, initialNodes, initialDocuments, documentTabs = [], activeDocumentTabKey = null, showDocumentTabs = true, onDocumentTabSelect, onDocumentTabClose, onRelatedNoteOpen, onDirtyChange }: Props) {
   const { updateDocumentTitle } = useDocuments();
   const isMobile = usePhoneLayout();
+  const isTablet = isTabletDevice(getDeviceLayoutSnapshot());
   const navigate_fn = useNavigate();
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>(isNew ? 'edit' : 'preview');
   const [content, setContent] = useState('');
@@ -761,6 +763,14 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
       : [],
     [highlightLoadDocumentId, normalizedActiveDocumentId, noteHighlights],
   );
+  const activeSelectionMenu = selectionMenu?.documentId === documentId && !isNew && viewMode !== 'edit'
+    ? selectionMenu
+    : null;
+  const tabletActionAtBottom = isTablet && activeSelectionMenu !== null
+    && shouldPlaceTabletHighlightActionAtBottom(activeSelectionMenu.selection);
+  // 所有设备统一：有有效选区时，顶部划线按钮直接处理该选区；
+  // iPad 额外显示底部入口只是为了避开 Safari 原生选择菜单，不改变操作语义。
+  const toolbarHighlightAction = activeSelectionMenu !== null;
 
   const flushNoteScrollPosition = useCallback(() => {
     // 首次恢复尚未完成时，预览区的 0 可能只是尚未挂载完的空壳，
@@ -1973,7 +1983,17 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
           <button
             ref={highlightButtonRef}
             type="button"
+            onPointerDown={event => {
+              if (toolbarHighlightAction) event.preventDefault();
+            }}
+            onMouseDown={event => {
+              if (toolbarHighlightAction) event.preventDefault();
+            }}
             onClick={() => {
+              if (toolbarHighlightAction) {
+                void handleCreateHighlight();
+                return;
+              }
               if (showHighlightPanel && highlightPanelDocumentId === documentId) {
                 setShowHighlightPanel(false);
               } else {
@@ -1981,13 +2001,13 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
                 setShowHighlightPanel(true);
               }
             }}
-            className={`editor-topbar-button ${showHighlightPanel && highlightPanelDocumentId === documentId ? 'is-active' : ''}`}
-            title="查看划线"
-            aria-label="查看划线"
+            className={`editor-topbar-button ${toolbarHighlightAction ? 'is-primary' : showHighlightPanel && highlightPanelDocumentId === documentId ? 'is-active' : ''}`}
+            title={toolbarHighlightAction ? '为选中内容划线' : '查看划线'}
+            aria-label={toolbarHighlightAction ? '为选中内容划线' : '查看划线'}
             aria-expanded={showHighlightPanel && highlightPanelDocumentId === documentId}
           >
             <Highlighter className="h-[14px] w-[14px]" />
-            <span>划线{activeNoteHighlights.length > 0 ? ` (${activeNoteHighlights.length})` : ''}</span>
+            <span>{toolbarHighlightAction ? '划线选中内容' : `划线${activeNoteHighlights.length > 0 ? ` (${activeNoteHighlights.length})` : ''}`}</span>
           </button>
           <div className="relative" ref={exportMenuRef}>
             <button
@@ -2138,8 +2158,11 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
         onAddToMemo={() => { void handleAddHighlightsToMemo(); }}
         isAddingToMemo={isAddingHighlightsToMemo}
       />
-      {selectionMenu?.documentId === documentId && !isNew && viewMode !== 'edit' && (
-        <NoteHighlightSelectionMenu selection={selectionMenu.selection} onHighlight={() => { void handleCreateHighlight(); }} />
+      {activeSelectionMenu && !isTablet && (
+        <NoteHighlightSelectionMenu selection={activeSelectionMenu.selection} onHighlight={() => { void handleCreateHighlight(); }} />
+      )}
+      {activeSelectionMenu && tabletActionAtBottom && (
+        <NoteHighlightTabletAction onHighlight={() => { void handleCreateHighlight(); }} />
       )}
 
       <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden"
