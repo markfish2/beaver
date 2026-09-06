@@ -25,6 +25,8 @@ Thumbs.db
 # Local agent context and temporary reports
 /MEMORY.md
 /CLAUDE.md
+/AGENTS.md
+/agent.md
 /excalidraw/CLAUDE.md
 /docs/HANDOVER.md
 /docs/CODE_AUDIT_*.md
