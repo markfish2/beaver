@@ -12,7 +12,10 @@ test('SSE 分片重组、心跳忽略、本端回声过滤与断开清理', asyn
   target.addEventListener(liveEventName, event => events.push((event as CustomEvent<string>).detail));
   globalThis.fetch = async (_url, options) => {
     signal = options?.signal as AbortSignal;
-    assert.equal((options?.headers as Record<string, string>).Authorization, 'Bearer test-token');
+    const headers = options?.headers as Record<string, string>;
+    assert.equal(options?.cache, 'no-store');
+    assert.equal(headers.Accept, 'text/event-stream');
+    assert.equal(headers.Authorization, 'Bearer test-token');
     return new Response(new ReadableStream({
       start(controller) {
         const encoder = new TextEncoder();

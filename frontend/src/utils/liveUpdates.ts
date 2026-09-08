@@ -25,7 +25,12 @@ export function connectLiveUpdates(): () => void {
       const token = localStorage.getItem('token');
       if (!token) { stopped = true; return; }
       const response = await fetch('/api/live', {
-        headers: { Authorization: `Bearer ${token}` }, signal: controller.signal,
+        cache: 'no-store',
+        headers: {
+          Accept: 'text/event-stream',
+          Authorization: `Bearer ${token}`,
+        },
+        signal: controller.signal,
       });
       if (response.status === 401) { stopped = true; return; }
       if (!response.ok || !response.body) throw new Error('Live connection failed');

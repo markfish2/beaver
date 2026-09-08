@@ -69,11 +69,18 @@ registerRoute(
   })
 );
 
+// SSE 实时通道必须始终直连网络，不能被缓存或复用已结束的响应。
+registerRoute(
+  ({ url }) => url.pathname === '/api/live',
+  new NetworkOnly(),
+);
+
 // API GET 请求：网络优先，离线返回最近一次成功的缓存。
 // 写请求不进入 Service Worker 缓存，避免把保存/同步请求变成陈旧数据。
 registerRoute(
-  ({ url }) => url.pathname.startsWith('/api/')
+  ({ url, request }) => url.pathname.startsWith('/api/')
     && request.method === 'GET'
+    && url.pathname !== '/api/live'
     && !url.pathname.startsWith('/api/auth/')
     && !url.pathname.startsWith('/api/setup')
     && !url.pathname.startsWith('/api/search'),
