@@ -12,15 +12,22 @@ export function finishLocalWrite() {
 }
 export const liveEventName = 'remote-data-change';
 
-/** One authenticated stream per app, with retry only after connection loss. */
+/** One authenticated stream per app; pause it in the background and rebuild it on resume. */
 export function connectLiveUpdates(): () => void {
   let stopped = false;
-  let controller: AbortController;
-  let timer: ReturnType<typeof setTimeout>;
+  let controller: AbortController | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   let delay = 1000;
-  let watchdog: ReturnType<typeof setTimeout>;
-  const connect = async () => {
-    controller = new AbortController();
+  let connectionAttempt = 0;
+
+  const isPageVisible = () => typeof document === 'undefined' || document.visibilityState !== 'hidden';
+
+  const connect = async (attempt: number) => {
+    if (stopped || attempt !== connectionAttempt || !isPageVisible()) return;
+
+    const currentController = new AbortController();
+    controller = currentController;
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
     try {
       const token = localStorage.getItem('token');
       if (!token) { stopped = true; return; }
@@ -30,7 +37,7 @@ export function connectLiveUpdates(): () => void {
           Accept: 'text/event-stream',
           Authorization: `Bearer ${token}`,
         },
-        signal: controller.signal,
+        signal: currentController.signal,
       });
       if (response.status === 401) { stopped = true; return; }
       if (!response.ok || !response.body) throw new Error('Live connection failed');
@@ -38,9 +45,9 @@ export function connectLiveUpdates(): () => void {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      while (!stopped) {
+      while (!stopped && attempt === connectionAttempt) {
         clearTimeout(watchdog);
-        watchdog = setTimeout(() => controller.abort(), 45000);
+        watchdog = setTimeout(() => currentController.abort(), 45000);
         const { value, done } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
@@ -57,12 +64,61 @@ export function connectLiveUpdates(): () => void {
       // Network loss is expected; reconnect also reconciles missed events.
     } finally {
       clearTimeout(watchdog);
-      if (!stopped) {
-        timer = setTimeout(() => { void connect(); }, delay);
+      if (controller === currentController) controller = undefined;
+      if (!stopped && attempt === connectionAttempt && isPageVisible()) {
+        const nextDelay = delay;
+        timer = setTimeout(() => {
+          timer = undefined;
+          void connect(attempt);
+        }, nextDelay);
         delay = Math.min(delay * 2, 30000);
       }
     }
   };
-  void connect();
-  return () => { stopped = true; controller?.abort(); clearTimeout(timer); clearTimeout(watchdog); };
+
+  const pause = () => {
+    connectionAttempt += 1;
+    clearTimeout(timer);
+    timer = undefined;
+    controller?.abort();
+    controller = undefined;
+  };
+
+  const resume = () => {
+    if (stopped || !isPageVisible()) return;
+    // Reconcile changes made while the PWA was suspended, even if the old SSE
+    // connection did not emit a close event before the page became visible.
+    window.dispatchEvent(new CustomEvent(liveEventName, { detail: 'all' }));
+    connectionAttempt += 1;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = undefined;
+      void connect(connectionAttempt);
+    }, 0);
+    delay = 1000;
+    controller?.abort();
+    controller = undefined;
+  };
+
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'hidden') pause();
+    else resume();
+  };
+
+  window.addEventListener('online', resume);
+  window.addEventListener('offline', pause);
+  window.addEventListener('pageshow', resume);
+  window.addEventListener('pagehide', pause);
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisibilityChange);
+
+  void connect(connectionAttempt);
+  return () => {
+    stopped = true;
+    pause();
+    window.removeEventListener('online', resume);
+    window.removeEventListener('offline', pause);
+    window.removeEventListener('pageshow', resume);
+    window.removeEventListener('pagehide', pause);
+    if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisibilityChange);
+  };
 }
