@@ -18,6 +18,10 @@ def install_live_updates(app):
         resource = path_parts[1:2]
         if resource == ["documents"] and "highlights" in path_parts:
             resource = ["highlights"]
+        # The share endpoint persists the submitted page as a Memo. Older
+        # browser integrations use this endpoint instead of /memos/ directly.
+        if resource == ["share"]:
+            resource = ["memos"]
         if (request.method in {"POST", "PUT", "PATCH", "DELETE"}
                 and 200 <= response.status_code < 300
                 and resource and resource[0] in {"documents", "nodes", "memos", "diary", "trash", "highlights"}):

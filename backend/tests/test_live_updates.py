@@ -16,6 +16,10 @@ class LiveUpdatesTest(unittest.IsolatedAsyncioTestCase):
         async def write():
             return {'ok': True}
 
+        @self.app.post('/api/share/')
+        async def share():
+            return {'ok': True}
+
         @self.app.put('/api/memos/failure')
         async def fail():
             raise HTTPException(409)
@@ -46,6 +50,12 @@ class LiveUpdatesTest(unittest.IsolatedAsyncioTestCase):
         subscribers.add(queue)
         await self.client.put('/api/nodes/test')
         self.assertEqual(queue.get_nowait(), {'resource': 'all', 'source': ''})
+
+    async def test_share_endpoint_notifies_as_memo(self):
+        queue = asyncio.Queue(maxsize=128)
+        subscribers.add(queue)
+        await self.client.post('/api/share/', headers={'X-Client-ID': 'browser-extension'})
+        self.assertEqual(queue.get_nowait(), {'resource': 'memos', 'source': 'browser-extension'})
 
     async def test_connect_reconciles_and_disconnect_cleans_up(self):
         route = next(route for route in self.app.routes if route.path == '/api/live')
