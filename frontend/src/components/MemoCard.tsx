@@ -101,6 +101,9 @@ interface MemoCardProps {
 }
 
 const BLOCK_CODE_FONT_SIZE = 'var(--markdown-block-code-font-size)';
+const EMPTY_DOCUMENTS: Document[] = [];
+const MEMO_REMARK_PLUGINS = [remarkGfm, remarkBreaks, remarkMath];
+const MEMO_REHYPE_PLUGINS = [rehypeRaw, preserveCodeBlocks, rehypeKatex];
 
 // 非默认主题暗色模式返回 transparent，让 CSS 主题变量控制背景
 function themeBg(fallback: string): string {
@@ -286,7 +289,7 @@ const markdownComponents = (
     code: (props) => {
       const match = /language-(\w+)/.exec(props.className || '');
       if (match && match[1] === 'mermaid') {
-        return <MermaidBlock code={String(props.children).replace(/\n$/, '')} dark={palette.isDarkSurface} />;
+        return <MermaidBlock code={String(props.children).replace(/\n$/, '')} dark={palette.isDarkSurface} renderPolicy="normal-note" />;
       }
       return <CodeBlock {...props} palette={palette} compact={compact} />;
     },
@@ -455,7 +458,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
   const [isLong, setIsLong] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const images = useMemo(() => extractImages(memo.content), [memo.content]);
-  const palette = getMemoPalette(isDark, memo.color);
+  const palette = useMemo(() => getMemoPalette(isDark, memo.color), [isDark, memo.color]);
   const bgColor = palette.background;
 
   useEffect(() => {
@@ -624,7 +627,11 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
       onEdit(memo.id, newContent);
     }
   }, [memo.content, memo.id, onEdit, strippedContent]);
-  const mdComponents = markdownComponents(setPreviewImage, toggleCheckbox, navigate, palette, compact, documents ?? []);
+  const memoDocuments = documents ?? EMPTY_DOCUMENTS;
+  const mdComponents = useMemo(
+    () => markdownComponents(setPreviewImage, toggleCheckbox, navigate, palette, compact, memoDocuments),
+    [compact, memoDocuments, navigate, palette, toggleCheckbox],
+  );
 
   // CodeMirror 编辑器自动管理高度，无需手动调整
 
@@ -1045,7 +1052,7 @@ const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, o
         onDoubleClick={readOnly ? undefined : handleContentDoubleClick}
 
       >
-        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeRaw, preserveCodeBlocks, rehypeKatex]} components={mdComponents}>{strippedContent}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={MEMO_REMARK_PLUGINS} rehypePlugins={MEMO_REHYPE_PLUGINS} components={mdComponents}>{strippedContent}</ReactMarkdown>
         {!expanded && isLong && (
           <>
             <div className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none"

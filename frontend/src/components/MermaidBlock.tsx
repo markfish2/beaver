@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Maximize2, Minus, Plus, RotateCcw, X } from 'lucide-react';
 
 let initializedTheme: 'dark' | 'default' | null = null;
+let mermaidInitializationPromise: Promise<void> | null = null;
 type MermaidRuntime = typeof import('mermaid').default;
 type ElkLayouts = typeof import('@mermaid-js/layout-elk').default;
 
@@ -99,46 +100,62 @@ function loadMermaidRuntime() {
 }
 
 async function initMermaid(mermaid: MermaidRuntime, elkLayouts: ElkLayouts, dark?: boolean) {
-  const theme = (dark ?? document.documentElement.classList.contains('dark')) ? 'dark' : 'default';
+  const theme: 'dark' | 'default' = (dark ?? document.documentElement.classList.contains('dark')) ? 'dark' : 'default';
   if (initializedTheme === theme) return;
-  // 注册 ELK 布局算法（registerExternalDiagrams 只注册图表检测器，布局算法需要单独注册）
-  mermaid.registerLayoutLoaders(elkLayouts);
-  await mermaid.registerExternalDiagrams([elkLayouts]);
-  mermaid.initialize({
-    startOnLoad: false,
-    theme,
-    securityLevel: 'loose',
-    // htmlLabels 是顶层配置（flowchart.htmlLabels 在 v11 已废弃且对节点不生效）。
-    // 关闭后节点标签使用原生 SVG 文本，多行自动换行、节点高度自适应，
-    // 不会受 Markdown 主题对 p/div 的字体与行高影响而出现文字被裁切。
-    htmlLabels: false,
-    fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
-    flowchart: {
-      curve: 'basis',
-      nodeSpacing: 50,
-      rankSpacing: 80,
-      padding: 15,
-      defaultRenderer: 'elk',
-    },
-    themeVariables: theme === 'dark'
-      ? {
-          primaryColor: '#374151',
-          primaryTextColor: '#f3f4f6',
-          primaryBorderColor: '#9ca3af',
-          lineColor: '#9ca3af',
-          secondaryColor: '#4b5563',
-          tertiaryColor: '#1f2937',
-        }
-      : {
-          primaryColor: '#f8fafc',
-          primaryTextColor: '#374151',
-          primaryBorderColor: '#9ca3af',
-          lineColor: '#9ca3af',
-          secondaryColor: '#f3f4f6',
-          tertiaryColor: '#ffffff',
-        },
-  });
-  initializedTheme = theme;
+
+  // 多个 Memo 中的 Mermaid 可能同时完成动态 import。Mermaid 的全局配置
+  // 不是并发安全的，串行初始化可以避免其中一个实例覆盖另一个实例的配置。
+  if (mermaidInitializationPromise) {
+    await mermaidInitializationPromise;
+    if (initializedTheme === theme) return;
+  }
+
+  const initialization = (async () => {
+    // 注册 ELK 布局算法（registerExternalDiagrams 只注册图表检测器，布局算法需要单独注册）
+    mermaid.registerLayoutLoaders(elkLayouts);
+    await mermaid.registerExternalDiagrams([elkLayouts]);
+    mermaid.initialize({
+      startOnLoad: false,
+      theme,
+      securityLevel: 'loose',
+      // htmlLabels 是顶层配置（flowchart.htmlLabels 在 v11 已废弃且对节点不生效）。
+      // 关闭后节点标签使用原生 SVG 文本，多行自动换行、节点高度自适应，
+      // 不会受 Markdown 主题对 p/div 的字体与行高影响而出现文字被裁切。
+      htmlLabels: false,
+      fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
+      flowchart: {
+        curve: 'basis',
+        nodeSpacing: 50,
+        rankSpacing: 80,
+        padding: 15,
+        defaultRenderer: 'elk',
+      },
+      themeVariables: theme === 'dark'
+        ? {
+            primaryColor: '#374151',
+            primaryTextColor: '#f3f4f6',
+            primaryBorderColor: '#9ca3af',
+            lineColor: '#9ca3af',
+            secondaryColor: '#4b5563',
+            tertiaryColor: '#1f2937',
+          }
+        : {
+            primaryColor: '#f8fafc',
+            primaryTextColor: '#374151',
+            primaryBorderColor: '#9ca3af',
+            lineColor: '#9ca3af',
+            secondaryColor: '#f3f4f6',
+            tertiaryColor: '#ffffff',
+          },
+    });
+    initializedTheme = theme;
+  })();
+  mermaidInitializationPromise = initialization;
+  try {
+    await initialization;
+  } finally {
+    if (mermaidInitializationPromise === initialization) mermaidInitializationPromise = null;
+  }
 }
 
 // beautiful-mermaid 只支持这些图表类型；其他（pie/gantt/mindmap/timeline 等）回退官方 mermaid。
@@ -184,7 +201,7 @@ async function renderSvg(code: string, dark?: boolean): Promise<string> {
 interface MermaidBlockProps {
   code: string;
   dark?: boolean;
-  /** 仅普通笔记阅读模式启用缓存和并发队列，其他场景保持原有行为。 */
+  /** 只读 Markdown 场景可启用缓存和并发队列，避免多个图表同时渲染。 */
   renderPolicy?: 'default' | 'normal-note';
 }
 
@@ -250,7 +267,6 @@ export default function MermaidBlock({ code, dark, renderPolicy = 'default' }: M
   useEffect(() => {
     if (!isNearViewport) return;
     let cancelled = false;
-    const container = containerRef.current;
     // 进入视口或代码变化时清空旧 SVG，避免短暂显示过期图。
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSvgMarkup(null);
@@ -265,7 +281,6 @@ export default function MermaidBlock({ code, dark, renderPolicy = 'default' }: M
         const svg = await renderJob.promise;
         if (!svg) return;
         if (!cancelled && containerRef.current) {
-          containerRef.current.innerHTML = svg;
           setSvgMarkup(svg);
           setScale(1);
           setPan({ x: 0, y: 0 });
@@ -283,9 +298,6 @@ export default function MermaidBlock({ code, dark, renderPolicy = 'default' }: M
     return () => {
       cancelled = true;
       renderJob.cancel();
-      // Mermaid 渲染是异步的。组件在切换笔记或关闭 Tab 时，主动清理旧 SVG，
-      // 避免异步完成后的残留节点影响页面尺寸或出现在正文区域外。
-      container?.replaceChildren();
     };
   }, [code, dark, isNearViewport, renderPolicy]);
 
@@ -346,6 +358,7 @@ export default function MermaidBlock({ code, dark, renderPolicy = 'default' }: M
         <div
           ref={containerRef}
           className="mermaid-diagram flex min-h-24 max-h-none justify-center overflow-auto"
+          dangerouslySetInnerHTML={svgMarkup ? { __html: svgMarkup } : undefined}
         />
         {svgMarkup && (
           <button
