@@ -19,9 +19,10 @@ GitHub Actions 会在 `main` 分支更新或推送 `v*` 标签时，自动发布
 ```text
 ghcr.io/markfish2/beaver-backend
 ghcr.io/markfish2/beaver-frontend
+ghcr.io/markfish2/beaver-nginx
 ```
 
-首次发布后，请在 GitHub 仓库的 **Packages** 页面将两个镜像设为 `Public`。如果镜像保持私有，服务器需要先使用具有 `read:packages` 权限的 Token 登录 GHCR。
+首次发布后，请在 GitHub 仓库的 **Packages** 页面将三个镜像设为 `Public`。如果镜像保持私有，服务器需要先使用具有 `read:packages` 权限的 Token 登录 GHCR。
 
 在新服务器上执行：
 
@@ -30,7 +31,6 @@ export BEAVER_REF=main
 mkdir -p /opt/beaver/data
 cd /opt/beaver
 curl -fsSLo docker-compose.yml "https://raw.githubusercontent.com/markfish2/beaver/${BEAVER_REF}/docker-compose.images.yml"
-curl -fsSLo nginx.conf "https://raw.githubusercontent.com/markfish2/beaver/${BEAVER_REF}/nginx/nginx.conf"
 curl -fsSLo .env.example "https://raw.githubusercontent.com/markfish2/beaver/${BEAVER_REF}/.env.example"
 cp .env.example .env
 openssl rand -hex 32
@@ -38,6 +38,8 @@ openssl rand -hex 32
 docker compose pull
 docker compose up -d
 ```
+
+Nginx 配置已经固化在 `beaver-nginx` 镜像中。执行 `docker compose pull` 或加载新的镜像包后，`docker compose up -d` 会自动使用与镜像版本匹配的 Nginx 配置，不依赖容器启动时访问 GitHub。
 
 服务通过 `8080` 端口访问。升级时保留 `/opt/beaver/data`，执行：
 

@@ -34,8 +34,8 @@ scripts/package-deploy.sh --verify full
 腾讯云服务器构建较慢时，优先在本地构建镜像并导出：
 
 ```bash
-docker compose build backend frontend
-docker save -o docker-images.tar beaver-backend:latest beaver-frontend:latest
+docker compose build backend frontend nginx
+docker save -o docker-images.tar beaver-backend:latest beaver-frontend:latest beaver-nginx:latest
 gzip -f docker-images.tar
 ```
 
@@ -47,4 +47,4 @@ gzip -dc docker-images.tar.gz | docker load
 docker compose up -d
 ```
 
-这种方式服务器不要执行 `docker compose up -d --build`。服务器必须长期保留 `data/` 目录，尤其是 `data/app.db`、`data/uploads/`、`data/excalidraw/`、`data/skill/`。部署包内的 `docker-compose.yml` 必须保持 `./data:/app/data`，不得覆盖服务器数据目录。
+这种方式服务器不要执行 `docker compose up -d --build`。服务器必须长期保留 `data/` 目录，尤其是 `data/app.db`、`data/uploads/`、`data/excalidraw/`、`data/skill/`。部署包内的 `docker-compose.yml` 必须保持 `./data:/app/data`，不得覆盖服务器数据目录。Nginx 配置已经固化在 `beaver-nginx` 镜像，服务器不再需要单独上传 `nginx.conf`。

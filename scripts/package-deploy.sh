@@ -117,6 +117,11 @@ copy_file_if_exists "$ROOT_DIR/frontend/eslint.config.js" "$STAGE_DEPLOY/fronten
 copy_file_if_exists "$ROOT_DIR/frontend/nginx.conf" "$STAGE_DEPLOY/frontend/nginx.conf"
 copy_file_if_exists "$ROOT_DIR/frontend/postcss.config.js" "$STAGE_DEPLOY/frontend/postcss.config.js"
 
+printf '%s\n' "Overlay nginx source..."
+mkdir -p "$STAGE_DEPLOY/nginx"
+copy_file_if_exists "$ROOT_DIR/nginx/Dockerfile" "$STAGE_DEPLOY/nginx/Dockerfile"
+copy_file_if_exists "$ROOT_DIR/nginx/nginx.conf" "$STAGE_DEPLOY/nginx/nginx.conf"
+
 printf '%s\n' "Normalize deploy compose..."
 normalize_deploy_compose
 
@@ -158,6 +163,7 @@ map_source_to_package_path() {
     frontend/public/*) printf 'deploy/%s\n' "$source_path" ;;
     frontend/scripts/*) printf 'deploy/%s\n' "$source_path" ;;
     frontend/Dockerfile|frontend/package.json|frontend/package-lock.json|frontend/index.html|frontend/vite.config.ts|frontend/tsconfig.json|frontend/tsconfig.app.json|frontend/tsconfig.node.json|frontend/eslint.config.js|frontend/nginx.conf|frontend/postcss.config.js) printf 'deploy/%s\n' "$source_path" ;;
+    nginx/Dockerfile|nginx/nginx.conf) printf 'deploy/%s\n' "$source_path" ;;
   esac
 }
 
@@ -202,6 +208,7 @@ if [ "$VERIFY_MODE" = "full" ]; then
   docker compose -f "$STAGE_DEPLOY/docker-compose.yml" config >/dev/null
   docker build -t miniflowy-backend-package-test "$STAGE_DEPLOY/backend"
   docker build -t miniflowy-frontend-package-test "$STAGE_DEPLOY/frontend"
+  docker build -t miniflowy-nginx-package-test "$STAGE_DEPLOY/nginx"
 fi
 
 printf '%s\n' "Package: $OUTPUT"
