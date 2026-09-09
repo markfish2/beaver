@@ -10,6 +10,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from . import models, crud
+from .ai_access import AiAccessPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +216,7 @@ async def search_similar(db: Session, query: str, config, limit: int = 10) -> li
 
         # 过滤相似度过低的结果，按 source 去重
         MAX_DISTANCE = 0.45  # 距离越小越相似
+        policy = AiAccessPolicy(db)
         seen_sources = set()
         sources = []
         for row in results:
@@ -230,6 +232,8 @@ async def search_similar(db: Session, query: str, config, limit: int = 10) -> li
             if source_key in seen_sources:
                 continue
             seen_sources.add(source_key)
+            if not policy.is_source_allowed(source_type, source_id):
+                continue
             title = _get_source_title(db, source_type, source_id)
             sources.append({
                 "id": source_id,
@@ -315,6 +319,7 @@ def search_similar_from_stored_embedding(
         logger.warning("本地向量检索失败: %s", exc)
         return []
 
+    policy = AiAccessPolicy(db)
     sources: list[dict] = []
     seen_sources: set[str] = set()
     for source_type, result_source_id, chunk_text, distance in result_rows:
@@ -324,6 +329,8 @@ def search_similar_from_stored_embedding(
         if source_key in seen_sources:
             continue
         seen_sources.add(source_key)
+        if not policy.is_source_allowed(source_type, result_source_id):
+            continue
         sources.append(
             {
                 "id": result_source_id,
@@ -383,6 +390,9 @@ def _get_source_title(db: Session, source_type: str, source_id: str) -> str:
     try:
         source_uuid = uuid_mod.UUID(source_id) if isinstance(source_id, str) else source_id
     except ValueError:
+        return "未知"
+
+    if not AiAccessPolicy(db).is_source_allowed(source_type, source_uuid):
         return "未知"
 
     if source_type == "memo":

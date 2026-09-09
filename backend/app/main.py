@@ -15,6 +15,8 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Dynalist Clone API")
 from .live_updates import install_live_updates
 install_live_updates(app)
+from .mcp_server import create_mcp_service
+mcp_service = create_mcp_service()
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -148,6 +150,16 @@ def migrate_excalidraw_to_files():
     except Exception as e:
         logger.warning(f"画布数据迁移失败: {e}")
 
+
+@app.on_event("startup")
+async def start_mcp_service():
+    await mcp_service.startup()
+
+
+@app.on_event("shutdown")
+async def stop_mcp_service():
+    await mcp_service.shutdown()
+
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(documents.router, prefix="/api/documents", tags=["documents"])
@@ -183,3 +195,8 @@ def read_root():
 @app.get("/api/health")
 def health_check():
     return {"status": "healthy"}
+
+
+# Keep this fallback mount last so existing REST, upload and health routes
+# retain their current paths while the MCP SDK receives /mcp.
+app.mount("/", mcp_service.asgi_app)

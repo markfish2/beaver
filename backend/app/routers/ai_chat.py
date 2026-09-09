@@ -10,6 +10,7 @@ from .. import crud, schemas, models
 from ..database import get_db
 from ..dependencies import get_current_user
 from ..vector_search import search_similar, get_embedding_config
+from ..ai_access import AiAccessPolicy
 import json
 import uuid
 import logging
@@ -168,6 +169,7 @@ async def _truncate_messages(messages: list, system_prompt: str, config=None, ma
 def _search_notes(db: Session, query: str, keywords: list[str] = None, limit: int = 10) -> list[dict]:
     """搜索笔记内容，按关键词匹配数量评分排序"""
     import re
+    policy = AiAccessPolicy(db)
     results = []
 
     # 如果没传 keywords，用原始查询提取
@@ -246,7 +248,7 @@ def _search_notes(db: Session, query: str, keywords: list[str] = None, limit: in
             elif min_score == 1:
                 nodes = [n for _, n in scored_nodes[:3]]
 
-    for memo in memos:
+    for memo in policy.filter_memos(memos):
         snippet = _extract_snippet(memo.content, query)
         results.append({
             "id": str(memo.id),
@@ -263,7 +265,7 @@ def _search_notes(db: Session, query: str, keywords: list[str] = None, limit: in
             models.Document.deleted_at.is_(None),
             models.Document.ai_excluded == False,
         ).first()
-        if not doc:
+        if not policy.is_document_allowed(doc):
             continue
         doc_id = str(doc.id)
         if doc_id not in doc_snippets:
@@ -300,6 +302,7 @@ def _search_notes(db: Session, query: str, keywords: list[str] = None, limit: in
 def _search_todos(db: Session, query: str, limit: int = 10) -> list[dict]:
     """搜索未完成的待办事项"""
     import re
+    policy = AiAccessPolicy(db)
     results = []
 
     # 从未完成的 todos 表搜索
@@ -320,7 +323,7 @@ def _search_todos(db: Session, query: str, limit: int = 10) -> list[dict]:
         models.Memo.ai_excluded == False,
         models.Memo.is_archived == False,
     ).all()
-    for memo in memos:
+    for memo in policy.filter_memos(memos):
         unchecked = re.findall(r'^(\s*[-*+])\s*\[\s*\]\s*(.+)', memo.content, re.MULTILINE)
         if unchecked:
             items = [f"{m[0]} [ ] {m[1]}" for m in unchecked]
@@ -346,7 +349,7 @@ def _search_todos(db: Session, query: str, limit: int = 10) -> list[dict]:
                 models.Document.deleted_at.is_(None),
                 models.Document.ai_excluded == False,
             ).first()
-            if doc:
+            if policy.is_document_allowed(doc):
                 doc_nodes[doc_id] = {"doc": doc, "items": []}
         if doc_id in doc_nodes:
             doc_nodes[doc_id]["items"].append(node.content or "")

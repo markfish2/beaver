@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from .. import crud, schemas
 from ..database import get_db
 from ..dependencies import get_current_user
+from ..ai_access import AiAccessPolicy
 import httpx
 import json
 import uuid
@@ -270,16 +271,14 @@ async def reindex_embeddings(
 
     # 统计总数
     from .. import models
-    total_memos = db.query(models.Memo).filter(
-        models.Memo.deleted_at.is_(None),
-        models.Memo.ai_excluded == False,
-        models.Memo.content != '',
-    ).count()
-    total_docs = db.query(models.Document).filter(
+    policy = AiAccessPolicy(db)
+    total_memos = len(policy.filter_memos(db.query(models.Memo).filter(
+        models.Memo.deleted_at.is_(None), models.Memo.content != '',
+    ).all()))
+    total_docs = len(policy.filter_documents(db.query(models.Document).filter(
         models.Document.deleted_at.is_(None),
-        models.Document.ai_excluded == False,
         models.Document.type.in_(["document", "note"]),
-    ).count()
+    ).all()))
 
     _reindex_status.update({
         "running": True,
@@ -312,24 +311,19 @@ async def _do_reindex(config_id):
             return
 
         # 统计不参与 AI 的笔记
-        excluded_memos = db.query(models.Memo).filter(
-            models.Memo.deleted_at.is_(None),
-            models.Memo.ai_excluded == True,
-        ).count()
-        excluded_docs = db.query(models.Document).filter(
+        policy = AiAccessPolicy(db)
+        all_memos = db.query(models.Memo).filter(
+            models.Memo.deleted_at.is_(None), models.Memo.content != '',
+        ).all()
+        all_docs = db.query(models.Document).filter(
             models.Document.deleted_at.is_(None),
-            models.Document.ai_excluded == True,
             models.Document.type.in_(["document", "note"]),
-        ).count()
-        excluded_total = excluded_memos + excluded_docs
+        ).all()
+        memos = policy.filter_memos(all_memos)
+        docs = policy.filter_documents(all_docs)
+        excluded_total = len(all_memos) - len(memos) + len(all_docs) - len(docs)
 
         # 索引 memos
-        memos = db.query(models.Memo).filter(
-            models.Memo.deleted_at.is_(None),
-            models.Memo.ai_excluded == False,
-            models.Memo.content != '',
-        ).all()
-
         for i, memo in enumerate(memos):
             _reindex_status["current"] = f"索引随想 {i+1}/{len(memos)}"
             if not memo.content or len(memo.content.strip()) < 20:
@@ -342,12 +336,6 @@ async def _do_reindex(config_id):
                 _reindex_status["errors"] += 1
 
         # 索引文档
-        docs = db.query(models.Document).filter(
-            models.Document.deleted_at.is_(None),
-            models.Document.ai_excluded == False,
-            models.Document.type.in_(["document", "note"]),
-        ).all()
-
         for i, doc in enumerate(docs):
             _reindex_status["current"] = f"索引文档 {i+1}/{len(docs)}"
             nodes = db.query(models.Node).filter(models.Node.document_id == doc.id).all()

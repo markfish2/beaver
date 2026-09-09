@@ -7,6 +7,7 @@ from .. import crud, models, schemas
 from ..database import get_db
 from ..dependencies import get_current_user_flexible as get_current_user
 from ..vector_search import search_similar_from_stored_embedding
+from ..ai_access import AiAccessPolicy
 
 router = APIRouter()
 
@@ -23,8 +24,11 @@ def _keyword_related_notes(db: Session, document_id: UUID, query: str, existing_
     if not terms:
         return []
 
+    policy = AiAccessPolicy(db)
     candidates: list[tuple[int, int, dict]] = []
     for memo in db.query(models.Memo).filter(models.Memo.is_archived == False).all():
+        if not policy.is_memo_allowed(memo):
+            continue
         source_id = str(memo.id)
         if source_id in existing_ids:
             continue
@@ -40,11 +44,10 @@ def _keyword_related_notes(db: Session, document_id: UUID, query: str, existing_
                 "distance": None,
             }))
 
-    documents = db.query(models.Document).filter(
+    documents = policy.filter_documents(db.query(models.Document).filter(
         models.Document.deleted_at.is_(None),
-        models.Document.ai_excluded == False,
         models.Document.type.in_(["document", "note"]),
-    ).all()
+    ).all())
     document_ids = [candidate.id for candidate in documents]
     nodes_by_document: dict[UUID, list[models.Node]] = {candidate_id: [] for candidate_id in document_ids}
     if document_ids:
@@ -149,7 +152,8 @@ async def read_related_documents(
     document = crud.get_document(db, document_id)
     if not document or document.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Document not found")
-    if document.type not in ("document", "note") or document.ai_excluded:
+    policy = AiAccessPolicy(db)
+    if document.type not in ("document", "note") or not policy.is_document_allowed(document):
         return []
 
     nodes = (
@@ -192,14 +196,14 @@ async def read_related_documents(
                 models.Memo.id == source_uuid,
                 models.Memo.is_archived == False,
             ).first()
-            if not memo:
+            if not policy.is_memo_allowed(memo):
                 continue
             result_type = "memo"
         else:
             related_document = crud.get_document(db, source_uuid)
             if not related_document or related_document.deleted_at is not None:
                 continue
-            if related_document.type not in ("document", "note") or related_document.ai_excluded:
+            if related_document.type not in ("document", "note") or not policy.is_document_allowed(related_document):
                 continue
             result_type = related_document.type
         seen_ids.add(source_id)

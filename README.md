@@ -85,6 +85,18 @@ npm test
 npm run build
 ```
 
+## MCP 接入
+
+Beaver 提供基于 Streamable HTTP 的 MCP 服务，地址为：
+
+```text
+https://你的域名/mcp
+```
+
+在 Beaver 的账户设置中创建一个 API Token，并在 MCP 客户端中以 Bearer Token 配置认证。服务提供笔记、Memo、划线、待办和项目任务的读取，以及创建普通笔记、移动笔记、Memo 和待办等受控写入操作。移动工具支持普通笔记、大纲笔记和画布在文件夹与根目录之间移动。
+
+标记为“不参与 AI”的普通笔记、大纲笔记或 Memo 不会出现在 MCP 结果中；文件夹的该设置会递归作用于全部子内容。MCP 不能修改这项设置，也不能通过搜索、资源链接或关联结果绕过它。
+
 ## 项目结构
 
 ```text

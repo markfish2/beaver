@@ -161,6 +161,7 @@ def update_document(db: Session, document_id: uuid.UUID, document: schemas.Docum
     if expected is not None and expected != db_doc.version:
         return db_doc, "conflict"
     update_data = document.model_dump(exclude_unset=True, exclude={'expected_version'})
+    previous_parent_id = db_doc.parent_id
     # ai_excluded 变化时处理向量索引
     ai_excluded_changed = 'ai_excluded' in update_data and update_data['ai_excluded'] != db_doc.ai_excluded
     for key, value in update_data.items():
@@ -168,12 +169,10 @@ def update_document(db: Session, document_id: uuid.UUID, document: schemas.Docum
     db_doc.version += 1
     db.commit()
     db.refresh(db_doc)
-    # ai_excluded 变化时更新向量索引
-    if ai_excluded_changed:
-        if db_doc.ai_excluded:
-            _delete_embeddings("document", str(document_id))
-        else:
-            _trigger_doc_embedding_index(db, document_id)
+    parent_changed = 'parent_id' in update_data and db_doc.parent_id != previous_parent_id
+    # 文件夹排除规则会继承到所有后代；移动文档也会改变整棵子树的有效权限。
+    if ai_excluded_changed or parent_changed:
+        _sync_document_subtree_ai_access(db, document_id)
     return db_doc, "ok"
 
 def copy_document(db: Session, document_id: uuid.UUID):
@@ -1125,8 +1124,10 @@ def _trigger_doc_embedding_index(db: Session, document_id):
         return
 
     try:
+        from .ai_access import AiAccessPolicy
+
         doc = db.query(models.Document).filter(models.Document.id == document_id).first()
-        if not doc or doc.ai_excluded:
+        if not AiAccessPolicy(db).is_document_allowed(doc):
             return
         # 收集文档下所有节点的内容
         nodes = db.query(models.Node).filter(models.Node.document_id == document_id).all()
@@ -1142,6 +1143,20 @@ def _trigger_doc_embedding_index(db: Session, document_id):
             _trigger_embedding_index("document", document_id, full_content)
     except Exception as e:
         logger.warning(f"触发文档 embedding 索引失败: {e}")
+
+
+def _sync_document_subtree_ai_access(db: Session, root_document_id: uuid.UUID):
+    """Apply inherited folder visibility to embeddings for a changed subtree."""
+    from .ai_access import AiAccessPolicy
+
+    policy = AiAccessPolicy(db)
+    for document in policy.descendants_of(root_document_id):
+        if document.type not in ("document", "note"):
+            continue
+        if policy.is_document_allowed(document):
+            _trigger_doc_embedding_index(db, document.id)
+        else:
+            _delete_embeddings("document", str(document.id))
 
 
 # Memos
