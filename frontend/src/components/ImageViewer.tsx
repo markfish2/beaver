@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, type TouchEvent as ReactTouchEvent } from 'react';
+import { useState, useEffect, useCallback, useRef, type TouchEvent as ReactTouchEvent, type TouchList as ReactTouchList } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 
@@ -78,7 +78,7 @@ const ImageViewer = ({ src, alt = '图片', isOpen, onClose }: ImageViewerProps)
     setIsDragging(false);
   };
 
-  const touchDistance = (touches: TouchList) => {
+  const touchDistance = (touches: ReactTouchList) => {
     const dx = touches[0].clientX - touches[1].clientX;
     const dy = touches[0].clientY - touches[1].clientY;
     return Math.hypot(dx, dy);

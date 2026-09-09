@@ -42,6 +42,12 @@ test('网页结构转换为 Markdown 段落、标题和列表', () => {
   assert.match(md, /-\s+条目二/);
 });
 
+test('嵌套加粗只输出一对 Markdown 加粗标记', () => {
+  const md = htmlToMarkdown('<p><span style="font-weight: 700"><strong>带着「货架思维」刷小红书</strong></span></p>');
+  assert.equal(md, '**带着「货架思维」刷小红书**');
+  assert.ok(!md.includes('****'));
+});
+
 test('表格粘贴转换为列数一致的 GFM 表格并转义竖线', () => {
   const md = htmlToMarkdown([
     '<table><thead><tr><th>名称</th><th>说明</th></tr></thead>',

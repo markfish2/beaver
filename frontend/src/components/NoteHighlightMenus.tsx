@@ -9,10 +9,6 @@ interface SelectionMenuProps {
   onHighlight: () => void;
 }
 
-export function shouldPlaceTabletHighlightActionAtBottom(selection: NoteHighlightSelection): boolean {
-  return selection.rect.top < Math.max(128, window.innerHeight * 0.28);
-}
-
 export function NoteHighlightSelectionMenu({ selection, onHighlight }: SelectionMenuProps) {
   const width = 104;
   const left = Math.max(8, Math.min(window.innerWidth - width - 8, selection.rect.left + selection.rect.width / 2 - width / 2));

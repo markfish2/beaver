@@ -162,6 +162,9 @@ turndown.addRule('boldStyle', {
   replacement(content) {
     const trimmed = content.trim();
     if (!trimmed) return content;
+    // A styled wrapper can contain a real <strong>; avoid wrapping the
+    // already-marked child a second time.
+    if (trimmed.startsWith('**') && trimmed.endsWith('**')) return trimmed;
     return `**${trimmed}**`;
   },
 });
@@ -280,6 +283,8 @@ function cleanMarkdown(md: string): string {
   result = result.replace(/(^|\n)(#{1,6})\s*\n+(?=\S)/g, '$1$2 ');
   // 链接文字与地址完全相同时，简化为纯 URL（remark-gfm 自动识别为链接）
   result = result.replace(/\[(https?:\/\/[^\s)\]]+)\]\(\1\)/g, '$1');
+  // X 等富文本页面可能把同一段加粗转换为四个星号，统一为普通加粗。
+  result = result.replace(/(^|[^*])\*{4}([^*\n]+?)\*{4}([^*]|$)/g, '$1**$2**$3');
   return result.trim();
 }
 
@@ -318,6 +323,15 @@ function preprocessHtml(html: string): string {
     });
 
     preserveRichTextLineBreaks(doc.body);
+
+    // 富文本剪贴板可能用嵌套 <strong>/<b> 表示同一段加粗，先合并节点，
+    // 避免 Turndown 生成四个星号。
+    doc.querySelectorAll('strong strong, strong b, b strong, b b').forEach((node) => {
+      const parent = node.parentNode;
+      if (!parent) return;
+      while (node.firstChild) parent.insertBefore(node.firstChild, node);
+      node.remove();
+    });
 
     return doc.body.innerHTML;
   } catch {

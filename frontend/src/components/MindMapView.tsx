@@ -66,7 +66,8 @@ interface ExportSvgWithTagText {
   };
 }
 
-type MindMapConstructor = typeof import('simple-mind-map').default;
+type MindMapConstructor = (new (options: Record<string, unknown>) => MindMap) &
+  Pick<typeof import('simple-mind-map').default, 'usePlugin'>;
 
 let mindMapPluginsRegistered = false;
 let mindMapModulesPromise: Promise<MindMapConstructor> | null = null;
@@ -87,7 +88,7 @@ function loadMindMapModules(): Promise<MindMapConstructor> {
         MindMap.usePlugin(touchEventModule.default);
         mindMapPluginsRegistered = true;
       }
-      return MindMap;
+      return MindMap as unknown as MindMapConstructor;
     }).catch(error => {
       mindMapModulesPromise = null;
       throw error;

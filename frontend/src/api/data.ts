@@ -1110,7 +1110,7 @@ export interface AIMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  sources?: Array<{ id: string; title: string; type: string; snippet: string }>;
+  sources?: Array<{ id: string; title: string; type: 'document' | 'note' | 'excalidraw' | 'memo'; snippet: string }>;
   created_at: string;
 }
 

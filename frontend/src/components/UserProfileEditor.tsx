@@ -27,14 +27,15 @@ export default function UserProfileEditor() {
     }
 
     setUploading(true);
+    let objectUrl: string | null = null;
     try {
       // Create canvas for cropping and compression
       const img = new Image();
-      const url = URL.createObjectURL(file);
+      objectUrl = URL.createObjectURL(file);
       await new Promise((resolve, reject) => {
         img.onload = resolve;
         img.onerror = reject;
-        img.src = url;
+        img.src = objectUrl;
       });
 
       // Calculate crop dimensions (center square)
@@ -66,7 +67,7 @@ export default function UserProfileEditor() {
       showToast('头像上传失败', 'error');
     } finally {
       setUploading(false);
-      URL.revokeObjectURL(url);
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     }
   }, []);
 

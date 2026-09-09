@@ -108,7 +108,8 @@ const RecoveryDialog: React.FC<RecoveryDialogProps> = ({
   };
 
   const operationCounts = pendingOperations.reduce((acc, op) => {
-    const type = op.data?.type || 'unknown';
+    const data = op.data && typeof op.data === 'object' ? op.data as Record<string, unknown> : null;
+    const type = typeof data?.type === 'string' ? data.type : 'unknown';
     acc[type] = (acc[type] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);

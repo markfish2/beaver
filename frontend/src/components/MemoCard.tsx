@@ -71,6 +71,7 @@ import { getMemoPalette, getMemoPaletteStyle, MEMO_TAG_COLORS, type MemoCardPale
 import { clearEditorDraft, getEditorDraft, saveEditorDraft } from '../utils/editorDrafts';
 import { getPasteMarkdown, getPasteMarkdownAsync, hasHtmlClipboardData } from '../utils/htmlToMarkdown';
 import { localizeMarkdownImages } from '../utils/markdownImageUpload';
+import { useResizableTextarea } from '../hooks/useResizableTextarea';
 
 const AIChatPanel = lazy(() => import('./AIChatPanel'));
 
@@ -353,9 +354,7 @@ const markdownComponents = (
       }
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
     },
-    li: ({ children, ordered, index, node, ...props }) => {
-      void ordered;
-      void index;
+    li: ({ children, node, ...props }) => {
       const liClassName = typeof props.className === 'string' ? props.className : '';
       const isTaskItem = liClassName.includes('task-list-item');
       const hasCheckboxDeep = (nodes: React.ReactNode[]): boolean =>
@@ -429,6 +428,7 @@ const markdownComponents = (
 const MemoCard = memo(function MemoCard({ memo, onEdit, onDelete, onTogglePin, onToggleArchive, onTogglePublic, onToggleAI, onTagClick, isHighlighted, documents, readOnly, compact = false, isMobile = false, initiallyExpanded = false }: MemoCardProps) {
   const isDark = useIsDark();
   const navigate = useNavigate();
+  const { resetUserHeight } = useResizableTextarea();
   const [isEditing, setIsEditing] = useState(false);
   useEffect(() => {
     if (!isEditing) return;

@@ -115,6 +115,31 @@ type TreeNode = Node & { children: TreeNode[]; subtreeVersion: string; subtreeNo
 type NodeKeyDownHandler = (e: React.KeyboardEvent, node: Node, type: 'content' | 'note') => void;
 type NoteEditorRequest = { id: string; requestId: number } | null;
 
+interface RecoveryOperationData {
+  type?: string;
+  id?: string;
+  nodeId?: string;
+  newContent?: string;
+  newNote?: string;
+  property?: 'is_completed' | 'is_in_progress' | 'is_collapsed' | 'is_todo';
+  newValue?: boolean;
+  ids?: string[];
+  newParent?: string | null;
+  newOrder?: number;
+  updates?: Array<{ id: string; newParent: string | null; newOrder: number }>;
+  nodeData?: {
+    document_id: string;
+    content?: string;
+    parent_node_id: string | null;
+    sort_order: number;
+    note?: string;
+    is_completed?: boolean;
+    is_collapsed?: boolean;
+    is_todo?: boolean;
+  };
+  allNodes?: Node[];
+}
+
 const getNodeOwnVersion = (node: Node): string => [
   node.id,
   node.document_id,
@@ -767,45 +792,46 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     setIsRecovering(true);
     try {
       for (const op of recoveryOperations) {
-        if (!op.data || !op.data.type) continue;
+        const data = op.data as RecoveryOperationData;
+        if (!data.type) continue;
         
-        const { type } = op.data;
+        const { type } = data;
         
         try {
           switch (type) {
             case 'updateContent':
-              if (op.data.id && op.data.newContent !== undefined) {
-                await updateNode(op.data.id, { content: op.data.newContent });
+              if (data.id && data.newContent !== undefined) {
+                await updateNode(data.id, { content: data.newContent });
               }
               break;
               
             case 'updateNote':
-              if (op.data.id && op.data.newNote !== undefined) {
-                await updateNode(op.data.id, { note: op.data.newNote });
+              if (data.id && data.newNote !== undefined) {
+                await updateNode(data.id, { note: data.newNote });
               }
               break;
               
             case 'toggleProperty':
-              if (op.data.id && op.data.property && op.data.newValue !== undefined) {
-                await updateNode(op.data.id, { [op.data.property]: op.data.newValue });
+              if (data.id && data.property && data.newValue !== undefined) {
+                await updateNode(data.id, { [data.property]: data.newValue });
               }
               break;
               
             case 'batchToggleProperty':
-              if (op.data.ids && op.data.property && op.data.newValue !== undefined) {
-                await batchUpdateNodes(op.data.ids.map((id: string) => ({ id, [op.data.property]: op.data.newValue })));
+              if (data.ids && data.property && data.newValue !== undefined) {
+                await batchUpdateNodes(data.ids.map((id: string) => ({ id, [data.property!]: data.newValue })));
               }
               break;
               
             case 'moveNode':
-              if (op.data.id) {
-                await moveNode(op.data.id, op.data.newParent, op.data.newOrder);
+              if (data.id && data.newOrder !== undefined) {
+                await moveNode(data.id, data.newParent ?? null, data.newOrder);
               }
               break;
               
             case 'batchMove':
-              if (op.data.updates) {
-                const payload = op.data.updates.map((u: { id: string; newParent: string | null; newOrder: number }) => ({
+              if (data.updates) {
+                const payload = data.updates.map((u) => ({
                   id: u.id, 
                   parent_node_id: u.newParent, 
                   sort_order: u.newOrder 
@@ -815,30 +841,30 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
               break;
               
             case 'deleteNode':
-              if (op.data.nodeId) {
-                await deleteNode(op.data.nodeId);
+              if (data.nodeId) {
+                await deleteNode(data.nodeId);
               }
               break;
               
             case 'batchDelete':
-              if (op.data.ids) {
-                await batchDeleteNodes(op.data.ids);
+              if (data.ids) {
+                await batchDeleteNodes(data.ids);
               }
               break;
               
             case 'createNode':
-              if (op.data.nodeData) {
+              if (data.nodeData) {
                 await createNode(
-                  op.data.nodeData.document_id,
-                  op.data.nodeData.content || '',
-                  op.data.nodeData.parent_node_id,
+                  data.nodeData.document_id,
+                  data.nodeData.content || '',
+                  data.nodeData.parent_node_id,
                   {
-                    id: op.data.nodeId,
-                    sort_order: op.data.nodeData.sort_order,
-                    note: op.data.nodeData.note,
-                    is_completed: op.data.nodeData.is_completed,
-                    is_collapsed: op.data.nodeData.is_collapsed,
-                    is_todo: op.data.nodeData.is_todo
+                    id: data.nodeId,
+                    sort_order: data.nodeData.sort_order,
+                    note: data.nodeData.note,
+                    is_completed: data.nodeData.is_completed,
+                    is_collapsed: data.nodeData.is_collapsed,
+                    is_todo: data.nodeData.is_todo
                   }
                 );
               }
@@ -846,8 +872,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
               
             case 'undoDeleteNode':
             case 'undoBatchDelete':
-              if (op.data.allNodes) {
-                const promises = op.data.allNodes.map((n: Node) => 
+              if (data.allNodes) {
+                const promises = data.allNodes.map((n) =>
                   createNode(n.document_id, n.content, n.parent_node_id, {
                     id: n.id,
                     sort_order: n.sort_order,
@@ -862,8 +888,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
               break;
               
             case 'undoCreateNode':
-              if (op.data.nodeId) {
-                await deleteNode(op.data.nodeId);
+              if (data.nodeId) {
+                await deleteNode(data.nodeId);
               }
               break;
               
@@ -944,7 +970,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
         documentId: doc.id,
         mode,
         title: doc.title || '无标题',
-        type: doc.type,
+        type: doc.type as DocumentTab['type'],
         dirty: existing?.dirty,
       };
       return existing
@@ -1047,7 +1073,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       return;
     }
     pendingTabModeRef.current = tab.mode;
-    startTransition(() => navigate(`/d/${tab.documentId}`));
+    startTransition(() => { void navigate(`/d/${tab.documentId}`); });
   }, [currentDoc, documentId, navigate, openDocumentTab]);
 
   const handleDocumentTabClose = useCallback((tab: DocumentTab) => {
@@ -1245,7 +1271,9 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   }, [isDiaryDoc, setTagFilter]);
 
   useEffect(() => {
-    if (!isDiaryDoc) setDiaryTagFilter(null);
+    if (isDiaryDoc) return;
+    const timer = window.setTimeout(() => setDiaryTagFilter(null), 0);
+    return () => window.clearTimeout(timer);
   }, [isDiaryDoc]);
 
   // 注意：不再在 sidebarClose 时重新 fetchData，
@@ -1543,6 +1571,8 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
       return;
     }
     
+    // sortedNodes/focusToGhostAnchor 在组件后段定义，事件执行时已完成本轮渲染。
+    // eslint-disable-next-line react-hooks/immutability
     const currentIndex = sortedNodes.findIndex(n => n.id === confirmDialog.nodeId);
     let nextFocusId = null;
 
@@ -1557,6 +1587,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
     }
 
     // 使用幽灵锚点保持键盘打开
+    // eslint-disable-next-line react-hooks/immutability
     focusToGhostAnchor();
 
     // 执行删除操作
@@ -2428,9 +2459,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
 
   // 大纲节点树只在节点、过滤条件或聚焦范围变化时重算，避免工具栏/保存状态变化时重复构建整棵树。
   // React Compiler 当前无法保留这两个手动 memo，但它们依赖的是稳定的节点计算输入。
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const sortedNodes = useMemo(() => getSortedNodes(nodes), [getSortedNodes, nodes]);
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const treeNodes = useMemo(() => buildTree(sortedNodes), [sortedNodes]);
   const tagCandidates = useMemo(
     () => extractTagCandidates(nodes.flatMap(node => [node.content || '', node.note || ''])),
@@ -2438,6 +2467,7 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
   );
 
   // 幽灵锚点：用于保持移动端键盘打开
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const focusToGhostAnchor = useCallback(() => {
     if (ghostAnchorRef.current) {
       ghostAnchorRef.current.focus();
@@ -3163,11 +3193,11 @@ const MainArea = ({ diaryDocId = null, onDiaryDocChange, userSubView = null, act
             onDocumentTabClose={handleDocumentTabClose}
             onRelatedNoteOpen={(note: RelatedNote) => {
               if (note.type === 'memo') {
-                startTransition(() => navigate(`/?view=wanderer&memoId=${note.id}`));
+                startTransition(() => { void navigate(`/?view=wanderer&memoId=${note.id}`); });
                 return;
               }
               pendingTabModeRef.current = 'outline';
-              startTransition(() => navigate(`/d/${note.id}`));
+              startTransition(() => { void navigate(`/d/${note.id}`); });
             }}
             onDirtyChange={handleCurrentOutlineDirty}
           />

@@ -60,6 +60,16 @@
       while (node.firstChild) strong.appendChild(node.firstChild);
       node.replaceWith(strong);
     });
+
+    // X may expose one bold range through both a computed-style span and an
+    // existing <strong>. Flatten the duplicate wrapper before Turndown sees
+    // it, otherwise nested bold becomes ****text****.
+    doc.querySelectorAll('strong strong, strong b, b strong, b b').forEach(function (node) {
+      var parent = node.parentNode;
+      if (!parent) return;
+      while (node.firstChild) parent.insertBefore(node.firstChild, node);
+      node.remove();
+    });
   }
 
   function normalizeDocument(html, baseUrl) {
@@ -138,7 +148,10 @@
   function convert(html, baseUrl) {
     if (!html) return '';
     var doc = normalizeDocument(html, baseUrl);
-    return makeConverter().turndown(doc.body.innerHTML).replace(/\n{3,}/g, '\n\n').trim();
+    return makeConverter().turndown(doc.body.innerHTML)
+      .replace(/(^|[^*])\*{4}([^*\n]+?)\*{4}([^*]|$)/g, '$1**$2**$3')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   }
 
   function removeXChrome(rootNode) {

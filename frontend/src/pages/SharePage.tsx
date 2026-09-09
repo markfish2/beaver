@@ -20,9 +20,11 @@ import {
 } from '../utils/markdownPreprocess';
 import MermaidBlock from '../components/MermaidBlock';
 
-const buildTree = (nodes: Node[]): (Node & { children: Node[] })[] => {
-  const nodeMap = new Map<string, Node & { children: Node[] }>();
-  const roots: (Node & { children: Node[] })[] = [];
+type SharedTreeNode = Node & { children: SharedTreeNode[] };
+
+const buildTree = (nodes: Node[]): SharedTreeNode[] => {
+  const nodeMap = new Map<string, SharedTreeNode>();
+  const roots: SharedTreeNode[] = [];
   nodes.forEach(n => nodeMap.set(n.id, { ...n, children: [] }));
   nodes.forEach(n => {
     const node = nodeMap.get(n.id)!;
@@ -52,7 +54,7 @@ const preprocessMarkdown = (content: string): string => normalizeCodeBlocks(
   ),
 );
 
-const isMarkdownDocumentFallback = (nodes: (Node & { children: Node[] })[]): boolean => {
+const isMarkdownDocumentFallback = (nodes: SharedTreeNode[]): boolean => {
   // 普通笔记历史上可能因为保存/迁移留下重复的根节点。判断分享类型时
   // 按正文去重，不能把同一份 Markdown 误判成大纲节点树。
   const contentNodes = nodes.filter(node => node.content.trim() !== '');
@@ -87,7 +89,7 @@ const markdownComponents: Components = {
   },
 };
 
-const SharedNode = ({ node }: { node: Node & { children: Node[] } }) => {
+const SharedNode = ({ node }: { node: SharedTreeNode }) => {
   const [collapsed, setCollapsed] = useState(false);
   const hasChildren = node.children.length > 0;
 
@@ -162,7 +164,7 @@ export default function SharePage() {
   const [title, setTitle] = useState('');
   const [documentType, setDocumentType] = useState<string | undefined>();
   const [markdownContent, setMarkdownContent] = useState('');
-  const [tree, setTree] = useState<(Node & { children: Node[] })[]>([]);
+  const [tree, setTree] = useState<SharedTreeNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 

@@ -53,13 +53,13 @@ export default function ConflictResolver() {
           此{conflict.entityType === 'document' ? '文档' : '节点'}在其他设备上已被修改，与本地修改冲突。请选择保留哪个版本：
         </p>
 
-        {conflict.serverData?.current_content && (
+        {typeof conflict.serverData?.current_content === 'string' && (
           <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">云端版本内容：</p>
             <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3">{conflict.serverData.current_content}</p>
           </div>
         )}
-        {conflict.serverData?.current_title && (
+        {typeof conflict.serverData?.current_title === 'string' && (
           <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">云端版本标题：</p>
             <p className="text-sm text-gray-700 dark:text-gray-300">{conflict.serverData.current_title}</p>

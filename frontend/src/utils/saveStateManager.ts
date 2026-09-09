@@ -23,6 +23,10 @@ interface OfflineCommandPayload {
   newNote: string;
   property: NodeBooleanProperty;
   newValue: boolean;
+  oldParent?: string | null;
+  oldOrder?: number;
+  newParent?: string | null;
+  newOrder?: number;
   ids: string[];
   updates: OfflineMove[];
   nodeData: {
@@ -433,10 +437,14 @@ class SaveStateManager {
         await data.batchUpdateNodes(payload.ids.map((id: string) => ({ id, [payload.property]: value })));
         return;
       } else if (commandType === 'moveNode') {
-        await data.moveNode(payload.id, payload.newParent, payload.newOrder);
+        if (payload.newOrder !== undefined) {
+          await data.moveNode(payload.id, payload.newParent ?? null, payload.newOrder);
+        }
         return;
       } else if (commandType === 'undoMoveNode') {
-        await data.moveNode(payload.id, payload.oldParent, payload.oldOrder);
+        if (payload.oldOrder !== undefined) {
+          await data.moveNode(payload.id, payload.oldParent ?? null, payload.oldOrder);
+        }
         return;
       } else if (commandType === 'batchMove' || commandType === 'undoBatchMove') {
         const undo = commandType === 'undoBatchMove';
@@ -467,45 +475,59 @@ class SaveStateManager {
         return;
       }
 
-      // Node operations
-      if (op.operationType === 'update' && op.data.nodeId && op.data.updates) {
-        await data.updateNode(op.data.nodeId, op.data.updates);
-      } else if (op.operationType === 'create' && op.data.nodeData) {
-        await data.createNode(op.data.nodeData.document_id, op.data.nodeData.content, op.data.nodeData.parent_node_id, op.data.nodeData);
-      } else if (op.operationType === 'delete' && op.data.nodeId) {
-        await data.deleteNode(op.data.nodeId);
-      } else if (op.operationType === 'move' && op.data.nodeId) {
-        await data.moveNode(op.data.nodeId, op.data.parent_node_id, op.data.sort_order);
-      } else if (op.operationType === 'batchUpdate' && op.data.updates) {
-        await data.batchUpdateNodes(op.data.updates);
-      } else if (op.operationType === 'batchMove' && op.data.moves) {
-        await data.batchMoveNodes(op.data.moves);
-      } else if (op.operationType === 'batchDelete' && op.data.ids) {
-        await data.batchDeleteNodes(op.data.ids);
-      } else if (op.operationType === 'batchCreate' && op.data.nodes) {
-        await data.createNodesBatch(op.data.nodes);
+      // Node operations（旧版离线队列格式仍需兼容，但数据来自 JSON，必须先校验形状。）
+      const legacyData = asRecord(op.data);
+      const legacyNodeId = typeof legacyData.nodeId === 'string' ? legacyData.nodeId : null;
+      const legacyDocumentId = typeof legacyData.documentId === 'string' ? legacyData.documentId : null;
+      const legacyMemoId = typeof legacyData.memoId === 'string' ? legacyData.memoId : null;
+      const legacyContent = typeof legacyData.content === 'string' ? legacyData.content : null;
+      const legacyParentId = typeof legacyData.parent_node_id === 'string' || legacyData.parent_node_id === null ? legacyData.parent_node_id : null;
+      const legacySortOrder = typeof legacyData.sort_order === 'number' ? legacyData.sort_order : null;
+      const legacyIds = Array.isArray(legacyData.ids) && legacyData.ids.every((id): id is string => typeof id === 'string') ? legacyData.ids : null;
+      const legacyUpdates = Array.isArray(legacyData.updates) ? legacyData.updates : null;
+      const legacyMoves = Array.isArray(legacyData.moves) ? legacyData.moves : null;
+      const legacyNodes = Array.isArray(legacyData.nodes) ? legacyData.nodes : null;
+      const legacyNodeData = asRecord(legacyData.nodeData);
+      if (op.operationType === 'update' && legacyNodeId && legacyUpdates && legacyUpdates.length === 1) {
+        await data.updateNode(legacyNodeId, legacyUpdates[0] as Partial<import('../api/data').Node>);
+      } else if (op.operationType === 'create' && legacyNodeData.document_id && typeof legacyNodeData.content === 'string') {
+        await data.createNode(legacyNodeData.document_id as string, legacyNodeData.content, legacyNodeData.parent_node_id as string | null, legacyNodeData as Parameters<typeof data.createNode>[3]);
+      } else if (op.operationType === 'delete' && legacyNodeId) {
+        await data.deleteNode(legacyNodeId);
+      } else if (op.operationType === 'move' && legacyNodeId && legacySortOrder !== null) {
+        await data.moveNode(legacyNodeId, legacyParentId, legacySortOrder);
+      } else if (op.operationType === 'batchUpdate' && legacyUpdates) {
+        await data.batchUpdateNodes(legacyUpdates as Array<{ id: string } & Partial<import('../api/data').Node>>);
+      } else if (op.operationType === 'batchMove' && legacyMoves) {
+        await data.batchMoveNodes(legacyMoves as Array<{ id: string; parent_node_id: string | null; sort_order: number }>);
+      } else if (op.operationType === 'batchDelete' && legacyIds) {
+        await data.batchDeleteNodes(legacyIds);
+      } else if (op.operationType === 'batchCreate' && legacyNodes) {
+        await data.createNodesBatch(legacyNodes as Parameters<typeof data.createNodesBatch>[0]);
       // Document operations
-      } else if (op.operationType === 'createDocument' && op.data.title && op.data.type) {
-        await data.createDocument(op.data.title, op.data.type, op.data.parent_id, op.data.sort_order);
-      } else if (op.operationType === 'updateDocument' && op.data.documentId) {
-        await data.updateDocument(op.data.documentId, op.data.changes);
-      } else if (op.operationType === 'deleteDocument' && op.data.documentId) {
-        await data.deleteDocument(op.data.documentId);
+      } else if (op.operationType === 'createDocument' && typeof legacyData.title === 'string' && typeof legacyData.type === 'string') {
+        const legacyTitle = legacyData.title;
+        const legacyType = legacyData.type;
+        await data.createDocument(legacyTitle, legacyType, legacyData.parent_id as string | null, legacySortOrder ?? undefined);
+      } else if (op.operationType === 'updateDocument' && legacyDocumentId) {
+        await data.updateDocument(legacyDocumentId, asRecord(legacyData.changes));
+      } else if (op.operationType === 'deleteDocument' && legacyDocumentId) {
+        await data.deleteDocument(legacyDocumentId);
       // Memo operations
-      } else if (op.operationType === 'createMemo' && op.data.content) {
-        await data.createMemo(op.data.content);
-      } else if (op.operationType === 'updateMemo' && op.data.memoId) {
-        await data.updateMemo(op.data.memoId, op.data.content);
-      } else if (op.operationType === 'deleteMemo' && op.data.memoId) {
-        await data.deleteMemo(op.data.memoId);
-      } else if (op.operationType === 'toggleMemoPinned' && op.data.memoId) {
-        await data.toggleMemoPinned(op.data.memoId, op.data.is_pinned);
-      } else if (op.operationType === 'toggleMemoArchived' && op.data.memoId) {
-        await data.toggleMemoArchived(op.data.memoId, op.data.is_archived);
-      } else if (op.operationType === 'updateMemoColor' && op.data.memoId) {
-        await data.updateMemoColor(op.data.memoId, op.data.color);
-      } else if (op.operationType === 'toggleMemoPublic' && op.data.memoId) {
-        await data.toggleMemoPublic(op.data.memoId, op.data.is_public);
+      } else if (op.operationType === 'createMemo' && legacyContent) {
+        await data.createMemo(legacyContent);
+      } else if (op.operationType === 'updateMemo' && legacyMemoId && legacyContent) {
+        await data.updateMemo(legacyMemoId, legacyContent);
+      } else if (op.operationType === 'deleteMemo' && legacyMemoId) {
+        await data.deleteMemo(legacyMemoId);
+      } else if (op.operationType === 'toggleMemoPinned' && legacyMemoId && typeof legacyData.is_pinned === 'boolean') {
+        await data.toggleMemoPinned(legacyMemoId, legacyData.is_pinned);
+      } else if (op.operationType === 'toggleMemoArchived' && legacyMemoId && typeof legacyData.is_archived === 'boolean') {
+        await data.toggleMemoArchived(legacyMemoId, legacyData.is_archived);
+      } else if (op.operationType === 'updateMemoColor' && legacyMemoId && (typeof legacyData.color === 'string' || legacyData.color === null)) {
+        await data.updateMemoColor(legacyMemoId, legacyData.color);
+      } else if (op.operationType === 'toggleMemoPublic' && legacyMemoId && typeof legacyData.is_public === 'boolean') {
+        await data.toggleMemoPublic(legacyMemoId, legacyData.is_public);
       } else {
         throw new Error(`Unknown offline operation: ${op.operationType || commandType || 'missing type'}`);
       }
@@ -524,11 +546,15 @@ class SaveStateManager {
     const pendingOps = Array.from(this.operations.values());
     if (pendingOps.length === 0) return;
     
-    sendBatchSaveRequest(pendingOps.map(op => ({
+    sendBatchSaveRequest(pendingOps.map(op => {
+      const operationData = asRecord(op.data);
+      const operationType = typeof operationData.type === 'string' ? operationData.type : 'unknown';
+      return {
       id: op.id,
-      type: (op.data as { type?: string })?.type || 'unknown',
+      type: operationType,
       data: op.data as Record<string, unknown>,
-    })));
+      };
+    }));
     
     this.saveToLocal();
   }

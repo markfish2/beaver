@@ -14,9 +14,11 @@ interface NoteEmbedContentProps {
   title?: string;
 }
 
+type EmbedTreeNode = Node & { children: EmbedTreeNode[] };
+
 // 树形节点渲染（大纲笔记）
 function OutlinePreview({ nodes, maxDepth = 2 }: { nodes: Node[]; maxDepth?: number }) {
-  const renderNode = (node: Node, depth: number): React.ReactNode => {
+  const renderNode = (node: EmbedTreeNode, depth: number): React.ReactNode => {
     if (depth > maxDepth) return null;
     return (
       <div key={node.id} style={{ paddingLeft: depth * 12 }}>
@@ -38,9 +40,9 @@ function OutlinePreview({ nodes, maxDepth = 2 }: { nodes: Node[]; maxDepth?: num
   return <div className="py-1">{tree.map(n => renderNode(n, 0))}</div>;
 }
 
-function buildTree(nodes: Node[]): Node[] {
-  const map = new Map<string, Node>();
-  const roots: Node[] = [];
+function buildTree(nodes: Node[]): EmbedTreeNode[] {
+  const map = new Map<string, EmbedTreeNode>();
+  const roots: EmbedTreeNode[] = [];
   for (const n of nodes) {
     map.set(n.id, { ...n, children: [] });
   }

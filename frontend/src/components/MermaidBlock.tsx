@@ -113,7 +113,6 @@ async function initMermaid(mermaid: MermaidRuntime, elkLayouts: ElkLayouts, dark
   const initialization = (async () => {
     // 注册 ELK 布局算法（registerExternalDiagrams 只注册图表检测器，布局算法需要单独注册）
     mermaid.registerLayoutLoaders(elkLayouts);
-    await mermaid.registerExternalDiagrams([elkLayouts]);
     mermaid.initialize({
       startOnLoad: false,
       theme,

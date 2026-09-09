@@ -218,8 +218,8 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   const [editFolderDialog, setEditFolderDialog] = useState<{ show: boolean; id: string; title: string; icon?: string }>({ show: false, id: '', title: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isImportingMarkdown, setIsImportingMarkdown] = useState(false);
-  const [draggedItem, setDraggedItem] = useState<{ id: string; type: 'document' | 'folder' } | null>(null);
-  const draggedItemRef = useRef<{ id: string; type: 'document' | 'folder' } | null>(null);
+  const [draggedItem, setDraggedItem] = useState<{ id: string; type: DocType['type'] } | null>(null);
+  const draggedItemRef = useRef<{ id: string; type: DocType['type'] } | null>(null);
   const [dragOverItem, setDragOverItem] = useState<string | null>(null);
   const [, setSelectedFolderId] = useState<string | null>(null);
   const [clickedFolderId, setClickedFolderId] = useState<string | null>(null);
@@ -245,12 +245,12 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   const projectContextMenuRef = useRef<HTMLDivElement>(null);
   const todoInputRef = useRef<HTMLInputElement>(null);
   const [contextMenu, setContextMenu] = useState<{
-    docId: string; docTitle: string; docType: 'document' | 'folder'; isStarred: boolean; aiExcluded: boolean; x: number; y: number; buttonBottom: number;
+    docId: string; docTitle: string; docType: DocType['type']; isStarred: boolean; aiExcluded: boolean; x: number; y: number; buttonBottom: number;
   } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [rootContextMenu, setRootContextMenu] = useState<{ x: number; y: number } | null>(null);
   const rootContextMenuRef = useRef<HTMLDivElement>(null);
-  const [moveDialog, setMoveDialog] = useState<{ show: boolean; docId: string; docTitle: string; docType: 'document' | 'folder' }>({ show: false, docId: '', docTitle: '', docType: 'document' });
+  const [moveDialog, setMoveDialog] = useState<{ show: boolean; docId: string; docTitle: string; docType: DocType['type'] }>({ show: false, docId: '', docTitle: '', docType: 'document' });
   const [moveTargetFolder, setMoveTargetFolder] = useState<string | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggeredRef = useRef(false);
@@ -413,7 +413,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
   useEffect(() => {
     const overlayLeft = isMobile ? 0 : (contentExpanded ? ICON_RAIL_WIDTH + sidebarWidth : ICON_RAIL_WIDTH);
     document.documentElement.style.setProperty('--desktop-overlay-left', `${overlayLeft}px`);
-    return () => document.documentElement.style.removeProperty('--desktop-overlay-left');
+    return () => { document.documentElement.style.removeProperty('--desktop-overlay-left'); };
   }, [contentExpanded, isMobile, sidebarWidth]);
 
   useEffect(() => {
@@ -641,6 +641,23 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
     } catch (error) {
       console.error('Failed to edit folder', error);
       if (oldTitle) updateDocumentLocal(folderId, { title: oldTitle });
+    }
+  };
+
+  const handleToggleAIExcluded = async (docId: string, currentValue: boolean, isFolder = false) => {
+    const nextValue = !currentValue;
+    updateDocumentLocal(docId, { ai_excluded: nextValue });
+    try {
+      await updateDocument(docId, { ai_excluded: nextValue });
+      await refreshDocuments();
+      showToast(
+        isFolder
+          ? (nextValue ? '文件夹及其内容将不参与 AI' : '文件夹及其内容已恢复参与 AI')
+          : (nextValue ? '已设置为不参与 AI' : '已恢复参与 AI')
+      );
+    } catch {
+      updateDocumentLocal(docId, { ai_excluded: currentValue });
+      showToast('设置失败，请重试', 'error');
     }
   };
 
@@ -1028,7 +1045,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                     isExpanded[doc.id] ? <ChevronDown className="w-3.5 h-3.5 mr-0.5 text-gray-400 dark:text-gray-500" /> : <ChevronRight className="w-3.5 h-3.5 mr-0.5 text-gray-400 dark:text-gray-500" />
                   )}
                   <DocumentTypeIcon type={folderIconType} className={`h-5 w-5 ${!isFolder ? 'ml-4' : ''}`} />
-                  {!isFolder && doc.ai_excluded && (
+                  {doc.ai_excluded && (
                     <svg className="w-3.5 h-3.5 absolute -bottom-1 -right-1" viewBox="0 0 24 24" fill="none">
                       <circle cx="12" cy="12" r="10" fill="#ef4444" stroke="white" strokeWidth="1.5"/>
                       <line x1="6" y1="6" x2="18" y2="18" stroke="white" strokeWidth="2" strokeLinecap="round"/>
@@ -1362,7 +1379,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                               <div className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider px-2 py-1">{group}</div>
                               {grouped[group].map(result => (
                                 <button
-                                  key={`${result.result_type}-${result.id}`}
+                                  key={`${result.result_type}-${result.entity_id}`}
                                   onClick={() => handleSearchResultClick(result)}
                                   className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                                 >
@@ -1431,7 +1448,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                         <DiaryCalendar
                           onNavigate={() => setContentExpanded(false)}
                           pendingTasks={pendingTasks}
-                          onTaskToggle={handleTaskToggle}
+                          onTaskToggle={handleTodoToggle}
                           onTaskMoved={fetchPendingTasks}
                         />
                       ) : viewMode === 'projects' ? (
@@ -1519,7 +1536,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                         </div>
                       ) : viewMode === 'starred' ? (
                         <div className="px-1 py-1">
-                          {renderFileTree(null, 0, true)}
+                          {renderFileTree(null, 0)}
                         </div>
                       ) : viewMode === 'ai' ? (
                         <AIChatSidebar
@@ -1531,7 +1548,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
                         />
                       ) : (
                         <div className="px-1 py-1">
-                          {renderFileTree(null, 0, false)}
+                          {renderFileTree(null, 0)}
                         </div>
                       )}
                     </div>
@@ -2191,7 +2208,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
 
       {/* Context Menu */}
       {contextMenu && (() => {
-        const MENU_HEIGHT = contextMenu.docType === 'folder' ? 260 : 250;
+        const MENU_HEIGHT = contextMenu.docType === 'folder' ? 320 : 250;
         const spaceBelow = window.innerHeight - contextMenu.buttonBottom;
         const openUpward = spaceBelow < MENU_HEIGHT;
         return (
@@ -2295,9 +2312,7 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
               </button>
               <button
                 onClick={() => {
-                  updateDocument(contextMenu.docId, { ai_excluded: !contextMenu.aiExcluded }).then(() => {
-                    updateDocumentLocal(contextMenu.docId, { ai_excluded: !contextMenu.aiExcluded });
-                  });
+                  void handleToggleAIExcluded(contextMenu.docId, contextMenu.aiExcluded);
                   setContextMenu(null);
                 }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -2370,6 +2385,16 @@ const Sidebar = ({ onDocumentSelect, isMobile = false, onUserSubViewChange }: Si
               >
                 <DocumentTypeIcon type="folder" className="w-4 h-4" />
                 <span>新建子文件夹</span>
+              </button>
+              <button
+                onClick={() => {
+                  void handleToggleAIExcluded(contextMenu.docId, contextMenu.aiExcluded, true);
+                  setContextMenu(null);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <Sparkles className={`w-4 h-4 ${contextMenu.aiExcluded ? 'text-gray-400' : 'text-blue-500'}`} />
+                <span>{contextMenu.aiExcluded ? '取消文件夹不参与 AI' : '文件夹不参与 AI'}</span>
               </button>
               <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
               <button

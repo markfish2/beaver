@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo, useDeferredValue, startTransition, memo, lazy, Suspense, Children, isValidElement } from 'react';
-import type { RefObject } from 'react';
+import type { ComponentPropsWithoutRef, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -79,7 +79,8 @@ import type { DocumentTab } from './documentTabTypes';
 import ImageViewer from './ImageViewer';
 import { useRemoteRefresh } from '../hooks/useRemoteRefresh';
 import { applyNoteHighlights, captureNoteHighlightSelection, clearNoteHighlights, formatNoteHighlightsAsMemo, normalizeHighlightSource, normalizeHighlightText, scrollToNoteHighlight, sortNoteHighlightsByDocumentOrder, sourceMayContainNoteHighlight, type NoteHighlightMatch, type NoteHighlightSelection } from '../utils/noteHighlights';
-import { NoteHighlightPanel, NoteHighlightSelectionMenu, NoteHighlightTabletAction, shouldPlaceTabletHighlightActionAtBottom } from './NoteHighlightMenus';
+import { NoteHighlightPanel, NoteHighlightSelectionMenu, NoteHighlightTabletAction } from './NoteHighlightMenus';
+import { shouldPlaceTabletHighlightActionAtBottom } from '../utils/noteHighlightMenuUtils';
 import { loadNoteScrollPosition, saveNoteScrollPosition } from '../utils/pwaState';
 import { getDeviceLayoutSnapshot, isTabletDevice } from '../utils/deviceLayout';
 
@@ -141,7 +142,7 @@ const codeLineNumberStyle = (isDark: boolean): React.CSSProperties => ({
   borderRight: `1px solid ${isDark ? 'rgba(139,148,158,0.28)' : 'rgba(140,149,159,0.28)'}`,
 });
 
-type MarkdownCodeProps = Parameters<NonNullable<Components['code']>>[0];
+type MarkdownCodeProps = ComponentPropsWithoutRef<'code'> & { node?: unknown };
 
 type MarkdownAstNodeWithPosition = {
   position?: {
@@ -931,7 +932,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   useEffect(() => {
     if (!showExportMenu) return;
     const handleClick = (e: MouseEvent) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as globalThis.Node)) {
         setShowExportMenu(false);
       }
     };
@@ -945,7 +946,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
     try {
       // 渲染面按需挂载，等待 React 提交和浏览器布局完成后再导出。
       await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(resolve));
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
       });
       if (!exportSurfaceRef.current) throw new Error('PDF 渲染面尚未准备好');
       await exportNotePdf({ surface: exportSurfaceRef.current, title: title || 'note' });
@@ -1719,7 +1720,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
   useEffect(() => {
     if (!showHighlightPanel) return;
     const handleOutsideClick = (event: MouseEvent) => {
-      const target = event.target as Node;
+      const target = event.target as globalThis.Node;
       if (highlightPanelRef.current?.contains(target) || highlightButtonRef.current?.contains(target)) return;
       setShowHighlightPanel(false);
     };
@@ -1855,9 +1856,7 @@ export default function MarkdownNoteEditor({ documentId, isNew = false, initialN
       }
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 underline">{children}</a>;
     },
-    li: ({ children, ordered, index, node, ...props }) => {
-      void ordered;
-      void index;
+    li: ({ children, node, ...props }) => {
       const liClassName = typeof props.className === 'string' ? props.className : '';
       if (liClassName.includes('task-list-item')) {
         const sourceLine = getNodeStartLine(node);

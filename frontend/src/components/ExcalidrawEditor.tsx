@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useEffect, useMemo, Component, Suspense } from 'react';
+import React, { useRef, useState, useCallback, useEffect, useMemo, Component, Suspense, type ReactElement } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
 import { Excalidraw, MainMenu, exportToBlob, exportToSvg, FONT_FAMILY } from "@excalidraw/excalidraw";
 import type { AppState, BinaryFiles, ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from "@excalidraw/excalidraw/types";
@@ -189,7 +189,9 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   type SceneElements = ReturnType<ExcalidrawImperativeAPI['getSceneElements']>;
   type SceneElement = SceneElements[number];
-  type SaveData = (elements: SceneElements, appState: AppState) => void;
+  type SaveData = ((elements: SceneElements, appState: AppState) => void) & {
+    cancel?: () => void;
+  };
   type ScenePayload = { elements: SceneElements; appState: Partial<AppState>; files?: BinaryFiles; presentation?: PresentationConfig };
 
   const [initialData, setInitialData] = useState<ExcalidrawInitialDataState | null>(null);
@@ -212,7 +214,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   const [showNotePicker, setShowNotePicker] = useState(false);
   const [canvasFontFamily, setCanvasFontFamily] = useState<AppState['currentItemFontFamily']>(DEFAULT_CANVAS_FONT);
   // 缓存已渲染的笔记引用，避免拖动时每帧重建 React 组件
-  const embedCacheRef = useRef<Map<string, React.ReactNode>>(new Map());
+  const embedCacheRef = useRef<Map<string, ReactElement>>(new Map());
   // 标记是否已加载初始数据
   const hasLoadedInitialData = useRef(false);
   // Excalidraw 首次挂载场景时可能触发一次内部 onChange，不应把它当成用户编辑。
@@ -528,7 +530,8 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
   const presentationRef = useRef<PresentationConfig>({ slides: [] });
   const sceneElementsRef = useRef<SceneElements>([]);
   const frameSignatureRef = useRef('');
-  const previousViewportRef = useRef<Partial<AppState> | null>(null);
+  type ViewportState = Pick<AppState, 'scrollX' | 'scrollY' | 'zoom' | 'frameRendering'>;
+  const previousViewportRef = useRef<ViewportState | null>(null);
   const draggedSlideRef = useRef<string | null>(null);
   const touchStartXRef = useRef<number | null>(null);
   const presentationPreviewRef = useRef<HTMLDivElement>(null);
@@ -802,7 +805,7 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
             pendingElementsRef.current = null;
             pendingAppStateRef.current = null;
             hasUnsavedChangesRef.current = true;
-            saveDataRef.current(pendingEls, pendingAs || {});
+            saveDataRef.current(pendingEls, pendingAs ?? excalidrawRef.current?.getAppState() ?? initialData?.appState as AppState);
           } else {
             // 没有新变更，正常清除
             pendingElementsRef.current = null;
@@ -813,9 +816,9 @@ export const ExcalidrawEditor: React.FC<ExcalidrawEditorProps> = ({
           // 图片保存成功后，将 pending 状态的图片元素更新为 saved
           if (filesWereSaved && excalidrawRef.current) {
             const currentElements = excalidrawRef.current.getSceneElements();
-            const updatedElements = currentElements.map((el) => {
+            const updatedElements: SceneElements = currentElements.map((el): SceneElement => {
               if (el.type === 'image' && el.status === 'pending' && el.fileId) {
-                return { ...el, status: 'saved' };
+                return { ...el, status: 'saved' as const };
               }
               return el;
             });

@@ -239,10 +239,11 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   }, [location.key, location.pathname, location.state, navigate, setUserSubView, userSubView]);
 
   const handleSearch = useCallback((query: string) => {
+    const returnTab = activeTab === 'new' ? 'memos' : activeTab;
     navigate(`/search?q=${encodeURIComponent(query)}`, {
       state: createMobileDocumentState(
         `${location.pathname}${location.search}`,
-        activeTab,
+        returnTab,
       ),
     });
   }, [activeTab, location.pathname, location.search, navigate]);
@@ -257,8 +258,9 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       setActiveTab('files');
       return;
     }
+    const returnTab = activeTab === 'new' ? 'memos' : activeTab;
     navigate(`/d/${id}`, {
-      state: createMobileDocumentState('/', activeTab),
+      state: createMobileDocumentState('/', returnTab),
     });
   }, [activeTab, navigate]);
 

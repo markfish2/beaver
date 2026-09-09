@@ -26,6 +26,11 @@ interface MindMapNodeData {
 
 type LineStyleKey = 'curve' | 'straight' | 'direct' | 'dashed' | 'rounded';
 
+type MindMapConstructor = new (options: Record<string, unknown>) => MindMap;
+
+const getThemeBackgroundColor = (theme: Record<string, unknown>): string =>
+  typeof theme.backgroundColor === 'string' ? theme.backgroundColor : '#ffffff';
+
 interface LineStyleConfig {
   name: string;
   description: string;
@@ -408,7 +413,7 @@ const MindMapModal = ({
     mindMapRef.current.setThemeConfig(styleConfig.theme, false);
     
     if (containerRef.current) {
-      containerRef.current.style.backgroundColor = styleConfig.theme.backgroundColor;
+      containerRef.current.style.backgroundColor = getThemeBackgroundColor(styleConfig.theme);
     }
   }, []);
 
@@ -418,7 +423,7 @@ const MindMapModal = ({
     const container = containerRef.current;
     
     const initMindMap = async () => {
-      const MindMap = (await import('simple-mind-map')).default;
+      const MindMap = (await import('simple-mind-map')).default as unknown as MindMapConstructor;
       
       const data = convertNodesToMindMapData(nodes);
 
@@ -443,12 +448,15 @@ const MindMapModal = ({
         fitPadding: 40,
       });
 
-      container.style.backgroundColor = styleConfig.theme.backgroundColor;
+      container.style.backgroundColor = getThemeBackgroundColor(styleConfig.theme);
 
       mindMapRef.current.on('node_dblclick', (_, node) => {
         const nodeData = node.getData();
         const nodeId = nodeData?.id;
-        mindMapRef.current?.renderer.startTextEdit(node, '', (newText: string) => {
+        const renderer = mindMapRef.current?.renderer as unknown as {
+          startTextEdit: (targetNode: unknown, text: string, onChange: (newText: string) => void) => void;
+        };
+        renderer.startTextEdit(node, '', (newText: string) => {
           if (nodeId && nodeId !== 'root') {
             onNodeUpdate(nodeId, newText);
           }
@@ -569,7 +577,7 @@ const MindMapModal = ({
     try {
       const styleConfig = LINE_STYLES[currentLineStyle];
       const canvas = await html2canvas(containerRef.current, {
-        backgroundColor: styleConfig.theme.backgroundColor,
+        backgroundColor: getThemeBackgroundColor(styleConfig.theme),
         scale: 2,
       });
 

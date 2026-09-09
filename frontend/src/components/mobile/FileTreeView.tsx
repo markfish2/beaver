@@ -9,6 +9,7 @@ import type { Document } from '../../api/data';
 import { createExcalidrawDocument } from '../../api/excalidraw';
 import { createMobileDocumentState } from '../../utils/mobileNavigation';
 import DocumentTypeIcon from '../DocumentTypeIcon';
+import { showToast } from '../../utils/toast';
 
 interface FileTreeViewProps {
   starredOnly?: boolean;
@@ -73,7 +74,7 @@ function persistExpandedFolders(viewMode: FileTreeViewMode, folders: Set<string>
 export default function FileTreeView({ starredOnly = false, viewMode = starredOnly ? 'starred' : 'all' }: FileTreeViewProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { documents, refreshDocuments } = useDocuments();
+  const { documents, refreshDocuments, updateDocumentLocal } = useDocuments();
   const [expandedFoldersByView, setExpandedFoldersByView] = useState<Record<FileTreeViewMode, Set<string>>>(() => ({
     all: readExpandedFolders('all'),
     starred: readExpandedFolders('starred'),
@@ -185,6 +186,26 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
     setContextMenu(null);
   };
 
+  const handleToggleAIExcluded = async (docId: string) => {
+    const doc = documents.find(item => item.id === docId);
+    if (!doc) return;
+    const nextValue = !doc.ai_excluded;
+    updateDocumentLocal(docId, { ai_excluded: nextValue });
+    setContextMenu(null);
+    try {
+      await updateDocument(docId, { ai_excluded: nextValue });
+      await refreshDocuments();
+      showToast(
+        doc.type === 'folder'
+          ? (nextValue ? '文件夹及其内容将不参与 AI' : '文件夹及其内容已恢复参与 AI')
+          : (nextValue ? '已设置为不参与 AI' : '已恢复参与 AI')
+      );
+    } catch {
+      updateDocumentLocal(docId, { ai_excluded: doc.ai_excluded });
+      showToast('设置失败，请重试', 'error');
+    }
+  };
+
   const handleCopy = async (docId: string) => {
     await copyDocument(docId);
     refreshDocuments();
@@ -233,7 +254,7 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
     const title = type === 'document' ? '新文章' : type === 'note' ? '新笔记' : '无标题画布';
     const doc = type === 'excalidraw'
       ? await createExcalidrawDocument(title, parentId)
-      : await createDocument(title, type, parentId, Date.now());
+      : await createDocument(title, type, parentId, documents.reduce((max, item) => Math.max(max, item.sort_order), 0) + 1);
     await refreshDocuments();
     setContextMenu(null);
     navigate(`/d/${doc.id}`);
@@ -369,6 +390,10 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
             />
           )}
 
+          {doc.ai_excluded && (
+            <Sparkles aria-label="不参与 AI" className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+          )}
+
           {/* 3-dot menu - always visible on mobile */}
           <button
             type="button"
@@ -470,7 +495,7 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
               </button>
             )}
             {doc.type !== 'folder' && (
-              <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); void updateDocument(contextMenu.docId, { ai_excluded: !doc.ai_excluded }).then(refreshDocuments); setContextMenu(null); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+              <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); void handleToggleAIExcluded(contextMenu.docId); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
                 <Sparkles className={`w-4 h-4 ${doc.ai_excluded ? 'text-gray-400' : 'text-blue-500'}`} />
                 {doc.ai_excluded ? '取消不参与 AI' : '不参与 AI'}
               </button>
@@ -496,6 +521,10 @@ export default function FileTreeView({ starredOnly = false, viewMode = starredOn
                 <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); setNewFolderParentId(doc.id); setShowNewFolderDialog(true); setContextMenu(null); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
                   <DocumentTypeIcon type="folder" className="w-4 h-4" />
                   新建子文件夹
+                </button>
+                <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); void handleToggleAIExcluded(contextMenu.docId); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                  <Sparkles className={`w-4 h-4 ${doc.ai_excluded ? 'text-gray-400' : 'text-blue-500'}`} />
+                  {doc.ai_excluded ? '取消文件夹不参与 AI' : '文件夹不参与 AI'}
                 </button>
                 <button type="button" onPointerDown={stopMenuPointer} onClick={(e) => { stopMenuEvent(e); setMoveDialog({ id: doc.id, title: doc.title || '文件夹' }); setMoveTargetFolder(doc.parent_id); setContextMenu(null); }} className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
                   <Move className="w-4 h-4 text-gray-400" />

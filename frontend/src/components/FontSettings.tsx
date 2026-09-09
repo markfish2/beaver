@@ -313,6 +313,8 @@ const AppearanceStateProvider = ({
   // 账号设置同步回来时只更新设置值，不重挂载 Provider，避免面板被意外关闭。
   useEffect(() => {
     if (!accountSettings) return;
+    // 账号设置是外部数据源，变化后需要同步到本地 Provider 状态。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSettings(prev => (
       prev.fontSize === accountSettings.fontSize
       && prev.fontFamily === accountSettings.fontFamily

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, type ComponentPropsWithoutRef } from 'react';
 import { Send, Loader2, BookmarkPlus, Database, Globe, Wand2, StickyNote, FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
@@ -36,8 +36,8 @@ interface AIChatMainViewProps {
   onNavigate?: (type: string, id: string) => void;
 }
 
-type MarkdownCodeProps = Parameters<NonNullable<Components['code']>>[0];
-type MarkdownLinkProps = Parameters<NonNullable<Components['a']>>[0];
+type MarkdownCodeProps = ComponentPropsWithoutRef<'code'> & { node?: unknown };
+type MarkdownLinkProps = ComponentPropsWithoutRef<'a'> & { node?: unknown };
 
 export default function AIChatMainView({ conversationId, onConversationCreated, onNavigate }: AIChatMainViewProps) {
   const { addDocument } = useDocuments();
@@ -137,7 +137,15 @@ export default function AIChatMainView({ conversationId, onConversationCreated, 
     setLoadingConv(true);
     getAIConversation(conversationId)
       .then(data => {
-        if (!cancelled) setMessages(data.messages || []);
+        if (!cancelled) {
+          setMessages((data.messages || []).map(message => ({
+            role: message.role,
+            content: message.content,
+            sources: message.sources?.filter(source =>
+              source.type === 'document' || source.type === 'note' || source.type === 'excalidraw' || source.type === 'memo',
+            ),
+          })));
+        }
       })
       .catch(e => console.error('加载对话失败', e))
       .finally(() => { if (!cancelled) setLoadingConv(false); });
